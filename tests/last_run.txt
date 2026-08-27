@@ -1,0 +1,20 @@
+NonGravForces 2.0.0  run 2026-08-27 14:00 UTC  MATLAB 26.1.0.3312084 (R2026a) Update 4
+tests 74  passed 74  failed 0  incomplete 0  duration 3.0 s  GATE TRUE   (ExcludeSlow=false; the default run without the speed tag: 73/73)
+
+== category audit (units short of a category) ==
+none
+
+== recorded bounds ==
+P0 from S0=1361 vs 4.5398e-6 Pa (Montenbruck & Gill give 4.56e-6 for 1367)   1.6159e-06 <=   1.0000e-04 rel    max |a-e| / max |e|
+const.Rgas = kB*NA                         0.0000e+00 <=   1.0000e-15 rel    max |a-e| / max |e|
+MacroModel rotation covariance             6.6222e-16 <=   1.0000e-12 m^2
+graceFO silhouette defect z                0.0000e+00 <=   1.0000e-09 m^2
+graceFO silhouette defect xy               5.5511e-17 <=   1.0000e-09 m^2
+MacroModel energy closure vis              0.0000e+00 <=   1.0000e-12 -
+MacroModel energy closure ir               0.0000e+00 <=   1.0000e-12 -
+graceFO total area vs Table 5 sum          0.0000e+00 <=   1.0000e-07 rel    max |a-e| / max |e|
+hampel time 86400x3                        6.4462e-01 <=   2.0000e+01 s
+hampel / movmedian ratio                   3.8193e+02 <=   1.0000e+03 -      interpreted loop vs compiled builtin (O-1)
+hampel robust sigma bias                   1.2854e-02 <=   2.0000e-02 -      mean over 1e4 windows
+
+== failures ==

@@ -1,0 +1,6 @@
+% APP  NonGravForces.app - L8 layer.
+% Version 2.0.0  27-Aug-2026
+%
+%   calibrate            - Accelerometer calibration bridge to lsqvce (bias spline + 3x3 scale + jumps) [stub]
+%   forceBudget          - Per-effect per-axis RMS budget table [stub]
+%   densityInversion     - Thermosphere density from calibrated accelerations (Doornbos) [stub]

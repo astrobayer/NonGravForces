@@ -1,0 +1,52 @@
+package,name,kind,level,wp,status,h1
+NonGravForces,Model,class,L5,WP-14,partial,Single point of access: accel | torque | series | partials | rhs | budget
+NonGravForces,Options,class,L0,WP-00,done,Validated option set with fidelity presets
+NonGravForces,const,function,L0,WP-00,done,Constants owned by the toolbox
+NonGravForces,toolboxVersion,function,L0,WP-00,done,Semantic version (single authority)
+NonGravForces,dependencyReport,function,L0,WP-01,done,Presence and version of the ecosystem toolboxes
+NonGravForces,fail,function,L0,WP-00,done,Uniform error raising with identifier taxonomy and correction hints
+NonGravForces,provenance,function,L0,WP-00,done,Metadata record that travels with every result
+io,readACC1B,function,L1,WP-18,stub,ACC1B/ACT1B/ACH1B reader over gracefoReading (3xK SRF accelerations + aux)
+io,readSCA1B,function,L1,WP-18,stub,SCA1B reader: ICRF->SRF quaternions conjugated once to BODY->GCRS
+io,readGNV1B,function,L1,WP-18,stub,GNV1B reader: ITRS state rotated to GCRS via referenceSystem
+io,readTHR1B,function,L1,WP-18,stub,THR1B thruster event reader (impulse priors for qc)
+io,readMAS1B,function,L1,WP-18,stub,MAS1B tank-mass reader (NOT spacecraft mass)
+io,readMAG1B,function,L1,WP-18,stub,MAG1B magnetometer/magnetorquer reader (magnetic torque priors)
+io,massModel,function,L1,WP-18,stub,Spacecraft mass model: handbook constant or MAS1B-driven variable mass
+io,spaceWeather,function,L1,WP-04,stub,Space-weather provider with query(epoch): F10.7 F30 S/M/Y10.7 Ap Kp Dst
+io,importCERES,function,L1,WP-08,stub,CERES SYN1deg/EBAF netCDF import into radiance grids
+io,igrfCoefficients,function,L1,WP-23,stub,IGRF-14 coefficient loader
+env,density,function,L2,WP-05,stub,Thermosphere density and composition dispatcher (exponential msis00 msis21 dtm2020 jb2008)
+env,wind,function,L2,WP-25,stub,Relative-velocity builder: co-rotation plus optional HWM14 wind
+env,eclipseFactor,function,L2,WP-07,stub,Shadow function nu in [0,1]: cylindrical conical solaarsCF plus lunar
+env,earthRadiance,function,L2,WP-08,stub,Earth albedo and IR radiance grids (pointSource knocke ceres) with ADM anisotropy
+env,magneticField,function,L2,WP-23,stub,IGRF-14 geomagnetic field in ITRS and body frame
+env,radiationSources,function,L2,WP-08,stub,Source list {dir_body P band} from Sun and Earth radiance for one epoch batch
+geom,MacroModel,class,L3,WP-09,done,Panel geometry frozen and validated once
+geom,graceFO,function,L3,WP-09,done,GRACE-FO macro model from JPL D-56935
+geom,boxWing,function,L3,WP-09,stub,Generic box-wing macro model factory
+geom,selfShadow,function,L3,WP-10,stub,Per-panel exposed fraction: exact ray-cast or icosphere LUT
+geom,thermalState,function,L3,WP-28,stub,Per-panel temperatures: steady state or transient (Wöske)
+geom,AttitudeProvider,class,L3,WP-11,stub,BODY->GCRS quaternions at query epochs (SCA1B or nominal) via referenceSystem.interpolateQuaternions
+geom,checkAttitudeSense,function,L3,WP-11,stub,Physics test of quaternion sense (nadir and line-of-sight)
+kernel,gsiCoefficients,function,L4,WP-13,stub,Pressure and shear coefficients per panel: sentman cll maxwell schamberg
+kernel,accommodation,function,L4,WP-26,stub,Energy accommodation coefficient: fixed sesam langmuir
+kernel,dragPanelForce,function,L4,WP-13,stub,Per-panel gas-momentum force in body frame
+kernel,radiationPanelForce,function,L4,WP-12,stub,Per-panel radiation force for a source list in body frame
+kernel,thermalRecoil,function,L4,WP-12,stub,Per-panel thermal re-emission recoil force
+kernel,assemble,function,L4,WP-14,stub,Reductions: F = sum F_k and tau = sum (r_k - r_cm) x F_k
+kernel,bodyTorques,function,L4,WP-24,stub,Gravity-gradient and magnetic body torques
+kernel,partials,function,L4,WP-16,stub,Analytic partials of a w.r.t. r v Cd Cr; complex-step verifier
+sensor,Sensor,class,L6,WP-29,interface,Abstract measurement model: observe / partials / noiseModel
+sensor,Electrostatic,class,L6,WP-29,stub,Electrostatic accelerometer: bias scale-matrix CoM coupling CRN filter
+sensor,AtomInterferometer,class,L6,WP-29,stub,Cold-atom interferometer: phase = k_eff a T^2 with dead time and rotation
+sensor,DragFree,class,L6,WP-29,stub,Drag-free residual acceleration model
+qc,residuals,function,L7,WP-31,stub,Whitened residuals measured - modelled with preliminary calibration
+qc,hampel,function,L7,WP-31,done,Robust point-outlier detector (moving median + MAD)
+qc,detectImpulses,function,L7,WP-31,stub,Matched filter on the CRN impulse response with THR1B priors
+qc,detectJumps,function,L7,WP-31,stub,Piecewise-constant/linear change-point detection (PELT + BIC)
+qc,eventTable,function,L7,WP-31,done,Canonical event table constructor and schema
+qc,screen,function,L7,WP-31,stub,Orchestrator: residuals -> outliers -> impulses -> jumps -> mask
+app,calibrate,function,L8,WP-19,stub,Accelerometer calibration bridge to lsqvce (bias spline + 3x3 scale + jumps)
+app,forceBudget,function,L8,WP-30,stub,Per-effect per-axis RMS budget table
+app,densityInversion,function,L8,WP-32,stub,Thermosphere density from calibrated accelerations (Doornbos)

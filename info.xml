@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<productinfo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="optional">
+  <matlabrelease>R2026a</matlabrelease>
+  <name>NonGravForces</name>
+  <type>toolbox</type>
+  <icon></icon>
+  <help_location>doc/html</help_location>
+</productinfo>
