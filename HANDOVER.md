@@ -336,6 +336,13 @@ WP-09 `boxWing`, cylinder/sphere kinds (the S-band boom) · WP-10 `selfShadow` r
 ### LP-5 — Kernel and quality control
 WP-13 `gsiCoefficients` Sentman exact (oracle: Python kinetic-theory integration in `tools/pyxcheck/sentman_check.py`; the v1 ×8 defect as a regression test; flat-plate limits s→∞) · WP-26 CLL, Maxwell, Schamberg, `accommodation` SESAM (oracle Pilinski 2013 Fig. 3 values) · WP-12 `radiationPanelForce`, `thermalRecoil` (oracle: [V] monthly SRP/ERP means; [S] Table 3 RMS per axis within 20 %) · WP-24 `bodyTorques` (oracle: gravity-gradient closed form for a diagonal inertia; magnetic torque m×B) · WP-31 `qc`: `residuals`, `detectImpulses` (oracle: synthetic CRN-shaped pulses at known epochs, THR1B priors from the real file), `detectJumps` (oracle: planted steps, PELT vs brute-force segmentation on short series), `screen` (metamorphic: time shift, affine scaling, reversal). Accuracy: kernel partials vs complex step 1e-8; impulse epoch to ±1 sample; jump amplitude to 3σ.
 
+### LP-5x — Cross-validation tooling (WP-33, WP-34; owner rulings C1(ii), C2(i), C3 of 2026-08-27)
+**WP-33 `tools/pyxcheck/ngfkernel/`** — a numpy mirror of the FROZEN KERNEL ONLY: `gsiCoefficients`, `dragPanelForce`, `radiationPanelForce`, `thermalRecoil`, `assemble`. Written from the equations, not transcribed from the MATLAB, or it inherits the author's misunderstandings and stops being an oracle (T9). No mirror of io, env, geom, Model, sensor, qc. **Frozen when LP-5 is GREEN**: from then on a regression oracle, not a maintained second product. Rationale: LP-6b ports this same kernel to C, so both ports are then checked against one authority.
+
+**WP-34 GROOPS bridge** — GROOPS is used as a BLACK BOX (GPLv3: no source is transcribed into this toolbox in any language). `SimulateAccelerometer` with `miscAccelerations:atmosphericDrag` (Sentman 1961 in the Moe & Moe 2005 analytical form, `considerTemperature`, `considerWind` HWM14) and `miscAccelerations:radiationPressure` (SRP + albedo/longwave grids + TRP) over the real 2020-01-01 GRACE-C day. Outputs are frozen as CSV under `tests/fixtures/groops/` and committed; neither the CI nor the owner's host needs a GROOPS installation. **Independence caveat:** GROOPS cites Wöske et al. (2019) for radiation and TRP — the same source as reference [W] — so for SRP/ERP/TRP this is an implementation comparison, not an independent oracle; the drag path (Moe & Moe analytical vs our exact Sentman) is a genuine cross-check.
+
+Side effect: `gracefoReading.writeGroopsInstrument` / `readGroopsInstrument` document that their header conventions were never verified against a real GROOPS installation. WP-34 verifies them and reports back to that toolbox.
+
 ### LP-6 — Model and partials
 WP-14 `Model.accel/torque` (integration requirement I2 from v0.1.1 kept: the kernel returns per-panel forces, never sums internally) · WP-15 `series` chunked/parallel with bit-identity test · WP-16 `partials` (r, v, Cd, Cr, α) · WP-17 `rhs()` and `budget` hook for gjToolbox · WP-30 `forceBudget`. Oracles: [S] and [V] magnitudes; ACT1B along-track drag at solar minimum ~5e-8 m/s².
 
@@ -383,6 +390,9 @@ WP-21 documentation build (`tools/buildDocs.m` regenerates `doc/html` from help 
 | 2026-08-27 | Run logs live in `tests/last_run.txt`, not in this document | F4 |
 | 2026-08-27 | CI = audit (Python, no MATLAB) → Code Analyzer (0 findings enforced) → `ciGate`; dependencies checked out as siblings; `main` protected | referenceSystem precedent; cheapest gate first |
 | 2026-08-27 | Stubs assign `varargout = cell(1, nargout)` before `fail`; sensor stub methods use `~`; `mustBeBetween` replaces `mustBeInRange` | Code Analyzer must be clean without suppression tags (which went stale: MSNU) |
+| 2026-08-27 | Python mirror of the kernel layer only, frozen after LP-5 (owner ruling C1 ii); no mirror of the other layers | a full mirror lengthens the chain GROOPS↔Python↔MATLAB and inverts "MATLAB is normative" |
+| 2026-08-27 | GROOPS fixtures are generated once and committed; GROOPS is never a build or test dependency (owner ruling C2 i) | reproducibility; CI stays MATLAB + Python only |
+| 2026-08-27 | LP-2 before the cross-validation tooling (owner ruling C3) | both need the same real L1B day; the readers are the prerequisite of every later oracle |
 | 2026-08-27 | Deliverables move by zip or git, never by base64 transcription | a transcribed bundle failed its MD5 in this session; caught before anything landed |
 
 ---
