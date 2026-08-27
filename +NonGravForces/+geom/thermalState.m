@@ -1,4 +1,4 @@
-function varargout = thermalState(varargin) %#ok<STOUT,INUSD>
+function varargout = thermalState(varargin)
 %THERMALSTATE Per-panel temperatures: steady state or transient (Wöske). NOT YET IMPLEMENTED (stub).
 %
 %   Specified in HANDOVER.md, WP-28 (level L3). This stub exists so that
@@ -25,5 +25,6 @@ function varargout = thermalState(varargin) %#ok<STOUT,INUSD>
 %
 % KEYWORDS stub WP-28
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
+varargout = cell(1, nargout);   % set so a caller with outputs is refused by fail, not by an unset return
 NonGravForces.fail("thermalState", "notImplemented", "thermalState is specified in WP-28 -> not delivered in 2.0.0, see HANDOVER.md");
 end

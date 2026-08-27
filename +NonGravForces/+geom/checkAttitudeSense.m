@@ -1,4 +1,4 @@
-function varargout = checkAttitudeSense(varargin) %#ok<STOUT,INUSD>
+function varargout = checkAttitudeSense(varargin)
 %CHECKATTITUDESENSE Physics test of quaternion sense (nadir and line-of-sight). NOT YET IMPLEMENTED (stub).
 %
 %   Specified in HANDOVER.md, WP-11 (level L3). This stub exists so that
@@ -25,5 +25,6 @@ function varargout = checkAttitudeSense(varargin) %#ok<STOUT,INUSD>
 %
 % KEYWORDS stub WP-11
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
+varargout = cell(1, nargout);   % set so a caller with outputs is refused by fail, not by an unset return
 NonGravForces.fail("checkAttitudeSense", "notImplemented", "checkAttitudeSense is specified in WP-11 -> not delivered in 2.0.0, see HANDOVER.md");
 end

@@ -1,4 +1,4 @@
-function varargout = calibrate(varargin) %#ok<STOUT,INUSD>
+function varargout = calibrate(varargin)
 %CALIBRATE Accelerometer calibration bridge to lsqvce (bias spline + 3x3 scale + jumps). NOT YET IMPLEMENTED (stub).
 %
 %   Specified in HANDOVER.md, WP-19 (level L8). This stub exists so that
@@ -25,5 +25,6 @@ function varargout = calibrate(varargin) %#ok<STOUT,INUSD>
 %
 % KEYWORDS stub WP-19
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
+varargout = cell(1, nargout);   % set so a caller with outputs is refused by fail, not by an unset return
 NonGravForces.fail("calibrate", "notImplemented", "calibrate is specified in WP-19 -> not delivered in 2.0.0, see HANDOVER.md");
 end

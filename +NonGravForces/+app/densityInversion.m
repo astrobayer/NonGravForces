@@ -1,4 +1,4 @@
-function varargout = densityInversion(varargin) %#ok<STOUT,INUSD>
+function varargout = densityInversion(varargin)
 %DENSITYINVERSION Thermosphere density from calibrated accelerations (Doornbos). NOT YET IMPLEMENTED (stub).
 %
 %   Specified in HANDOVER.md, WP-32 (level L8). This stub exists so that
@@ -25,5 +25,6 @@ function varargout = densityInversion(varargin) %#ok<STOUT,INUSD>
 %
 % KEYWORDS stub WP-32
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
+varargout = cell(1, nargout);   % set so a caller with outputs is refused by fail, not by an unset return
 NonGravForces.fail("densityInversion", "notImplemented", "densityInversion is specified in WP-32 -> not delivered in 2.0.0, see HANDOVER.md");
 end

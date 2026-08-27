@@ -1,4 +1,4 @@
-function varargout = readSCA1B(varargin) %#ok<STOUT,INUSD>
+function varargout = readSCA1B(varargin)
 %READSCA1B SCA1B reader: ICRF->SRF quaternions conjugated once to BODY->GCRS. NOT YET IMPLEMENTED (stub).
 %
 %   Specified in HANDOVER.md, WP-18 (level L1). This stub exists so that
@@ -25,5 +25,6 @@ function varargout = readSCA1B(varargin) %#ok<STOUT,INUSD>
 %
 % KEYWORDS stub WP-18
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
+varargout = cell(1, nargout);   % set so a caller with outputs is refused by fail, not by an unset return
 NonGravForces.fail("readSCA1B", "notImplemented", "readSCA1B is specified in WP-18 -> not delivered in 2.0.0, see HANDOVER.md");
 end

@@ -1,4 +1,4 @@
-function varargout = wind(varargin) %#ok<STOUT,INUSD>
+function varargout = wind(varargin)
 %WIND Relative-velocity builder: co-rotation plus optional HWM14 wind. NOT YET IMPLEMENTED (stub).
 %
 %   Specified in HANDOVER.md, WP-25 (level L2). This stub exists so that
@@ -25,5 +25,6 @@ function varargout = wind(varargin) %#ok<STOUT,INUSD>
 %
 % KEYWORDS stub WP-25
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
+varargout = cell(1, nargout);   % set so a caller with outputs is refused by fail, not by an unset return
 NonGravForces.fail("wind", "notImplemented", "wind is specified in WP-25 -> not delivered in 2.0.0, see HANDOVER.md");
 end

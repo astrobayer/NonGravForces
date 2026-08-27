@@ -29,6 +29,10 @@ function mm = graceFO(satellite, options)
 % OUTPUT ARGUMENTS
 %   mm         1x1  NonGravForces.geom.MacroModel with .inertia (Table 4)
 %
+% ERRORS
+%   MATLAB:validators:mustBeMember   satellite is not "C" or "D" (arguments block)
+%   plus the contract errors of geom.MacroModel, which validates the table.
+%
 % ACCURACY
 %   Areas and normals are transcriptions, no approximation. Panel centroids
 %   are derived from the exterior dimensions (Figs 2-3) and are accurate to
@@ -50,7 +54,7 @@ function mm = graceFO(satellite, options)
 arguments
     satellite (1,1) string {mustBeMember(satellite, ["C","D"])}
     options.SolarArrayOperating (1,1) logical = true
-    options.Alpha (1,1) double {mustBeInRange(options.Alpha, 0, 1)} = 0.85
+    options.Alpha (1,1) double {mustBeBetween(options.Alpha, 0, 1)} = 0.85
 end
 s50 = 0.766044; c50 = 0.642787;
 if options.SolarArrayOperating, aV = 0.65; dV = 0.30; else, aV = 0.72; dV = 0.23; end
