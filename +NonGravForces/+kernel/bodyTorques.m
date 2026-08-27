@@ -1,4 +1,4 @@
-function varargout = bodyTorques(varargin) %#ok<STOUT,INUSD>
+function varargout = bodyTorques(varargin)
 %BODYTORQUES Gravity-gradient and magnetic body torques. NOT YET IMPLEMENTED (stub).
 %
 %   Specified in HANDOVER.md, WP-24 (level L4). This stub exists so that
@@ -25,5 +25,6 @@ function varargout = bodyTorques(varargin) %#ok<STOUT,INUSD>
 %
 % KEYWORDS stub WP-24
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
+varargout = cell(1, nargout);   % set so a caller with outputs is refused by fail, not by an unset return
 NonGravForces.fail("bodyTorques", "notImplemented", "bodyTorques is specified in WP-24 -> not delivered in 2.0.0, see HANDOVER.md");
 end

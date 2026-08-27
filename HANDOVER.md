@@ -2,7 +2,7 @@
 
 **Single source of truth** for the design, the audit that motivated it, the work plan, the rules, and the decisions of `NonGravForces`, a MATLAB toolbox computing non-gravitational forces, torques and partial derivatives for LEO satellites, with GRACE-FO accelerometer processing as the reference application and a sensor layer that admits future instruments (electrostatic, cold-atom, optomechanical, drag-free).
 
-Revision 2.0 · 2026-08-27 · Claude Fable 5 (Anthropic) for Matthias Weigelt · MATLAB R2026a Update 4 · patch number of `NonGravForces.toolboxVersion` = revision of this document (rule P-7).
+Revision 2.0 (amended the same day: CI section A.3, three decisions in Part I; no version bump, P-7) · 2026-08-27 · Claude Fable 5 (Anthropic) for Matthias Weigelt · MATLAB R2026a Update 4 · patch number of `NonGravForces.toolboxVersion` = revision of this document (rule P-7).
 
 Companion: `doc/NonGravForces_Theory_and_Implementation.pdf` (theory, practical considerations, implementation). This document does not repeat the physics; it cites the PDF by section.
 
@@ -26,6 +26,7 @@ Delivered (status key: ☑ verified in MATLAB, ◐ delivered-untested, ○ speci
 | Sensor interface `sensor.Sensor` (abstract) | `+NonGravForces/+sensor/` | ☑ (interface) |
 | 39 documented stubs raising `NonGravForces:<name>:notImplemented` | all packages | ○ |
 | Test infrastructure: `NgfTestCase`, `runNgfTests`, `auditTestCategories`, exemptions; 5 test classes, 74 tests, **gate GREEN 74/74** | `tests/` | ☑ |
+| CI: `ci.yml`, `ciGate.m`, `auditPackage.py`; Code Analyzer clean (0 findings) | repository root, `.github/workflows/` | ☑ (local run 2026-08-27) |
 | Help-browser documentation (`info.xml`, `helptoc.xml`, six pages) | `doc/html/` | ☑ (`doc NonGravForces` opens) |
 | Theory & implementation PDF | `doc/*.pdf` (+ LaTeX source in `doc/src`) | — |
 
@@ -56,6 +57,8 @@ runNgfTests                          % gate; 'ExcludeSlow',false adds the speed 
 doc NonGravForces                    % help browser
 ```
 `setupNonGravForces` adds `tests/` itself (v0.1.1 did not: finding V-13 friction, closed by design).
+
+**Continuous integration** (`.github/workflows/ci.yml`, modelled on referenceSystem's): job `audit` runs `auditPackage.py` (stdlib only: catalogue ↔ files, help template, `fail` taxonomy, banned constructs); job `matlab` checks out `referenceSystem` and `gracefoReading` as siblings, runs `codeIssues` on the package (must be empty) and then `ciGate`, the one entry point that installs, runs the suite and judges. `ciGate` is also the local postflight (`matlab -batch ciGate`). Branch `main` is protected: both checks required, no force pushes, changes arrive by pull request.
 
 ### A.4 Session protocol (unchanged in spirit from v0.1.1, tightened)
 
@@ -378,6 +381,9 @@ WP-21 documentation build (`tools/buildDocs.m` regenerates `doc/html` from help 
 | 2026-08-27 | Speed ratio bound 1000 for the interpreted hampel loop | measured 382; interpreter/C gap, not an algorithmic defect |
 | 2026-08-27 | Errors through one raise point with taxonomy and hint | F12 |
 | 2026-08-27 | Run logs live in `tests/last_run.txt`, not in this document | F4 |
+| 2026-08-27 | CI = audit (Python, no MATLAB) → Code Analyzer (0 findings enforced) → `ciGate`; dependencies checked out as siblings; `main` protected | referenceSystem precedent; cheapest gate first |
+| 2026-08-27 | Stubs assign `varargout = cell(1, nargout)` before `fail`; sensor stub methods use `~`; `mustBeBetween` replaces `mustBeInRange` | Code Analyzer must be clean without suppression tags (which went stale: MSNU) |
+| 2026-08-27 | Deliverables move by zip or git, never by base64 transcription | a transcribed bundle failed its MD5 in this session; caught before anything landed |
 
 ---
 

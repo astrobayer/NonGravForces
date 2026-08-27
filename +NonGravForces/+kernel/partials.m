@@ -1,4 +1,4 @@
-function varargout = partials(varargin) %#ok<STOUT,INUSD>
+function varargout = partials(varargin)
 %PARTIALS Analytic partials of a w.r.t. r v Cd Cr; complex-step verifier. NOT YET IMPLEMENTED (stub).
 %
 %   Specified in HANDOVER.md, WP-16 (level L4). This stub exists so that
@@ -25,5 +25,6 @@ function varargout = partials(varargin) %#ok<STOUT,INUSD>
 %
 % KEYWORDS stub WP-16
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
+varargout = cell(1, nargout);   % set so a caller with outputs is refused by fail, not by an unset return
 NonGravForces.fail("partials", "notImplemented", "partials is specified in WP-16 -> not delivered in 2.0.0, see HANDOVER.md");
 end

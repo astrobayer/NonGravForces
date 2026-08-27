@@ -118,18 +118,18 @@ classdef Options
     methods (Access = private)
         function obj = applyPreset(obj, preset)
             switch preset
-                case "fast",     dens = "exponential"; gsi = "constantCd"; acc = "fixed"; ecl = "conical";   erp = "none";   grid = [0 0];   th = "none";        ss = "none";    sun = "rs.analytic";
-                case "standard", dens = "msis00";      gsi = "sentman";    acc = "fixed"; ecl = "conical";   erp = "knocke"; grid = [12 24]; th = "steadyState"; ss = "lut";     sun = "rs.analytic";
-                case "precise",  dens = "msis21";      gsi = "sentman";    acc = "sesam"; ecl = "solaarsCF"; erp = "ceres";  grid = [24 48]; th = "steadyState"; ss = "raycast"; sun = "rs.de440";
+                case "fast",     dens = "exponential"; gsi = "constantCd"; acc = "fixed"; ecl = "conical";   erpB = "none";   grid = [0 0];   th = "none";        ss = "none";    sunS = "rs.analytic";
+                case "standard", dens = "msis00";      gsi = "sentman";    acc = "fixed"; ecl = "conical";   erpB = "knocke"; grid = [12 24]; th = "steadyState"; ss = "lut";     sunS = "rs.analytic";
+                case "precise",  dens = "msis21";      gsi = "sentman";    acc = "sesam"; ecl = "solaarsCF"; erpB = "ceres";  grid = [24 48]; th = "steadyState"; ss = "raycast"; sunS = "rs.de440";
             end
             obj.drag     = struct('density', dens, 'wind', "corotation", 'gsi', gsi, ...
                                   'accommodation', acc, 'alpha', 0.85, 'Tw_K', 300, 'cdScale', 1.0);
             obj.srp      = struct('tsi', NonGravForces.const().S0, 'eclipse', ecl, 'lunarEclipse', false);
-            obj.erp      = struct('backend', erp, 'grid', grid, 'anisotropy', "lambert");
+            obj.erp      = struct('backend', erpB, 'grid', grid, 'anisotropy', "lambert");
             obj.thermal  = struct('model', th, 'internalPower_W', 0);
             obj.torques  = struct('gravityGradient', false, 'magnetic', false);
             obj.geom     = struct('selfShadow', ss, 'lutResolution', 642);
-            obj.sun      = struct('source', sun);
+            obj.sun      = struct('source', sunS);
             obj.series   = struct('useParallel', false, 'chunk', 8640);
             obj.partials = struct('method', "analytic");
         end

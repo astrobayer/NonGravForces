@@ -1,4 +1,4 @@
-function varargout = igrfCoefficients(varargin) %#ok<STOUT,INUSD>
+function varargout = igrfCoefficients(varargin)
 %IGRFCOEFFICIENTS IGRF-14 coefficient loader. NOT YET IMPLEMENTED (stub).
 %
 %   Specified in HANDOVER.md, WP-23 (level L1). This stub exists so that
@@ -25,5 +25,6 @@ function varargout = igrfCoefficients(varargin) %#ok<STOUT,INUSD>
 %
 % KEYWORDS stub WP-23
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
+varargout = cell(1, nargout);   % set so a caller with outputs is refused by fail, not by an unset return
 NonGravForces.fail("igrfCoefficients", "notImplemented", "igrfCoefficients is specified in WP-23 -> not delivered in 2.0.0, see HANDOVER.md");
 end

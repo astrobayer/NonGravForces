@@ -1,4 +1,4 @@
-function varargout = accommodation(varargin) %#ok<STOUT,INUSD>
+function varargout = accommodation(varargin)
 %ACCOMMODATION Energy accommodation coefficient: fixed sesam langmuir. NOT YET IMPLEMENTED (stub).
 %
 %   Specified in HANDOVER.md, WP-26 (level L4). This stub exists so that
@@ -25,5 +25,6 @@ function varargout = accommodation(varargin) %#ok<STOUT,INUSD>
 %
 % KEYWORDS stub WP-26
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
+varargout = cell(1, nargout);   % set so a caller with outputs is refused by fail, not by an unset return
 NonGravForces.fail("accommodation", "notImplemented", "accommodation is specified in WP-26 -> not delivered in 2.0.0, see HANDOVER.md");
 end

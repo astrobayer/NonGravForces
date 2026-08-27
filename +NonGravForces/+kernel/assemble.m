@@ -1,4 +1,4 @@
-function varargout = assemble(varargin) %#ok<STOUT,INUSD>
+function varargout = assemble(varargin)
 %ASSEMBLE Reductions: F = sum F_k and tau = sum (r_k - r_cm) x F_k. NOT YET IMPLEMENTED (stub).
 %
 %   Specified in HANDOVER.md, WP-14 (level L4). This stub exists so that
@@ -25,5 +25,6 @@ function varargout = assemble(varargin) %#ok<STOUT,INUSD>
 %
 % KEYWORDS stub WP-14
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
+varargout = cell(1, nargout);   % set so a caller with outputs is refused by fail, not by an unset return
 NonGravForces.fail("assemble", "notImplemented", "assemble is specified in WP-14 -> not delivered in 2.0.0, see HANDOVER.md");
 end

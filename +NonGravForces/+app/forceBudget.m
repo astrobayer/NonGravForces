@@ -1,4 +1,4 @@
-function varargout = forceBudget(varargin) %#ok<STOUT,INUSD>
+function varargout = forceBudget(varargin)
 %FORCEBUDGET Per-effect per-axis RMS budget table. NOT YET IMPLEMENTED (stub).
 %
 %   Specified in HANDOVER.md, WP-30 (level L8). This stub exists so that
@@ -25,5 +25,6 @@ function varargout = forceBudget(varargin) %#ok<STOUT,INUSD>
 %
 % KEYWORDS stub WP-30
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
+varargout = cell(1, nargout);   % set so a caller with outputs is refused by fail, not by an unset return
 NonGravForces.fail("forceBudget", "notImplemented", "forceBudget is specified in WP-30 -> not delivered in 2.0.0, see HANDOVER.md");
 end

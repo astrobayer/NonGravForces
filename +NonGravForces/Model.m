@@ -75,22 +75,28 @@ classdef Model
             obj.mass = nv.Mass;
             obj.provenance = NonGravForces.provenance("Model", 'Options', options.toStruct());
         end
-        function varargout = accel(obj, varargin) %#ok<*STOUT,*INUSD>
+        function varargout = accel(~, varargin)
+            varargout = cell(1, nargout);
             NonGravForces.fail("Model", "notImplemented", "accel is specified in LP-6 (WP-14) -> not delivered in 2.0.0");
         end
-        function varargout = torque(obj, varargin)
+        function varargout = torque(~, varargin)
+            varargout = cell(1, nargout);
             NonGravForces.fail("Model", "notImplemented", "torque is specified in LP-6 (WP-14) -> not delivered in 2.0.0");
         end
-        function varargout = series(obj, varargin)
+        function varargout = series(~, varargin)
+            varargout = cell(1, nargout);
             NonGravForces.fail("Model", "notImplemented", "series is specified in LP-6 (WP-15) -> not delivered in 2.0.0");
         end
-        function varargout = partials(obj, varargin)
+        function varargout = partials(~, varargin)
+            varargout = cell(1, nargout);
             NonGravForces.fail("Model", "notImplemented", "partials is specified in LP-6 (WP-16) -> not delivered in 2.0.0");
         end
-        function varargout = rhs(obj, varargin)
+        function varargout = rhs(~, varargin)
+            varargout = cell(1, nargout);
             NonGravForces.fail("Model", "notImplemented", "rhs is specified in LP-6 (WP-17) -> not delivered in 2.0.0");
         end
-        function varargout = budget(obj, varargin)
+        function varargout = budget(~, varargin)
+            varargout = cell(1, nargout);
             NonGravForces.fail("Model", "notImplemented", "budget is specified in LP-8 (WP-30) -> not delivered in 2.0.0");
         end
     end

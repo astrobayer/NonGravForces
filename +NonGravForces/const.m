@@ -31,6 +31,9 @@ function c = const()
 %   c.graceFO         1x1   struct  -         Handbook (JPL D-56935 Tab.4):
 %                                             .massC .massD [kg]
 %
+% ERRORS
+%   (none) The function takes no input and cannot fail.
+%
 % ACCURACY
 %   All values are defining or nominal constants; none carries a model error.
 %   S0: the observed TSI varies by 0.1 % over a solar cycle; the toolbox

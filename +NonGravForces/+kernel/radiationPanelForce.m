@@ -1,4 +1,4 @@
-function varargout = radiationPanelForce(varargin) %#ok<STOUT,INUSD>
+function varargout = radiationPanelForce(varargin)
 %RADIATIONPANELFORCE Per-panel radiation force for a source list in body frame. NOT YET IMPLEMENTED (stub).
 %
 %   Specified in HANDOVER.md, WP-12 (level L4). This stub exists so that
@@ -25,5 +25,6 @@ function varargout = radiationPanelForce(varargin) %#ok<STOUT,INUSD>
 %
 % KEYWORDS stub WP-12
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
+varargout = cell(1, nargout);   % set so a caller with outputs is refused by fail, not by an unset return
 NonGravForces.fail("radiationPanelForce", "notImplemented", "radiationPanelForce is specified in WP-12 -> not delivered in 2.0.0, see HANDOVER.md");
 end

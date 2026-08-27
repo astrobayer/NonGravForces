@@ -1,4 +1,4 @@
-function varargout = density(varargin) %#ok<STOUT,INUSD>
+function varargout = density(varargin)
 %DENSITY Thermosphere density and composition dispatcher (exponential msis00 msis21 dtm2020 jb2008). NOT YET IMPLEMENTED (stub).
 %
 %   Specified in HANDOVER.md, WP-05 (level L2). This stub exists so that
@@ -25,5 +25,6 @@ function varargout = density(varargin) %#ok<STOUT,INUSD>
 %
 % KEYWORDS stub WP-05
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
+varargout = cell(1, nargout);   % set so a caller with outputs is refused by fail, not by an unset return
 NonGravForces.fail("density", "notImplemented", "density is specified in WP-05 -> not delivered in 2.0.0, see HANDOVER.md");
 end

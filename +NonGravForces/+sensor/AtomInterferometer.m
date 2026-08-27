@@ -16,12 +16,12 @@ classdef AtomInterferometer < NonGravForces.sensor.Sensor
 % KEYWORDS stub WP-29
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
     methods
-        function obj = AtomInterferometer(varargin) %#ok<INUSD>
+        function obj = AtomInterferometer(varargin)
             NonGravForces.fail("AtomInterferometer", "notImplemented", "AtomInterferometer is specified in WP-29 -> not delivered in 2.0.0, see HANDOVER.md");
         end
-        function y = observe(obj, dyn), y = []; end %#ok<INUSD>
-        function [J, names] = partials(obj, dyn), J = []; names = string.empty; end %#ok<INUSD>
-        function S = noiseModel(obj, f_Hz), S = []; end %#ok<INUSD>
-        function n = numParameters(obj), n = 0; end %#ok<INUSD>
+        function y = observe(~, ~), y = []; end
+        function [J, names] = partials(~, ~), J = []; names = string.empty; end
+        function S = noiseModel(~, ~), S = []; end
+        function n = numParameters(~), n = 0; end
     end
 end
