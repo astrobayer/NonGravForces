@@ -35,7 +35,7 @@ jobs:
 
   matlab:
     needs: [audit]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Windows]
     timeout-minutes: 45
     env:
       NONGRAVFORCES_CI: 1
@@ -44,27 +44,23 @@ jobs:
         with: { path: NonGravForces }
       - uses: actions/checkout@v4
         with: { repository: matweigelt/referenceSystem, path: referenceSystem }
-      - uses: actions/checkout@v4
-        with: { repository: matweigelt/gracefoReading, path: gracefoReading }
-
-      # setup-matlab can wedge; one automatic retry, each attempt capped.
-      - uses: matlab-actions/setup-matlab@v2
-        id: matlabSetupFirst
-        continue-on-error: true
-        timeout-minutes: 12
+      # Set up MATLAB is GONE, not disabled. This repository went
+      # private with the move to the organisation, and setup-matlab
+      # licenses base MATLAB by itself only on a PUBLIC repository -
+      # so the step could not have worked again, with or without a
+      # self-hosted runner. The batch-licensing token that covers
+      # private repositories comes from a MathWorks pilot closed to
+      # new requests.
+      #
+      # The probe replaces it: seconds, and a missing or
+      # misconfigured MATLAB fails by name here instead of as a
+      # confusing error inside the suite.
+      - name: Verify MATLAB on PATH (self-hosted)
+        timeout-minutes: 2
+        uses: matlab-actions/run-command@v3
         with:
-          release: R2026a          # == the local release, the ground truth
-          products: Parallel_Computing_Toolbox
-          cache: true
-      - uses: matlab-actions/setup-matlab@v2
-        if: steps.matlabSetupFirst.outcome != 'success'
-        timeout-minutes: 12
-        with:
-          release: R2026a
-          products: Parallel_Computing_Toolbox
-          cache: true
-
-      # Code Analyzer first: a style finding is cheaper to read than a suite log.
+          command: >
+            fprintf('MATLAB on self-hosted runner: %s\n', version);
       - uses: matlab-actions/run-command@v2
         with:
           command: |
