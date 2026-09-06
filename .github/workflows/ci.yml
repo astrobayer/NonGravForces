@@ -7,11 +7,15 @@
 #            green.
 #
 # NonGravForces has TWO inviolable dependencies that live in sibling
-# repositories of the same owner (HANDOVER A.2). CI checks them out next to
-# this repository so that ciGate's default DependencyRoot (the parent folder)
-# is the same layout the owner uses locally. Both are public; no token.
+# repositories of the same organisation (HANDOVER A.2). CI checks them out
+# next to this repository so that ciGate's default DependencyRoot (the parent
+# folder) is the same layout the owner uses locally.
 #
-# The repository is PUBLIC, so matlab-actions licenses MATLAB for free.
+# ALL THREE REPOSITORIES ARE PRIVATE since the move to astrobayer. That has
+# two consequences this file has to carry: matlab-actions no longer licenses
+# MATLAB by itself, which is why the job runs on the self-hosted runner, and
+# GITHUB_TOKEN no longer reaches the siblings, which is why the two sibling
+# checkouts carry an organisation secret.
 name: NonGravForces CI
 
 on:
@@ -42,8 +46,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { path: NonGravForces }
+      # ciGate checks for BOTH siblings - referenceSystem/setupReferenceSystem.m
+      # and gracefoReading/setupGraceFOReading.m - so both must be here. The
+      # gracefoReading checkout was lost when this file was patched for the
+      # self-hosted runner: the removal block ended mid-step and took the
+      # following one with it. It never showed up as a failure because the
+      # job did not get that far.
+      #
+      # THREE THINGS CHANGED AT ONCE, and each alone would break the job:
+      #   owner   astrobayer, not matweigelt. Transfers redirect for the API
+      #           but not for actions/checkout, which 404s on the old owner.
+      #   token   GITHUB_TOKEN is scoped to THIS repository only. Both
+      #           siblings went private with the move, so a second credential
+      #           is required. REFERENCE_READ_TOKEN is an organisation secret
+      #           scoped to this repository alone.
+      #   creds   persist-credentials: false. actions/checkout otherwise
+      #           writes the token into the workspace .git/config, and this
+      #           runner keeps _work between runs while git clean -ffdx does
+      #           not touch .git/config - the token would sit on the disk of
+      #           a shared machine indefinitely.
       - uses: actions/checkout@v4
-        with: { repository: matweigelt/referenceSystem, path: referenceSystem }
+        with:
+          repository: astrobayer/referenceSystem
+          path: referenceSystem
+          token: ${{ secrets.REFERENCE_READ_TOKEN }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: astrobayer/gracefoReading
+          path: gracefoReading
+          token: ${{ secrets.REFERENCE_READ_TOKEN }}
+          persist-credentials: false
       # Set up MATLAB is GONE, not disabled. This repository went
       # private with the move to the organisation, and setup-matlab
       # licenses base MATLAB by itself only on a PUBLIC repository -
