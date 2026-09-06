@@ -2,7 +2,7 @@ function v = toolboxVersion(format)
 %TOOLBOXVERSION Semantic version of NonGravForces - the single authority.
 %
 %   v = NonGravForces.toolboxVersion            % struct
-%   s = NonGravForces.toolboxVersion('string')  % '0.2.0'
+%   s = NonGravForces.toolboxVersion('string')  % '0.3.0'
 %
 %   THE NUMERIC FIELDS ARE THE AUTHORITY AND THE STRING IS COMPOSED FROM THEM
 %   (rule R1, decision of 2026-09-06): an edit changes major/minor/patch below
@@ -24,7 +24,7 @@ function v = toolboxVersion(format)
 %                                (string, composed), .date (string, ISO),
 %                                .concept (uint8, 3 = this redesign), .model
 %                                (string: authoring model of this revision).
-%                                With "string": char '0.2.0'.
+%                                With "string": char '0.3.0'.
 %
 % ERRORS
 %   MATLAB:validators:mustBeMember   Unknown format keyword.
@@ -39,10 +39,10 @@ function v = toolboxVersion(format)
 arguments
     format (1,1) string {mustBeMember(format, ["struct","string"])} = "struct"
 end
-major = uint16(0); minor = uint16(2); patch = uint16(0);
+major = uint16(0); minor = uint16(3); patch = uint16(0);
 v = struct('major', major, 'minor', minor, 'patch', patch, ...
            'semantic', string(sprintf('%d.%d.%d', major, minor, patch)), ...
-           'date', "2026-09-06", 'concept', uint8(3), ...
+           'date', "2026-09-07", 'concept', uint8(3), ...
            'model', "Claude Fable 5.1 (Anthropic)");
 if format == "string"
     v = char(v.semantic);
