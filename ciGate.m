@@ -20,6 +20,7 @@ function ciGate(options)
 % ERRORS
 %   NonGravForces:ciGate:depMissing   a required dependency setup was not found
 %   NonGravForces:ciGate:red          the gate is not GREEN; message lists why
+%   NonGravForces:buildMex:*          no compiler / missing sources (O-14)
 %
 % KEYWORDS ci gate
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
@@ -38,6 +39,8 @@ for k = 1:numel(deps)
 end
 cd(here);
 info = setupNonGravForces('Verbose', true);
+mexReport = NonGravForces.buildMex();          % O-14: a runner without a compiler turns the gate red here, by design
+fprintf("ciGate: MEX %s built with %s\n", mexReport.file, mexReport.compiler);
 req = info.dependencies([info.dependencies.required]);
 if ~all([req.present])
     error("NonGravForces:ciGate:depMissing", "a required dependency did not answer after its setup -> read the table above");
