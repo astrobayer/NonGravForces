@@ -45,4 +45,9 @@ ex.MacroModel.speed             = "no numerical work";
 ex.const.vectorization          = "scalar struct";
 ex.const.speed                  = "no numerical work";
 ex.const.metamorphic            = "constants have no input";
+ex.buildMex.reference           = "the compiler and the vendored C are the reference; the density table test is the reference of what it builds";
+ex.buildMex.precision           = "no numerical claim of its own";
+ex.buildMex.vectorization       = "one build";
+ex.buildMex.metamorphic         = "no input relation exists";
+ex.buildMex.speed               = "a compile is not timed";
 end
