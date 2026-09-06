@@ -195,8 +195,8 @@ for `Options.sun.source = "rs.de440"` · O-8 no MAG1B file (`readMAG1B` stays a
 stub) · O-9 Dst/F30 in no space-weather source in hand · O-10 referenceSystem
 refuses the whole 1962-now C04 series (pre-1972 rows) · O-11 doc/html pages
 other than FunctionList are hand-edited until WP-21 · O-12 `readL1bMulti` crashes on
-an empty TimeRange result · O-13 SOLAARS-CF coefficients not in hand · O-14 MEX on
-the CI runner (buildMex finds the MinGW support package itself) · O-15 rs.de440 Sun
+an empty TimeRange result · O-13 SOLAARS-CF coefficients not in hand · O-14 closed: the CI
+runner builds the MEX (buildMex finds the MinGW support package itself) · O-15 rs.de440 Sun
 path delivered-untested.
 
 Housekeeping: the repository has no LICENSE file yet.
