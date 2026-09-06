@@ -4,8 +4,19 @@ classdef tNgfCore < NgfTestCase
     methods (Test, TestTags = {'contract'})
         function toolboxVersionContract(tc)
             v = NonGravForces.toolboxVersion;
-            tc.verifyEqual(v.semantic, "0.1.0");
-            tc.verifyEqual(NonGravForces.toolboxVersion('string'), '0.1.0');
+            % R1: the string is composed from the numeric fields; no literal is pinned here.
+            tc.verifyEqual(v.semantic, string(sprintf('%d.%d.%d', v.major, v.minor, v.patch)));
+            tc.verifyEqual(NonGravForces.toolboxVersion('string'), char(v.semantic));
+            tc.verifyClass(v.major, 'uint16');
+            % Every Contents.m carries a copy of the version; the copies must agree (R1, mechanical).
+            here = fileparts(mfilename('fullpath'));
+            cfiles = dir(fullfile(fileparts(here), '+NonGravForces', '**', 'Contents.m'));
+            tc.verifyGreaterThanOrEqual(numel(cfiles), 8);
+            for k = 1:numel(cfiles)
+                txt = fileread(fullfile(cfiles(k).folder, cfiles(k).name));
+                tok = regexp(txt, '^% Version (\S+)', 'tokens', 'once', 'lineanchors');
+                tc.verifyEqual(string(tok), v.semantic, sprintf('%s disagrees with toolboxVersion', fullfile(cfiles(k).folder, cfiles(k).name)));
+            end
             tc.verifyEqual(v.concept, uint8(3));
             tc.verifyError(@() NonGravForces.toolboxVersion('xml'), 'MATLAB:validators:mustBeMember');
         end
@@ -28,7 +39,7 @@ classdef tNgfCore < NgfTestCase
             p = NonGravForces.provenance("unitA", 'Files', "a.txt", 'Options', struct('k', 1));
             tc.verifyEqual(p.unit, "unitA");
             tc.verifyEqual(strlength(p.optionHash), 8);
-            tc.verifyEqual(p.toolboxVersion, "0.1.0");
+            tc.verifyEqual(p.toolboxVersion, string(NonGravForces.toolboxVersion('string')));
             tc.verifyEqual(p.created.TimeZone, 'UTC');
             q = NonGravForces.provenance("unitA");
             tc.verifyEqual(q.optionHash, "00000000");

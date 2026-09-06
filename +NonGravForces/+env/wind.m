@@ -26,5 +26,5 @@ function varargout = wind(varargin)
 % KEYWORDS stub WP-25
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
 varargout = cell(1, nargout);   % set so a caller with outputs is refused by fail, not by an unset return
-NonGravForces.fail("wind", "notImplemented", "wind is specified in WP-25 -> not delivered in 0.1.0, see HANDOVER.md");
+NonGravForces.fail("wind", "notImplemented", "wind is specified in WP-25 -> not delivered yet, see HANDOVER.md");
 end

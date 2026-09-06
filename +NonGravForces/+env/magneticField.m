@@ -26,5 +26,5 @@ function varargout = magneticField(varargin)
 % KEYWORDS stub WP-23
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
 varargout = cell(1, nargout);   % set so a caller with outputs is refused by fail, not by an unset return
-NonGravForces.fail("magneticField", "notImplemented", "magneticField is specified in WP-23 -> not delivered in 0.1.0, see HANDOVER.md");
+NonGravForces.fail("magneticField", "notImplemented", "magneticField is specified in WP-23 -> not delivered yet, see HANDOVER.md");
 end
