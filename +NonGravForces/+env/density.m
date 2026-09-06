@@ -1,30 +1,209 @@
-function varargout = density(varargin)
-%DENSITY Thermosphere density and composition dispatcher (exponential msis00 msis21 dtm2020 jb2008). NOT YET IMPLEMENTED (stub).
+function [rho, species, T, info] = density(model, epoch, lla, sw, options)
+%DENSITY Thermosphere density and composition dispatcher: exponential, NRLMSISE-00 (MEX); others refuse until LP-3b.
 %
-%   Specified in HANDOVER.md, WP-05 (level L2). This stub exists so that
-%   the package layout is complete from the first commit and so that a caller
-%   written against the future API fails LOUDLY with a stable identifier
-%   instead of resolving to something else on the path (rule R4).
+%   [rho, species, T, info] = NonGravForces.env.density("msis00", epoch, lla, sw)
+%   [rho, species, T, info] = NonGravForces.env.density("msis00", epoch, lla, [], 'Drivers', d)
+%   rho = NonGravForces.env.density("exponential", epoch, lla, [], 'Exponential', p)
+%
+%   K-vectorised evaluation of the neutral atmosphere at geodetic positions.
+%   The position is GEODETIC ON WGS-84 (latitude, longitude, height), which
+%   the caller obtains from referenceSystem.cartesianToGeodetic with
+%   'Ellipsoid', "WGS84" passed explicitly (its default is GRS80): a spherical
+%   Earth is 21.4 km wrong at the poles and a factor 1.40 in density (HANDOVER
+%   C.1, defect D2).
+%
+%   BACKENDS
+%     msis00       NRLMSISE-00 (Picone et al. 2002) through the MEX of the
+%                  vendored Brodowski C (NonGravForces.buildMex). Drivers from
+%                  a celestrak-family spaceWeather struct queried at the
+%                  epochs: previous-day observed F10.7, 81-day centred mean,
+%                  the 7-element ap history (switch 9 = -1); or from
+%                  'Drivers'. gtd7d by default: the total mass density
+%                  includes anomalous oxygen, as the model authors recommend
+%                  for drag above ~500 km; 'AnomalousOxygen', false gives gtd7.
+%     exponential  rho = rho0 exp(-(h - h0)/H) with the caller's rho0, h0, H
+%                  ('Exponential'); sizing only, no composition, no drivers.
+%     msis21, dtm2020, jb2008   refuse with notImplemented (LP-3b, WP-25).
+%
+%   NaN POLICY: a NaN anywhere in lla or in the drivers raises numericNaN,
+%   because a NaN density silently zeroes the drag (HANDOVER E.2 rule 7).
 %
 % INPUT ARGUMENTS
-%   varargin   any   -   Accepted and ignored; the signature is fixed in WP-05.
+%   Name     Size  Type    Units      Description
+%   ----     ----  ----    -----      -----------
+%   model    1x1   string  -          "exponential" | "msis00" | "msis21" | "dtm2020" | "jb2008"
+%   epoch    1x1   struct  -          referenceSystem epoch struct, K entries, any scale
+%   lla      3xK   double  rad,rad,m  Geodetic latitude, longitude, height (WGS-84)
+%   sw       1x1   struct  -          NonGravForces.io.spaceWeather result of the
+%                                     celestrak family, or [] with 'Drivers' or
+%                                     for "exponential".
+%
+% NAME-VALUE ARGUMENTS
+%   Name              Size  Type     Units    Description
+%   ----              ----  ----     -----    -----------
+%   Drivers           1x1   struct   -        .f107 (1xK, previous-day observed
+%                                             F10.7), .f107a (1xK, 81-day
+%                                             centred), .ap (1xK daily Ap, or 7xK
+%                                             NRLMSISE history). Overrides sw.
+%   AnomalousOxygen   1x1   logical  -        true (default): gtd7d; false: gtd7.
+%   Exponential       1x1   struct   -        .rho0_kg_m3, .h0_m, .H_m; required
+%                                             for "exponential", ignored otherwise.
+%   LocalSolarTime_h  1xK   double   h        Override of the local solar time handed
+%                                             to MSIS. Default [] = sec/3600 + lon/15,
+%                                             the consistent choice the reference
+%                                             recommends. The published test cases
+%                                             set an inconsistent 16 h and are
+%                                             reproduced only with this override.
 %
 % OUTPUT ARGUMENTS
-%   (none)     Never returned; the function always raises.
+%   Name     Size  Type    Units    Description
+%   ----     ----  ----    -----    -----------
+%   rho      1xK   double  kg/m^3   Total mass density.
+%   species  8xK   double  1/m^3    Number densities He O N2 O2 Ar H N
+%                                   O_anomalous (const.speciesName order); NaN
+%                                   for "exponential".
+%   T        2xK   double  K        [exospheric temperature; temperature at h];
+%                                   NaN for "exponential".
+%   info     1x1   struct  -        .backend, .drivers (struct actually used:
+%                                   f107 f107a ap, and .source "spaceWeather" |
+%                                   "caller" | "none"), .anomalousOxygen,
+%                                   .msisInput (struct doy sec alt_km lat_deg
+%                                   lon_deg lst_h, 1xK each; msis00 only),
+%                                   .provenance.
+%
+% ACCURACY
+%   msis00 is bit-identical to the reference C for the same inputs (same
+%   object code); the SI conversion (x1e6 for number densities, x1e3 for the
+%   mass density) is one multiplication. The published 17-case table is
+%   reproduced to its printed 7 digits every run (tests/tNgfEnv.m). Local
+%   solar time is sec/3600 + lon/15 as the reference documents; the equation
+%   of time (< 17 min) is neglected, as the reference recommends. The model
+%   itself is uncertain by 10-30 % (HANDOVER C.4).
 %
 % ERRORS
-%   NonGravForces:density:notImplemented   Always.
+%   NonGravForces:density:inputShape        lla not 3xK or K differs from epoch
+%   NonGravForces:density:inputDrivers      no sw and no Drivers; sw not of the
+%                                           celestrak family; Drivers or
+%                                           LocalSolarTime_h malformed
+%   NonGravForces:density:inputExponential  "exponential" without a complete
+%                                           Exponential struct
+%   NonGravForces:density:numericNaN        NaN in lla or in the drivers
+%   NonGravForces:density:depMissing        msis00 MEX not built
+%   NonGravForces:density:notImplemented    msis21 | dtm2020 | jb2008 (LP-3b)
+%   NonGravForces:spaceWeather:*            from sw.query, unwrapped
+%   referenceSystem:*                       propagated unwrapped
 %
 % REFERENCES
-%   HANDOVER.md Rev 2.0, WP-05; doc/NonGravForces_Theory_and_Implementation.pdf.
+%   Picone, Hedin, Drob, Aikin (2002) JGR 107(A12) 1468, NRLMSISE-00.
+%   Brodowski, NRLMSISE-00 C release 20041227, DOCUMENTATION §5 (inputs) and §7 (table).
 %
 % EXAMPLE
-%   try, NonGravForces.env.density(); catch ME, disp(ME.identifier); end
+%   ep = referenceSystem.mjdToEpoch(58849.5, "UTC");
+%   lla = [deg2rad(60); deg2rad(-70); 400e3];
+%   d = struct('f107', 150, 'f107a', 150, 'ap', 4);
+%   rho = NonGravForces.env.density("msis00", ep, lla, [], 'Drivers', d, 'AnomalousOxygen', false)
 %
-% See also NonGravForces.Model.
+% See also NonGravForces.io.spaceWeather, NonGravForces.buildMex, referenceSystem.cartesianToGeodetic.
 %
-% KEYWORDS stub WP-05
-% Created 2026-08-27 by Claude Fable 5 (Anthropic).
-varargout = cell(1, nargout);   % set so a caller with outputs is refused by fail, not by an unset return
-NonGravForces.fail("density", "notImplemented", "density is specified in WP-05 -> not delivered yet, see HANDOVER.md");
+% KEYWORDS density thermosphere NRLMSISE-00 exponential drag
+% Created 2026-09-07 by Claude Fable 5.1 (Anthropic).
+arguments
+    model (1,1) string {mustBeMember(model, ["exponential","msis00","msis21","dtm2020","jb2008"])}
+    epoch (1,1) struct
+    lla double
+    sw = []
+    options.Drivers = []
+    options.AnomalousOxygen (1,1) logical = true
+    options.Exponential = []
+    options.LocalSolarTime_h = []
+end
+unit = "density";
+if ~all(isfield(epoch, ["day","sec","scale"]))
+    NonGravForces.fail(unit, "inputShape", "epoch must be a referenceSystem epoch struct (.day .sec .scale) -> build one with daySecondToEpoch or mjdToEpoch");
+end
+K = numel(epoch.day);
+if ~(ismatrix(lla) && size(lla, 1) == 3 && size(lla, 2) == K && isreal(lla))
+    NonGravForces.fail(unit, "inputShape", "lla must be 3x%d [lat; lon; h] for %d epochs, got %s -> transpose or match the epoch count", K, K, mat2str(size(lla)));
+end
+if any(~isfinite(lla(:)))
+    NonGravForces.fail(unit, "numericNaN", "lla contains NaN/Inf at column %d -> screen the positions first; a NaN density would silently zero the drag", find(any(~isfinite(lla), 1), 1));
+end
+info.backend = model;
+switch model
+    case "exponential"
+        p = options.Exponential;
+        if ~(isstruct(p) && all(isfield(p, ["rho0_kg_m3","h0_m","H_m"]))) || ~all(isfinite([p.rho0_kg_m3 p.h0_m p.H_m])) || p.rho0_kg_m3 <= 0 || p.H_m <= 0
+            NonGravForces.fail(unit, "inputExponential", "model exponential needs 'Exponential', struct('rho0_kg_m3', r, 'h0_m', h0, 'H_m', H) with positive rho0 and H -> pass the scale height model explicitly (sizing only)");
+        end
+        rho = p.rho0_kg_m3 * exp(-(lla(3, :) - p.h0_m) / p.H_m);
+        species = nan(8, K); T = nan(2, K);
+        info.drivers = struct('source', "none");
+        info.anomalousOxygen = false;
+        info.exponential = p;
+    case "msis00"
+        drv = localDrivers(unit, epoch, sw, options.Drivers, K);
+        gw = fullfile(fileparts(mfilename('fullpath')), 'private', "msisGateway." + mexext);
+        if ~isfile(gw)
+            NonGravForces.fail(unit, "depMissing", "the NRLMSISE-00 MEX %s is not built -> run NonGravForces.buildMex once on this machine", gw);
+        end
+        utc = referenceSystem.convertTimeScale(epoch, "UTC");
+        dt = referenceSystem.epochTo(utc, "datetime");
+        in.doy     = double(day(dt, 'dayofyear'))';
+        in.sec     = double(utc.sec(:))';
+        in.alt_km  = lla(3, :) / 1000;
+        in.lat_deg = rad2deg(lla(1, :));
+        in.lon_deg = rad2deg(lla(2, :));
+        if isempty(options.LocalSolarTime_h)
+            in.lst_h = in.sec / 3600 + in.lon_deg / 15;      % the consistent choice the reference recommends
+        else
+            lst = double(options.LocalSolarTime_h(:)');
+            if isscalar(lst), lst = repmat(lst, 1, K); end
+            if numel(lst) ~= K || any(~isfinite(lst))
+                NonGravForces.fail(unit, "inputDrivers", "LocalSolarTime_h must be 1x%d finite hours -> match the epoch count", K);
+            end
+            in.lst_h = lst;
+        end
+        [d, t] = msisGateway(in.doy, in.sec, in.alt_km, in.lat_deg, in.lon_deg, in.lst_h, drv.f107a, drv.f107, drv.ap, double(options.AnomalousOxygen));
+        rho = d(6, :) * 1e3;                                   % g/cm^3 -> kg/m^3
+        species = d([1 2 3 4 5 7 8 9], :) * 1e6;               % cm^-3 -> m^-3, He O N2 O2 Ar H N O_anom
+        T = t;
+        info.drivers = drv;
+        info.anomalousOxygen = options.AnomalousOxygen;
+        info.msisInput = in;
+    otherwise
+        rho = []; species = []; T = [];
+        NonGravForces.fail(unit, "notImplemented", "backend %s is specified in LP-3b (WP-25) -> use msis00 or exponential until it lands", model);
+end
+info.provenance = NonGravForces.provenance("env.density", 'Options', struct('model', model, 'anomalousOxygen', options.AnomalousOxygen, 'lstOverride', ~isempty(options.LocalSolarTime_h)));
+end
+
+function drv = localDrivers(unit, epoch, sw, drivers, K)
+if ~isempty(drivers)
+    if ~(isstruct(drivers) && all(isfield(drivers, ["f107","f107a","ap"])))
+        NonGravForces.fail(unit, "inputDrivers", "Drivers must have fields f107, f107a, ap -> see the help");
+    end
+    f107 = double(drivers.f107(:)'); f107a = double(drivers.f107a(:)'); ap = double(drivers.ap);
+    if isscalar(f107), f107 = repmat(f107, 1, K); end
+    if isscalar(f107a), f107a = repmat(f107a, 1, K); end
+    if isscalar(ap), ap = repmat(ap, 1, K); end
+    if isvector(ap) && numel(ap) == 7 && K == 1, ap = ap(:); end
+    if isrow(ap) && numel(ap) == K && size(ap, 1) == 1, ap = reshape(ap, 1, K); end
+    if ~(numel(f107) == K && numel(f107a) == K && size(ap, 2) == K && any(size(ap, 1) == [1 7]))
+        NonGravForces.fail(unit, "inputDrivers", "Drivers must be 1x%d (f107, f107a) and 1x%d or 7x%d (ap) -> match the epoch count", K, K, K);
+    end
+    src = "caller";
+elseif isstruct(sw) && isfield(sw, 'format') && isfield(sw, 'query')
+    if sw.format ~= "celestrak"
+        NonGravForces.fail(unit, "inputDrivers", "spaceWeather family %s does not drive NRLMSISE-00 -> load the CelesTrak SW-All file (family celestrak)", sw.format);
+    end
+    q = sw.query(epoch);
+    f107 = q.f107; f107a = q.f107a; ap = q.apHistory;
+    src = "spaceWeather";
+else
+    NonGravForces.fail(unit, "inputDrivers", "msis00 needs drivers -> pass a celestrak spaceWeather struct as sw, or 'Drivers', struct('f107', .., 'f107a', .., 'ap', ..)");
+end
+if any(~isfinite([f107(:); f107a(:); ap(:)]))
+    NonGravForces.fail(unit, "numericNaN", "a driver is NaN/Inf -> spaceWeather never returns NaN; check the caller's Drivers");
+end
+drv = struct('f107', f107, 'f107a', f107a, 'ap', ap, 'source', src);
 end
