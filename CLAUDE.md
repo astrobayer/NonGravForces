@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic). Toolbox version 0.1.0.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-06 (LP-2) by Claude Fable 5.1. Toolbox version 0.2.0.
 
 ---
 
@@ -140,13 +140,17 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-09-06)
+## 5. Current status (2026-09-06, after LP-2)
 
-- **74/74 tests GREEN**, Code Analyzer 0 findings, gate TRUE
-  (last verified run 2026-08-27, R2026a Update 4; log in `tests/last_run.txt`).
+- **116/116 tests GREEN** (2026-09-06, R2026a Update 4, Tier A host run; predicted
+  116), Code Analyzer 0 findings, gate TRUE; log in `tests/last_run.txt`.
+  LP-0 baseline was 74/74 on 2026-08-27.
 - Implemented (☑): L0 core, `geom.MacroModel`, `geom.graceFO`, `qc.hampel`,
-  `qc.eventTable`, `sensor.Sensor` interface, test infrastructure, CI.
-- **39 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
+  `qc.eventTable`, `sensor.Sensor` interface, test infrastructure, CI, and the
+  LP-2 data I/O: `io.readACC1B`, `readSCA1B`, `readGNV1B`, `readTHR1B`,
+  `readMAS1B`, `massModel`, `spaceWeather` (tests in `tests/tNgfIo.m`, real-data
+  fixtures in `data/samples` and `data/spaceweather`).
+- **32 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
 - Repository `github.com/astrobayer/NonGravForces` (the account was renamed
   from `matweigelt` on 2026-09-06; `referenceSystem` and `gracefoReading` moved
   with it), local clone at
@@ -157,13 +161,14 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 6. Open tasks
 
-**Next: LP-2 (Data I/O)** — WP-18 readers over `gracefoReading`, WP-04
-`spaceWeather`, `massModel`. Blocked only on real L1B files (ACT1B, SCA1B,
-GNV1B, MAG1B for 2020-01-01 GRACE-C; MAS1B and THR1B already exist in
-`gracefoReading/tests/realdata`). Oracles: GNV1B round trip < 1 mm, exact
-time-tag round trip, Greenwich-angle test of the rotation direction.
+**Done 2026-09-06: LP-2 (Data I/O)** except `readMAG1B` (no MAG1B file on the
+host, HANDOVER O-8). Real-data fixtures: the five 2020-01-01 GRACE-C products
+(1 Hz products are 600-record excerpts) and space-weather excerpts
+2019-09..2020-03.
 
-Then LP-3 (env), LP-4 (geom), LP-5 (kernel + qc), LP-5x, LP-6 (Model/partials),
+**Next: LP-3 (env)** — WP-05 `density` (exponential, msis00 MEX of the
+Brodowski C), WP-07 `eclipseFactor`, WP-08 `earthRadiance` +
+`radiationSources`; oracles in HANDOVER Part G. Then LP-4 (geom), LP-5 (kernel + qc), LP-5x, LP-6 (Model/partials),
 LP-6b (C/MEX), LP-R (release).
 
 **LP-5x cross-validation** (owner rulings of 2026-08-27):
@@ -177,16 +182,20 @@ LP-6b (C/MEX), LP-R (release).
 
 **Obligations** (`HANDOVER.md` Part H): O-1 `hampel` speed · O-2 handbook normal
 renormalisation · O-3 CERES SYN1deg variable names · O-4 `gjToolbox` not on the
-host path · O-5 `referenceSystem` MEX "present but not loadable" (needed for
-LP-6b) · O-6 exact TRP oracle for GRACE-FO 2020 · O-7 DE440 kernels for
-`Options.sun.source = "rs.de440"`.
+host path · O-5 `referenceSystem` MEX (loads on the host since 2026-09-06; open
+for the CI runner) · O-6 exact TRP oracle for GRACE-FO 2020 · O-7 DE440 kernels
+for `Options.sun.source = "rs.de440"` · O-8 no MAG1B file (`readMAG1B` stays a
+stub) · O-9 Dst/F30 in no space-weather source in hand · O-10 referenceSystem
+refuses the whole 1962-now C04 series (pre-1972 rows) · O-11 doc/html pages
+other than FunctionList are hand-edited until WP-21.
 
 Housekeeping: the repository has no LICENSE file yet.
 
-**Open defect to confirm:** `toolboxVersion` now returns `semantic = "0.1.0"`
-while the numeric fields still read `major = 2, minor = 0, patch = 0`. One fact,
-two authorities (violates R1) — decide which is normative and make the other
-follow.
+**Version rule (decided 2026-09-06):** the numeric fields of `toolboxVersion`
+are the authority and `semantic` is composed from them; minor = levels
+delivered, patch = HANDOVER amendment. `auditPackage.py` compares every copy
+(Contents.m, README, doc/html footers) and checks `FunctionList.html` against
+`tools/buildFunctionList.py`; run both before every push.
 
 ---
 
@@ -221,3 +230,11 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   verified against a real GROOPS installation — WP-34 closes this.
 - `clear classes` wipes workspace variables inside a batched MATLAB script;
   split the script if state must survive.
+- **`referenceSystem` refuses an EOP series with rows before 1972-01-01**
+  (`leapSecondTable:beforeUtcEpoch`): pass `finals2000A.all` or a C04 subset
+  from MJD 41317 on to `readGNV1B`, never the whole `eopc04_20.1962-now`.
+- **MAS1B samples start at 3599.99 s of the day**, so the first hour has no
+  sample; `massModel` holds the nearest value for two sample intervals.
+- **Fixture excerpts are real data with `num_records` rewritten**; a test that
+  skips for a missing file counts as `incomplete` and reddens the gate, so
+  fixtures are committed, never fetched.

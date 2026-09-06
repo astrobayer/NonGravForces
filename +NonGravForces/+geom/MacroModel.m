@@ -5,7 +5,7 @@ classdef MacroModel
 %
 %   PANELS is a struct array, one element per surface element, with fields
 %     name        string     label
-%     kind        string     "plate" (only kind in 0.1.0; "cylinder" and
+%     kind        string     "plate" (the only kind so far; "cylinder" and
 %                            "sphere" are reserved, see LP-4)
 %     area_m2     1x1 double area
 %     normal      3x1 double outward unit normal, body frame

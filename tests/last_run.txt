@@ -1,5 +1,5 @@
-NonGravForces 0.1.0  run 2026-08-27 14:00 UTC  MATLAB 26.1.0.3312084 (R2026a) Update 4
-tests 74  passed 74  failed 0  incomplete 0  duration 3.0 s  GATE TRUE   (ExcludeSlow=false; the default run without the speed tag: 73/73)
+NonGravForces 0.2.0  run 2026-09-06 21:59 UTC  MATLAB 26.1.0.3312084 (R2026a) Update 4
+tests 116  passed 116  failed 0  incomplete 0  duration 10.1 s  GATE TRUE
 
 == category audit (units short of a category) ==
 none
@@ -7,14 +7,36 @@ none
 == recorded bounds ==
 P0 from S0=1361 vs 4.5398e-6 Pa (Montenbruck & Gill give 4.56e-6 for 1367)   1.6159e-06 <=   1.0000e-04 rel    max |a-e| / max |e|
 const.Rgas = kB*NA                         0.0000e+00 <=   1.0000e-15 rel    max |a-e| / max |e|
-MacroModel rotation covariance             6.6222e-16 <=   1.0000e-12 m^2
-graceFO silhouette defect z                0.0000e+00 <=   1.0000e-09 m^2
-graceFO silhouette defect xy               5.5511e-17 <=   1.0000e-09 m^2
-MacroModel energy closure vis              0.0000e+00 <=   1.0000e-12 -
-MacroModel energy closure ir               0.0000e+00 <=   1.0000e-12 -
+MacroModel rotation covariance             6.6222e-16 <=   1.0000e-12 m^2    
+graceFO silhouette defect z                0.0000e+00 <=   1.0000e-09 m^2    
+graceFO silhouette defect xy               5.5511e-17 <=   1.0000e-09 m^2    
+MacroModel energy closure vis              0.0000e+00 <=   1.0000e-12 -      
+MacroModel energy closure ir               0.0000e+00 <=   1.0000e-12 -      
 graceFO total area vs Table 5 sum          0.0000e+00 <=   1.0000e-07 rel    max |a-e| / max |e|
-hampel time 86400x3                        6.4462e-01 <=   2.0000e+01 s
-hampel / movmedian ratio                   3.8193e+02 <=   1.0000e+03 -      interpreted loop vs compiled builtin (O-1)
+readACC1B / readL1b time ratio             1.1909e+00 <=   5.0000e+00 -      measured 0.98
+readSCA1B / readL1b time ratio             1.1804e+00 <=   5.0000e+00 -      measured 1.46
+readGNV1B GCRS / ITRS time ratio           1.4950e+00 <=   5.0000e+00 -      measured 1.16 warm
+readTHR1B / readL1b time ratio             1.0918e+00 <=   5.0000e+00 -      measured 1.04
+readMAS1B / readL1b time ratio             1.3544e+00 <=   5.0000e+00 -      measured 1.47
+massModel.at(86400) / interp1 time ratio   2.6618e+00 <=   7.0000e+00 -      measured 2.24
+spaceWeather.query(86400) / ismember time ratio   5.2880e+01 <=   2.0000e+02 -      measured 65
+SCA1B double conjugation vs file           3.3307e-16 <=   1.0000e-14 -      measured 3.3e-16
+GNV1B |r| GCRS vs ITRS                     4.0564e-16 <=   1.0000e-14 rel    measured 4e-16
+GNV1B round trip GCRS->ITRS position       4.0862e-09 <=   1.0000e-06 m      measured 5e-9; requirement 1e-3
+GNV1B round trip GCRS->ITRS velocity       1.4031e-11 <=   1.0000e-09 m/s    measured 1e-11
+massModel anchor shift                     0.0000e+00 <=   1.0000e-12 kg     one addition at 600 kg
+massModel query scale invariance           0.0000e+00 <=   1.0000e-12 kg     exact 18 s shift
+ACC1B time tag round trip                  0.0000e+00 <=   0.0000e+00 s      exact by construction
+SCA1B unit norm of q_body2gcrs             2.2204e-16 <=   1.0000e-15 -      measured 2.2e-16
+GNV1B velocity vs 5-point FD of GCRS position   4.4037e-05 <=   1.0000e-03 m/s    measured 4.4e-5; 4.7e2 without Rdot
+THR1B event duration vs max on-time        0.0000e+00 <=   1.0000e-06 s      datetime resolution ~1e-7 s near 2020
+MAS1B total vs tank1+tank2                 0.0000e+00 <=   0.0000e+00 kg     bitwise
+massModel mas1b at the sample epochs       0.0000e+00 <=   1.0000e-09 kg     rounding 1e-13
+spaceWeather 10*kp integer                 0.0000e+00 <=   1.0000e-14 -      one division
+SCA1B body +Z vs nadir (conjugated)        8.6018e-01 <=   3.0000e+00 deg    measured 0.86; 96 without the conjugation
+GNV1B GCRS-ITRS longitude vs IAU1982 GMST   1.9067e-01 <=   5.0000e-01 deg    precession since J2000 dominates (measured 0.19)
+hampel time 86400x3                        6.4465e-01 <=   2.0000e+01 s      
+hampel / movmedian ratio                   5.2962e+02 <=   1.0000e+03 -      
 hampel robust sigma bias                   1.2854e-02 <=   2.0000e-02 -      mean over 1e4 windows
 
 == failures ==

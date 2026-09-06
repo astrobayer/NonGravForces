@@ -1,8 +1,8 @@
-# HANDOVER — NonGravForces 2.0.0 (concept 3)
+# HANDOVER — NonGravForces 0.2.0 (concept 3)
 
 **Single source of truth** for the design, the audit that motivated it, the work plan, the rules, and the decisions of `NonGravForces`, a MATLAB toolbox computing non-gravitational forces, torques and partial derivatives for LEO satellites, with GRACE-FO accelerometer processing as the reference application and a sensor layer that admits future instruments (electrostatic, cold-atom, optomechanical, drag-free).
 
-Revision 2.0 (amended the same day: CI section A.3, three decisions in Part I; no version bump, P-7) · 2026-08-27 · Claude Fable 5 (Anthropic) for Matthias Weigelt · MATLAB R2026a Update 4 · patch number of `NonGravForces.toolboxVersion` = revision of this document (rule P-7).
+Revision 2.1 (LP-2 Data I/O delivered; version 0.2.0; P-7 re-based, see Part I 2026-09-06) · 2026-09-06 · Claude Fable 5.1 (Anthropic) for Matthias Weigelt · MATLAB R2026a Update 4. Revision 2.0 · 2026-08-27 · Claude Fable 5 (Anthropic).
 
 Companion: `doc/NonGravForces_Theory_and_Implementation.pdf` (theory, practical considerations, implementation). This document does not repeat the physics; it cites the PDF by section.
 
@@ -24,13 +24,14 @@ Delivered (status key: ☑ verified in MATLAB, ◐ delivered-untested, ○ speci
 | Geometry: `geom.MacroModel`, `geom.graceFO` (JPL D-56935 Tables 4–5) | `+NonGravForces/+geom/` | ☑ |
 | Quality control: `qc.hampel` (with numpy oracle), `qc.eventTable` (schema) | `+NonGravForces/+qc/`, `tools/pyxcheck/` | ☑ |
 | Sensor interface `sensor.Sensor` (abstract) | `+NonGravForces/+sensor/` | ☑ (interface) |
-| 39 documented stubs raising `NonGravForces:<name>:notImplemented` | all packages | ○ |
-| Test infrastructure: `NgfTestCase`, `runNgfTests`, `auditTestCategories`, exemptions; 5 test classes, 74 tests, **gate GREEN 74/74** | `tests/` | ☑ |
+| Data I/O (LP-2, 2026-09-06): `io.readACC1B`, `readSCA1B`, `readGNV1B`, `readTHR1B`, `readMAS1B`, `massModel`, `spaceWeather`; real-data fixtures under `data/samples`, `data/spaceweather` | `+NonGravForces/+io/`, `data/`, `tests/tNgfIo.m` | ☑ (116/116, 2026-09-06) |
+| 32 documented stubs raising `NonGravForces:<name>:notImplemented` | all packages | ○ |
+| Test infrastructure: `NgfTestCase`, `runNgfTests`, `auditTestCategories`, exemptions; 6 test classes, 116 tests, **gate GREEN 116/116** (74/74 at LP-0) | `tests/` | ☑ |
 | CI: `ci.yml`, `ciGate.m`, `auditPackage.py`; Code Analyzer clean (0 findings) | repository root, `.github/workflows/` | ☑ (local run 2026-08-27) |
 | Help-browser documentation (`info.xml`, `helptoc.xml`, six pages) | `doc/html/` | ☑ (`doc NonGravForces` opens) |
 | Theory & implementation PDF | `doc/*.pdf` (+ LaTeX source in `doc/src`) | — |
 
-Run log of the verifying run: `tests/last_run.txt` (2026-08-27, R2026a Update 4, 74 passed, 0 failed, 0 incomplete, 0 audit shortfalls).
+Run log of the verifying run: `tests/last_run.txt` (2026-09-06, R2026a Update 4, 116 passed, 0 failed, 0 incomplete, 0 audit shortfalls, predicted 116; LP-0 baseline 2026-08-27: 74/74).
 
 ### A.2 The rule that governs every other rule
 
@@ -77,7 +78,7 @@ doc NonGravForces                    % help browser
 |---|---|---|
 | epoch from L1B | `daySecondToEpoch(Nx2,"GPS")` | epoch struct `.day .sec .scale .source` |
 | scale conversion | `convertTimeScale(ep,"TT"|"UT1"|"UTC")` | UT1 needs EOP |
-| ITRS→GCRS | `rotationItrsToGcrs(ep,'Eop',eop)` → `[R,Rdot,Rddot]` | 3×3×N pages, ITRS→GCRS, tidal corrections default on, samples EOP beyond the arc (±3 d margin) |
+| ITRS→GCRS | `rotationItrsToGcrs(ep,'Eop',eop)` → `[R,Rdot,Rddot]` | 3×3×N pages, ITRS→GCRS, tidal corrections default on, samples EOP beyond the arc (±3 d margin). **The series must hold no row before 1972-01-01** (measured 2026-09-06: the shipped `eopc04_20.1962-now` read whole raises `referenceSystem:leapSecondTable:beforeUtcEpoch` from `interpolateEop`; `finals2000A.all`, or a C04 subset from MJD 41317 on, works; the two agree to 9 mm / 5e-6 m/s on the 2020-01-01 arc). Cost measured: 600 epochs with `Rdot` 0.14 s, without 0.024 s (O-10) |
 | apply | `applyRotation(R,Rdot,r,v)` | carries ω×r; never formed by hand |
 | geodetic | `cartesianToGeodetic(Nx3,'Ellipsoid',"WGS84")` | **rows in, default GRS80** → WGS84 passed explicitly |
 | Sun/Moon | `geocentricBodyState("sun",ep)` / `Source="mice"` | ICRS-oriented 3×N; analytic tier RMS 8.3e3 m; DE440 tier via furnished kernels (de440s.bsp present) |
@@ -88,9 +89,9 @@ doc NonGravForces                    % help browser
 | version | `toolboxVersion().version` | **struct, not string** — the first probe of this session was wrong and was corrected by measurement |
 | C API | `mex/rsApi.h` `rsApiRotation` (0.56 µs) | for the single-epoch MEX (LP-6b) |
 
-### B.2 gracefoReading 2.3.0
+### B.2 gracefoReading 1.0.0 (measured 2026-09-06; was 2.3.0 on 2026-08-27, renumbered by its owner)
 
-`readL1b(file)` → `[time Nx2 GPS, obs, aux]`; `readL1bMulti`; `decodeQualFlags`; `checkQuaternionNorm`; `findGaps`; `version()`. Rules learned in v0.1.1 and kept: `obs` holds measurements only (flags, char columns, `_id` columns, time tags go to `aux`); `prod_flag` products have per-record columns (bit 0 rightmost); **MAS1B is cold-gas tank mass (~30 kg), not spacecraft mass (601.214 / 601.209 kg)** — misuse gives 20–40× accelerations; `io.massModel` defaults to the handbook constant and asserts > 500 kg.
+`readL1bMulti(files)` → `[time, obs, aux]` with `aux.products`, `aux.fileNames`, `aux.recordsPerFile` (no `product` field); `checkQuaternionNorm(obs, aux)` → `[ok Nx1, stats]`, default tolerance 1e-6, measured 9e-11 on the real SCA1B sample; `readL1b(file)` → `[time Nx2 GPS, obs, aux]`; `readL1bMulti`; `decodeQualFlags`; `checkQuaternionNorm`; `findGaps`; `version()`. Rules learned in v0.1.1 and kept: `obs` holds measurements only (flags, char columns, `_id` columns, time tags go to `aux`); `prod_flag` products have per-record columns (bit 0 rightmost); **MAS1B is cold-gas tank mass (~30 kg), not spacecraft mass (601.214 / 601.209 kg)** — misuse gives 20–40× accelerations; `io.massModel` defaults to the handbook constant and asserts > 500 kg.
 
 ### B.3 gjToolbox (odeSuite)
 
@@ -287,7 +288,7 @@ T1 seven categories per public unit, counted by `auditTestCategories`: `contract
 
 ### E.5 Process rules
 
-P-1 ☑ only after a read run report · P-2 predict then reconcile the count · P-3 freeze scope, new ideas to Part H · P-4 decisions dated · P-5 mechanisms over reminders · P-6 one substantial change per session · P-7 patch = handover revision · **P-8 one zip per session, nothing beside it** · **P-9 the run log is the diary; this document holds decisions only**.
+P-1 ☑ only after a read run report · P-2 predict then reconcile the count · P-3 freeze scope, new ideas to Part H · P-4 decisions dated · P-5 mechanisms over reminders · P-6 one substantial change per session · P-7 version rule (re-based 2026-09-06, Part I): the numeric fields of `toolboxVersion` are the authority and `semantic` is composed from them; minor = level delivered, patch = HANDOVER amendment without code change · **P-8 one zip per session, nothing beside it** · **P-9 the run log is the diary; this document holds decisions only**.
 
 ---
 
@@ -298,7 +299,7 @@ P-1 ☑ only after a read run report · P-2 predict then reconcile the count · 
 | root | `Options(preset, name, value, …)`, `.set`, `.toStruct` | ☑ | 00 |
 | root | `Model(macro, options, 'Attitude', att, 'Mass', m)` | ☑ constructor; `[a,info]=accel(ep,r,v,q)`, `[tau,info]=torque(…)`, `T=series(…)`, `[J,info]=partials(…,'WithRespectTo',[…])`, `f=rhs()`, `B=budget(…)` ○ | 14–17, 30 |
 | root | `const`, `toolboxVersion`, `dependencyReport`, `fail`, `provenance` | ☑ | 00/01 |
-| io | `readACC1B(files) → [ep, a_srf 3×K, aux]`; `readSCA1B → [ep, q_body2gcrs 4×K, aux]` (conjugated once); `readGNV1B → [ep, r, v (GCRS), aux]` (rotated via RS); `readTHR1B → events table`; `readMAS1B → tank masses`; `readMAG1B → B_meas, dipoles`; `massModel(sat, 'Mode', "constant"|"mas1b")`; `spaceWeather(file) → sw` with `sw.query(ep)`; `importCERES(nc, 'Product', "SYN1deg"|"EBAF")`; `igrfCoefficients(file)` | ○ | 18, 04, 08, 23 |
+| io | ☑ (frozen 2026-09-06) `[ep, a_srf 3×K, aux] = readACC1B(files, 'TimeRange', 'QualityBitMask')`; `[ep, q_body2gcrs 4×K, aux] = readSCA1B(files, …)` (conjugated once via `referenceSystem.invertQuaternion`, canonical q0 ≥ 0); `[ep, r, v, aux] = readGNV1B(files, 'Eop', eop|file, 'Frame', "GCRS"|"ITRS", …)` (rotated via `rotationItrsToGcrs` + `applyRotation`; `'Eop'` mandatory for GCRS); `[events, aux] = readTHR1B(files, 'TimeRange')` (`qc.eventTable` rows, class impulse, source THR1B, axis all; per-thruster on-times in `aux`); `[ep, tank, aux] = readMAS1B(files, 'TimeRange')` (gas masses, total refused ≥ 100 kg); `mass = massModel(sat, 'Mode', "constant"|"mas1b", 'Epoch', 'GasMass_kg', 'Anchor_kg')` with `mass.at(ep)`; `sw = spaceWeather(files, 'Format', "auto"|"celestrak"|"jb2008")` with `sw.query(ep)`. ○ `readMAG1B → B_meas, dipoles` (O-8); `importCERES(nc, 'Product', "SYN1deg"|"EBAF")`; `igrfCoefficients(file)` | ☑ 7 / ○ 3 | 18, 04, 08, 23 |
 | env | `density(model, ep, lla, sw) → [rho, species, T, info]` (K-vectorised; backends exponential/msis00/msis21/dtm2020/jb2008, MEX where built); `wind(model, ep, r, v, lla, sw) → v_rel body/GCRS`; `eclipseFactor(r, r_sun, 'Model', …, 'Moon', r_moon) → nu, info` (C¹ across penumbra for solaarsCF); `earthRadiance(backend, ep, grid) → tiles`; `magneticField(ep, r_itrs) → B`; `radiationSources(ep, r, q, options) → src` | ○ | 05/25, 07, 08/27, 23 |
 | geom | `MacroModel` ☑, `graceFO` ☑, `boxWing(dims, optics)`, `selfShadow(macro, dir_body, 'Method', "raycast"|"lut")`, `thermalState(macro, src, 'Model', …) → T_panel`, `AttitudeProvider(ep_nodes, q_nodes)` with `.at(ep)` (slerp/squad via RS), `checkAttitudeSense(q, r, v)` | ○ | 09–11, 28 |
 | kernel | `gsiCoefficients(model, s, theta, alpha, Tw, Tinf) → [Cp, Ctau]` (Sentman exact erf form, CLL, Maxwell, Schamberg); `accommodation(model, species, Tinf, …) → alpha`; `dragPanelForce(macro, rho, species, v_rel_body, …) → F_k 3×N×K`; `radiationPanelForce(macro, src) → F_k`; `thermalRecoil(macro, T_panel) → F_k`; `assemble(F_k, macro, r_cm) → [F, tau]`; `bodyTorques(macro, r, B, …)`; `partials(…)` analytic + complex-step verifier | ○ | 12, 13, 26, 24, 16 |
@@ -306,7 +307,7 @@ P-1 ☑ only after a read run report · P-2 predict then reconcile the count · 
 | qc | `hampel` ☑, `eventTable` ☑, `residuals(y_meas, y_model, sensor, cal0) → r_white`; `detectImpulses(r, 'Response', crn, 'Priors', thr) → events`; `detectJumps(r, 'Model', "level"|"slope", 'Priors', eclipse/mass) → events` (PELT + BIC); `screen(…) → [mask, events, info]` | ○ | 31 |
 | app | `calibrate(y_meas, model_out, sensor, 'Bias', spline, 'Scale', "full"|"diag", 'Events', T) → Results (lsqvce)`; `forceBudget(Model, ep, r, v, q) → table`; `densityInversion(…)` | ○ | 19, 30, 32 |
 
-Counting: 7 root + 10 io + 6 env + 7 geom + 8 kernel + 4 sensor + 6 qc + 3 app = **51 units**, of which 13 ☑/interface, 38 ○ stubs (the 39th stub row, `Sensor`, became the interface). Every unit has one catalogue row, one file, one `Contents.m` line, and — when ☑ — seven test categories or a reasoned exemption.
+Counting: 7 root + 10 io + 6 env + 7 geom + 8 kernel + 4 sensor + 6 qc + 3 app = **51 units**, of which 20 ☑/interface, 31 ○ stubs (the 39th stub row, `Sensor`, became the interface; LP-2 turned seven io stubs into units on 2026-09-06). Every unit has one catalogue row, one file, one `Contents.m` line, and — when ☑ — seven test categories or a reasoned exemption.
 
 Simplifications agreed by the expert panel (Part J): one density dispatcher instead of three classes; one `eclipseFactor` with a model option instead of three functions; the source list makes SRP, albedo and IR one kernel path; sensors replace per-instrument calibration code; no compat layer; no gravity; no EOM; no integrator; no least squares.
 
@@ -321,8 +322,9 @@ WP-00 skeleton, `const`, `Options`, `fail`, `provenance`, catalogue, stubs · WP
 
 ### LP-1 — does not exist (time and frames are referenceSystem).
 
-### LP-2 — Data I/O
+### LP-2 — Data I/O ☑ (2026-09-06; run report 116/116 GREEN, count predicted 116)
 WP-18 readers over `gracefoReading` (GNV1B rotated ITRS→GCRS through `rotationItrsToGcrs`; SCA1B conjugated once; THR1B as event table; MAS1B tank masses; MAG1B) · WP-04 `spaceWeather` (CelesTrak SW-All + SET SOLFSMY/DTCFILE for JB2008; observed and previous-day F10.7; ap7 history; Kp; Dst) · `massModel`. Oracles: the owner's real 2020-01-01 GRACE-C samples; handbook mass; a Greenwich-angle test of the rotation direction. Accuracy: GNV1B round trip < 1 mm; time tag round trip exact.
+**Delivered 2026-09-06**: seven units (MAG1B stays a stub, O-8), private helpers `io/private/l1bLoad`, `l1bColumns`, test class `tNgfIo`, real-data fixtures (Part I). Measured on the 2020-01-01 GRACE-C sample: GNV1B round trip 5e-9 m; 5-point finite-difference velocity vs rotated velocity 4.4e-5 m/s (4.7e2 m/s without the `Rdot` term); GCRS−ITRS longitude of record 1 vs the IAU 1982 GMST polynomial −0.27° (precession since J2000); body +Z vs nadir 0.86° conjugated, 96° not. Result: 116/116 GREEN (Tier A, host MATLAB R2026a Update 4), Code Analyzer 0 findings, `auditPackage.py` clean; first run had 6 red rows, all one cause (O-12) plus one test regexp — decomposed before any bound moved.
 
 ### LP-3 — Environment
 WP-05 `density` with backends exponential and msis00 (MEX of the Brodowski C, oracle = its 17-case DOCUMENTATION table, reproduced exactly) · WP-07 `eclipseFactor` (cylindrical, conical, solaarsCF; oracle Montenbruck & Gill §3.4.2 example and a numerical disc-integration in Python; C¹ test across penumbra) · WP-08 `earthRadiance` (pointSource, knocke; oracle Knocke 1988 Table 1 and Orekit's `KnockeRediffusedForceModel` numbers) + `radiationSources` (metamorphic: rotating attitude rotates the source list). Accuracy: density backend bit-exact to the C reference; ν to 1e-12; Knocke flux to 1e-6 relative.
@@ -365,9 +367,14 @@ WP-21 documentation build (`tools/buildDocs.m` regenerates `doc/html` from help 
 | O-2 | Handbook normals are printed to six digits (norm 1 − 5e-7); `MacroModel` tolerates 1e-5 and documents it; decide whether kernels renormalise (they currently do not) | LP-4 | before WP-13 |
 | O-3 | CERES SYN1deg variable names (B7) | owner supplies a file | before WP-27 |
 | O-4 | `gjToolbox` not on the path on the owner's host; `rhs()` contract to be confirmed against `gjToolbox.Dynamics` once L3 of that toolbox exists | owner | before WP-17 |
-| O-5 | `referenceSystem` MEX reported "present but not loadable" by its own setup on 2026-08-27; the analytic paths work; LP-6b needs the MEX | owner | before LP-6b |
+| O-5 | `referenceSystem` MEX reported "present but not loadable" by its own setup on 2026-08-27; **2026-09-06: setup reports `mex current` (gateway built 2026-08-05, SOFA 20231011, OpenMP 32 threads), so it loads on the host**; open only for the CI runner | owner | before LP-6b |
 | O-6 | Exact TRP oracle: [S] Table 3 gives RMS per axis for GRACE-A 2008; a GRACE-FO 2020 oracle needs [V]'s 2025 update or ACT1B residual analysis | LP-5 | before WP-12 |
 | O-7 | `Options.sun.source = "rs.de440"` requires furnished kernels; `radiationSources` must raise `depKernel` with the `downloadKernels` hint | LP-3 | WP-08 |
+| O-8 | `readMAG1B`: no MAG1B file exists on the host (searched 2026-09-06), so there is no oracle and the unit stays a stub; the owner supplies a real MAG1B day (2020-01-01 GRACE-C) | owner | before WP-23/24 |
+| O-9 | Dst and F30 are in none of the three space-weather sources in hand (CelesTrak SW-All; SET SOLFSMY, DTCFILE); DTM2020 (F30, Kp) and any Dst-driven model need another source | LP-3b | before WP-25 |
+| O-10 | `referenceSystem.interpolateEop` / `rotationItrsToGcrs` refuse the shipped whole `eopc04_20.1962-now` (pre-1972 rows; identifier `leapSecondTable:beforeUtcEpoch`): report to the referenceSystem owner; NonGravForces documents the constraint (B.1, `readGNV1B` help) and lets the foreign error propagate | owner | before LP-R |
+| O-12 | `gracefoReading.readL1bMulti` 1.0.0 raises `MATLAB:badsubscript` (line 156, `time(1,1)` on an empty concatenation) when TimeRange excludes every record, while `readL1b` returns clean empties — report to the gracefoReading owner; until fixed, `io/private/l1bLoad` reads one file through `readL1b` and only several through `readL1bMulti`, so `dataEmpty` is guaranteed for one file and documented as unreachable for several | owner | before LP-R |
+| O-11 | `doc/html/FunctionList.html` is regenerated by `tools/buildFunctionList.py` and checked for staleness by `auditPackage.py`; the five other pages carry hand-edited version footers (checked for the version string only); the full documentation build is WP-21 (LP-R) | LP-R | WP-21 |
 
 ---
 
@@ -394,6 +401,16 @@ WP-21 documentation build (`tools/buildDocs.m` regenerates `doc/html` from help 
 | 2026-08-27 | GROOPS fixtures are generated once and committed; GROOPS is never a build or test dependency (owner ruling C2 i) | reproducibility; CI stays MATLAB + Python only |
 | 2026-08-27 | LP-2 before the cross-validation tooling (owner ruling C3) | both need the same real L1B day; the readers are the prerequisite of every later oracle |
 | 2026-08-27 | Deliverables move by zip or git, never by base64 transcription | a transcribed bundle failed its MD5 in this session; caught before anything landed |
+| 2026-09-06 | Version numbering re-based on the owner's 0.1.0 (PR #7): the numeric fields of `toolboxVersion` are the authority and `semantic` is composed from them; minor = levels delivered (LP-2 → 0.2.0), patch = HANDOVER amendment without code change; every copy (Contents.m, README, doc/html footers) is compared mechanically by `auditPackage.py`; tests compare against `toolboxVersion`, never pin a literal | R1: PR #7 left `major = 2` beside `semantic = "0.1.0"` (CLAUDE.md §6 open defect) |
+| 2026-09-06 | Real-data fixtures are committed: `data/samples` holds the five 2020-01-01 GRACE-C RL04 products as the predecessor shipped them (THR1B and MAS1B the complete day; ACT1B, GNV1B, SCA1B the first 600 records with `num_records` rewritten); `data/spaceweather` holds CelesTrak SW-All and SET SOLFSMY/DTCFILE excerpts for 2019-09-01..2020-03-31. Tests never skip for absent data: a skip counts as `incomplete` and reddens the gate | no full-day 1 Hz file exists on the host (searched 2026-09-06); an excerpt of real data is real data; a skipped test is not evidence |
+| 2026-09-06 | `readGNV1B` takes `'Eop'` explicitly (readEop struct or file path) and has no default series; `'Frame'` "GCRS" (default) or "ITRS" (no EOP) | R5; two EOP series differ by 9 mm on the arc, so the choice is the caller's |
+| 2026-09-06 | `readSCA1B` conjugates once through `referenceSystem.invertQuaternion` and returns its canonical q0 ≥ 0 form; the sense is proven on the real sample (body +Z 0.86° from nadir; 96° when not conjugated) and re-tested every run | no hand-written quaternion algebra (A.2) |
+| 2026-09-06 | `readTHR1B` returns `qc.eventTable` rows (class impulse, source THR1B, axis "all", amplitude and sigma NaN, confidence 1; records without any on-time are counted, not listed) and the per-thruster on-times in `aux`; the thruster-to-axis map is in no source in hand and is not guessed | R3; the detector (WP-31) assigns axes from the data |
+| 2026-09-06 | `readMAS1B` returns gas masses only and refuses a total ≥ 100 kg; `massModel` anchors the handbook constant at the first MAS1B sample, interpolates linearly, holds the nearest value up to two sample intervals beyond the series and refuses further (`inputEpoch`); every mass it returns must exceed 500 kg | C.1 (MAS1B ≠ spacecraft mass); the first hour of a day has no MAS1B sample (records at 3599.99 s + k h) |
+| 2026-09-06 | `spaceWeather` serves two families that are never mixed: celestrak (MSIS drivers: previous-day observed F10.7, centred 81-day observed mean, daily Ap, the 7-element ap history, 3-hourly Kp) and jb2008 (F10/S10 one day, M10 two days, Y10 five days earlier, 81-day values with the same lags, DTC at the UTC hour; the lags as printed in the SOLFSMY header); a query outside the table or hitting a missing value errors (`dataRange`, `dataMissing`) and never returns NaN | E.2 rule 7; a NaN driver silently zeroes or corrupts density |
+| 2026-09-06 | `readMAG1B` remains a stub (O-8); `importCERES`, `igrfCoefficients` stay in LP-3/LP-3b as planned | no oracle, no unit |
+| 2026-09-06 | `l1bLoad` calls `gracefoReading.readL1b` for one file and `readL1bMulti` for several (the dependency function that fits the input; the aux layouts are normalised to the plural names) | O-12: the multi-file reader crashes on an empty result; found by the `dataEmpty` tests, all six red rows of the first run were this one cause plus one test-authoring regexp |
+| 2026-09-06 | The local `gracefoReading` clone was found at a broken initial commit (`parseDataSection.m` with a truncated signature) and fast-forwarded to its origin `main` (v1.0.0) before any measurement | dependencies are used at their published state, never patched locally |
 
 ---
 

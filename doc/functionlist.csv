@@ -6,14 +6,14 @@ NonGravForces,toolboxVersion,function,L0,WP-00,done,Semantic version (single aut
 NonGravForces,dependencyReport,function,L0,WP-01,done,Presence and version of the ecosystem toolboxes
 NonGravForces,fail,function,L0,WP-00,done,Uniform error raising with identifier taxonomy and correction hints
 NonGravForces,provenance,function,L0,WP-00,done,Metadata record that travels with every result
-io,readACC1B,function,L1,WP-18,stub,ACC1B/ACT1B/ACH1B reader over gracefoReading (3xK SRF accelerations + aux)
-io,readSCA1B,function,L1,WP-18,stub,SCA1B reader: ICRF->SRF quaternions conjugated once to BODY->GCRS
-io,readGNV1B,function,L1,WP-18,stub,GNV1B reader: ITRS state rotated to GCRS via referenceSystem
-io,readTHR1B,function,L1,WP-18,stub,THR1B thruster event reader (impulse priors for qc)
-io,readMAS1B,function,L1,WP-18,stub,MAS1B tank-mass reader (NOT spacecraft mass)
+io,readACC1B,function,L1,WP-18,done,ACC1B/ACT1B/ACH1B reader over gracefoReading (3xK SRF accelerations + aux)
+io,readSCA1B,function,L1,WP-18,done,SCA1B reader: ICRF->SRF quaternions conjugated once to BODY->GCRS
+io,readGNV1B,function,L1,WP-18,done,GNV1B reader: ITRS state rotated to GCRS via referenceSystem
+io,readTHR1B,function,L1,WP-18,done,THR1B thruster event reader (impulse priors for qc)
+io,readMAS1B,function,L1,WP-18,done,MAS1B tank-mass reader (NOT spacecraft mass)
 io,readMAG1B,function,L1,WP-18,stub,MAG1B magnetometer/magnetorquer reader (magnetic torque priors)
-io,massModel,function,L1,WP-18,stub,Spacecraft mass model: handbook constant or MAS1B-driven variable mass
-io,spaceWeather,function,L1,WP-04,stub,Space-weather provider with query(epoch): F10.7 F30 S/M/Y10.7 Ap Kp Dst
+io,massModel,function,L1,WP-18,done,Spacecraft mass model: handbook constant or MAS1B-driven variable mass
+io,spaceWeather,function,L1,WP-04,done,Space-weather provider with query(epoch): F10.7 F30 S/M/Y10.7 Ap Kp Dst
 io,importCERES,function,L1,WP-08,stub,CERES SYN1deg/EBAF netCDF import into radiance grids
 io,igrfCoefficients,function,L1,WP-23,stub,IGRF-14 coefficient loader
 env,density,function,L2,WP-05,stub,Thermosphere density and composition dispatcher (exponential msis00 msis21 dtm2020 jb2008)

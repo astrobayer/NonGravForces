@@ -1,0 +1,604 @@
+classdef tNgfIo < NgfTestCase
+%TNGFIO Tests of the io layer (LP-2): readACC1B, readSCA1B, readGNV1B, readTHR1B, readMAS1B, massModel, spaceWeather.
+%
+%   Oracle: the real 2020-01-01 GRACE-C RL04 products in data/samples (first 600
+%   records of the 1 Hz products; THR1B and MAS1B complete), the IERS
+%   finals2000A excerpt in data/eop, and the CelesTrak / SET excerpts in
+%   data/spaceweather (HANDOVER Part I, 2026-09-06). Independent oracles are
+%   the raw file text (parsed here with regexp, not with gracefoReading), the
+%   IAU 1982 GMST polynomial, the IERS leap-second count and JPL D-56935.
+%   Every bound carries the number it was measured at on 2026-09-06.
+%
+%   No test skips when a fixture is missing: it fails (a skip is `incomplete`
+%   and not evidence).
+% Created 2026-09-06 by Claude Fable 5.1 (Anthropic).
+    properties
+        f      % fixture paths
+        eop    % referenceSystem.readEop of data/eop/finals2000A excerpt
+        tmp    % scratch folder for corrupted copies
+    end
+    methods (TestClassSetup)
+        function loadFixtures(tc)
+            root = fileparts(fileparts(mfilename('fullpath')));
+            S = fullfile(root, 'data', 'samples'); W = fullfile(root, 'data', 'spaceweather');
+            tc.f = struct( ...
+                'act', fullfile(S, 'ACT1B_2020-01-01_C_04.txt'), 'sca', fullfile(S, 'SCA1B_2020-01-01_C_04.txt'), ...
+                'gnv', fullfile(S, 'GNV1B_2020-01-01_C_04.txt'), 'thr', fullfile(S, 'THR1B_2020-01-01_C_04.txt'), ...
+                'mas', fullfile(S, 'MAS1B_2020-01-01_C_04.txt'), 'sw', fullfile(W, 'SW-All_2019-09_2020-03.csv'), ...
+                'solfsmy', fullfile(W, 'SOLFSMY_2019-09_2020-03.TXT'), 'dtc', fullfile(W, 'DTCFILE_2019-09_2020-03.TXT'), ...
+                'eop', fullfile(root, 'data', 'eop', 'finals2000A_2019-09_2020-03.all'));
+            for n = string(fieldnames(tc.f))'
+                tc.assertTrue(isfile(tc.f.(n)), sprintf('fixture %s is missing: %s', n, tc.f.(n)));
+            end
+            tc.eop = referenceSystem.readEop(tc.f.eop);
+            tc.tmp = tempname; mkdir(tc.tmp);
+            tc.addTeardown(@() rmdir(tc.tmp, 's'));
+        end
+    end
+    methods
+        function p = corrupt(tc, src, name, editFcn)
+            %CORRUPT Copy an L1B/text fixture with editFcn(lines, kFirstData) applied; return the path.
+            lines = splitlines(string(fileread(src)));
+            k = find(startsWith(lines, "# End of YAML header"), 1) + 1;
+            lines = editFcn(lines, k);
+            p = fullfile(tc.tmp, name);
+            fid = fopen(p, 'w'); fprintf(fid, '%s\n', lines); fclose(fid);
+        end
+        function tok = rawRecord(tc, src, k)
+            %RAWRECORD Whitespace tokens of the k-th data record, parsed independently of gracefoReading.
+            lines = splitlines(string(fileread(src)));
+            k0 = find(startsWith(lines, "# End of YAML header"), 1);
+            tok = split(strtrim(lines(k0 + k)));
+            tc.assertGreaterThan(numel(tok), 3);
+        end
+        function tr = range(~, s0, s1)
+            %RANGE decimal-MJD TimeRange for seconds s0..s1 of 2020-01-01 (GPS day 58849).
+            tr = [58849 + s0 / 86400, 58849 + s1 / 86400];
+        end
+        function q = speedRatio(~, fcn, base)
+            %SPEEDRATIO median over 5 repeats of (fcn time / base time), after one warm-up of each.
+            fcn(); base();
+            r = zeros(1, 5);
+            for k = 1:5
+                t1 = tic; fcn(); a = toc(t1); t2 = tic; base(); b = toc(t2); r(k) = a / b;
+            end
+            q = median(r);
+        end
+    end
+
+    % ===================================================================== contract
+    methods (Test, TestTags = {'contract'})
+        function readACC1BContract(tc)
+            [ep, a, aux] = NonGravForces.io.readACC1B(tc.f.act);
+            tc.verifySize(a, [3 600]); tc.verifyEqual(string(ep.scale), "GPS"); tc.verifySize(ep.day, [600 1]);
+            tc.verifyEqual(aux.product, "ACT1B"); tc.verifyEqual(aux.satellite, "C"); tc.verifyEqual(aux.numRecords, 600);
+            tc.verifyEqual(aux.sampling_s, 1); tc.verifySize(aux.angular_rad_s2, [3 600]); tc.verifySize(aux.residual_m_s2, [3 600]);
+            tc.verifyClass(aux.qualflgBits, 'logical'); tc.verifySize(aux.qualflgBits, [600 8]);
+            tc.verifyEqual(aux.provenance.unit, "io.readACC1B"); tc.verifyEqual(aux.provenance.files, string(tc.f.act));
+            tc.verifyErrorId(@() NonGravForces.io.readACC1B(tc.f.sca), 'NonGravForces:readACC1B:dataProduct');
+            tc.verifyErrorId(@() NonGravForces.io.readACC1B(tc.f.act, 'TimeRange', [58850 58851]), 'NonGravForces:readACC1B:dataEmpty');
+            tc.verifyError(@() NonGravForces.io.readACC1B(fullfile(tc.tmp, 'nope.txt')), 'MATLAB:validators:mustBeFile');
+        end
+        function readSCA1BContract(tc)
+            [ep, q, aux] = NonGravForces.io.readSCA1B(tc.f.sca);
+            tc.verifySize(q, [4 600]); tc.verifySize(ep.sec, [600 1]); tc.verifyEqual(string(ep.scale), "GPS");
+            tc.verifyEqual(aux.frame, "BODY->GCRS"); tc.verifyEqual(aux.convention.quaternion, "scalarFirst");
+            tc.verifyEqual(aux.convention.product, "hamilton"); tc.verifySize(aux.qualRss, [1 600]); tc.verifySize(aux.scaId, [1 600]);
+            tc.verifyTrue(all(q(1, :) >= 0), 'canonical sign q0 >= 0');
+            tc.verifyEqual(aux.product, "SCA1B"); tc.verifyEqual(aux.provenance.unit, "io.readSCA1B");
+            tc.verifyErrorId(@() NonGravForces.io.readSCA1B(tc.f.act), 'NonGravForces:readSCA1B:dataProduct');
+        end
+        function readGNV1BContract(tc)
+            [ep, r, v, aux] = NonGravForces.io.readGNV1B(tc.f.gnv, 'Eop', tc.eop);
+            tc.verifySize(r, [3 600]); tc.verifySize(v, [3 600]); tc.verifySize(ep.day, [600 1]);
+            tc.verifyEqual(aux.frame, "GCRS"); tc.verifyEqual(aux.eopSeries, "finals2000A"); tc.verifyEqual(aux.rotation.path, "direct");
+            tc.verifySize(aux.sigma_r_m, [3 600]); tc.verifySize(aux.sigma_v_m_s, [3 600]);
+            tc.verifyGreaterThan(min(vecnorm(r)), 6.7e6); tc.verifyLessThan(max(vecnorm(r)), 7.1e6);
+            [~, rI, ~, auxI] = NonGravForces.io.readGNV1B(tc.f.gnv, 'Frame', "ITRS");
+            tc.verifyEqual(auxI.frame, "ITRS"); tc.verifyEmpty(auxI.rotation); tc.verifyEqual(auxI.eopSeries, "");
+            tc.verifyNotEqual(rI, r, 'ITRS and GCRS must differ');
+            tc.verifyErrorId(@() NonGravForces.io.readGNV1B(tc.f.gnv), 'NonGravForces:readGNV1B:inputEop');
+            tc.verifyErrorId(@() NonGravForces.io.readGNV1B(tc.f.gnv, 'Eop', struct('mjd', 1)), 'NonGravForces:readGNV1B:inputEop');
+            tc.verifyErrorId(@() NonGravForces.io.readGNV1B(tc.f.gnv, 'Eop', fullfile(tc.tmp, 'no.eop')), 'NonGravForces:readGNV1B:inputEop');
+            tc.verifyErrorId(@() NonGravForces.io.readGNV1B(tc.f.sca, 'Eop', tc.eop), 'NonGravForces:readGNV1B:dataProduct');
+            tc.verifyError(@() NonGravForces.io.readGNV1B(tc.f.gnv, 'Frame', "TEME"), 'MATLAB:validators:mustBeMember');
+        end
+        function readTHR1BContract(tc)
+            [T, aux] = NonGravForces.io.readTHR1B(tc.f.thr);
+            tc.verifyEqual(T.Properties.VariableNames, NonGravForces.qc.eventTable().Properties.VariableNames);
+            tc.verifyEqual(height(T), aux.numRecords - aux.numRecordsNoFiring);
+            tc.verifyTrue(all(T.class == "impulse") && all(T.source == "THR1B") && all(T.axis == "all") && all(T.confidence == 1));
+            tc.verifyTrue(all(isnan(T.amplitude)) && all(isnan(T.sigma)));
+            tc.verifyEqual(T.tStart.TimeZone, 'UTC'); tc.verifyTrue(all(T.tEnd >= T.tStart));
+            tc.verifyEqual(numel(aux.thruster), 14); tc.verifySize(aux.onTime_s, [14 aux.numRecords]); tc.verifySize(aux.fired, [14 aux.numRecords]);
+            tc.verifyEqual(numel(aux.epoch.day), aux.numRecords); tc.verifyEqual(aux.product, "THR1B");
+            tc.verifyErrorId(@() NonGravForces.io.readTHR1B(tc.f.mas), 'NonGravForces:readTHR1B:dataProduct');
+            tc.verifyErrorId(@() NonGravForces.io.readTHR1B(tc.f.thr, 'TimeRange', [58851 58852]), 'NonGravForces:readTHR1B:dataEmpty');
+        end
+        function readMAS1BContract(tc)
+            [ep, tank, aux] = NonGravForces.io.readMAS1B(tc.f.mas);
+            tc.verifyEqual(numel(ep.day), 24); tc.verifySize(tank.total_kg, [1 24]); tc.verifySize(tank.tank_kg, [2 24]);
+            tc.verifySize(tank.thruster_kg, [2 24]); tc.verifyTrue(all(isnan(tank.thruster_kg(:))), 'thruster columns are absent in the 2020 files');
+            tc.verifyTrue(tank.present.gas_mass_tnk1 && tank.present.gas_mass_tnk2 && ~tank.present.mass_tnk);
+            tc.verifyTrue(all(tank.total_kg > 0 & tank.total_kg < 100));
+            tc.verifySize(aux.prodFlagBits, [24 8]); tc.verifyEqual(aux.product, "MAS1B");
+            tc.verifyErrorId(@() NonGravForces.io.readMAS1B(tc.f.thr), 'NonGravForces:readMAS1B:dataProduct');
+        end
+        function massModelContract(tc)
+            m = NonGravForces.io.massModel("C");
+            tc.verifyEqual(m.kind, "constant"); tc.verifyEqual(m.satellite, "C"); tc.verifyEqual(m.span, [-Inf Inf]);
+            tc.verifyClass(m.at, 'function_handle'); tc.verifyEqual(m.provenance.unit, "io.massModel");
+            ep = referenceSystem.mjdToEpoch([58849.1; 58849.5; 58850], "GPS");
+            tc.verifySize(m.at(ep), [1 3]);
+            [epM, tank] = NonGravForces.io.readMAS1B(tc.f.mas);
+            v = NonGravForces.io.massModel("D", 'Mode', "mas1b", 'Epoch', epM, 'GasMass_kg', tank.total_kg);
+            tc.verifyEqual(v.kind, "mas1b"); tc.verifyEqual(v.scale, "GPS"); tc.verifySize(v.at(ep), [1 3]);
+            tc.verifyEqual(v.span, [epM.day(1) + epM.sec(1)/86400, epM.day(end) + epM.sec(end)/86400]);
+            tc.verifyError(@() NonGravForces.io.massModel("E"), 'MATLAB:validators:mustBeMember');
+            tc.verifyErrorId(@() NonGravForces.io.massModel("C", 'Anchor_kg', 30), 'NonGravForces:massModel:inputAnchor');
+            tc.verifyErrorId(@() NonGravForces.io.massModel("C", 'Mode', "mas1b"), 'NonGravForces:massModel:inputMas1b');
+            tc.verifyErrorId(@() NonGravForces.io.massModel("C", 'Mode', "mas1b", 'Epoch', epM, 'GasMass_kg', tank.total_kg(1:3)), 'NonGravForces:massModel:inputMas1b');
+            tc.verifyErrorId(@() m.at(struct('x', 1)), 'NonGravForces:massModel:inputEpoch');
+        end
+        function spaceWeatherContract(tc)
+            sw = NonGravForces.io.spaceWeather(tc.f.sw);
+            tc.verifyEqual(sw.format, "celestrak"); tc.verifyEqual(numel(sw.mjd), 213); tc.verifyEqual(sw.span, [58727 58939]);
+            tc.verifySize(sw.index.ap3h, [213 8]); tc.verifySize(sw.index.kp3h, [213 8]); tc.verifyClass(sw.index.dataType, 'string');
+            d = sw.query(referenceSystem.mjdToEpoch([58849.5; 58850.2], "UTC"));
+            tc.verifySize(d.f107, [1 2]); tc.verifySize(d.apHistory, [7 2]); tc.verifySize(d.kp, [1 2]); tc.verifySize(d.dataType, [1 2]);
+            sj = NonGravForces.io.spaceWeather([string(tc.f.dtc) string(tc.f.solfsmy)]);
+            tc.verifyEqual(sj.format, "jb2008"); tc.verifyEqual(numel(sj.mjd), 213); tc.verifySize(sj.index.dtc, [213 24]);
+            dj = sj.query(referenceSystem.mjdToEpoch(58849.5, "UTC"));
+            tc.verifyEqual(sort(string(fieldnames(dj))), sort(["f10";"f10b";"s10";"s10b";"m10";"m10b";"y10";"y10b";"dtc"]));
+            sj2 = NonGravForces.io.spaceWeather([string(tc.f.solfsmy) string(tc.f.dtc)], 'Format', "jb2008");
+            tc.verifyEqual(sj2.mjd, sj.mjd, 'file order must not matter');
+            tc.verifyErrorId(@() NonGravForces.io.spaceWeather(tc.f.dtc), 'NonGravForces:spaceWeather:inputFiles');
+            tc.verifyErrorId(@() NonGravForces.io.spaceWeather(tc.f.sw, 'Format', "jb2008"), 'NonGravForces:spaceWeather:inputFormat');
+            tc.verifyErrorId(@() sw.query(struct('x', 1)), 'NonGravForces:spaceWeather:inputEpoch');
+            tc.verifyError(@() NonGravForces.io.spaceWeather(fullfile(tc.tmp, 'nope.csv')), 'MATLAB:validators:mustBeFile');
+        end
+    end
+
+    % ===================================================================== reference
+    methods (Test, TestTags = {'reference'})
+        function readACC1BReference(tc)
+            % Oracle: the file text itself, parsed independently (regexp tokens of the first data record).
+            [~, a, aux] = NonGravForces.io.readACC1B(tc.f.act);
+            tok = tc.rawRecord(tc.f.act, 1);          % gps_time GRACEFO_id lin_x lin_y lin_z ang_x ang_y ang_z res_x res_y res_z qualflg
+            tc.verifyEqual(a(:, 1), str2double(tok(3:5)));
+            tc.verifyEqual(aux.angular_rad_s2(:, 1), str2double(tok(6:8)));
+            tc.verifyEqual(aux.residual_m_s2(:, 1), str2double(tok(9:11)));
+            tc.verifyEqual(aux.units.lin_accl_x, 'm/s2');   % JPL D-56935: SI in the header
+        end
+        function readSCA1BReference(tc)
+            % Physics oracle: the body +Z axis (graceFO "Nadir" plate normal) rotated
+            % into the GCRS must point to nadir (-r/|r| from GNV1B). Measured 2026-09-06:
+            % 0.84 deg mean, 0.86 deg max when conjugated; 96 deg mean when NOT conjugated.
+            % Bound 3 deg: the GRACE-FO pitch offset and attitude deadband are ~1 deg.
+            [~, q] = NonGravForces.io.readSCA1B(tc.f.sca);
+            [~, r] = NonGravForces.io.readGNV1B(tc.f.gnv, 'Eop', tc.eop);
+            rhat = r ./ vecnorm(r);
+            ez = squeeze(pagemtimes(referenceSystem.rotationFromQuaternion(q), [0; 0; 1]));
+            ang = acosd(max(-1, min(1, sum(ez .* -rhat, 1))));
+            tc.verifyBoundAndRecord("SCA1B body +Z vs nadir (conjugated)", max(ang), 3, "deg", "measured 0.86; 96 without the conjugation");
+            % the same statistic without the conjugation must be far off, or this test proves nothing
+            qNo = referenceSystem.invertQuaternion(q);
+            ezNo = squeeze(pagemtimes(referenceSystem.rotationFromQuaternion(qNo), [0; 0; 1]));
+            tc.verifyGreaterThan(mean(acosd(max(-1, min(1, sum(ezNo .* -rhat, 1))))), 30, 'the unconjugated sense must fail this test');
+        end
+        function readGNV1BReference(tc)
+            % Oracle: Greenwich mean sidereal time from the IAU 1982 polynomial (Aoki et al.
+            % 1982; Meeus 12.4), evaluated here without referenceSystem. The GCRS-ITRS
+            % longitude difference of a point equals the hour angle of the equinox at
+            % Greenwich up to precession-nutation since J2000 (~0.28 deg in 2020) and the
+            % CIO/equinox difference. Measured 2026-09-06: -0.19 deg after the 18 s GPS-UTC
+            % offset is applied; bound 0.5 deg. A wrong rotation sense gives ~160 deg.
+            [~, r] = NonGravForces.io.readGNV1B(tc.f.gnv, 'Eop', tc.eop);
+            [~, rI] = NonGravForces.io.readGNV1B(tc.f.gnv, 'Frame', "ITRS");
+            T = (58849 + 2400000.5 - 2451545.0) / 36525;                       % centuries J2000 -> 2020-01-01 0h
+            gmst0 = 24110.54841 + 8640184.812866 * T + 0.093104 * T^2 - 6.2e-6 * T^3;   % s, at 0h UT1
+            ut1 = -18;                                                           % record 1: GPS 0 s = UTC 23:59:42 (dUT1 -0.18 s neglected: 0.0007 deg)
+            gmst_deg = mod((gmst0 + 1.00273790935 * ut1) / 86400 * 360, 360);
+            dlon = mod(rad2deg(atan2(r(2, 1), r(1, 1)) - atan2(rI(2, 1), rI(1, 1))), 360);
+            tc.verifyBoundAndRecord("GNV1B GCRS-ITRS longitude vs IAU1982 GMST", abs(dlon - gmst_deg), 0.5, "deg", "precession since J2000 dominates (measured 0.19)");
+        end
+        function readTHR1BReference(tc)
+            % Oracle: the raw first record (time_intg time_frac time_ref id 14 counts 14 on_times ...).
+            [T, aux] = NonGravForces.io.readTHR1B(tc.f.thr);
+            tok = tc.rawRecord(tc.f.thr, 1);
+            tc.verifyEqual(aux.onTime_s(:, 1), str2double(tok(19:32)) / 1000);
+            tc.verifyEqual(aux.count(:, 1), str2double(tok(5:18)));
+            tc.verifyEqual(aux.thruster(1), "att_ctrl_1_1"); tc.verifyEqual(aux.thruster(13), "orb_ctrl_1");
+            % GPS -> UTC: 18 leap seconds in 2020 (IERS Bulletin C 58); the tag is GPS seconds past 2000-01-01T12:00.
+            t0 = datetime(2000, 1, 1, 12, 0, 0, 'TimeZone', 'UTC') + seconds(str2double(tok(1)) + str2double(tok(2)) * 1e-6) - seconds(18);
+            tc.verifyLessThan(abs(seconds(T.tStart(1) - t0)), 1e-6, 'first event epoch vs raw GPS tag minus 18 s');
+            tc.verifyEqual(height(T), 471, 'the complete day has 471 records, all with a firing');
+        end
+        function readMAS1BReference(tc)
+            % Oracle: the values printed in the first record of the real file (also pinned by gracefoReading's realdata test).
+            [~, tank] = NonGravForces.io.readMAS1B(tc.f.mas);
+            tc.verifyEqual(tank.tank_kg(:, 1), [15.25970067419259; 15.23406422398089], 'AbsTol', 1e-12);
+            tc.verifyLessThan(abs(tank.total_kg(1) - 30.5), 0.5, 'GRACE-FO carries ~30 kg of cold gas; not 601 kg');
+        end
+        function massModelReference(tc)
+            % Oracle: JPL D-56935 masses (GRACE-C 601.214 kg, GRACE-D 601.209 kg).
+            ep = referenceSystem.mjdToEpoch(58849.5, "GPS");
+            tc.verifyEqual(NonGravForces.io.massModel("C").at(ep), 601.214);
+            tc.verifyEqual(NonGravForces.io.massModel("D").at(ep), 601.209);
+        end
+        function spaceWeatherReference(tc)
+            % Oracle: the raw CSV / TXT lines parsed here by hand (split on comma / whitespace).
+            lines = splitlines(string(fileread(tc.f.sw)));
+            row = @(d) split(lines(startsWith(lines, d)), ",");
+            d0 = row("2020-01-01"); dm1 = row("2019-12-31"); dm2 = row("2019-12-30");
+            sw = NonGravForces.io.spaceWeather(tc.f.sw);
+            q = sw.query(referenceSystem.mjdToEpoch(58849.5, "UTC"));            % 2020-01-01 12:00 UTC, 3-h slot 5
+            tc.verifyEqual(q.f107, str2double(dm1(25)), 'F10.7_OBS of the previous day');
+            tc.verifyEqual(q.f107a, str2double(d0(28)), 'F10.7_OBS_CENTER81 of the day');
+            tc.verifyEqual(q.ap, str2double(d0(21)), 'AP_AVG');
+            tc.verifyEqual(q.kp, str2double(d0(8)) / 10, 'KP5');
+            ap = @(r) str2double(r(13:20))';                                     % AP1..AP8
+            hist = [str2double(d0(21)); ap(d0) * [0 0 0 0 1 0 0 0]'; ap(d0) * [0 0 0 1 0 0 0 0]'; ap(d0) * [0 0 1 0 0 0 0 0]'; ap(d0) * [0 1 0 0 0 0 0 0]'; ...
+                    mean([ap(dm1) * [0 1 1 1 1 1 1 1]' / 7 * 7 / 8 * 8; 0]) * 0 + (sum(ap(dm1) .* [0 1 1 1 1 1 1 1]) + ap(d0) * [1 0 0 0 0 0 0 0]') / 8; ...
+                    (sum(ap(dm2) .* [0 1 1 1 1 1 1 1]) + ap(dm1) * [1 0 0 0 0 0 0 0]') / 8];
+            tc.verifyEqual(q.apHistory, hist, 'NRLMSISE-00 AP array: [daily, now, -3h, -6h, -9h, mean(-12..-33h), mean(-36..-57h)]');
+            tc.verifyEqual(q.dataType, string(d0(27)));
+            % JB2008: SOLFSMY line "2020 1": F10 S10 M10 Y10 with lags 1/1/2/5 d; DTC "DTC 2020 1" hourly.
+            sl = splitlines(string(fileread(tc.f.solfsmy))); s1 = split(strtrim(sl(startsWith(strtrim(sl), "2020   1 "))));
+            dl = splitlines(string(fileread(tc.f.dtc)));     dt = split(strtrim(dl(startsWith(dl, "DTC 2020   1 "))));
+            sj = NonGravForces.io.spaceWeather([string(tc.f.solfsmy) string(tc.f.dtc)]);
+            e = @(mjd) referenceSystem.mjdToEpoch(mjd, "UTC");
+            tc.verifyEqual(sj.query(e(58850.5)).f10, str2double(s1(4)), 'F10 one day later');
+            tc.verifyEqual(sj.query(e(58850.5)).s10b, str2double(s1(7)), 'S81c one day later');
+            tc.verifyEqual(sj.query(e(58851.5)).m10, str2double(s1(8)), 'M10 two days later');
+            tc.verifyEqual(sj.query(e(58854.5)).y10, str2double(s1(10)), 'Y10 five days later');
+            tc.verifyEqual(sj.query(e(58849 + 0.5/24)).dtc, str2double(dt(4)), 'DTC hour 1');
+            tc.verifyEqual(sj.query(e(58849 + 7.5/24)).dtc, str2double(dt(11)), 'DTC hour 8');
+        end
+    end
+
+    % ===================================================================== precision
+    methods (Test, TestTags = {'precision'})
+        function readACC1BPrecision(tc)
+            % Time-tag round trip is exact: epoch -> [day sec] equals gracefoReading's time bitwise (bound 0).
+            [ep] = NonGravForces.io.readACC1B(tc.f.act);
+            t = gracefoReading.readL1b(tc.f.act);
+            back = referenceSystem.epochTo(ep, "daySecond");
+            tc.verifyBoundAndRecord("ACC1B time tag round trip", max(abs(back(:) - t(:))), 0, "s", "exact by construction");
+        end
+        function readSCA1BPrecision(tc)
+            % invertQuaternion normalises: |norm(q) - 1| at the eps level (measured 2.2e-16); bound 1e-15 = 4.5 eps.
+            [~, q] = NonGravForces.io.readSCA1B(tc.f.sca);
+            tc.verifyBoundAndRecord("SCA1B unit norm of q_body2gcrs", max(abs(vecnorm(q) - 1)), 1e-15, "-", "measured 2.2e-16");
+        end
+        function readGNV1BPrecision(tc)
+            % The rotated velocity must contain the frame-rate term: a five-point central
+            % difference of the GCRS positions (1 Hz) reproduces it to 4.4e-5 m/s (measured;
+            % dominated by the GNV1B position noise ~mm and the stencil truncation at 1 s).
+            % Bound 1e-3 m/s: 20x the measurement, 5 orders below the 470 m/s error of a
+            % dropped Rdot term.
+            [~, r, v] = NonGravForces.io.readGNV1B(tc.f.gnv, 'Eop', tc.eop);
+            h = 1;
+            vfd = (-r(:, 5:end) + 8 * r(:, 4:end-1) - 8 * r(:, 2:end-3) + r(:, 1:end-4)) / (12 * h);
+            tc.verifyBoundAndRecord("GNV1B velocity vs 5-point FD of GCRS position", max(vecnorm(vfd - v(:, 3:end-2))), 1e-3, "m/s", "measured 4.4e-5; 4.7e2 without Rdot");
+        end
+        function readTHR1BPrecision(tc)
+            % Event duration equals the longest on-time of the record exactly (integer ms / 1000, one division).
+            [T, aux] = NonGravForces.io.readTHR1B(tc.f.thr);
+            dur = seconds(T.tEnd - T.tStart)';
+            expect = max(aux.onTime_s(:, any(aux.fired, 1)), [], 1);
+            tc.verifyBoundAndRecord("THR1B event duration vs max on-time", max(abs(dur - expect)), 1e-6, "s", "datetime resolution ~1e-7 s near 2020");
+        end
+        function readMAS1BPrecision(tc)
+            % total is the plain sum tank1 + tank2 (same operands, same order): bitwise.
+            [~, tank] = NonGravForces.io.readMAS1B(tc.f.mas);
+            tc.verifyBoundAndRecord("MAS1B total vs tank1+tank2", max(abs(tank.total_kg - sum(tank.tank_kg, 1))), 0, "kg", "bitwise");
+        end
+        function massModelPrecision(tc)
+            % At the MAS1B sample epochs the model equals anchor + gas - gas(1): interp1 at a node is
+            % exact, the two additions round at 1e-13 kg (600 kg * eps); bound 1e-9 kg leaves 4 decades.
+            [epM, tank] = NonGravForces.io.readMAS1B(tc.f.mas);
+            m = NonGravForces.io.massModel("C", 'Mode', "mas1b", 'Epoch', epM, 'GasMass_kg', tank.total_kg);
+            expect = 601.214 + tank.total_kg - tank.total_kg(1);
+            tc.verifyBoundAndRecord("massModel mas1b at the sample epochs", max(abs(m.at(epM) - expect)), 1e-9, "kg", "rounding 1e-13");
+            tc.verifyTrue(all(m.at(epM) > 600.9 & m.at(epM) < 601.3));
+        end
+        function spaceWeatherPrecision(tc)
+            % kp is the file integer / 10 (the only arithmetic): 10*kp is an integer to 4 eps.
+            sw = NonGravForces.io.spaceWeather(tc.f.sw);
+            ep = referenceSystem.daySecondToEpoch([repmat(58849, 8, 1), (0:7)' * 10800 + 1], "UTC");
+            d = sw.query(ep);
+            tc.verifyBoundAndRecord("spaceWeather 10*kp integer", max(abs(10 * d.kp - round(10 * d.kp))), 1e-14, "-", "one division");
+            tc.verifyEqual(d.kp, sw.index.kp3h(sw.mjd == 58849, :), 'the eight 3-h slots of the day in order');
+        end
+    end
+
+    % ===================================================================== vectorization
+    methods (Test, TestTags = {'vectorization'})
+        function readACC1BVectorization(tc)
+            % A TimeRange excerpt equals the slice of the full read, bitwise (leading and interior).
+            [ep, a, aux] = NonGravForces.io.readACC1B(tc.f.act);
+            [e1, a1, x1] = NonGravForces.io.readACC1B(tc.f.act, 'TimeRange', tc.range(0, 9.5));
+            tc.verifyEqual(a1, a(:, 1:10)); tc.verifyEqual(e1.sec, ep.sec(1:10)); tc.verifyEqual(x1.angular_rad_s2, aux.angular_rad_s2(:, 1:10));
+            [e2, a2] = NonGravForces.io.readACC1B(tc.f.act, 'TimeRange', tc.range(300, 309.5));
+            tc.verifyEqual(a2, a(:, 301:310)); tc.verifyEqual(e2.sec, ep.sec(301:310));
+        end
+        function readSCA1BVectorization(tc)
+            [~, q] = NonGravForces.io.readSCA1B(tc.f.sca);
+            [~, q2] = NonGravForces.io.readSCA1B(tc.f.sca, 'TimeRange', tc.range(300, 309.5));
+            tc.verifyEqual(q2, q(:, 301:310));
+        end
+        function readGNV1BVectorization(tc)
+            % The rotation of a batch must equal the rotation of a subset, bitwise (measured 0 difference).
+            [~, r, v] = NonGravForces.io.readGNV1B(tc.f.gnv, 'Eop', tc.eop);
+            [~, r1, v1] = NonGravForces.io.readGNV1B(tc.f.gnv, 'Eop', tc.eop, 'TimeRange', tc.range(0, 9.5));
+            [~, r2, v2] = NonGravForces.io.readGNV1B(tc.f.gnv, 'Eop', tc.eop, 'TimeRange', tc.range(300, 309.5));
+            tc.verifyEqual(r1, r(:, 1:10)); tc.verifyEqual(v1, v(:, 1:10));
+            tc.verifyEqual(r2, r(:, 301:310)); tc.verifyEqual(v2, v(:, 301:310));
+        end
+        function readTHR1BVectorization(tc)
+            % Whole day equals the two half days concatenated (isequaln: amplitude and sigma are NaN by design).
+            T = NonGravForces.io.readTHR1B(tc.f.thr);
+            T1 = NonGravForces.io.readTHR1B(tc.f.thr, 'TimeRange', [58849, 58849.5]);
+            T2 = NonGravForces.io.readTHR1B(tc.f.thr, 'TimeRange', [58849.5 + 1e-9, 58850]);
+            tc.verifyTrue(isequaln([T1; T2], T)); tc.verifyGreaterThan(height(T1), 0); tc.verifyGreaterThan(height(T2), 0);
+        end
+        function readMAS1BVectorization(tc)
+            [ep, tank] = NonGravForces.io.readMAS1B(tc.f.mas);
+            [e2, t2] = NonGravForces.io.readMAS1B(tc.f.mas, 'TimeRange', [58849 + 5/24, 58849 + 10/24]);
+            k = ep.sec >= 5 * 3600 & ep.sec <= 10 * 3600;
+            tc.verifyEqual(e2.sec, ep.sec(k)); tc.verifyEqual(t2.total_kg, tank.total_kg(k')); tc.verifyEqual(t2.tank_kg, tank.tank_kg(:, k'));
+        end
+        function massModelVectorization(tc)
+            [epM, tank] = NonGravForces.io.readMAS1B(tc.f.mas);
+            m = NonGravForces.io.massModel("C", 'Mode', "mas1b", 'Epoch', epM, 'GasMass_kg', tank.total_kg);
+            ep = referenceSystem.daySecondToEpoch([repmat(58849, 7, 1), (1000:5000:31000)'], "GPS");
+            all7 = m.at(ep);
+            one = arrayfun(@(k) m.at(referenceSystem.daySecondToEpoch([58849, ep.sec(k)], "GPS")), 1:7);
+            tc.verifyEqual(all7, one);
+        end
+        function spaceWeatherVectorization(tc)
+            sw = NonGravForces.io.spaceWeather(tc.f.sw); sj = NonGravForces.io.spaceWeather([string(tc.f.solfsmy) string(tc.f.dtc)]);
+            mjd = [58849.01; 58849.5; 58849.99; 58860.3; 58900.7];
+            for s = {sw, sj}
+                dAll = s{1}.query(referenceSystem.mjdToEpoch(mjd, "UTC"));
+                for k = 1:numel(mjd)
+                    d1 = s{1}.query(referenceSystem.mjdToEpoch(mjd(k), "UTC"));
+                    for fn = string(fieldnames(dAll))'
+                        tc.verifyEqual(dAll.(fn)(:, k), d1.(fn), sprintf('%s field %s epoch %d', s{1}.format, fn, k));
+                    end
+                end
+            end
+        end
+    end
+
+    % ===================================================================== robustness
+    methods (Test, TestTags = {'robustness'})
+        function readACC1BRobustness(tc)
+            % A quality mask naming a bit no record sets removes nothing; two files of different products refuse (foreign id).
+            [~, a] = NonGravForces.io.readACC1B(tc.f.act);
+            [~, a2, aux2] = NonGravForces.io.readACC1B(tc.f.act, 'QualityBitMask', 7);
+            tc.verifyEqual(a2, a); tc.verifyEqual(aux2.numRecords, 600);
+            tc.verifyError(@() NonGravForces.io.readACC1B([string(tc.f.act) string(tc.f.sca)]), 'gracefoReading:readL1bMulti:inconsistentVariables');
+            % a header missing lin_accl_z: refuse by name, never by position
+            bad = tc.corrupt(tc.f.act, 'ACT1B_nocol.txt', @(L, k) regexprep(L, '^(\s*- )lin_accl_z(:)', '$1lin_accl_z_renamed$2'));
+            tc.verifyErrorId(@() NonGravForces.io.readACC1B(bad), 'NonGravForces:readACC1B:dataColumn');
+        end
+        function readSCA1BRobustness(tc)
+            % A quaternion off the unit sphere is refused, not repaired.
+            bad = tc.corrupt(tc.f.sca, 'SCA1B_bad.txt', @(L, k) localScaleToken(L, k, 4, 2));
+            tc.verifyErrorId(@() NonGravForces.io.readSCA1B(bad), 'NonGravForces:readSCA1B:dataQuaternion');
+            tc.verifyErrorId(@() NonGravForces.io.readSCA1B(tc.f.sca, 'TimeRange', [58850 58851]), 'NonGravForces:readSCA1B:dataEmpty');
+        end
+        function readGNV1BRobustness(tc)
+            % coord_ref other than 'E' is refused; the whole 1962-now C04 series propagates referenceSystem's refusal unwrapped.
+            bad = tc.corrupt(tc.f.gnv, 'GNV1B_bad.txt', @(L, k) localSetToken(L, k, 3, "I"));
+            tc.verifyErrorId(@() NonGravForces.io.readGNV1B(bad, 'Eop', tc.eop), 'NonGravForces:readGNV1B:dataFrame');
+            tc.verifyErrorId(@() NonGravForces.io.readGNV1B(tc.f.gnv, 'Eop', tc.eop, 'TimeRange', [58850 58851]), 'NonGravForces:readGNV1B:dataEmpty');
+            [~, r] = NonGravForces.io.readGNV1B(tc.f.gnv, 'Frame', "ITRS", 'Eop', tc.eop);   % Eop ignored, not refused, for ITRS
+            tc.verifySize(r, [3 600]);
+        end
+        function readTHR1BRobustness(tc)
+            bad = tc.corrupt(tc.f.thr, 'THR1B_bad.txt', @(L, k) localSetToken(L, k, 3, "U"));
+            tc.verifyErrorId(@() NonGravForces.io.readTHR1B(bad), 'NonGravForces:readTHR1B:dataTimeRef');
+            % a record with no firing is counted, not listed
+            noFire = tc.corrupt(tc.f.thr, 'THR1B_nofire.txt', @(L, k) localZeroTokens(L, k, 19:32));
+            [T, aux] = NonGravForces.io.readTHR1B(noFire);
+            tc.verifyEqual(aux.numRecordsNoFiring, 1); tc.verifyEqual(height(T), aux.numRecords - 1);
+        end
+        function readMAS1BRobustness(tc)
+            % 150 kg in a tank column is not propellant: refused.
+            bad = tc.corrupt(tc.f.mas, 'MAS1B_bad.txt', @(L, k) localSetToken(L, k, 7, "150.0"));
+            tc.verifyErrorId(@() NonGravForces.io.readMAS1B(bad), 'NonGravForces:readMAS1B:dataRange');
+            tc.verifyErrorId(@() NonGravForces.io.readMAS1B(tc.f.mas, 'TimeRange', [58851 58852]), 'NonGravForces:readMAS1B:dataEmpty');
+        end
+        function massModelRobustness(tc)
+            [epM, tank] = NonGravForces.io.readMAS1B(tc.f.mas);
+            m = NonGravForces.io.massModel("C", 'Mode', "mas1b", 'Epoch', epM, 'GasMass_kg', tank.total_kg);
+            % hold within two sample intervals (2 h) beyond the ends; refuse further
+            tc.verifyEqual(m.at(referenceSystem.mjdToEpoch(58849, "GPS")), 601.214, 'first hour of the day: held at the first sample');
+            tc.verifyEqual(m.at(referenceSystem.mjdToEpoch(58850 + 1.9/24, "GPS")), m.at(epM) * [zeros(23, 1); 1], 'AbsTol', 1e-12);
+            tc.verifyErrorId(@() m.at(referenceSystem.mjdToEpoch(58850 + 2.1/24, "GPS")), 'NonGravForces:massModel:inputEpoch');
+            tc.verifyErrorId(@() m.at(referenceSystem.mjdToEpoch(58848.5, "GPS")), 'NonGravForces:massModel:inputEpoch');
+            g = tank.total_kg; g(5) = NaN;
+            tc.verifyErrorId(@() NonGravForces.io.massModel("C", 'Mode', "mas1b", 'Epoch', epM, 'GasMass_kg', g), 'NonGravForces:massModel:inputMas1b');
+            epRev = epM; epRev.sec = flipud(epM.sec);
+            tc.verifyErrorId(@() NonGravForces.io.massModel("C", 'Mode', "mas1b", 'Epoch', epRev, 'GasMass_kg', tank.total_kg), 'NonGravForces:massModel:inputMas1b');
+            % a gas series that would push the mass below 500 kg is refused at evaluation
+            bigLoss = NonGravForces.io.massModel("C", 'Mode', "mas1b", 'Epoch', epM, 'GasMass_kg', tank.total_kg - 200 * (0:23) / 23);
+            tc.verifyErrorId(@() bigLoss.at(epM), 'NonGravForces:massModel:numericRange');
+        end
+        function spaceWeatherRobustness(tc)
+            sw = NonGravForces.io.spaceWeather(tc.f.sw);
+            e = @(mjd) referenceSystem.mjdToEpoch(mjd, "UTC");
+            tc.verifyErrorId(@() sw.query(e(58720)), 'NonGravForces:spaceWeather:dataRange');            % before the table
+            tc.verifyErrorId(@() sw.query(e(58727.5)), 'NonGravForces:spaceWeather:dataRange');          % first day: no previous day for F10.7
+            tc.verifyErrorId(@() sw.query(e(58940)), 'NonGravForces:spaceWeather:dataRange');            % after the table
+            d = sw.query(e(58730.5)); tc.verifyTrue(isfinite(d.f107), 'fourth day: 57 h history available');
+            % a blank Kp field in the day queried is refused, never returned as NaN
+            lines = splitlines(string(fileread(tc.f.sw))); k = find(startsWith(lines, "2020-01-01")); tok = split(lines(k), ","); tok(8) = ""; lines(k) = strjoin(tok, ",");
+            blank = fullfile(tc.tmp, 'SW_blank.csv'); fid = fopen(blank, 'w'); fprintf(fid, '%s\n', lines); fclose(fid);
+            swb = NonGravForces.io.spaceWeather(blank);
+            tc.verifyErrorId(@() swb.query(e(58849.5)), 'NonGravForces:spaceWeather:dataMissing');     % slot 5 of 2020-01-01
+            tc.verifyTrue(isfinite(swb.query(e(58849.1)).kp), 'slot 1 of the same day is intact');
+            junk = fullfile(tc.tmp, 'junk.txt'); fid = fopen(junk, 'w'); fprintf(fid, 'hello\nworld\n'); fclose(fid);
+            tc.verifyErrorId(@() NonGravForces.io.spaceWeather(junk), 'NonGravForces:spaceWeather:inputFormat');
+            sl = splitlines(string(fileread(tc.f.solfsmy))); sl(10) = "  2019 249   garbage";
+            badS = fullfile(tc.tmp, 'SOLFSMY_bad.TXT'); fid = fopen(badS, 'w'); fprintf(fid, '%s\n', sl); fclose(fid);
+            tc.verifyErrorId(@() NonGravForces.io.spaceWeather([string(badS) string(tc.f.dtc)]), 'NonGravForces:spaceWeather:dataMalformed');
+            sj = NonGravForces.io.spaceWeather([string(tc.f.solfsmy) string(tc.f.dtc)]);
+            tc.verifyErrorId(@() sj.query(e(58731.5)), 'NonGravForces:spaceWeather:dataRange');          % fifth day: Y10 lag needs day-5
+            tc.verifyTrue(isfinite(sj.query(e(58732.5)).y10));
+        end
+    end
+
+    % ===================================================================== metamorphic
+    methods (Test, TestTags = {'metamorphic'})
+        function readACC1BMetamorphic(tc)
+            % Split/merge: two adjoining TimeRanges concatenated equal the whole read, bitwise.
+            [ep, a, aux] = NonGravForces.io.readACC1B(tc.f.act);
+            [e1, a1, x1] = NonGravForces.io.readACC1B(tc.f.act, 'TimeRange', tc.range(0, 299.5));
+            [e2, a2, x2] = NonGravForces.io.readACC1B(tc.f.act, 'TimeRange', tc.range(299.5, 600));
+            tc.verifyEqual([a1 a2], a); tc.verifyEqual([e1.sec; e2.sec], ep.sec);
+            tc.verifyEqual([x1.qualflgBits; x2.qualflgBits], aux.qualflgBits);
+        end
+        function readSCA1BMetamorphic(tc)
+            % Inverting the output once more reproduces the (normalised) file quaternion at the eps level
+            % (two normalisations; measured 3.3e-16). Bound 1e-14.
+            [~, q] = NonGravForces.io.readSCA1B(tc.f.sca);
+            [~, obs] = gracefoReading.readL1b(tc.f.sca);
+            qFile = referenceSystem.normalizeQuaternion(obs(:, 1:4)');
+            tc.verifyBoundAndRecord("SCA1B double conjugation vs file", max(abs(referenceSystem.invertQuaternion(q) - qFile), [], 'all'), 1e-14, "-", "measured 3.3e-16");
+        end
+        function readGNV1BMetamorphic(tc)
+            % (1) a rotation preserves |r| (measured 4e-16 relative; bound 1e-14);
+            % (2) round trip GCRS -> ITRS through applyRotation's inverse reproduces the file
+            %     (measured 5e-9 m; bound 1e-6 m, 1000x the double rounding at 7e6 m and 1000x below
+            %     the HANDOVER requirement of 1 mm);
+            % (3) an Eop struct and the same series as a file give bitwise the same state.
+            [ep, r, v] = NonGravForces.io.readGNV1B(tc.f.gnv, 'Eop', tc.eop);
+            [~, rI, vI] = NonGravForces.io.readGNV1B(tc.f.gnv, 'Frame', "ITRS");
+            tc.verifyBoundAndRecord("GNV1B |r| GCRS vs ITRS", max(abs(vecnorm(r) - vecnorm(rI)) ./ vecnorm(rI)), 1e-14, "rel", "measured 4e-16");
+            [R, Rdot] = referenceSystem.rotationItrsToGcrs(ep, 'Eop', tc.eop);
+            [rB, vB] = referenceSystem.applyRotation(R, Rdot, r, v, 'Inverse', true);
+            tc.verifyBoundAndRecord("GNV1B round trip GCRS->ITRS position", max(vecnorm(rB - rI)), 1e-6, "m", "measured 5e-9; requirement 1e-3");
+            tc.verifyBoundAndRecord("GNV1B round trip GCRS->ITRS velocity", max(vecnorm(vB - vI)), 1e-9, "m/s", "measured 1e-11");
+            [~, rF, vF] = NonGravForces.io.readGNV1B(tc.f.gnv, 'Eop', tc.f.eop);
+            tc.verifyEqual(rF, r); tc.verifyEqual(vF, v);
+        end
+        function readTHR1BMetamorphic(tc)
+            % The event table and aux describe the same records: one event per fired record, in order,
+            % and the UTC epochs are the GPS epochs minus the leap-second count.
+            [T, aux] = NonGravForces.io.readTHR1B(tc.f.thr);
+            fired = any(aux.fired, 1);
+            tc.verifyEqual(height(T), nnz(fired));
+            gps = referenceSystem.epochTo(aux.epoch, "datetime"); gps.TimeZone = 'UTC';
+            dt = seconds(gps(fired) - T.tStart);
+            tc.verifyLessThan(max(abs(dt - 18)), 1e-6, 'GPS - UTC = 18 s throughout 2020');
+            tc.verifyTrue(issorted(T.tStart));
+        end
+        function readMAS1BMetamorphic(tc)
+            % Split/merge over TimeRange equals the whole read (isequaln: NaN columns by design).
+            [ep, tank] = NonGravForces.io.readMAS1B(tc.f.mas);
+            [e1, t1] = NonGravForces.io.readMAS1B(tc.f.mas, 'TimeRange', [58849, 58849.5]);
+            [e2, t2] = NonGravForces.io.readMAS1B(tc.f.mas, 'TimeRange', [58849.5, 58850]);
+            tc.verifyEqual([e1.sec; e2.sec], ep.sec);
+            tc.verifyTrue(isequaln([t1.tank_kg t2.tank_kg], tank.tank_kg));
+            tc.verifyTrue(isequaln([t1.total_kg t2.total_kg], tank.total_kg));
+        end
+        function massModelMetamorphic(tc)
+            % (1) shifting the anchor by D shifts every mass by D (one addition: 1e-12 kg);
+            % (2) the epoch scale of the query does not matter (converted inside): bitwise-equal day/sec
+            %     after the 18 s GPS-UTC shift, so identical masses to 1e-12 kg.
+            [epM, tank] = NonGravForces.io.readMAS1B(tc.f.mas);
+            m1 = NonGravForces.io.massModel("C", 'Mode', "mas1b", 'Epoch', epM, 'GasMass_kg', tank.total_kg);
+            m2 = NonGravForces.io.massModel("C", 'Mode', "mas1b", 'Epoch', epM, 'GasMass_kg', tank.total_kg, 'Anchor_kg', 601.214 + 10);
+            ep = referenceSystem.daySecondToEpoch([repmat(58849, 5, 1), (3600:7200:32400)'], "GPS");
+            tc.verifyBoundAndRecord("massModel anchor shift", max(abs(m2.at(ep) - m1.at(ep) - 10)), 1e-12, "kg", "one addition at 600 kg");
+            epU = referenceSystem.convertTimeScale(ep, "UTC");
+            tc.verifyBoundAndRecord("massModel query scale invariance", max(abs(m1.at(epU) - m1.at(ep))), 1e-12, "kg", "exact 18 s shift");
+            c = NonGravForces.io.massModel("D");
+            tc.verifyEqual(c.at(ep), c.at(epU));
+        end
+        function spaceWeatherMetamorphic(tc)
+            % Daily indices are step functions: 00:00:00 and 23:59:59 of one day agree on every daily field;
+            % the JB2008 lags are relations between query and table: query(d).f10 == table(d-1), etc.
+            sw = NonGravForces.io.spaceWeather(tc.f.sw);
+            e = @(mjd) referenceSystem.mjdToEpoch(mjd, "UTC");
+            a = sw.query(e(58860)); b = sw.query(e(58860 + 86399/86400));
+            tc.verifyEqual([a.f107 a.f107a a.ap], [b.f107 b.f107a b.ap]); tc.verifyEqual(a.dataType, b.dataType);
+            tc.verifyEqual(a.apHistory(1), b.apHistory(1));
+            sj = NonGravForces.io.spaceWeather([string(tc.f.solfsmy) string(tc.f.dtc)]);
+            for d = [58800 58849 58900]
+                q = sj.query(e(d + 0.3));
+                tc.verifyEqual(q.f10, sj.index.f10(sj.mjd == d - 1)); tc.verifyEqual(q.s10b, sj.index.s10b(sj.mjd == d - 1));
+                tc.verifyEqual(q.m10, sj.index.m10(sj.mjd == d - 2)); tc.verifyEqual(q.y10b, sj.index.y10b(sj.mjd == d - 5));
+                tc.verifyEqual(q.dtc, sj.index.dtc(sj.mjd == d, 8), 'hour index floor(0.3*24)+1 = 8');
+            end
+        end
+    end
+
+    % ===================================================================== speed
+    methods (Test, TestTags = {'speed'})
+        function readACC1BSpeed(tc)
+            % Reader over raw gracefoReading.readL1b: measured 0.98 (median of 5, warm). Bound 5 = 3x a
+            % generous 1.5 expectation for the epoch struct, checks and provenance.
+            q = tc.speedRatio(@() NonGravForces.io.readACC1B(tc.f.act), @() gracefoReading.readL1b(tc.f.act));
+            tc.verifyBoundAndRecord("readACC1B / readL1b time ratio", q, 5, "-", "measured 0.98");
+        end
+        function readSCA1BSpeed(tc)
+            % Measured 1.46 (norm check + conjugation). Bound 5.
+            q = tc.speedRatio(@() NonGravForces.io.readSCA1B(tc.f.sca), @() gracefoReading.readL1b(tc.f.sca));
+            tc.verifyBoundAndRecord("readSCA1B / readL1b time ratio", q, 5, "-", "measured 1.46");
+        end
+        function readGNV1BSpeed(tc)
+            % GCRS read over ITRS read (the rotation with Rdot for 600 epochs): measured 1.16 warm, 6.3 cold.
+            % Bound 5 after warm-up (3x the 1.5 expectation).
+            q = tc.speedRatio(@() NonGravForces.io.readGNV1B(tc.f.gnv, 'Eop', tc.eop), @() NonGravForces.io.readGNV1B(tc.f.gnv, 'Frame', "ITRS"));
+            tc.verifyBoundAndRecord("readGNV1B GCRS / ITRS time ratio", q, 5, "-", "measured 1.16 warm");
+        end
+        function readTHR1BSpeed(tc)
+            % Measured 1.04 (event table build is cheap). Bound 5.
+            q = tc.speedRatio(@() NonGravForces.io.readTHR1B(tc.f.thr), @() gracefoReading.readL1b(tc.f.thr));
+            tc.verifyBoundAndRecord("readTHR1B / readL1b time ratio", q, 5, "-", "measured 1.04");
+        end
+        function readMAS1BSpeed(tc)
+            % Measured 1.47. Bound 5.
+            q = tc.speedRatio(@() NonGravForces.io.readMAS1B(tc.f.mas), @() gracefoReading.readL1b(tc.f.mas));
+            tc.verifyBoundAndRecord("readMAS1B / readL1b time ratio", q, 5, "-", "measured 1.47");
+        end
+        function massModelSpeed(tc)
+            % at() over one day at 1 Hz against a bare interp1 of the same size: measured 2.24
+            % (validation, clamping, the range check). Bound 7 = 3x.
+            [epM, tank] = NonGravForces.io.readMAS1B(tc.f.mas);
+            m = NonGravForces.io.massModel("C", 'Mode', "mas1b", 'Epoch', epM, 'GasMass_kg', tank.total_kg);
+            ep = referenceSystem.daySecondToEpoch([repmat(58849, 86400, 1), (0:86399)'], "GPS");
+            tg = epM.day + epM.sec / 86400; tq = ep.day + ep.sec / 86400;
+            q = tc.speedRatio(@() m.at(ep), @() interp1(tg, tank.total_kg, min(max(tq, tg(1)), tg(end))));
+            tc.verifyBoundAndRecord("massModel.at(86400) / interp1 time ratio", q, 7, "-", "measured 2.24");
+        end
+        function spaceWeatherSpeed(tc)
+            % query of one day at 1 Hz (86400 epochs, 0.05 s measured) against an ismember day lookup of
+            % the same size: measured 65 (four day rows, 20 history picks, five NaN scans). Bound 200 = 3x.
+            sw = NonGravForces.io.spaceWeather(tc.f.sw);
+            ep = referenceSystem.daySecondToEpoch([repmat(58849, 86400, 1), (0:86399)'], "UTC");
+            base = @() localBaseline(sw.mjd, ep);
+            q = tc.speedRatio(@() sw.query(ep), base);
+            tc.verifyBoundAndRecord("spaceWeather.query(86400) / ismember time ratio", q, 200, "-", "measured 65");
+        end
+    end
+end
+
+% ------------------------------------------------------------------------- local helpers
+function L = localSetToken(L, k, j, value)
+tok = split(strtrim(L(k))); tok(j) = string(value); L(k) = strjoin(tok, " ");
+end
+function L = localScaleToken(L, k, j, factor)
+tok = split(strtrim(L(k))); tok(j) = string(factor * str2double(tok(j))); L(k) = strjoin(tok, " ");
+end
+function L = localZeroTokens(L, k, jj)
+tok = split(strtrim(L(k))); tok(jj) = "0"; L(k) = strjoin(tok, " ");
+end
+function x = localBaseline(mjd, ep)
+[~, r] = ismember(ep.day, mjd); s = floor(ep.sec / 10800) + 1; x = r + s;
+end
