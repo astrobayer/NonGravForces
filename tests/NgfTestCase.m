@@ -25,8 +25,12 @@ classdef NgfTestCase < matlab.unittest.TestCase
                 fcn();
                 tc.verifyFail(sprintf('expected error %s, nothing was thrown', identifier));
             catch ME
+                where = "";
+                for k = 1:min(3, numel(ME.stack))
+                    where = where + sprintf(' <- %s:%d', ME.stack(k).name, ME.stack(k).line);
+                end
                 tc.verifyEqual(ME.identifier, char(identifier), ...
-                    sprintf('wrong identifier: got %s, message: %s', ME.identifier, ME.message));
+                    sprintf('wrong identifier: got %s, message: %s%s', ME.identifier, ME.message, where));
             end
         end
         function rec = verifyBoundAndRecord(tc, name, measured, bound, units, note)
