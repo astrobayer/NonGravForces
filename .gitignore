@@ -5,3 +5,6 @@ doc/html/custom_toolbox.json
 # Compiled MEX gateway, one extension per platform; built by NonGravForces.buildMex, never committed
 +NonGravForces/+env/private/msisGateway.mex*
 +NonGravForces/+env/private/msisGateway.digest.txt
+
+# Python bytecode caches of the audit and build scripts
+__pycache__/
