@@ -17,7 +17,7 @@ classdef AttitudeProvider < handle
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
     methods
         function obj = AttitudeProvider(varargin)
-            NonGravForces.fail("AttitudeProvider", "notImplemented", "AttitudeProvider is specified in WP-11 -> not delivered in 2.0.0, see HANDOVER.md");
+            NonGravForces.fail("AttitudeProvider", "notImplemented", "AttitudeProvider is specified in WP-11 -> not delivered in 0.1.0, see HANDOVER.md");
         end
     end
 end

@@ -26,5 +26,5 @@ function varargout = readSCA1B(varargin)
 % KEYWORDS stub WP-18
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
 varargout = cell(1, nargout);   % set so a caller with outputs is refused by fail, not by an unset return
-NonGravForces.fail("readSCA1B", "notImplemented", "readSCA1B is specified in WP-18 -> not delivered in 2.0.0, see HANDOVER.md");
+NonGravForces.fail("readSCA1B", "notImplemented", "readSCA1B is specified in WP-18 -> not delivered in 0.1.0, see HANDOVER.md");
 end
