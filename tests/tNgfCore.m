@@ -4,8 +4,8 @@ classdef tNgfCore < NgfTestCase
     methods (Test, TestTags = {'contract'})
         function toolboxVersionContract(tc)
             v = NonGravForces.toolboxVersion;
-            tc.verifyEqual(v.semantic, "2.0.0");
-            tc.verifyEqual(NonGravForces.toolboxVersion('string'), '2.0.0');
+            tc.verifyEqual(v.semantic, "0.1.0");
+            tc.verifyEqual(NonGravForces.toolboxVersion('string'), '0.1.0');
             tc.verifyEqual(v.concept, uint8(3));
             tc.verifyError(@() NonGravForces.toolboxVersion('xml'), 'MATLAB:validators:mustBeMember');
         end
@@ -28,7 +28,7 @@ classdef tNgfCore < NgfTestCase
             p = NonGravForces.provenance("unitA", 'Files', "a.txt", 'Options', struct('k', 1));
             tc.verifyEqual(p.unit, "unitA");
             tc.verifyEqual(strlength(p.optionHash), 8);
-            tc.verifyEqual(p.toolboxVersion, "2.0.0");
+            tc.verifyEqual(p.toolboxVersion, "0.1.0");
             tc.verifyEqual(p.created.TimeZone, 'UTC');
             q = NonGravForces.provenance("unitA");
             tc.verifyEqual(q.optionHash, "00000000");

@@ -26,5 +26,5 @@ function varargout = density(varargin)
 % KEYWORDS stub WP-05
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
 varargout = cell(1, nargout);   % set so a caller with outputs is refused by fail, not by an unset return
-NonGravForces.fail("density", "notImplemented", "density is specified in WP-05 -> not delivered in 2.0.0, see HANDOVER.md");
+NonGravForces.fail("density", "notImplemented", "density is specified in WP-05 -> not delivered in 0.1.0, see HANDOVER.md");
 end

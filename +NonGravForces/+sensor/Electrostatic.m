@@ -17,7 +17,7 @@ classdef Electrostatic < NonGravForces.sensor.Sensor
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
     methods
         function obj = Electrostatic(varargin)
-            NonGravForces.fail("Electrostatic", "notImplemented", "Electrostatic is specified in WP-29 -> not delivered in 2.0.0, see HANDOVER.md");
+            NonGravForces.fail("Electrostatic", "notImplemented", "Electrostatic is specified in WP-29 -> not delivered in 0.1.0, see HANDOVER.md");
         end
         function y = observe(~, ~), y = []; end
         function [J, names] = partials(~, ~), J = []; names = string.empty; end
