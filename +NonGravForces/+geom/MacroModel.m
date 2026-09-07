@@ -27,8 +27,11 @@ classdef MacroModel
 %   Validation at construction is the ONLY validation: kernels trust the
 %   packed arrays. Energy closure |a+s+d-1| <= 1e-6 in both bands, unit
 %   normals to 1e-5 (the handbook prints sin/cos 50 deg to six digits, whose
-%   squares sum to 1 - 5e-7; kernels renormalise nothing, the 5e-7 is
-%   carried as a documented transcription defect), positive areas, finite
+%   norm is 1 - 7.3e-7, measured): the packed N holds the normals RENORMALISED to
+%   unit length (decided 2026-09-07, HANDOVER O-2: the printed digits are a
+%   truncation of a unit vector, so one renormalisation here restores the
+%   authority's intent and no kernel renormalises), while panels(k).normal
+%   keeps the value as given; positive areas, finite
 %   centroids or all-NaN. Vertices, when given: planar to 1 mm about the
 %   normal, polygon area within 5 % of area_m2 (the polygons are derived
 %   from exterior dimensions, the areas are the printed authority), and
@@ -110,6 +113,7 @@ classdef MacroModel
             if any(abs(nn - 1) > 1e-5)
                 NonGravForces.fail("MacroModel", "inputNormal", "normal of panel %d has norm %.3e -> normalise it", find(abs(nn-1) > 1e-5, 1), nn(find(abs(nn-1)>1e-5,1)));
             end
+            N = N ./ nn;                                   % packed normals are exactly unit (O-2); panels keep the printed value
             oV = [[panels.absVis]; [panels.specVis]; [panels.diffVis]];
             oI = [[panels.emisIR]; [panels.specIR]; [panels.diffIR]];
             if any(abs(sum(oV,1) - 1) > 1e-6)

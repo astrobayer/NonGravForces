@@ -32,19 +32,23 @@ classdef tNgfGeom < NgfTestCase
             tc.verifyEqual(mm.inertia(3,3), 649.690);
         end
         function macroModelReference(tc)
-            % Side normals use sin/cos 50 deg exactly as printed.
+            % Side normals use sin/cos 50 deg as printed (panels), renormalised to unit length in N (O-2, 2026-09-07).
             mm = NonGravForces.geom.graceFO("C");
             k = find([mm.panels.name] == "StarboardOuter");
-            tc.verifyEqual(mm.N(:,k), [0; 0.766044; -0.642787]);
+            tc.verifyEqual(mm.panels(k).normal, [0; 0.766044; -0.642787]);
+            tc.verifyEqual(norm(mm.N(:,k)), 1, 'AbsTol', 2e-16);
+            tc.verifyBoundAndRecord("renormalised normal vs printed digits", norm(mm.N(:,k) - [0; 0.766044; -0.642787]), 1e-6, "-", "six printed digits: their norm is 1 - 7.3e-7 (measured 2026-09-07; the record had declared 5e-7)");
         end
     end
     methods (Test, TestTags = {'precision'})
         function graceFOPrecision(tc)
             % Non-convexity: the silhouette defect must equal 2*A_inner*c50 in Z
             % (inner and outer flank normals cancel in Y). Bound 1e-9 m^2: arithmetic.
+            % c50 is taken from the packed unit normal (O-2, 2026-09-07), not from the printed 0.642787 (norm 1 - 7.3e-7).
             mm = NonGravForces.geom.graceFO("C");
             s = mm.silhouetteDefect();
-            expectZ = 2 * 0.2282913 * 0.642787 - 2 * 3.1554792 * 0.642787 + 6.0711120 - 2.1673620;
+            c50 = abs(mm.N(3, find([mm.panels.name] == "StarboardOuter", 1)));
+            expectZ = 2 * 0.2282913 * c50 - 2 * 3.1554792 * c50 + 6.0711120 - 2.1673620;
             tc.verifyBoundAndRecord("graceFO silhouette defect z", abs(s(3) - expectZ), 1e-9, "m^2");
             tc.verifyBoundAndRecord("graceFO silhouette defect xy", norm(s(1:2)), 1e-9, "m^2");
         end
