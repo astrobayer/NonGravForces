@@ -1,5 +1,5 @@
 % KERNEL  NonGravForces.kernel - L4 layer.
-% Version 0.3.0  07-Sep-2026
+% Version 0.4.0  07-Sep-2026
 %
 %   gsiCoefficients      - Pressure and shear coefficients per panel: sentman cll maxwell schamberg [stub]
 %   accommodation        - Energy accommodation coefficient: fixed sesam langmuir [stub]

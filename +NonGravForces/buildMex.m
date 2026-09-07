@@ -12,10 +12,13 @@ function report = buildMex(options)
 %   committed; run this once per machine and after every change to mex/.
 %
 %   COMPILER. MATLAB's selected C compiler is used. When none is selected but
-%   the MinGW-w64 support package is installed, its location is placed in
-%   MW_MINGW64_LOC for this session and "mex -setup C" is run, because a fresh
-%   MATLAB session forgets that variable (measured 2026-09-07, HANDOVER O-14).
-%   Without any compiler the function refuses with depCompiler.
+%   the MinGW-w64 support package is installed, its location (MW_MINGW64_LOC,
+%   %ProgramData%\MATLAB\SupportPackages\<release>\3P.instrset\mingw_w64.instrset,
+%   the literal C:\ProgramData path when the variable is absent, or the support
+%   package root) is placed in MW_MINGW64_LOC for this session and "mex -setup C"
+%   is run, because a fresh MATLAB session forgets that variable (measured
+%   2026-09-07, HANDOVER O-14). Without any compiler the function refuses with
+%   depCompiler.
 %
 %   STALENESS IS DECIDED BY CONTENT. A SHA-256 digest of the sources is written
 %   beside the binary; 'Check' compares it with the sources on disk, so an
@@ -80,15 +83,19 @@ end
 % --- compiler
 cc = mex.getCompilerConfigurations('C', 'Selected');
 if isempty(cc)
-    candidates = string.empty(1, 0);
-    pd = string(getenv('ProgramData'));
-    if strlength(pd) > 0
-        candidates(end+1) = fullfile(pd, 'MATLAB', 'SupportPackages', "R" + version('-release'), '3P.instrset', 'mingw_w64.instrset');
-    end
+    % Where the MinGW-w64 support package may live, most specific first. Environment variables can be
+    % absent in a MATLAB started by a service (measured 2026-09-07: ProgramData empty in the MCP session),
+    % so the standard Windows location is also tried literally.
+    rel = "R" + version('-release');
+    bases = [string(getenv('ProgramData')), string(getenv('ALLUSERSPROFILE')), "C:\ProgramData"];
+    bases = bases(strlength(bases) > 0);
     spr = string(matlabshared.supportpkg.getSupportPackageRoot());
-    if strlength(spr) > 0
-        candidates(end+1) = fullfile(spr, '3P.instrset', 'mingw_w64.instrset');
-    end
+    spr = spr(strlength(spr) > 0);
+    candidates = [string(getenv('MW_MINGW64_LOC')), ...
+        fullfile(bases, 'MATLAB', 'SupportPackages', rel, '3P.instrset', 'mingw_w64.instrset'), ...
+        fullfile(spr, '3P.instrset', 'mingw_w64.instrset')];
+    candidates = candidates(strlength(candidates) > 0);     % an unset MW_MINGW64_LOC is ""
+    candidates = unique(candidates, 'stable');
     hit = candidates(arrayfun(@(c) isfile(fullfile(c, 'bin', 'gcc.exe')), candidates));
     if isempty(hit)
         NonGravForces.fail(unit, "depCompiler", ...

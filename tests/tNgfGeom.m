@@ -74,7 +74,7 @@ classdef tNgfGeom < NgfTestCase
             % Rotating every normal and centroid by R rotates the silhouette defect by R.
             mm = NonGravForces.geom.graceFO("C"); p = mm.panels;
             [Q, ~] = qr(reshape(sin(1:9), 3, 3)); R = Q * diag(sign(diag(Q))); if det(R) < 0, R(:,1) = -R(:,1); end
-            for k = 1:numel(p), p(k).normal = R * p(k).normal; p(k).centroid_m = R * p(k).centroid_m; end
+            for k = 1:numel(p), p(k).normal = R * p(k).normal; p(k).centroid_m = R * p(k).centroid_m; p(k).vertices_m = R * p(k).vertices_m; end
             m2 = NonGravForces.geom.MacroModel(p);
             tc.verifyBoundAndRecord("MacroModel rotation covariance", norm(m2.silhouetteDefect() - R * mm.silhouetteDefect()), 1e-12, "m^2");
         end
