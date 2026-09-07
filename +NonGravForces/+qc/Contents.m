@@ -1,9 +1,9 @@
 % QC  NonGravForces.qc - L7 layer.
-% Version 0.4.0  07-Sep-2026
+% Version 0.5.0  07-Sep-2026
 %
-%   residuals            - Whitened residuals measured - modelled with preliminary calibration [stub]
+%   residuals            - Whitened residuals measured - modelled with preliminary calibration
 %   hampel               - Robust point-outlier detector (moving median + MAD)
-%   detectImpulses       - Matched filter on the CRN impulse response with THR1B priors [stub]
-%   detectJumps          - Piecewise-constant/linear change-point detection (PELT + BIC) [stub]
+%   detectImpulses       - Matched filter on the CRN impulse response with THR1B priors
+%   detectJumps          - Piecewise-constant/linear change-point detection (PELT + BIC)
 %   eventTable           - Canonical event table constructor and schema
-%   screen               - Orchestrator: residuals -> outliers -> impulses -> jumps -> mask [stub]
+%   screen               - Orchestrator: residuals -> outliers -> impulses -> jumps -> mask
