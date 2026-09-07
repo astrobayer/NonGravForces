@@ -1,30 +1,181 @@
-function varargout = gsiCoefficients(varargin)
-%GSICOEFFICIENTS Pressure and shear coefficients per panel: sentman cll maxwell schamberg. NOT YET IMPLEMENTED (stub).
+function [Cp, Ctau, info] = gsiCoefficients(model, s, theta, alpha, Tw_K, Tinf_K, options)
+%GSICOEFFICIENTS Normal and tangential free-molecular force coefficients of a flat plate: sentman, maxwell, constantCd.
 %
-%   Specified in HANDOVER.md, WP-13 (level L4). This stub exists so that
-%   the package layout is complete from the first commit and so that a caller
-%   written against the future API fails LOUDLY with a stable identifier
-%   instead of resolving to something else on the path (rule R4).
+%   [Cp, Ctau] = NonGravForces.kernel.gsiCoefficients("sentman", s, theta, alpha, Tw_K, Tinf_K)
+%   [Cp, Ctau] = NonGravForces.kernel.gsiCoefficients("maxwell", s, theta, alpha, Tw_K, Tinf_K, 'SpecularFraction', 0.1)
+%   [Cp, Ctau] = NonGravForces.kernel.gsiCoefficients("constantCd", [], theta, [], [], [], 'Cd', 2.2)
+%   [Cp, Ctau, info] = NonGravForces.kernel.gsiCoefficients(___)
+%
+%   Force per unit plate area, in the (1/2) rho U^2 convention that the drag
+%   coefficient uses:
+%
+%       f = (1/2) rho U^2 ( Cp (-n) + Ctau t ),      g = -n.v,  t = (g + gamma n) / l,
+%
+%   where n is the outward plate normal, v the unit vector of the satellite's
+%   velocity relative to the gas, g = -v the direction the gas streams in,
+%   theta the angle between n and v (0: head-on, > pi/2: leeward),
+%   gamma = cos theta = n.v and l = sin theta; t is the tangential part of the
+%   gas stream. Cp > 0 pushes the plate inward, Ctau > 0 drags it along the
+%   tangential stream. The drag (along g) and lift (in the n-g plane) of the
+%   plate follow as CD = Cp gamma + Ctau l and CL = Cp l - Ctau gamma; both are
+%   returned in info. dragPanelForce does the body-frame assembly.
+%
+%   MODELS
+%     sentman     Free-molecular flow of a drifting Maxwellian on a plate with
+%                 diffuse re-emission (Sentman 1961). With P = exp(-gamma^2 s^2)/s,
+%                 Z = 1 + erf(gamma s), the momentum integrals give
+%                   Cp_inc   = gamma P/sqrt(pi) + (gamma^2 + 1/(2 s^2)) Z
+%                   Ctau_inc = l (P/sqrt(pi) + gamma Z)
+%                 and the diffusely re-emitted molecules add, along the normal,
+%                   Cp_re    = (1/2) (v_re/v_inc) (gamma sqrt(pi) Z + P),
+%                   v_re/v_inc = sqrt( (1/2) [1 + alpha (2 Tw/(Tinf s^2) - 1)] )
+%                 (Koppenwallner's energy accommodation: the re-emission
+%                 temperature is T_i - alpha (T_i - Tw) with the energy-equivalent
+%                 incident temperature T_i = m U^2/(4 k)). Cp gamma + Ctau l is
+%                 Doornbos' (2011, eqs 3.55-3.56) C_D and Cp l - Ctau gamma his
+%                 C_L. NOTE the reference document of this toolbox (theory, §2.3)
+%                 labels that drag/lift pair Cp/Ctau; the hyperthermal limit
+%                 (2 gamma^2 normal, 2 gamma l tangential, 2 gamma drag) shows
+%                 which is which. Species enter through s: one call per species
+%                 and a density-weighted sum (dragPanelForce does this).
+%     maxwell     A fraction SpecularFraction of the molecules reflects
+%                 specularly (incident normal momentum doubled, no shear, no
+%                 re-emission), the rest as sentman.
+%     constantCd  Cp = Cd max(gamma, 0) gamma, Ctau = Cd max(gamma, 0) l: the
+%                 force of every windward plate points along the gas stream (no
+%                 lift), and the plate sum reproduces the textbook
+%                 F = -(1/2) rho A_proj Cd |v| v with the projected area as
+%                 reference (Wöske 2019 eq. 5.20). s, alpha, Tw, Tinf are ignored
+%                 and may be empty.
+%     cll, schamberg  refused (unsupportedModel): no closed flat-plate form
+%                 and no oracle in hand (HANDOVER O-17).
 %
 % INPUT ARGUMENTS
-%   varargin   any   -   Accepted and ignored; the signature is fixed in WP-13.
+%   Name     Size     Type    Units  Description
+%   ----     ----     ----    -----  -----------
+%   model    1x1      string  -      "sentman" | "maxwell" | "constantCd" | "cll" | "schamberg"
+%   s        any      double  -      Speed ratio U / sqrt(2 k T / m) > 0 (ignored by constantCd)
+%   theta    any      double  rad    Angle between the plate normal and the relative velocity v, in [0, pi]
+%   alpha    any      double  -      Energy accommodation coefficient in [0, 1]
+%   Tw_K     any      double  K      Wall temperature > 0
+%   Tinf_K   any      double  K      Gas kinetic temperature > 0
+%   All arrays must be compatible for implicit expansion (e.g. theta NxK, s 1xK).
+%
+% NAME-VALUE ARGUMENTS
+%   Name              Size  Type    Units  Description
+%   ----              ----  ----    -----  -----------
+%   Cd                1x1   double  -      Drag coefficient for constantCd, > 0 (required by that model)
+%   SpecularFraction  1x1   double  -      Specular fraction for maxwell, in [0, 1] (required by that model)
 %
 % OUTPUT ARGUMENTS
-%   (none)     Never returned; the function always raises.
+%   Name     Size     Type    Units  Description
+%   ----     ----     ----    -----  -----------
+%   Cp       expanded double  -      Normal coefficient (>= 0)
+%   Ctau     expanded double  -      Tangential coefficient (>= 0)
+%   info     1x1      struct  -      .model, .CD, .CL (same size as Cp), .vRatio (re-emission
+%                                    speed ratio; empty for constantCd), .provenance
+%
+% ACCURACY
+%   Closed forms evaluated once per array (erfc and exp): rounding only, 1e-15
+%   relative (Z = erfc(-gamma s) keeps leeward plates positive where
+%   1 + erf(gamma s) cancels to 0 or below; measured 2026-09-07). Agreement with the numerical kinetic-theory integration in
+%   tools/pyxcheck/sentman_check.py is measured by the reference test (the
+%   oracle's own Simpson error is below 1e-10). The model error is the gas-
+%   surface interaction itself: Sentman with alpha = 0.85 agrees with GRACE/
+%   CHAMP-derived coefficients to 5-10 % (March et al. 2019); the tangential
+%   term of a leeward plate (gamma < 0) is exponentially small, not zero.
 %
 % ERRORS
-%   NonGravForces:gsiCoefficients:notImplemented   Always.
+%   NonGravForces:gsiCoefficients:unsupportedModel   cll or schamberg (O-17)
+%   NonGravForces:gsiCoefficients:inputShape         arrays not compatible for expansion
+%   NonGravForces:gsiCoefficients:inputRange         s <= 0, theta outside [0, pi], alpha outside [0, 1], Tw or Tinf <= 0
+%   NonGravForces:gsiCoefficients:inputCd            constantCd without a positive Cd
+%   NonGravForces:gsiCoefficients:inputSpecular      maxwell without a SpecularFraction in [0, 1]
+%   NonGravForces:gsiCoefficients:numericNaN         NaN or Inf in an input
 %
 % REFERENCES
-%   HANDOVER.md Rev 2.0, WP-13; doc/NonGravForces_Theory_and_Implementation.pdf.
+%   Sentman L.H. (1961) Free molecule flow theory and its application to the
+%   determination of aerodynamic forces, LMSC-448514. Doornbos E. (2011)
+%   Thermospheric density and wind determination from satellite dynamics,
+%   Ch. 3 (eqs 3.55-3.57). Koppenwallner G. (2008) Comment on special section:
+%   new perspectives on the satellite drag environments, JSR 45(6). Wöske F.
+%   (2019) PhD thesis, eq. 5.20. March et al. (2019) J. Space Weather Space Clim. 9, A36.
 %
 % EXAMPLE
-%   try, NonGravForces.kernel.gsiCoefficients(); catch ME, disp(ME.identifier); end
+%   [Cp, Ctau, info] = NonGravForces.kernel.gsiCoefficients("sentman", 8, 0, 1, 300, 1000);
+%   [Cp, info.CD]   % head-on plate: 2.137 (2 + 1/64 incident, 0.121 re-emission)
 %
-% See also NonGravForces.Model.
+% See also NonGravForces.kernel.dragPanelForce, NonGravForces.kernel.accommodation.
 %
-% KEYWORDS stub WP-13
-% Created 2026-08-27 by Claude Fable 5 (Anthropic).
-varargout = cell(1, nargout);   % set so a caller with outputs is refused by fail, not by an unset return
-NonGravForces.fail("gsiCoefficients", "notImplemented", "gsiCoefficients is specified in WP-13 -> not delivered yet, see HANDOVER.md");
+% KEYWORDS gas-surface interaction Sentman Maxwell drag coefficient free molecular
+% Created 2026-09-07 by Claude Fable 5.1 (Anthropic).
+arguments
+    model (1,1) string {mustBeMember(model, ["sentman","maxwell","constantCd","cll","schamberg"])}
+    s double
+    theta double
+    alpha double
+    Tw_K double
+    Tinf_K double
+    options.Cd double = []
+    options.SpecularFraction double = []
+end
+unit = "gsiCoefficients";
+if any(model == ["cll","schamberg"])
+    NonGravForces.fail(unit, "unsupportedModel", ...
+        "model %s has no closed flat-plate form and no oracle in this toolbox (HANDOVER O-17) -> use sentman, maxwell or constantCd", model);
+end
+if any(~isfinite(theta(:)))
+    NonGravForces.fail(unit, "numericNaN", "theta contains NaN/Inf -> screen the geometry");
+end
+if any(theta(:) < 0 | theta(:) > pi)
+    NonGravForces.fail(unit, "inputRange", "theta must lie in [0, pi] rad -> take atan2(|n x u|, n.u), not a signed angle");
+end
+g = cos(theta);
+l = sin(theta);
+info.model = model;
+if model == "constantCd"
+    if isempty(options.Cd) || ~isscalar(options.Cd) || ~(options.Cd > 0) || ~isfinite(options.Cd)
+        NonGravForces.fail(unit, "inputCd", "constantCd needs a positive scalar 'Cd' -> pass 'Cd', 2.2 for a GRACE-class body");
+    end
+    Cp = options.Cd .* max(g, 0) .* g;
+    Ctau = options.Cd .* max(g, 0) .* l;
+    info.vRatio = [];
+else
+    for v = {s, alpha, Tw_K, Tinf_K}
+        if any(~isfinite(v{1}(:)))
+            NonGravForces.fail(unit, "numericNaN", "s, alpha, Tw_K or Tinf_K contain NaN/Inf -> check the density and temperature inputs");
+        end
+    end
+    try
+        probe = s + theta + alpha + Tw_K + Tinf_K; %#ok<NASGU>
+    catch
+        NonGravForces.fail(unit, "inputShape", "s, theta, alpha, Tw_K, Tinf_K must be compatible for implicit expansion -> got %s, %s, %s, %s, %s", ...
+            mat2str(size(s)), mat2str(size(theta)), mat2str(size(alpha)), mat2str(size(Tw_K)), mat2str(size(Tinf_K)));
+    end
+    if any(s(:) <= 0) || any(alpha(:) < 0 | alpha(:) > 1) || any(Tw_K(:) <= 0) || any(Tinf_K(:) <= 0)
+        NonGravForces.fail(unit, "inputRange", "s > 0, alpha in [0, 1], Tw_K > 0, Tinf_K > 0 are required -> check the inputs");
+    end
+    P = exp(-(g .* s).^2) ./ s;
+    Z = erfc(-g .* s);                              % = 1 + erf(g s) without cancellation on leeward plates (g s << 0)
+    CpInc = g .* P / sqrt(pi) + (g.^2 + 1 ./ (2 * s.^2)) .* Z;
+    CtauInc = l .* (P / sqrt(pi) + g .* Z);
+    vRatio = sqrt(0.5 * ((1 - alpha) + alpha .* 2 .* Tw_K ./ (Tinf_K .* s.^2)));   % = sqrt((1/2)[1 + alpha(2Tw/(Tinf s^2) - 1)]) without the 1 - 1 cancellation at alpha = 1
+    CpRe = 0.5 * vRatio .* (g * sqrt(pi) .* Z + P);
+    switch model
+        case "sentman"
+            Cp = CpInc + CpRe;
+            Ctau = CtauInc + zeros(size(Cp));
+        case "maxwell"
+            sig = options.SpecularFraction;
+            if isempty(sig) || ~isscalar(sig) || ~isfinite(sig) || sig < 0 || sig > 1
+                NonGravForces.fail(unit, "inputSpecular", "maxwell needs a scalar 'SpecularFraction' in [0, 1] -> pass 'SpecularFraction', 0.1");
+            end
+            Cp = (1 - sig) * (CpInc + CpRe) + sig * 2 * CpInc;
+            Ctau = (1 - sig) * CtauInc + zeros(size(Cp));
+    end
+    info.vRatio = vRatio + zeros(size(Cp));
+end
+info.CD = Cp .* g + Ctau .* l;
+info.CL = Cp .* l - Ctau .* g;
+info.provenance = NonGravForces.provenance("kernel.gsiCoefficients", 'Options', struct('model', model, 'Cd', options.Cd, 'SpecularFraction', options.SpecularFraction));
 end

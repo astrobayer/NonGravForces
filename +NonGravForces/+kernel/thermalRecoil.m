@@ -1,30 +1,91 @@
-function varargout = thermalRecoil(varargin)
-%THERMALRECOIL Per-panel thermal re-emission recoil force. NOT YET IMPLEMENTED (stub).
+function [F, info] = thermalRecoil(macro, T_K)
+%THERMALRECOIL Per-panel recoil force of Lambertian thermal emission in the body frame.
 %
-%   Specified in HANDOVER.md, WP-12 (level L4). This stub exists so that
-%   the package layout is complete from the first commit and so that a caller
-%   written against the future API fails LOUDLY with a stable identifier
-%   instead of resolving to something else on the path (rule R4).
+%   [F, info] = NonGravForces.kernel.thermalRecoil(macro, T_K)
+%
+%   A plate of area A_k, infrared emissivity eps_k and temperature T_k emits
+%   eps_k sigma T_k^4 A_k watts as a Lambertian (cosine) source and recoils
+%   along its inward normal:
+%
+%       F_k = - (2/3) eps_k sigma T_k^4 A_k / c  n_k          (Wöske 2019 eq. 5.14)
+%
+%   The factor 2/3 is the hemispherical integral of the cosine law (only the
+%   normal components add up). The temperatures come from geom.thermalState
+%   (steady state or transient); this unit does no energy balance itself, so a
+%   caller can also feed measured or otherwise modelled temperatures.
 %
 % INPUT ARGUMENTS
-%   varargin   any   -   Accepted and ignored; the signature is fixed in WP-12.
+%   Name     Size  Type    Units  Description
+%   ----     ----  ----    -----  -----------
+%   macro    1x1   MacroModel     Panel model (A, N, optIR(1,:) = emissivity)
+%   T_K      NxK   double  K      Surface temperature per plate and epoch, >= 0 (an unlit steady-state
+%                                  plate without internal power sits at 0 K and emits nothing)
 %
 % OUTPUT ARGUMENTS
-%   (none)     Never returned; the function always raises.
+%   Name     Size    Type    Units  Description
+%   ----     ----    ----    -----  -----------
+%   F        3xNxK   double  N      Recoil force on each plate, body frame
+%   info     1x1     struct  -      .emitted_W_m2 (NxK, eps sigma T^4), .emittedPower_W (1xK, total),
+%                                   .provenance
+%
+% ACCURACY
+%   Exact for a Lambertian emitter at a uniform plate temperature; rounding
+%   1e-16. The model error is the temperature (geom.thermalState: steady
+%   state ignores the wall heat capacity, the transient model the conduction
+%   between plates) and the Lambertian assumption; for GRACE, TRP is the
+%   second-largest radiation term (Wöske et al. 2019; Vielberg & Kusche 2020;
+%   Siemes et al. 2023: 6.4 nm/s^2 cross-track RMS), so the temperature error
+%   dominates, not this formula.
 %
 % ERRORS
-%   NonGravForces:thermalRecoil:notImplemented   Always.
+%   NonGravForces:thermalRecoil:inputMacro   macro is not a MacroModel
+%   NonGravForces:thermalRecoil:inputShape   T_K is not NxK
+%   NonGravForces:thermalRecoil:inputRange   a negative temperature
+%   NonGravForces:thermalRecoil:numericNaN   NaN/Inf in T_K
 %
 % REFERENCES
-%   HANDOVER.md Rev 2.0, WP-12; doc/NonGravForces_Theory_and_Implementation.pdf.
+%   Wöske F. (2019) PhD thesis, Univ. Bremen, Sect. 5.1.4 eq. 5.14; Rievers B.,
+%   Lämmerzahl C. (2011) Ann. Phys. 523:439; Vielberg K., Kusche J. (2020)
+%   J. Geodesy 94:71; Siemes C. et al. (2023) Adv. Space Res.
 %
 % EXAMPLE
-%   try, NonGravForces.kernel.thermalRecoil(); catch ME, disp(ME.identifier); end
+%   mm = NonGravForces.geom.graceFO("C");
+%   T = NonGravForces.geom.thermalState(mm, src);          % NxK steady state
+%   F = NonGravForces.kernel.thermalRecoil(mm, T);          % (2/3) of the emitted power over c
 %
-% See also NonGravForces.Model.
+% See also NonGravForces.geom.thermalState, NonGravForces.kernel.radiationPanelForce, NonGravForces.kernel.assemble.
 %
-% KEYWORDS stub WP-12
-% Created 2026-08-27 by Claude Fable 5 (Anthropic).
-varargout = cell(1, nargout);   % set so a caller with outputs is refused by fail, not by an unset return
-NonGravForces.fail("thermalRecoil", "notImplemented", "thermalRecoil is specified in WP-12 -> not delivered yet, see HANDOVER.md");
+% KEYWORDS thermal radiation pressure recoil emission Lambert
+% Created 2026-09-07 by Claude Fable 5.1 (Anthropic).
+arguments
+    macro
+    T_K double
+end
+unit = "thermalRecoil";
+if ~isa(macro, 'NonGravForces.geom.MacroModel')
+    NonGravForces.fail(unit, "inputMacro", "macro must be a NonGravForces.geom.MacroModel -> build one with geom.graceFO or geom.boxWing");
+end
+N = macro.n;
+if ~(ismatrix(T_K) && size(T_K, 1) == N)
+    NonGravForces.fail(unit, "inputShape", "T_K must be NxK with N = %d plates -> got %s (geom.thermalState returns it)", N, mat2str(size(T_K)));
+end
+if any(~isfinite(T_K(:)))
+    NonGravForces.fail(unit, "numericNaN", "T_K contains NaN/Inf -> check thermalState's input fluxes");
+end
+if any(T_K(:) < 0)
+    NonGravForces.fail(unit, "inputRange", "T_K must be >= 0 K -> got %g", min(T_K(:)));
+end
+K = size(T_K, 2);
+c = NonGravForces.const();
+cLight = referenceSystem.iersConstants().speedOfLight;
+eps = macro.optIR(1, :)';                           % Nx1 emissivity
+emitted = eps .* c.sigmaSB .* T_K.^4;               % NxK  W/m^2
+mag = (2 / 3) * emitted .* macro.A(:) / cLight;     % NxK  N
+F = zeros(3, N, K);
+for k = 1:N
+    F(:, k, :) = reshape(-macro.N(:, k) .* mag(k, :), 3, 1, K);
+end
+info.emitted_W_m2 = emitted;
+info.emittedPower_W = sum(emitted .* macro.A(:), 1);
+info.provenance = NonGravForces.provenance("kernel.thermalRecoil");
 end
