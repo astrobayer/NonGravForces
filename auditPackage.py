@@ -14,6 +14,7 @@ Mechanisms, not reminders (HANDOVER P-5). Each check names the rule it enforces.
   6. doc/html/FunctionList.html equals what tools/buildFunctionList.py renders
      from the catalogue: staleness by content, not by stamp (O-11).
 """
+import hashlib
 import csv, glob, os, re, sys
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -115,6 +116,31 @@ try:
         note("doc/html/FunctionList.html is stale -> python tools/buildFunctionList.py")
 except SystemExit as e:
     note(f"tools/buildFunctionList.py: {e}")
+
+# 7. the catalogue must survive a naive CSV read: an unquoted comma inside an h1 silently
+#    truncated env.eclipseFactor's purpose into Contents.m and FunctionList.html until 2026-09-07.
+for i, raw in enumerate(open(os.path.join(ROOT, "doc", "functionlist.csv"), encoding="utf-8").read().splitlines(), 1):
+    if raw and raw.count(",") != 6:
+        note(f"doc/functionlist.csv line {i} has {raw.count(',') + 1} comma-separated fields, not 7 "
+             f"-> remove the comma from the h1 text (the catalogue is read unquoted)")
+
+# 8. the vendored NRLMSISE-00 sources must match the digests their README records, or a silent
+#    edit to third-party C would ship unnoticed. The digests were recorded when it was vendored.
+mexdir = os.path.join(ROOT, "mex", "nrlmsise00")
+readme = os.path.join(mexdir, "README.md")
+if os.path.isfile(readme):
+    recorded = dict(re.findall(r"\|\s*`([\w.\-]+)`\s*\|\s*([0-9a-f]{64})\s*\|", open(readme, encoding="utf-8").read()))
+    if not recorded:
+        note("mex/nrlmsise00/README.md records no SHA-256 digests -> the vendored sources are unverifiable")
+    for fname, want in recorded.items():
+        fpath = os.path.join(mexdir, fname)
+        if not os.path.isfile(fpath):
+            note(f"mex/nrlmsise00/{fname} is recorded with a digest but missing")
+            continue
+        got = hashlib.sha256(open(fpath, "rb").read()).hexdigest()
+        if got != want:
+            note(f"mex/nrlmsise00/{fname} digest {got[:16]} does not match the recorded {want[:16]} "
+                 f"-> the vendored third-party source was edited")
 
 if findings:
     print(f"auditPackage: {len(findings)} finding(s)")
