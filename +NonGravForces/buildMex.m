@@ -13,7 +13,7 @@ function report = buildMex(options)
 %
 %   COMPILER. MATLAB's selected C compiler is used. When none is selected but
 %   the MinGW-w64 support package is installed, its location (MW_MINGW64_LOC,
-%   %ProgramData%\MATLAB\SupportPackages\<release>P.instrset\mingw_w64.instrset,
+%   %ProgramData%\MATLAB\SupportPackages\<release>\3P.instrset\mingw_w64.instrset,
 %   the literal C:\ProgramData path when the variable is absent, or the support
 %   package root) is placed in MW_MINGW64_LOC for this session and "mex -setup C"
 %   is run, because a fresh MATLAB session forgets that variable (measured
