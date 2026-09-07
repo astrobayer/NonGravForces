@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-07 (LP-4) by Claude Fable 5.1. Toolbox version 0.4.0.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-07 (LP-5) by Claude Fable 5.1. Toolbox version 0.5.0.
 
 ---
 
@@ -142,9 +142,9 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-09-06, after LP-2)
 
-- **169/169 tests GREEN** (2026-09-07, R2026a Update 4, Tier A host run; predicted
-  169), Code Analyzer 0 findings, gate TRUE; log in `tests/last_run.txt`.
-  LP-3 was 142, LP-2 116 (2026-09-06), LP-0 74 (2026-08-27).
+- **231/231 tests GREEN** (2026-09-07, R2026a Update 4, Tier A host run; predicted
+  231), Code Analyzer 0 findings, gate TRUE; log in `tests/last_run.txt`.
+  LP-4 was 169, LP-3 142, LP-2 116 (2026-09-06), LP-0 74 (2026-08-27).
 - Implemented (☑): L0 core, `geom.MacroModel`, `geom.graceFO`, `qc.hampel`,
   `qc.eventTable`, `sensor.Sensor` interface, test infrastructure, CI, and the
   LP-2 data I/O: `io.readACC1B`, `readSCA1B`, `readGNV1B`, `readTHR1B`,
@@ -157,8 +157,13 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   solaarsCF (Robertson 2015, coefficients in `tools/pyxcheck/solaars_cf_coefficients.csv`);
   and the LP-4 geometry: `MacroModel` plate polygons and heat capacities, `graceFO` closed
   polygons, `boxWing`, `selfShadow` (ray cast + icosphere LUT), `AttitudeProvider` with
-  `nominal`, `checkAttitudeSense`, `thermalState` (tests in `tests/tNgfGeometry.m`).
-- **23 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
+  `nominal`, `checkAttitudeSense`, `thermalState` (tests in `tests/tNgfGeometry.m`);
+  and the LP-5 kernel and quality control: `kernel.gsiCoefficients` (sentman, maxwell,
+  constantCd), `accommodation` (fixed), `dragPanelForce` (per species), `radiationPanelForce`,
+  `thermalRecoil`, `assemble`, `bodyTorques`; `qc.residuals`, `detectImpulses`, `detectJumps`
+  (PELT), `screen` (tests in `tests/tNgfKernel.m`, `tests/tNgfQcScreen.m`; oracles
+  `tools/pyxcheck/sentman_check.py`, `pelt_check.py`).
+- **12 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
 - Repository `github.com/astrobayer/NonGravForces` (the account was renamed
   from `matweigelt` on 2026-09-06; `referenceSystem` and `gracefoReading` moved
   with it), local clone at
@@ -179,10 +184,13 @@ dtm2020/jb2008 (LP-3b), and the furnished-kernel Sun path (O-15).
 
 **Done 2026-09-07: LP-4 (geom)** and solaarsCF (O-13 closed).
 
-**Next: LP-5 (kernel + qc)** — WP-13 `gsiCoefficients` (Sentman exact; Python
-kinetic-theory oracle), WP-26 `accommodation`, WP-12 `radiationPanelForce`,
-`thermalRecoil`, WP-24 `bodyTorques`, WP-14 `assemble`, WP-31 `qc.residuals`,
-`detectImpulses`, `detectJumps`, `screen`; oracles in HANDOVER Part G. Then LP-4 (geom), LP-5 (kernel + qc), LP-5x, LP-6 (Model/partials),
+**Done 2026-09-07: LP-5 (kernel + qc)** except `partials` (LP-6), SESAM (O-16),
+CLL/Schamberg (O-17); O-2 closed (unit normals). Upstream issues filed:
+referenceSystem#15 (O-10), gracefoReading#6 (O-12).
+
+**Next: LP-5x (cross-validation tooling)** — WP-33 numpy mirror of the frozen
+kernel under `tools/pyxcheck/ngfkernel/` (written from the equations), WP-34 GROOPS
+black-box fixtures; or LP-6 (Model, series, partials, rhs) per HANDOVER Part G. Then LP-4 (geom), LP-5 (kernel + qc), LP-5x, LP-6 (Model/partials),
 LP-6b (C/MEX), LP-R (release).
 
 **LP-5x cross-validation** (owner rulings of 2026-08-27):
@@ -271,3 +279,14 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   intersect (a spurious 2.5 % self-shadow from straight above was the symptom).
 - **A BLAS matrix product sums in a batch-size-dependent order**; use column-wise sums
   where a vectorisation test must be bitwise.
+- **Sentman's published C_D/C_L are drag and lift, not normal and tangential**; the kernel
+  derives Cp (normal) and Ctau (tangential) from the momentum integrals and asserts both
+  projections. The theory document §2.3 mislabels them (to be corrected at LP-R).
+- **1 + erf(x) cancels for x << 0**: use erfc(-x). **1 + a(x - 1) loses 1e-8 at a = 1**: write
+  (1 - a) + a x.
+- **Hampel flags the peaks of a strong pulse** (runs of several samples); replace only
+  isolated runs (<= 2 samples) before a matched filter, and let pulses claim their samples.
+- **BIC for change points counts the location**: (p + 1) sigma^2 log K, not p sigma^2 log K;
+  PELT must keep not-yet-admissible candidates in its set.
+- **`MacroModel.N` holds unit normals** (renormalised); `panels(k).normal` keeps the printed
+  handbook digits (norm 1 - 7.3e-7, measured).
