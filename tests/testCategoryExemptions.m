@@ -52,7 +52,6 @@ ex.buildMex.metamorphic         = "no input relation exists";
 ex.buildMex.speed               = "a compile is not timed";
 ex.boxWing.vectorization        = "factory returns one object";
 ex.boxWing.speed                = "no numerical work";
-ex.checkAttitudeSense.speed     = "two rotations and an arc cosine per epoch; timed inside AttitudeProvider speed";
 ex.accommodation.reference      = "fixed is a pass-through of the caller's value; the SESAM reference (Pilinski 2013 Fig. 3) lands with O-16";
 ex.accommodation.precision      = "no numerical claim until sesam exists (O-16)";
 ex.accommodation.speed          = "no numerical work";

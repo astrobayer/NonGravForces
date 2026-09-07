@@ -1,8 +1,8 @@
 % KERNEL  NonGravForces.kernel - L4 layer.
-% Version 0.5.1  07-Sep-2026
+% Version 0.5.2  07-Sep-2026
 %
-%   gsiCoefficients      - Pressure and shear coefficients per panel: sentman cll maxwell schamberg
-%   accommodation        - Energy accommodation coefficient: fixed sesam langmuir
+%   gsiCoefficients      - Normal and tangential plate coefficients: sentman maxwell constantCd (cll/schamberg refuse)
+%   accommodation        - Energy accommodation coefficient: fixed (sesam/langmuir refuse until O-16)
 %   dragPanelForce       - Per-panel gas-momentum force in body frame
 %   radiationPanelForce  - Per-panel radiation force for a source list in body frame
 %   thermalRecoil        - Per-panel thermal re-emission recoil force

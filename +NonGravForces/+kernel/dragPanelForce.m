@@ -55,8 +55,13 @@ function [F, info] = dragPanelForce(macro, rho, species, T_K, vrel_body, options
 %
 % ACCURACY
 %   Exact assembly of the gsiCoefficients closed forms; rounding 1e-15. The
-%   species sum reproduces the density backend's total to the backend's own
-%   consistency (msis00: 1e-6 relative, measured); the drag force error is
+%   species sum does NOT reproduce the density backend's total exactly: measured
+%   3.7e-4 to 5.7e-4 relative against msis00 (2026-09-07, three epochs at 480-500 km),
+%   because NRLMSISE-00 forms its total from its own molecular masses and this unit
+%   re-forms it from const.speciesMass. The forces use the species sum, so the
+%   difference is a statement about the reported total, not an error in the force.
+%   (This block claimed 1e-6 until 2026-09-07; the number had been asserted, not
+%   measured - rule R3.) The drag force error is
 %   dominated by the density (10-30 %, HANDOVER E) and by the gas-surface
 %   model (5-10 %), not by this assembly. A plate exactly edge-on (l = 0 or
 %   gamma = 0) gets its exact limit, no NaN.

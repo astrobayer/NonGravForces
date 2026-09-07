@@ -86,6 +86,32 @@ classdef tNgfCore < NgfTestCase
         end
     end
     methods (Test, TestTags = {'robustness'})
+        function constRobustness(tc)
+            % The constants are data, so robustness is about the data being well formed: nothing
+            % non-finite, nothing non-positive that is physically positive, the two species arrays
+            % the same length, and no hidden state between calls.
+            c = NonGravForces.const();
+            num = ["S0","au","Rsun","Rmoon","sigmaSB","kB","NA","Rgas","amu","lambertDiffuse"];
+            for f = num
+                tc.verifyTrue(isscalar(c.(f)) && isfinite(c.(f)) && c.(f) > 0, sprintf('const.%s must be a finite positive scalar', f));
+            end
+            tc.verifyEqual(numel(c.speciesName), numel(c.speciesMass), 'the species name and mass arrays are one fact in two arrays');
+            tc.verifyTrue(all(isfinite(c.speciesMass) & c.speciesMass > 0));
+            tc.verifyTrue(all(strlength(c.speciesName) > 0));
+            tc.verifyGreaterThan([c.graceFO.massC c.graceFO.massD], 500, 'handbook masses, not MAS1B tank masses');
+            tc.verifyEqual(NonGravForces.const(), c, 'const must be a pure function of nothing');
+        end
+        function toolboxVersionRobustness(tc)
+            % The numeric fields are the authority and `semantic` is composed from them (rule R1):
+            % the robustness claim is that the two can never drift, and that a bad format refuses.
+            v = NonGravForces.toolboxVersion();
+            tc.verifyClass(v.major, 'uint16'); tc.verifyClass(v.minor, 'uint16'); tc.verifyClass(v.patch, 'uint16');
+            parts = double(split(v.semantic, "."));
+            tc.verifyEqual(parts(:)', double([v.major v.minor v.patch]), 'semantic must decompose into the numeric fields');
+            tc.verifyEqual(string(NonGravForces.toolboxVersion('string')), v.semantic);
+            tc.verifyEqual(NonGravForces.toolboxVersion(), v, 'no hidden state between calls');
+            tc.verifyError(@() NonGravForces.toolboxVersion('bogus'), 'MATLAB:validators:mustBeMember');
+        end
         function optionsRobustness(tc)
             % Empty override list and repeated set() are well defined.
             o = NonGravForces.Options("standard");

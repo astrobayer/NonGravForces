@@ -15,11 +15,13 @@ function [epoch, r, v, aux] = readGNV1B(files, options)
 %   there is no default series: pass 'Eop' (rule R5). With 'Frame' "ITRS" the
 %   state is returned as printed and no EOP is needed.
 %
-%   EOP SERIES CONSTRAINT (measured 2026-09-06, HANDOVER O-10): referenceSystem
-%   refuses a series with rows before 1972-01-01, so the shipped
-%   eopc04_20.1962-now read whole raises
-%   referenceSystem:leapSecondTable:beforeUtcEpoch; use finals2000A.all, or a
-%   C04 series restricted to MJD >= 41317. The two agree to 9 mm on the
+%   EOP SERIES NOTE (re-measured 2026-09-07 against referenceSystem 2.1.216,
+%   HANDOVER O-10 closed): a series carrying rows before 1972-01-01 is now accepted.
+%   referenceSystem trims those rows and warns
+%   (referenceSystem:interpolateEop:*), because UTC before that date is a rate-based
+%   fractional offset it does not model; until 2.1.216 it refused outright. The
+%   shipped eopc04_20.1962-now therefore works read whole, with 3652 of 23562 rows
+%   ignored. finals2000A.all and the trimmed C04 agree to 9 mm on the
 %   2020-01-01 arc.
 %
 % INPUT ARGUMENTS

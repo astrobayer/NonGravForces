@@ -19,7 +19,7 @@ io,importCERES,function,L1,WP-08,stub,CERES SYN1deg/EBAF netCDF import into radi
 io,igrfCoefficients,function,L1,WP-23,stub,IGRF-14 coefficient loader
 env,density,function,L2,WP-05,done,Thermosphere density and composition dispatcher (exponential msis00 msis21 dtm2020 jb2008)
 env,wind,function,L2,WP-25,stub,Relative-velocity builder: co-rotation plus optional HWM14 wind
-env,eclipseFactor,function,L2,WP-07,done,Shadow function nu in [0,1]: cylindrical conical solaarsCF plus lunar
+env,eclipseFactor,function,L2,WP-07,done,Shadow function nu from 0 to 1: cylindrical conical solaarsCF plus lunar
 env,earthRadiance,function,L2,WP-08,done,Earth albedo and IR radiance grids (pointSource knocke ceres) with ADM anisotropy
 env,magneticField,function,L2,WP-23,stub,IGRF-14 geomagnetic field in ITRS and body frame
 env,radiationSources,function,L2,WP-08,done,Source list {dir_body P band} from Sun and Earth radiance for one epoch batch
@@ -30,8 +30,8 @@ geom,selfShadow,function,L3,WP-10,done,Per-panel exposed fraction: exact ray-cas
 geom,thermalState,function,L3,WP-28,done,Per-panel temperatures: steady state or transient (Wöske)
 geom,AttitudeProvider,class,L3,WP-11,done,BODY->GCRS quaternions at query epochs (SCA1B or nominal) via referenceSystem.interpolateQuaternions
 geom,checkAttitudeSense,function,L3,WP-11,done,Physics test of quaternion sense (nadir and line-of-sight)
-kernel,gsiCoefficients,function,L4,WP-13,done,Pressure and shear coefficients per panel: sentman cll maxwell schamberg
-kernel,accommodation,function,L4,WP-26,done,Energy accommodation coefficient: fixed sesam langmuir
+kernel,gsiCoefficients,function,L4,WP-13,done,Normal and tangential plate coefficients: sentman maxwell constantCd (cll/schamberg refuse)
+kernel,accommodation,function,L4,WP-26,done,Energy accommodation coefficient: fixed (sesam/langmuir refuse until O-16)
 kernel,dragPanelForce,function,L4,WP-13,done,Per-panel gas-momentum force in body frame
 kernel,radiationPanelForce,function,L4,WP-12,done,Per-panel radiation force for a source list in body frame
 kernel,thermalRecoil,function,L4,WP-12,done,Per-panel thermal re-emission recoil force

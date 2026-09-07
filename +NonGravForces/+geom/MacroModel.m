@@ -13,7 +13,10 @@ classdef MacroModel
 %                            self-shadowing); NaN if unknown
 %     absVis, specVis, diffVis   visible band, must sum to 1
 %     emisIR, specIR, diffIR     infrared band, must sum to 1
-%     alpha       1x1 double energy accommodation coefficient default (0..1)
+%     alpha       1x1 double energy accommodation coefficient default (0..1). CARRIED,
+%                 NOT CONSUMED: kernel.dragPanelForce takes a scalar 'Alpha' option and
+%                 reads no per-panel value, so a model with mixed surfaces cannot express
+%                 that today (HANDOVER O-23, to be wired or removed at LP-6).
 %     group       string     "bus" | "array" | "boom" (informational)
 %   and OPTIONALLY (added 2026-09-07, LP-4)
 %     vertices_m  3xV double corners of the plate polygon, body frame, wound

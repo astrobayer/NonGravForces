@@ -1,5 +1,5 @@
-NonGravForces 0.5.1  run 2026-09-07 15:40 UTC  MATLAB 26.1.0.3312084 (R2026a) Update 4
-tests 238  passed 238  failed 0  incomplete 0  duration 67.6 s  GATE TRUE
+NonGravForces 0.5.2  run 2026-09-07 21:17 UTC  MATLAB 26.1.0.3312084 (R2026a) Update 4
+tests 244  passed 244  failed 0  incomplete 0  duration 85.7 s  GATE TRUE
 
 == category audit (units short of a category) ==
 none
@@ -7,10 +7,10 @@ none
 == recorded bounds ==
 P0 from S0=1361 vs 4.5398e-6 Pa (Montenbruck & Gill give 4.56e-6 for 1367)   1.6159e-06 <=   1.0000e-04 rel    max |a-e| / max |e|
 const.Rgas = kB*NA                         0.0000e+00 <=   1.0000e-15 rel    max |a-e| / max |e|
-msis00 86400 / 8640 epochs time ratio      9.7751e-01 <=   2.0000e+00 -      linear scaling; measured see last_run
-eclipse conical / cylindrical time ratio   1.0578e+00 <=   8.0000e+00 -      
-earthRadiance [24 48] / [12 24] time ratio   1.8668e+00 <=   8.0000e+00 -      4x the tiles
-radiationSources / earthRadiance time ratio (600 epochs)   4.8637e+00 <=   6.0000e+00 -      
+msis00 86400 / 8640 epochs time ratio      9.3396e-01 <=   2.0000e+00 -      linear scaling; measured see last_run
+eclipse conical / cylindrical time ratio   1.2193e+00 <=   8.0000e+00 -      
+earthRadiance [24 48] / [12 24] time ratio   1.7698e+00 <=   8.0000e+00 -      4x the tiles
+radiationSources / earthRadiance time ratio (600 epochs)   4.6045e+00 <=   6.0000e+00 -      
 gtd7d - gtd7 vs 16 amu x anomalous O       2.0195e-16 <=   1.0000e-12 rel    two rounding operations, per case
 exponential scale-height ratio             1.6337e-16 <=   1.0000e-14 rel    
 eclipse rotation invariance                2.5424e-14 <=   1.0000e-12 -      HANDOVER accuracy figure; measured see last_run
@@ -24,6 +24,7 @@ Knocke odd term cancels over mirrored caps   2.2204e-16 <=   1.0000e-14 -
 source directions rotate with the attitude   5.5511e-16 <=   1.0000e-14 -      two rotations
 pressures scale with tsi                   4.4409e-16 <=   1.0000e-14 -      one division
 ERP convergence ratio (err 12x24 / err 24x48)   4.1747e+00 <=   6.0000e+00 -      first order expects ~4; measured 4.1
+msis00 total vs the species sum over const.speciesMass   5.6922e-04 <=   1.0000e-03 -      the backend's molecular masses differ from CODATA/IUPAC values; measured 5.7e-4 on 2026-09-07 and quoted by kernel.dragPanelForce
 exponential density one scale height       0.0000e+00 <=   8.8818e-16 rel    exp and a multiply
 eclipse annular limit 1 - b^2/a^2          0.0000e+00 <=   1.0000e-15 -      same asin, one division
 SOLAARS-CF umbra limit                     0.0000e+00 <=   1.0000e-12 -      three saturated sigmoids
@@ -49,9 +50,10 @@ MacroModel energy closure vis              0.0000e+00 <=   1.0000e-12 -
 MacroModel energy closure ir               0.0000e+00 <=   1.0000e-12 -      
 graceFO total area vs Table 5 sum          0.0000e+00 <=   1.0000e-07 rel    max |a-e| / max |e|
 renormalised normal vs printed digits      7.3135e-07 <=   1.0000e-06 -      six printed digits: their norm is 1 - 7.3e-7 (measured 2026-09-07; the record had declared 5e-7)
-selfShadow LUT query / ray cast time ratio (600 directions)   1.5203e-01 <=   1.0000e+00 -      the table exists to be cheaper
-thermalState transient / steady time ratio (600 epochs)   1.5649e+00 <=   2.0000e+01 -      RK4 substeps
-AttitudeProvider.at / interpolateQuaternions time ratio   1.5762e+00 <=   8.0000e+00 -      three-output form of the dependency
+checkAttitudeSense vs one rotationFromQuaternion over 600 epochs   8.9636e+00 <=   1.2000e+01 -      budget 3x the expected 4: two rotations, one quaternion conjugation and two atan2 angles; 5 repeats, median
+selfShadow LUT query / ray cast time ratio (600 directions)   1.8353e-01 <=   1.0000e+00 -      the table exists to be cheaper
+thermalState transient / steady time ratio (600 epochs)   1.7384e+00 <=   2.0000e+01 -      RK4 substeps
+AttitudeProvider.at / interpolateQuaternions time ratio   1.6336e+00 <=   8.0000e+00 -      three-output form of the dependency
 boxWing area scaling                       0.0000e+00 <=   1.0000e-14 m^2    products of two lengths
 selfShadow 40 vs 100 samples               1.0000e-02 <=   5.0000e-02 -      one edge row of the coarser grid
 LUT at its vertices vs the table           0.0000e+00 <=   1.0000e-14 -      barycentric weights (1,0,0)
@@ -80,13 +82,13 @@ selfShadow raycast 100 vs Python 160       3.7500e-03 <=   1.0000e-02 -      mea
 steady-state temperature vs closed form    0.0000e+00 <=   1.0000e-09 K      one fourth root
 nominal attitude (+X against v) vs SCA1B   8.6093e-01 <=   3.0000e+00 deg    pointing offsets ~1 deg; measured 0.86
 checkAttitudeSense max nadir angle, real day   8.6018e-01 <=   3.0000e+00 deg    measured 0.86
-readACC1B / readL1b time ratio             1.0367e+00 <=   5.0000e+00 -      measured 0.98
-readSCA1B / readL1b time ratio             1.0604e+00 <=   5.0000e+00 -      measured 1.46
-readGNV1B GCRS / ITRS time ratio           1.1753e+00 <=   5.0000e+00 -      measured 1.16 warm
-readTHR1B / readL1b time ratio             1.0544e+00 <=   5.0000e+00 -      measured 1.04
-readMAS1B / readL1b time ratio             1.4770e+00 <=   5.0000e+00 -      measured 1.47
-massModel.at(86400) / interp1 time ratio   3.2175e+00 <=   7.0000e+00 -      measured 2.24
-spaceWeather.query(86400) / ismember time ratio   4.9682e+01 <=   2.0000e+02 -      measured 65
+readACC1B / readL1b time ratio             9.6973e-01 <=   5.0000e+00 -      measured 0.98
+readSCA1B / readL1b time ratio             1.0493e+00 <=   5.0000e+00 -      measured 1.46
+readGNV1B GCRS / ITRS time ratio           1.0526e+00 <=   5.0000e+00 -      measured 1.16 warm
+readTHR1B / readL1b time ratio             1.0632e+00 <=   5.0000e+00 -      measured 1.04
+readMAS1B / readL1b time ratio             1.2986e+00 <=   5.0000e+00 -      measured 1.47
+massModel.at(86400) / interp1 time ratio   2.2511e+00 <=   7.0000e+00 -      measured 2.24
+spaceWeather.query(86400) / ismember time ratio   4.4779e+01 <=   2.0000e+02 -      measured 65
 SCA1B double conjugation vs file           3.3307e-16 <=   1.0000e-14 -      measured 3.3e-16
 GNV1B |r| GCRS vs ITRS                     4.0564e-16 <=   1.0000e-14 rel    measured 4e-16
 GNV1B round trip GCRS->ITRS position       4.0862e-09 <=   1.0000e-06 m      measured 5e-9; requirement 1e-3
@@ -102,12 +104,12 @@ massModel mas1b at the sample epochs       0.0000e+00 <=   1.0000e-09 kg     rou
 spaceWeather 10*kp integer                 0.0000e+00 <=   1.0000e-14 -      one division
 SCA1B body +Z vs nadir (conjugated)        8.6018e-01 <=   3.0000e+00 deg    measured 0.86; 96 without the conjugation
 GNV1B GCRS-ITRS longitude vs IAU1982 GMST   1.9067e-01 <=   5.0000e-01 deg    precession since J2000 dominates (measured 0.19)
-gsiCoefficients: 1e5-element array vs 100 scalar calls, time ratio   1.3424e-01 <=   5.0000e+01 -      budget 3x the expected 1000/60; N = 1e5, 5 repeats, median
-dragPanelForce: K = 1000 batched vs one epoch, time ratio   2.8942e+00 <=   1.0000e+02 -      budget 3x the expected ~30; 8 species x 8 plates; 5 repeats, median
-radiationPanelForce: K = 1000 x 51 sources vs one epoch, time ratio   1.6143e+01 <=   3.0000e+02 -      budget 3x the expected ~100 (the source loop is not batched over K); 5 repeats, median
-thermalRecoil: K = 1e4 vs one epoch, time ratio   3.3485e+00 <=   6.0000e+01 -      budget 3x the expected ~20; 5 repeats, median
-assemble: K = 1e4 vs one epoch, time ratio   3.9722e+00 <=   6.0000e+01 -      budget 3x the expected ~20; 5 repeats, median
-bodyTorques: K = 1e4 vs one epoch, time ratio   2.0053e+00 <=   6.0000e+01 -      budget 3x the expected ~20; 5 repeats, median
+gsiCoefficients: 1e5-element array vs 100 scalar calls, time ratio   1.0535e-01 <=   5.0000e+01 -      budget 3x the expected 1000/60; N = 1e5, 5 repeats, median
+dragPanelForce: K = 1000 batched vs one epoch, time ratio   2.7385e+00 <=   1.0000e+02 -      budget 3x the expected ~30; 8 species x 8 plates; 5 repeats, median
+radiationPanelForce: K = 1000 x 51 sources vs one epoch, time ratio   1.2593e+01 <=   3.0000e+02 -      budget 3x the expected ~100 (the source loop is not batched over K); 5 repeats, median
+thermalRecoil: K = 1e4 vs one epoch, time ratio   3.2808e+00 <=   6.0000e+01 -      budget 3x the expected ~20; 5 repeats, median
+assemble: K = 1e4 vs one epoch, time ratio   3.3497e+00 <=   6.0000e+01 -      budget 3x the expected ~20; 5 repeats, median
+bodyTorques: K = 1e4 vs one epoch, time ratio   2.0728e+00 <=   6.0000e+01 -      budget 3x the expected ~20; 5 repeats, median
 normal/tangential from drag/lift round trip   1.1102e-16 <=   1.0000e-15 -      rotation of a 2-vector, rounding
 cube: F(-v) = -F(v)                        2.4439e-18 <=   1.0000e-14 -      opposite plates swap roles; rounding
 superposition of two sources               0.0000e+00 <=   1.0000e-15 -      one addition per source, rounding
@@ -164,13 +166,13 @@ fixture normals vs live geom.graceFO       3.3307e-16 <=   1.0000e-15 -      one
 fixture centroids vs live geom.graceFO     4.4409e-16 <=   1.0000e-15 m      one CSV round trip
 fixture optics vs live geom.graceFO        0.0000e+00 <=   1.0000e-15 -      one CSV round trip
 fixture inertia vs live geom.graceFO       0.0000e+00 <=   1.0000e-09 kg m^2 printed to 17 digits from Table 4
-hampel time 86400x3                        6.3222e-01 <=   2.0000e+01 s      
-hampel / movmedian ratio                   4.5194e+02 <=   1.0000e+03 -      
+hampel time 86400x3                        9.6736e-01 <=   2.0000e+01 s      
+hampel / movmedian ratio                   5.9050e+02 <=   1.0000e+03 -      
 hampel robust sigma bias                   1.2854e-02 <=   2.0000e-02 -      mean over 1e4 windows
-residuals highpass on a day of 3 channels vs one movmean   1.4097e+01 <=   3.6000e+01 -      budget 3x the expected 12: one movmean plus two medians of 86400 per channel (sort-based); measured 11.3
-detectImpulses on a day at 1 Hz vs one conv   3.4687e+01 <=   6.0000e+01 -      budget 3x the expected 20 (30 shifted adds, MAD, sort); 5 repeats, median
-detectJumps PELT: 20000 vs 5000 samples, time ratio   1.0243e+01 <=   2.4000e+01 -      PELT is near-linear: expected ~4-8 (pruning keeps few candidates); budget 3x; 5 repeats, median
-screen vs detectJumps alone on 20000 samples   1.0340e+00 <=   3.0000e+00 -      budget 3x the expected ~1.05: the PELT loop dominates the pipeline (measured 2.4 s of 2.6 s at 20000 samples before the inlining, O-18), hampel 0.05 s, the rest 5 ms
+residuals highpass on a day of 3 channels vs one movmean   1.1537e+01 <=   3.6000e+01 -      budget 3x the expected 12: one movmean plus two medians of 86400 per channel (sort-based); measured 11.3 to 14.1 across runs on the owner's host
+detectImpulses on a day at 1 Hz vs one conv   2.8286e+01 <=   6.0000e+01 -      budget 3x the expected 20 (30 shifted adds, MAD, sort); 5 repeats, median
+detectJumps PELT: 20000 vs 5000 samples, time ratio   9.2699e+00 <=   2.4000e+01 -      PELT is near-linear: expected ~4-8 (pruning keeps few candidates); budget 3x; 5 repeats, median
+screen vs detectJumps alone on 20000 samples   1.0082e+00 <=   3.0000e+00 -      budget 3x the expected ~1.05: the PELT loop dominates the pipeline (measured 2.4 s of 2.6 s at 20000 samples before the inlining, O-18), hampel 0.05 s, the rest 5 ms
 highpass removes a constant offset         3.1086e-15 <=   1.0000e-13 -      movmean of 9 samples of order 7: rounding 1e-15 x 7
 matched-filter output under a level offset   4.6185e-14 <=   1.0000e-06 sigma  zero-mean template: rounding of 3e-9 x sum(hz) ~ 1e-25 over sigma_c
 highpass step response at the first new sample   0.0000e+00 <=   1.0000e-15 -      movmean of 11 centred: 6 of 11 samples are on the new level
@@ -181,7 +183,7 @@ sigma_a vs the analytic value sigma / (hz.h) for white noise   8.5008e-02 <=   1
 planted step epoch error                   0.0000e+00 <=   1.0000e+00 samples 4 sigma step, BIC penalty; measured 2026-09-07
 planted step amplitude error in sigma      4.5055e-01 <=   3.0000e+00 sigma  difference of two means; measured 2026-09-07
 robust sigma from first differences vs truth   4.7092e-02 <=   1.0000e-01 -      1000 samples, MAD sampling error ~4 %
-planted kink epoch error (slope model)     8.0000e+00 <=   1.0000e+01 samples a kink of 0.1 sigma/sample: the fitted lines separate by 1 sigma after 10 samples; measured 4 (a 0.02 sigma/sample kink was off by 28)
+planted kink epoch error (slope model)     8.0000e+00 <=   1.0000e+01 samples a kink of 0.1 sigma/sample: the fitted lines separate by 1 sigma after 10 samples; measured 8 (a 0.02 sigma/sample kink was off by 28)
 step epoch error through the pipeline      6.0000e+00 <=   3.0000e+01 s      the step edge registers as one impulse candidate whose 30-sample window is blanked; the jump lands at its end (measured 6 s)
 step amplitude error through the pipeline   6.0665e-02 <=   3.0000e+00 sigma  measured 2026-09-07
 masked samples beyond spike and pulses     3.2000e+01 <=   4.0000e+01 samples Hampel false alarms at 4 sigma on 3000 Gaussian samples (~0.2) plus the step edge candidate (30); measured 2026-09-07
@@ -194,6 +196,6 @@ PELT objective vs exhaustive optimum (slope, beta 60)   3.7382e-16 <=   1.0000e-
 THR1B-assigned pulse epochs vs the priors   1.0000e+00 <=   1.0000e+00 s      planted at the first sample after the prior
 1.4826 MAD vs sigma of 1e5 Gaussian samples   5.3339e-03 <=   2.0000e-02 -      sampling error of the MAD ~ 1.2/sqrt(N) = 0.4 %; measured 0.3 %
 outliers flagged in the real 600-s ACT1B sample (fraction)   3.8889e-03 <=   2.0000e-02 -      Hampel at 4 sigma on 1/f data: a few per 1000 expected; measured 2026-09-07
-impulses found in the real 600-s sample (recorded, no oracle)   1.1000e+01 <=   2.0000e+01 -      every 30-s window could fire; a 5-sigma threshold on 1/f data with a synthetic template found 7 on 2026-09-07
+impulses found in the real 600-s sample (recorded, no oracle)   1.1000e+01 <=   2.0000e+01 -      every 30-s window could fire; a 5-sigma threshold on 1/f data with a synthetic template found 11 on 2026-09-07
 
 == failures ==

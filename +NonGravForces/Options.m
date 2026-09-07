@@ -174,7 +174,7 @@ classdef Options
                     end
                 case 'erp_grid'
                     if ~(isnumeric(value) && isequal(size(value), [1 2]) && all(value >= 0) && all(value == round(value)))
-                        NonGravForces.fail("Options", "inputValue", "%s must be [nLat nLon] non-negative integers -> e.g. [12 24]", field);
+                        NonGravForces.fail("Options", "inputValue", "%s must be [nRings nSectors] non-negative integers over the visible cap -> e.g. [12 24]", field);
                     end
             end
         end
