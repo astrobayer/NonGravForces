@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-07 (LP-3) by Claude Fable 5.1. Toolbox version 0.3.0.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-07 (LP-4) by Claude Fable 5.1. Toolbox version 0.4.0.
 
 ---
 
@@ -142,9 +142,9 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-09-06, after LP-2)
 
-- **142/142 tests GREEN** (2026-09-07, R2026a Update 4, Tier A host run; predicted
-  142), Code Analyzer 0 findings, gate TRUE; log in `tests/last_run.txt`.
-  LP-2 was 116/116 (2026-09-06), LP-0 74/74 (2026-08-27).
+- **169/169 tests GREEN** (2026-09-07, R2026a Update 4, Tier A host run; predicted
+  169), Code Analyzer 0 findings, gate TRUE; log in `tests/last_run.txt`.
+  LP-3 was 142, LP-2 116 (2026-09-06), LP-0 74 (2026-08-27).
 - Implemented (☑): L0 core, `geom.MacroModel`, `geom.graceFO`, `qc.hampel`,
   `qc.eventTable`, `sensor.Sensor` interface, test infrastructure, CI, and the
   LP-2 data I/O: `io.readACC1B`, `readSCA1B`, `readGNV1B`, `readTHR1B`,
@@ -153,8 +153,12 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   `env.density` (exponential, msis00 through the MEX of the vendored Brodowski C in
   `mex/`, built by `NonGravForces.buildMex`), `eclipseFactor` (cylindrical, conical,
   lunar), `earthRadiance` (pointSource, knocke cap tiles), `radiationSources`;
-  pure-Python oracles in `tools/pyxcheck` (tests in `tests/tNgfEnv.m`).
-- **28 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
+  pure-Python oracles in `tools/pyxcheck` (tests in `tests/tNgfEnv.m`); `eclipseFactor`
+  solaarsCF (Robertson 2015, coefficients in `tools/pyxcheck/solaars_cf_coefficients.csv`);
+  and the LP-4 geometry: `MacroModel` plate polygons and heat capacities, `graceFO` closed
+  polygons, `boxWing`, `selfShadow` (ray cast + icosphere LUT), `AttitudeProvider` with
+  `nominal`, `checkAttitudeSense`, `thermalState` (tests in `tests/tNgfGeometry.m`).
+- **23 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
 - Repository `github.com/astrobayer/NonGravForces` (the account was renamed
   from `matweigelt` on 2026-09-06; `referenceSystem` and `gracefoReading` moved
   with it), local clone at
@@ -173,9 +177,12 @@ host, HANDOVER O-8). Real-data fixtures: the five 2020-01-01 GRACE-C products
 **Done 2026-09-07: LP-3 (env)** except solaarsCF (O-13), ceres (WP-27), msis21/
 dtm2020/jb2008 (LP-3b), and the furnished-kernel Sun path (O-15).
 
-**Next: LP-4 (geom)** — WP-09 `boxWing`, WP-10 `selfShadow` (raycast + LUT),
-WP-11 `AttitudeProvider` over `interpolateQuaternions` and `checkAttitudeSense`,
-WP-28 `thermalState`; oracles in HANDOVER Part G. Then LP-4 (geom), LP-5 (kernel + qc), LP-5x, LP-6 (Model/partials),
+**Done 2026-09-07: LP-4 (geom)** and solaarsCF (O-13 closed).
+
+**Next: LP-5 (kernel + qc)** — WP-13 `gsiCoefficients` (Sentman exact; Python
+kinetic-theory oracle), WP-26 `accommodation`, WP-12 `radiationPanelForce`,
+`thermalRecoil`, WP-24 `bodyTorques`, WP-14 `assemble`, WP-31 `qc.residuals`,
+`detectImpulses`, `detectJumps`, `screen`; oracles in HANDOVER Part G. Then LP-4 (geom), LP-5 (kernel + qc), LP-5x, LP-6 (Model/partials),
 LP-6b (C/MEX), LP-R (release).
 
 **LP-5x cross-validation** (owner rulings of 2026-08-27):
@@ -257,3 +264,10 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   longitude**; reproduce them only with `density(..., 'LocalSolarTime_h', 16)`.
 - **MATLAB forgets `MW_MINGW64_LOC`**; `NonGravForces.buildMex` locates the MinGW
   support package itself and runs `mex -setup C` for the session.
+- **Angles by atan2(|a×b|, a·b), never acos of a dot product**: acos loses sqrt(eps)
+  near 0 and 180 degrees (1e-6 deg); bitten twice (eclipse lens area, attitude sense).
+- **The handbook's exterior dimensions do not close at the 2-4 cm level**; `graceFO`
+  derives the nadir width from the 50 degree flank crossing so the polygons do not
+  intersect (a spurious 2.5 % self-shadow from straight above was the symptom).
+- **A BLAS matrix product sums in a batch-size-dependent order**; use column-wise sums
+  where a vectorisation test must be bitwise.
