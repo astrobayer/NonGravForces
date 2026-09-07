@@ -1,5 +1,5 @@
 % IO  NonGravForces.io - L1 layer.
-% Version 0.5.0  07-Sep-2026
+% Version 0.5.1  07-Sep-2026
 %
 %   readACC1B            - ACC1B/ACT1B/ACH1B reader over gracefoReading (3xK SRF accelerations + aux)
 %   readSCA1B            - SCA1B reader: ICRF->SRF quaternions conjugated once to BODY->GCRS
