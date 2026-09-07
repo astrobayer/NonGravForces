@@ -25,11 +25,11 @@ env,magneticField,function,L2,WP-23,stub,IGRF-14 geomagnetic field in ITRS and b
 env,radiationSources,function,L2,WP-08,done,Source list {dir_body P band} from Sun and Earth radiance for one epoch batch
 geom,MacroModel,class,L3,WP-09,done,Panel geometry frozen and validated once
 geom,graceFO,function,L3,WP-09,done,GRACE-FO macro model from JPL D-56935
-geom,boxWing,function,L3,WP-09,stub,Generic box-wing macro model factory
-geom,selfShadow,function,L3,WP-10,stub,Per-panel exposed fraction: exact ray-cast or icosphere LUT
-geom,thermalState,function,L3,WP-28,stub,Per-panel temperatures: steady state or transient (Wöske)
-geom,AttitudeProvider,class,L3,WP-11,stub,BODY->GCRS quaternions at query epochs (SCA1B or nominal) via referenceSystem.interpolateQuaternions
-geom,checkAttitudeSense,function,L3,WP-11,stub,Physics test of quaternion sense (nadir and line-of-sight)
+geom,boxWing,function,L3,WP-09,done,Generic box-wing macro model factory
+geom,selfShadow,function,L3,WP-10,done,Per-panel exposed fraction: exact ray-cast or icosphere LUT
+geom,thermalState,function,L3,WP-28,done,Per-panel temperatures: steady state or transient (Wöske)
+geom,AttitudeProvider,class,L3,WP-11,done,BODY->GCRS quaternions at query epochs (SCA1B or nominal) via referenceSystem.interpolateQuaternions
+geom,checkAttitudeSense,function,L3,WP-11,done,Physics test of quaternion sense (nadir and line-of-sight)
 kernel,gsiCoefficients,function,L4,WP-13,stub,Pressure and shear coefficients per panel: sentman cll maxwell schamberg
 kernel,accommodation,function,L4,WP-26,stub,Energy accommodation coefficient: fixed sesam langmuir
 kernel,dragPanelForce,function,L4,WP-13,stub,Per-panel gas-momentum force in body frame
