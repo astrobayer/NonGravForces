@@ -1,5 +1,5 @@
 % NONGRAVFORCES  Non-gravitational forces, torques and partials for LEO satellites.
-% Version 0.3.0  07-Sep-2026
+% Version 0.4.0  07-Sep-2026
 %
 % Single point of access
 %   Model              - Configure once, evaluate many: accel | torque | series |
