@@ -87,20 +87,14 @@ if isempty(cc)
     % absent in a MATLAB started by a service (measured 2026-09-07: ProgramData empty in the MCP session),
     % so the standard Windows location is also tried literally.
     rel = "R" + version('-release');
-    candidates = string.empty(1, 0);
-    for envName = ["MW_MINGW64_LOC"]
-        v = string(getenv(envName));
-        if strlength(v) > 0, candidates(end+1) = v; end
-    end
-    for base = [string(getenv('ProgramData')), string(getenv('ALLUSERSPROFILE')), "C:\ProgramData"]
-        if strlength(base) > 0
-            candidates(end+1) = fullfile(base, 'MATLAB', 'SupportPackages', rel, '3P.instrset', 'mingw_w64.instrset');
-        end
-    end
+    bases = [string(getenv('ProgramData')), string(getenv('ALLUSERSPROFILE')), "C:\ProgramData"];
+    bases = bases(strlength(bases) > 0);
     spr = string(matlabshared.supportpkg.getSupportPackageRoot());
-    if strlength(spr) > 0
-        candidates(end+1) = fullfile(spr, '3P.instrset', 'mingw_w64.instrset');
-    end
+    spr = spr(strlength(spr) > 0);
+    candidates = [string(getenv('MW_MINGW64_LOC')), ...
+        fullfile(bases, 'MATLAB', 'SupportPackages', rel, '3P.instrset', 'mingw_w64.instrset'), ...
+        fullfile(spr, '3P.instrset', 'mingw_w64.instrset')];
+    candidates = candidates(strlength(candidates) > 0);     % an unset MW_MINGW64_LOC is ""
     candidates = unique(candidates, 'stable');
     hit = candidates(arrayfun(@(c) isfile(fullfile(c, 'bin', 'gcc.exe')), candidates));
     if isempty(hit)
