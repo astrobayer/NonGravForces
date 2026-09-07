@@ -1,5 +1,5 @@
-NonGravForces 0.3.0  run 2026-09-07 03:22 UTC  MATLAB 26.1.0.3312084 (R2026a) Update 4
-tests 142  passed 142  failed 0  incomplete 0  duration 14.3 s  GATE TRUE
+NonGravForces 0.4.0  run 2026-09-07 03:49 UTC  MATLAB 26.1.0.3312084 (R2026a) Update 4
+tests 169  passed 169  failed 0  incomplete 0  duration 25.2 s  GATE TRUE
 
 == category audit (units short of a category) ==
 none
@@ -7,10 +7,10 @@ none
 == recorded bounds ==
 P0 from S0=1361 vs 4.5398e-6 Pa (Montenbruck & Gill give 4.56e-6 for 1367)   1.6159e-06 <=   1.0000e-04 rel    max |a-e| / max |e|
 const.Rgas = kB*NA                         0.0000e+00 <=   1.0000e-15 rel    max |a-e| / max |e|
-msis00 86400 / 8640 epochs time ratio      9.8196e-01 <=   2.0000e+00 -      linear scaling; measured see last_run
-eclipse conical / cylindrical time ratio   1.0911e+00 <=   8.0000e+00 -      
-earthRadiance [24 48] / [12 24] time ratio   1.9960e+00 <=   8.0000e+00 -      4x the tiles
-radiationSources / earthRadiance time ratio (600 epochs)   4.3532e+00 <=   6.0000e+00 -      
+msis00 86400 / 8640 epochs time ratio      9.2340e-01 <=   2.0000e+00 -      linear scaling; measured see last_run
+eclipse conical / cylindrical time ratio   1.3315e+00 <=   8.0000e+00 -      
+earthRadiance [24 48] / [12 24] time ratio   1.8249e+00 <=   8.0000e+00 -      4x the tiles
+radiationSources / earthRadiance time ratio (600 epochs)   4.5970e+00 <=   6.0000e+00 -      
 gtd7d - gtd7 vs 16 amu x anomalous O       2.0195e-16 <=   1.0000e-12 rel    two rounding operations, per case
 exponential scale-height ratio             1.6337e-16 <=   1.0000e-14 rel    
 eclipse rotation invariance                2.5424e-14 <=   1.0000e-12 -      HANDOVER accuracy figure; measured see last_run
@@ -48,13 +48,44 @@ graceFO silhouette defect xy               5.5511e-17 <=   1.0000e-09 m^2
 MacroModel energy closure vis              0.0000e+00 <=   1.0000e-12 -      
 MacroModel energy closure ir               0.0000e+00 <=   1.0000e-12 -      
 graceFO total area vs Table 5 sum          0.0000e+00 <=   1.0000e-07 rel    max |a-e| / max |e|
-readACC1B / readL1b time ratio             1.0425e+00 <=   5.0000e+00 -      measured 0.98
-readSCA1B / readL1b time ratio             1.0604e+00 <=   5.0000e+00 -      measured 1.46
-readGNV1B GCRS / ITRS time ratio           1.1596e+00 <=   5.0000e+00 -      measured 1.16 warm
-readTHR1B / readL1b time ratio             1.0620e+00 <=   5.0000e+00 -      measured 1.04
-readMAS1B / readL1b time ratio             1.3580e+00 <=   5.0000e+00 -      measured 1.47
-massModel.at(86400) / interp1 time ratio   3.4274e+00 <=   7.0000e+00 -      measured 2.24
-spaceWeather.query(86400) / ismember time ratio   4.5368e+01 <=   2.0000e+02 -      measured 65
+selfShadow LUT query / ray cast time ratio (600 directions)   1.7091e-01 <=   1.0000e+00 -      the table exists to be cheaper
+thermalState transient / steady time ratio (600 epochs)   1.4342e+00 <=   2.0000e+01 -      RK4 substeps
+AttitudeProvider.at / interpolateQuaternions time ratio   1.7501e+00 <=   8.0000e+00 -      three-output form of the dependency
+boxWing area scaling                       0.0000e+00 <=   1.0000e-14 m^2    products of two lengths
+selfShadow 40 vs 100 samples               1.0000e-02 <=   5.0000e-02 -      one edge row of the coarser grid
+LUT at its vertices vs the table           0.0000e+00 <=   1.0000e-14 -      barycentric weights (1,0,0)
+LUT 642 mean error vs ray cast (40 random directions)   3.1570e-02 <=   5.0000e-02 -      measured see last_run; a shadow edge sharper than 6 deg is not resolved
+LUT 642 / LUT 42 mean error ratio          3.1840e-01 <=   1.0000e+00 -      must improve
+steady-state energy balance                6.0378e-16 <=   1.0000e-13 rel    fourth root and fourth power
+steady temperature scales with P^(1/4)     5.6843e-14 <=   1.0000e-09 K      
+transient from the steady state stays      0.0000e+00 <=   1.0000e-09 K      fixed point
+nominal attitude rotates with the state    4.4409e-16 <=   1.0000e-14 -      one rotation
+sense flag vs reversed velocity            2.2204e-16 <=   1.0000e-14 -      same rotation up to the quaternion sign
+provider reproduces its own nominal nodes   1.1102e-16 <=   1.0000e-15 -      renormalisation of unit quaternions
+sense angles invariant under a scene rotation   2.0539e-14 <=   1.0000e-09 deg    two rotations and a quaternion round trip
+along-track angles of the two senses sum to 180   2.8422e-14 <=   1.0000e-09 deg    
+AttitudeProvider UTC vs GPS query          0.0000e+00 <=   1.0000e-12 -      epoch arithmetic rounding
+squad vs slerp between 1 Hz nodes          3.0705e-08 <=   1.0000e-06 -      orbital rate 1.1e-3 rad/s: cubic vs linear over 0.5 s
+selfShadow two plates half covered         3.3307e-16 <=   1.0000e-12 -      edge on a grid line: exact
+selfShadow two plates, odd grid            1.2821e-02 <=   2.5641e-02 -      one straddling row
+transient vs linearised relaxation (1 K)   1.1063e-03 <=   5.0000e-03 K      T^4 nonlinearity of a 1 K step; measured 1.1e-3
+transient: steady plates stay put          0.0000e+00 <=   1.0000e-12 K      fixed point of RK4
+AttitudeProvider at the nodes              0.0000e+00 <=   2.0000e-16 -      renormalisation of a unit quaternion
+nominal attitude +Z is nadir               3.3307e-16 <=   1.0000e-14 -      rotation round trip
+checkAttitudeSense nadir angle of the nominal frame   2.0116e-14 <=   1.0000e-09 deg    atan2 of cross and dot: rounding only
+checkAttitudeSense along-track angle of the nominal frame   7.5903e-02 <=   1.0000e+00 deg    flight-path angle of the near-circular orbit (< 0.2 deg)
+selfShadow raycast 40 vs Python 160        1.2500e-02 <=   3.0000e-02 -      measured 1.25e-2
+selfShadow raycast 100 vs Python 160       3.7500e-03 <=   1.0000e-02 -      measured 3.8e-3
+steady-state temperature vs closed form    0.0000e+00 <=   1.0000e-09 K      one fourth root
+nominal attitude (+X against v) vs SCA1B   8.6093e-01 <=   3.0000e+00 deg    pointing offsets ~1 deg; measured 0.86
+checkAttitudeSense max nadir angle, real day   8.6018e-01 <=   3.0000e+00 deg    measured 0.86
+readACC1B / readL1b time ratio             1.0510e+00 <=   5.0000e+00 -      measured 0.98
+readSCA1B / readL1b time ratio             1.0452e+00 <=   5.0000e+00 -      measured 1.46
+readGNV1B GCRS / ITRS time ratio           1.1943e+00 <=   5.0000e+00 -      measured 1.16 warm
+readTHR1B / readL1b time ratio             1.0468e+00 <=   5.0000e+00 -      measured 1.04
+readMAS1B / readL1b time ratio             1.3310e+00 <=   5.0000e+00 -      measured 1.47
+massModel.at(86400) / interp1 time ratio   2.5885e+00 <=   7.0000e+00 -      measured 2.24
+spaceWeather.query(86400) / ismember time ratio   4.4354e+01 <=   2.0000e+02 -      measured 65
 SCA1B double conjugation vs file           3.3307e-16 <=   1.0000e-14 -      measured 3.3e-16
 GNV1B |r| GCRS vs ITRS                     4.0564e-16 <=   1.0000e-14 rel    measured 4e-16
 GNV1B round trip GCRS->ITRS position       4.0862e-09 <=   1.0000e-06 m      measured 5e-9; requirement 1e-3
@@ -70,8 +101,8 @@ massModel mas1b at the sample epochs       0.0000e+00 <=   1.0000e-09 kg     rou
 spaceWeather 10*kp integer                 0.0000e+00 <=   1.0000e-14 -      one division
 SCA1B body +Z vs nadir (conjugated)        8.6018e-01 <=   3.0000e+00 deg    measured 0.86; 96 without the conjugation
 GNV1B GCRS-ITRS longitude vs IAU1982 GMST   1.9067e-01 <=   5.0000e-01 deg    precession since J2000 dominates (measured 0.19)
-hampel time 86400x3                        6.1906e-01 <=   2.0000e+01 s      
-hampel / movmedian ratio                   4.3185e+02 <=   1.0000e+03 -      
+hampel time 86400x3                        1.0168e+00 <=   2.0000e+01 s      
+hampel / movmedian ratio                   6.5280e+02 <=   1.0000e+03 -      
 hampel robust sigma bias                   1.2854e-02 <=   2.0000e-02 -      mean over 1e4 windows
 
 == failures ==

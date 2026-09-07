@@ -50,4 +50,7 @@ ex.buildMex.precision           = "no numerical claim of its own";
 ex.buildMex.vectorization       = "one build";
 ex.buildMex.metamorphic         = "no input relation exists";
 ex.buildMex.speed               = "a compile is not timed";
+ex.boxWing.vectorization        = "factory returns one object";
+ex.boxWing.speed                = "no numerical work";
+ex.checkAttitudeSense.speed     = "two rotations and an arc cosine per epoch; timed inside AttitudeProvider speed";
 end
