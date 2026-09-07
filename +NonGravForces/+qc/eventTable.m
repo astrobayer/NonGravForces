@@ -17,11 +17,12 @@ function T = eventTable(varargin)
 %   tEnd        datetime  -      UTC, last affected sample (== tStart for a point)
 %   class       string    -      "outlier" | "impulse" | "jump"
 %   axis        string    -      "x" | "y" | "z" | "all"
-%   amplitude   double    m/s^2  estimated size (step size for jumps)
-%   sigma       double    m/s^2  1-sigma uncertainty of amplitude
+%   amplitude   double    m/s^2  estimated size (step size for jumps); NaN means NOT ESTIMATED,
+%                                which is what io.readTHR1B writes for a thruster firing
+%   sigma       double    m/s^2  1-sigma uncertainty of amplitude, >= 0; NaN with the amplitude
 %   source      string    -      "THR1B" | "MAS1B" | "eclipse" | "heater" |
 %                                "magnetorquer" | "unassigned"
-%   confidence  double    -      in [0,1]
+%   confidence  double    -      in [0,1], finite (a probability, never NaN)
 %
 % OUTPUT ARGUMENTS
 %   T           table   N rows, columns as above in that order.
@@ -30,6 +31,7 @@ function T = eventTable(varargin)
 %   NonGravForces:eventTable:inputArity   not 0 or 8 arguments
 %   NonGravForces:eventTable:inputClass   class / axis / source not in set
 %   NonGravForces:eventTable:inputLength  columns of different length
+%   NonGravForces:eventTable:numericNaN   Inf amplitude or sigma, or non-finite confidence
 %
 % EXAMPLE
 %   T = NonGravForces.qc.eventTable(); T.Properties.VariableNames
@@ -63,6 +65,19 @@ if ~all(ismember(ax, ["x","y","z","all"]))
 end
 if ~all(ismember(so, ["THR1B","MAS1B","eclipse","heater","magnetorquer","unassigned"]))
     NonGravForces.fail("eventTable", "inputClass", "source not in the admissible set -> use unassigned if unknown");
+end
+% amplitude and sigma may be NaN, meaning NOT ESTIMATED: io.readTHR1B writes exactly that for a
+% thruster firing, whose epoch is certain while its size can only come from the accelerometer.
+% Inf is never meaningful, and confidence is a probability, so a NaN there is the real defect:
+% until 2026-09-07 it passed the [0,1] test below, because every comparison with NaN is false.
+if any(isinf(am)) || any(isinf(sg))
+    NonGravForces.fail("eventTable", "numericNaN", "amplitude and sigma must be finite or NaN (not estimated) -> got an Inf");
+end
+if any(~isfinite(cf))
+    NonGravForces.fail("eventTable", "numericNaN", "confidence must be finite -> a NaN confidence passed the [0,1] test silently until 2026-09-07, since every comparison with NaN is false");
+end
+if any(sg < 0)
+    NonGravForces.fail("eventTable", "inputClass", "sigma must be >= 0 -> got %g", min(sg));
 end
 if any(cf < 0 | cf > 1)
     NonGravForces.fail("eventTable", "inputClass", "confidence must be in [0,1] -> clip or rescale");

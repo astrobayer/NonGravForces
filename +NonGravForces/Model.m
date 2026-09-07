@@ -61,9 +61,13 @@ classdef Model
         function obj = Model(macro, options, nv)
             arguments
                 macro
-                options (1,1) NonGravForces.Options = NonGravForces.Options("standard")
+                options = NonGravForces.Options("standard")
                 nv.Attitude = []
                 nv.Mass struct = struct('kind', "constant", 'value_kg', NaN)
+            end
+            if ~isa(options, 'NonGravForces.Options') || ~isscalar(options)
+                NonGravForces.fail("Model", "inputOptions", ...
+                    "options must be a scalar NonGravForces.Options -> build one with NonGravForces.Options(preset)");
             end
             if ~isa(macro, 'NonGravForces.geom.MacroModel')
                 NonGravForces.fail("Model", "inputMacro", ...
