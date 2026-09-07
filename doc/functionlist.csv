@@ -30,24 +30,24 @@ geom,selfShadow,function,L3,WP-10,done,Per-panel exposed fraction: exact ray-cas
 geom,thermalState,function,L3,WP-28,done,Per-panel temperatures: steady state or transient (Wöske)
 geom,AttitudeProvider,class,L3,WP-11,done,BODY->GCRS quaternions at query epochs (SCA1B or nominal) via referenceSystem.interpolateQuaternions
 geom,checkAttitudeSense,function,L3,WP-11,done,Physics test of quaternion sense (nadir and line-of-sight)
-kernel,gsiCoefficients,function,L4,WP-13,stub,Pressure and shear coefficients per panel: sentman cll maxwell schamberg
-kernel,accommodation,function,L4,WP-26,stub,Energy accommodation coefficient: fixed sesam langmuir
-kernel,dragPanelForce,function,L4,WP-13,stub,Per-panel gas-momentum force in body frame
-kernel,radiationPanelForce,function,L4,WP-12,stub,Per-panel radiation force for a source list in body frame
-kernel,thermalRecoil,function,L4,WP-12,stub,Per-panel thermal re-emission recoil force
-kernel,assemble,function,L4,WP-14,stub,Reductions: F = sum F_k and tau = sum (r_k - r_cm) x F_k
-kernel,bodyTorques,function,L4,WP-24,stub,Gravity-gradient and magnetic body torques
+kernel,gsiCoefficients,function,L4,WP-13,done,Pressure and shear coefficients per panel: sentman cll maxwell schamberg
+kernel,accommodation,function,L4,WP-26,done,Energy accommodation coefficient: fixed sesam langmuir
+kernel,dragPanelForce,function,L4,WP-13,done,Per-panel gas-momentum force in body frame
+kernel,radiationPanelForce,function,L4,WP-12,done,Per-panel radiation force for a source list in body frame
+kernel,thermalRecoil,function,L4,WP-12,done,Per-panel thermal re-emission recoil force
+kernel,assemble,function,L4,WP-14,done,Reductions: F = sum F_k and tau = sum (r_k - r_cm) x F_k
+kernel,bodyTorques,function,L4,WP-24,done,Gravity-gradient and magnetic body torques
 kernel,partials,function,L4,WP-16,stub,Analytic partials of a w.r.t. r v Cd Cr; complex-step verifier
 sensor,Sensor,class,L6,WP-29,interface,Abstract measurement model: observe / partials / noiseModel
 sensor,Electrostatic,class,L6,WP-29,stub,Electrostatic accelerometer: bias scale-matrix CoM coupling CRN filter
 sensor,AtomInterferometer,class,L6,WP-29,stub,Cold-atom interferometer: phase = k_eff a T^2 with dead time and rotation
 sensor,DragFree,class,L6,WP-29,stub,Drag-free residual acceleration model
-qc,residuals,function,L7,WP-31,stub,Whitened residuals measured - modelled with preliminary calibration
+qc,residuals,function,L7,WP-31,done,Whitened residuals measured - modelled with preliminary calibration
 qc,hampel,function,L7,WP-31,done,Robust point-outlier detector (moving median + MAD)
-qc,detectImpulses,function,L7,WP-31,stub,Matched filter on the CRN impulse response with THR1B priors
-qc,detectJumps,function,L7,WP-31,stub,Piecewise-constant/linear change-point detection (PELT + BIC)
+qc,detectImpulses,function,L7,WP-31,done,Matched filter on the CRN impulse response with THR1B priors
+qc,detectJumps,function,L7,WP-31,done,Piecewise-constant/linear change-point detection (PELT + BIC)
 qc,eventTable,function,L7,WP-31,done,Canonical event table constructor and schema
-qc,screen,function,L7,WP-31,stub,Orchestrator: residuals -> outliers -> impulses -> jumps -> mask
+qc,screen,function,L7,WP-31,done,Orchestrator: residuals -> outliers -> impulses -> jumps -> mask
 app,calibrate,function,L8,WP-19,stub,Accelerometer calibration bridge to lsqvce (bias spline + 3x3 scale + jumps)
 app,forceBudget,function,L8,WP-30,stub,Per-effect per-axis RMS budget table
 app,densityInversion,function,L8,WP-32,stub,Thermosphere density from calibrated accelerations (Doornbos)
