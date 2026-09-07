@@ -1,5 +1,5 @@
 % NONGRAVFORCES  Non-gravitational forces, torques and partials for LEO satellites.
-% Version 0.2.0  06-Sep-2026
+% Version 0.3.0  07-Sep-2026
 %
 % Single point of access
 %   Model              - Configure once, evaluate many: accel | torque | series |
@@ -12,6 +12,7 @@
 %   dependencyReport   - Presence and version of the four ecosystem toolboxes
 %   fail               - The one place errors are raised from (identifier
 %                        taxonomy, correction hints)
+%   buildMex             - Build the NRLMSISE-00 MEX gateway from mex/ (never committed) or report its state
 %   provenance         - Metadata record that travels with every result
 %
 % Layers (see doc)

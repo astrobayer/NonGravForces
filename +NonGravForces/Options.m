@@ -30,7 +30,7 @@ classdef Options
 %   drag        struct    .density .wind .gsi .accommodation .alpha .Tw_K
 %                         .cdScale
 %   srp         struct    .tsi [W/m^2] .eclipse .lunarEclipse (logical)
-%   erp         struct    .backend .grid [1x2] .anisotropy
+%   erp         struct    .backend .grid [nRings nSectors of the visible cap] .anisotropy
 %   thermal     struct    .model .internalPower_W
 %   torques     struct    .gravityGradient .magnetic (logical)
 %   geom        struct    .selfShadow .lutResolution

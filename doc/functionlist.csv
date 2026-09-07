@@ -6,6 +6,7 @@ NonGravForces,toolboxVersion,function,L0,WP-00,done,Semantic version (single aut
 NonGravForces,dependencyReport,function,L0,WP-01,done,Presence and version of the ecosystem toolboxes
 NonGravForces,fail,function,L0,WP-00,done,Uniform error raising with identifier taxonomy and correction hints
 NonGravForces,provenance,function,L0,WP-00,done,Metadata record that travels with every result
+NonGravForces,buildMex,function,L0,WP-05b,done,Build the NRLMSISE-00 MEX gateway from mex/ (never committed) or report its state
 io,readACC1B,function,L1,WP-18,done,ACC1B/ACT1B/ACH1B reader over gracefoReading (3xK SRF accelerations + aux)
 io,readSCA1B,function,L1,WP-18,done,SCA1B reader: ICRF->SRF quaternions conjugated once to BODY->GCRS
 io,readGNV1B,function,L1,WP-18,done,GNV1B reader: ITRS state rotated to GCRS via referenceSystem
@@ -16,12 +17,12 @@ io,massModel,function,L1,WP-18,done,Spacecraft mass model: handbook constant or 
 io,spaceWeather,function,L1,WP-04,done,Space-weather provider with query(epoch): F10.7 F30 S/M/Y10.7 Ap Kp Dst
 io,importCERES,function,L1,WP-08,stub,CERES SYN1deg/EBAF netCDF import into radiance grids
 io,igrfCoefficients,function,L1,WP-23,stub,IGRF-14 coefficient loader
-env,density,function,L2,WP-05,stub,Thermosphere density and composition dispatcher (exponential msis00 msis21 dtm2020 jb2008)
+env,density,function,L2,WP-05,done,Thermosphere density and composition dispatcher (exponential msis00 msis21 dtm2020 jb2008)
 env,wind,function,L2,WP-25,stub,Relative-velocity builder: co-rotation plus optional HWM14 wind
-env,eclipseFactor,function,L2,WP-07,stub,Shadow function nu in [0,1]: cylindrical conical solaarsCF plus lunar
-env,earthRadiance,function,L2,WP-08,stub,Earth albedo and IR radiance grids (pointSource knocke ceres) with ADM anisotropy
+env,eclipseFactor,function,L2,WP-07,done,Shadow function nu in [0,1]: cylindrical conical solaarsCF plus lunar
+env,earthRadiance,function,L2,WP-08,done,Earth albedo and IR radiance grids (pointSource knocke ceres) with ADM anisotropy
 env,magneticField,function,L2,WP-23,stub,IGRF-14 geomagnetic field in ITRS and body frame
-env,radiationSources,function,L2,WP-08,stub,Source list {dir_body P band} from Sun and Earth radiance for one epoch batch
+env,radiationSources,function,L2,WP-08,done,Source list {dir_body P band} from Sun and Earth radiance for one epoch batch
 geom,MacroModel,class,L3,WP-09,done,Panel geometry frozen and validated once
 geom,graceFO,function,L3,WP-09,done,GRACE-FO macro model from JPL D-56935
 geom,boxWing,function,L3,WP-09,stub,Generic box-wing macro model factory

@@ -20,6 +20,8 @@ function c = const()
 %                                             (149597870700). referenceSystem
 %                                             publishes none (verified 2026-08).
 %   c.Rsun            1x1   double  m         Nominal solar radius, IAU 2015 B3.
+%   c.Rmoon           1x1   double  m         Mean lunar radius, IAU WGCCRE 2015
+%                                             (1737.4 km); lunar-eclipse geometry.
 %   c.sigmaSB         1x1   double  W/m^2/K^4 Stefan-Boltzmann, CODATA 2018 exact.
 %   c.kB              1x1   double  J/K       Boltzmann, exact.
 %   c.NA              1x1   double  1/mol     Avogadro, exact.
@@ -53,6 +55,7 @@ function c = const()
 c.S0      = 1361.0;
 c.au      = 149597870700.0;
 c.Rsun    = 6.957e8;
+c.Rmoon   = 1737.4e3;
 c.sigmaSB = 5.670374419e-8;
 c.kB      = 1.380649e-23;
 c.NA      = 6.02214076e23;

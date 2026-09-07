@@ -1,5 +1,5 @@
 % QC  NonGravForces.qc - L7 layer.
-% Version 0.2.0  06-Sep-2026
+% Version 0.3.0  07-Sep-2026
 %
 %   residuals            - Whitened residuals measured - modelled with preliminary calibration [stub]
 %   hampel               - Robust point-outlier detector (moving median + MAD)

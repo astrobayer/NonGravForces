@@ -1,0 +1,467 @@
+classdef tNgfEnv < NgfTestCase
+%TNGFENV Tests of the env layer (LP-3): density, eclipseFactor, earthRadiance, radiationSources, and buildMex.
+%
+%   Oracles (none built here): the NRLMSISE-00 DOCUMENTATION §7 table (17
+%   published cases, mex/nrlmsise00/DOCUMENTATION, parsed by this class);
+%   tools/pyxcheck/eclipse_check.py (pure-Python disc-overlap integration);
+%   tools/pyxcheck/knocke_check.py (pure-Python 0.25 deg cap integration and an
+%   independent restatement of Knocke's Table 1); the real 2020-01-01 GRACE-C
+%   state from data/samples. Every bound carries the number measured on
+%   2026-09-07.
+% Created 2026-09-07 by Claude Fable 5.1 (Anthropic).
+    properties
+        root
+        msisTable    % 17x11 published values (cgs): HE O N2 O2 AR RHO H N ANOM TINF TG
+        msisInput    % struct of 1x17 inputs from nrlmsise-00_test.c
+        eclipse      % oracle table
+        knocke       % oracle table
+        au
+        cLight
+    end
+    methods (TestClassSetup)
+        function loadOracles(tc)
+            tc.root = fileparts(fileparts(mfilename('fullpath')));
+            L = splitlines(string(fileread(fullfile(tc.root, 'mex', 'nrlmsise00', 'DOCUMENTATION'))));
+            rows = L(~cellfun(@isempty, regexp(L, '^\d\.\d{6}E[+-]\d{2} ', 'once')));
+            tc.assertEqual(numel(rows), 17, 'DOCUMENTATION §7 must hold the 17 published rows');
+            tc.msisTable = cell2mat(cellfun(@(s) sscanf(s, '%f')', cellstr(rows), 'UniformOutput', false));
+            % inputs: the base case and the deviations, transcribed from nrlmsise-00_test.c (published driver)
+            n = 17; in.doy = 172*ones(1,n); in.sec = 29000*ones(1,n); in.alt_km = 400*ones(1,n); in.lat = 60*ones(1,n); in.lon = -70*ones(1,n);
+            in.lst = 16*ones(1,n); in.f107a = 150*ones(1,n); in.f107 = 150*ones(1,n); in.ap = 4*ones(1,n);
+            in.doy(2) = 81; in.sec(3) = 75000; in.alt_km(3) = 1000; in.alt_km(4) = 100; in.alt_km(11) = 0; in.alt_km(12) = 10; in.alt_km(13) = 30;
+            in.alt_km(14) = 50; in.alt_km(15) = 70; in.alt_km(17) = 100; in.lat(5) = 0; in.lon(6) = 0; in.lst(7) = 4; in.f107a(8) = 70; in.f107(9) = 180; in.ap(10) = 40;
+            tc.msisInput = in;
+            tc.eclipse = readtable(fullfile(tc.root, 'tools', 'pyxcheck', 'eclipse_oracle.csv'), 'VariableNamingRule', 'preserve');
+            tc.knocke  = readtable(fullfile(tc.root, 'tools', 'pyxcheck', 'knocke_oracle.csv'), 'VariableNamingRule', 'preserve');
+            tc.au = NonGravForces.const().au;
+            tc.cLight = referenceSystem.iersConstants().speedOfLight;
+            tc.assertTrue(NonGravForces.buildMex('Check', true).present, 'the MSIS MEX must be built before this class runs (ciGate builds it)');
+        end
+    end
+    methods
+        function [rho, sp, T] = msisCases(tc, idx, anomalous)
+            % Evaluate the published cases idx (1-based) with the published (inconsistent) local time.
+            in = tc.msisInput;
+            ep = referenceSystem.daySecondToEpoch([51544 + in.doy(idx)' - 1, in.sec(idx)'], "UTC");   % year 2000: irrelevant to the model
+            lla = [deg2rad(in.lat(idx)); deg2rad(in.lon(idx)); in.alt_km(idx) * 1e3];
+            if all(idx >= 16)
+                ap = 100 * ones(7, numel(idx));                    % cases 16, 17: the ap array (all 100), switch 9 = -1
+            else
+                ap = in.ap(idx);
+            end
+            d = struct('f107', in.f107(idx), 'f107a', in.f107a(idx), 'ap', ap);
+            [rho, sp, T] = NonGravForces.env.density("msis00", ep, lla, [], 'Drivers', d, 'AnomalousOxygen', anomalous, 'LocalSolarTime_h', in.lst(idx));
+        end
+        function [ep, r, q, eop] = sampleState(tc)
+            eop = referenceSystem.readEop(fullfile(tc.root, 'data', 'eop', 'finals2000A_2019-09_2020-03.all'));
+            [ep, r] = NonGravForces.io.readGNV1B(fullfile(tc.root, 'data', 'samples', 'GNV1B_2020-01-01_C_04.txt'), 'Eop', eop);
+            [~, q] = NonGravForces.io.readSCA1B(fullfile(tc.root, 'data', 'samples', 'SCA1B_2020-01-01_C_04.txt'));
+        end
+        function [Ea, Ei, src] = knockeCase(tc, k, grid, backend)
+            K = tc.knocke;
+            ep = referenceSystem.datetimeToEpoch(datetime(1981, 12, 22) + days(K.days_since_t0(k)), "UTC");
+            r = [K.rx(k); K.ry(k); K.rz(k)]; sun = tc.au * [K.sunx(k); K.suny(k); K.sunz(k)];
+            opt = NonGravForces.Options("standard", "erp.backend", backend, "srp.eclipse", "cylindrical");
+            if ~isempty(grid), opt = opt.set("erp.grid", grid); end
+            src = NonGravForces.env.radiationSources(ep, r, [1; 0; 0; 0], opt, 'Sun', sun);
+            Mt = (src.M - 1) / 2;
+            Ea = sum(src.P(2:1+Mt)) * tc.cLight; Ei = sum(src.P(2+Mt:end)) * tc.cLight;
+        end
+        function q = speedRatio(~, fcn, base)
+            fcn(); base();
+            r = zeros(1, 5);
+            for k = 1:5
+                t1 = tic; fcn(); a = toc(t1); t2 = tic; base(); b = toc(t2); r(k) = a / b;
+            end
+            q = median(r);
+        end
+    end
+
+    % ===================================================================== contract
+    methods (Test, TestTags = {'contract'})
+        function densityContract(tc)
+            ep = referenceSystem.mjdToEpoch([58849.5; 58849.6], "UTC"); lla = [0 0.1; 0 0.2; 490e3 500e3];
+            d = struct('f107', [70 71], 'f107a', [71 71], 'ap', [3 4]);
+            [rho, sp, T, info] = NonGravForces.env.density("msis00", ep, lla, [], 'Drivers', d);
+            tc.verifySize(rho, [1 2]); tc.verifySize(sp, [8 2]); tc.verifySize(T, [2 2]); tc.verifyTrue(all(rho > 0));
+            tc.verifyEqual(info.backend, "msis00"); tc.verifyEqual(info.drivers.source, "caller"); tc.verifyTrue(info.anomalousOxygen);
+            tc.verifyEqual(info.provenance.unit, "env.density"); tc.verifyEqual(info.msisInput.alt_km, [490 500]);
+            p = struct('rho0_kg_m3', 3e-12, 'h0_m', 450e3, 'H_m', 60e3);
+            [rhoE, spE, TE, infoE] = NonGravForces.env.density("exponential", ep, lla, [], 'Exponential', p);
+            tc.verifySize(rhoE, [1 2]); tc.verifyTrue(all(isnan(spE(:)))); tc.verifyTrue(all(isnan(TE(:)))); tc.verifyEqual(infoE.drivers.source, "none");
+            tc.verifyError(@() NonGravForces.env.density("nrlmsis", ep, lla, []), 'MATLAB:validators:mustBeMember');
+            tc.verifyErrorId(@() NonGravForces.env.density("msis00", ep, lla(1:2, :), [], 'Drivers', d), 'NonGravForces:density:inputShape');
+            tc.verifyErrorId(@() NonGravForces.env.density("msis00", ep, lla, []), 'NonGravForces:density:inputDrivers');
+            tc.verifyErrorId(@() NonGravForces.env.density("exponential", ep, lla, []), 'NonGravForces:density:inputExponential');
+            tc.verifyErrorId(@() NonGravForces.env.density("msis21", ep, lla, [], 'Drivers', d), 'NonGravForces:density:notImplemented');
+            tc.verifyErrorId(@() NonGravForces.env.density("jb2008", ep, lla, [], 'Drivers', d), 'NonGravForces:density:notImplemented');
+        end
+        function eclipseFactorContract(tc)
+            % at 490 km the penumbra spans 67.97..68.51 deg from the anti-Sun point (b -/+ a); 68.25 is inside it
+            r = [-(6378137 + 490e3) * cosd([0 68.25 90]); 0 0 0; (6378137 + 490e3) * sind([0 68.25 90])]; s = [tc.au; 0; 0];
+            [nu, info] = NonGravForces.env.eclipseFactor(r, s);
+            tc.verifySize(nu, [1 3]); tc.verifyEqual(nu(1), 0); tc.verifyTrue(nu(2) > 0 && nu(2) < 1); tc.verifyEqual(nu(3), 1);
+            tc.verifyEqual(info.model, "conical"); tc.verifyEqual(info.radiusEarth_m, referenceSystem.ellipsoidParameters("WGS84").a); tc.verifyEmpty(info.moon);
+            nuY = NonGravForces.env.eclipseFactor(r, s, 'Model', "cylindrical"); tc.verifyEqual(nuY, [0 1 1]);
+            [nuM, infoM] = NonGravForces.env.eclipseFactor(r, s, 'Moon', [0; 384400e3; 0]); tc.verifyEqual(nuM, nu); tc.verifySize(infoM.moon, [1 3]);
+            tc.verifyEqual(NonGravForces.env.eclipseFactor(r, repmat(s, 1, 3)), nu, 'a 3xK Sun equals the broadcast 3x1');
+            tc.verifyErrorId(@() NonGravForces.env.eclipseFactor(r(1:2, :), s), 'NonGravForces:eclipseFactor:inputShape');
+            tc.verifyErrorId(@() NonGravForces.env.eclipseFactor(r, [s s]), 'NonGravForces:eclipseFactor:inputShape');
+            tc.verifyErrorId(@() NonGravForces.env.eclipseFactor(r, s, 'Model', "solaarsCF"), 'NonGravForces:eclipseFactor:notImplemented');
+            tc.verifyError(@() NonGravForces.env.eclipseFactor(r, s, 'Model', "flat"), 'MATLAB:validators:mustBeMember');
+        end
+        function earthRadianceContract(tc)
+            ep = referenceSystem.mjdToEpoch([58849.5; 58850.5], "UTC"); r = [[6.88e6; 0; 0] [0; 0; 7e6]];
+            t = NonGravForces.env.earthRadiance("knocke", ep, [12 24], r);
+            tc.verifyEqual(t.M, 288); tc.verifySize(t.n, [3 288 2]); tc.verifySize(t.area_m2, [288 2]); tc.verifySize(t.albedo, [288 2]); tc.verifySize(t.emissivity, [288 2]);
+            tc.verifySize(t.lat_rad, [288 2]); tc.verifySize(t.capAngle_rad, [1 2]); tc.verifyEqual(t.grid, [12 24]); tc.verifyEqual(t.backend, "knocke");
+            tc.verifyTrue(all(t.albedo(:) > 0 & t.albedo(:) < 1) && all(t.emissivity(:) > 0 & t.emissivity(:) < 1));
+            p = NonGravForces.env.earthRadiance("pointSource", ep, [], r);
+            tc.verifyEqual(p.M, 0); tc.verifyEqual(p.albedo, [0.34 0.34]); tc.verifyEqual(p.emissivity, [0.68 0.68]);
+            tc.verifyErrorId(@() NonGravForces.env.earthRadiance("knocke", ep, [0 24], r), 'NonGravForces:earthRadiance:inputGrid');
+            tc.verifyErrorId(@() NonGravForces.env.earthRadiance("knocke", ep, [12 24], r(:, 1)), 'NonGravForces:earthRadiance:inputShape');
+            tc.verifyErrorId(@() NonGravForces.env.earthRadiance("knocke", ep, [12 24], [r(:, 1) [1e6; 0; 0]]), 'NonGravForces:earthRadiance:inputRange');
+            tc.verifyErrorId(@() NonGravForces.env.earthRadiance("ceres", ep, [12 24], r), 'NonGravForces:earthRadiance:notImplemented');
+        end
+        function radiationSourcesContract(tc)
+            [ep, r, q] = tc.sampleState();
+            ep5 = referenceSystem.daySecondToEpoch([ep.day(1:5) ep.sec(1:5)], "GPS"); r5 = r(:, 1:5); q5 = q(:, 1:5);
+            [src, info] = NonGravForces.env.radiationSources(ep5, r5, q5, NonGravForces.Options("standard"));
+            tc.verifyEqual(src.M, 1 + 2 * 288); tc.verifySize(src.dir, [3 577 5]); tc.verifySize(src.P, [577 5]); tc.verifySize(src.band, [1 577]);
+            tc.verifyEqual(src.band(1), "vis"); tc.verifyEqual(nnz(src.band == "vis"), 289); tc.verifyEqual(nnz(src.band == "ir"), 288);
+            tc.verifySize(src.nu, [1 5]); tc.verifyEqual(src.frame, "body"); tc.verifyTrue(all(src.P(:) >= 0));
+            tc.verifyLessThan(max(abs(vecnorm(src.dir(:, 1, :)) - 1)), 1e-14, 'unit Sun direction');
+            tc.verifyEqual(info.sunSource, "rs.analytic"); tc.verifyEqual(info.erpBackend, "knocke"); tc.verifyEqual(info.provenance.unit, "env.radiationSources");
+            tc.verifyErrorId(@() NonGravForces.env.radiationSources(ep5, r5(:, 1:4), q5, NonGravForces.Options("standard")), 'NonGravForces:radiationSources:inputShape');
+            tc.verifyErrorId(@() NonGravForces.env.radiationSources(ep5, r5, q5(1:3, :), NonGravForces.Options("standard")), 'NonGravForces:radiationSources:inputShape');
+            tc.verifyErrorId(@() NonGravForces.env.radiationSources(ep5, r5, q5, NonGravForces.Options("standard", "sun.source", "rs.de440")), 'NonGravForces:radiationSources:depKernel');
+            tc.verifyErrorId(@() NonGravForces.env.radiationSources(ep5, r5, q5, NonGravForces.Options("standard"), 'Sun', [tc.au; 0; 0]), 'NonGravForces:radiationSources:inputShape');
+            tc.verifyError(@() NonGravForces.env.radiationSources(ep5, r5, q5, struct()), 'MATLAB:validation:UnableToConvert');
+        end
+        function buildMexContract(tc)
+            rep = NonGravForces.buildMex('Check', true);
+            tc.verifyTrue(rep.present); tc.verifyTrue(rep.upToDate); tc.verifyFalse(rep.built); tc.verifyEqual(rep.compiler, "");
+            tc.verifyEqual(strlength(rep.sourceDigest), 64); tc.verifyEqual(rep.sourceDigest, rep.binaryDigest);
+            tc.verifyTrue(all(isfile(rep.sources))); tc.verifyEqual(numel(rep.sources), 4);
+            tc.verifyTrue(endsWith(rep.file, "msisGateway." + mexext));
+        end
+    end
+
+    % ===================================================================== reference
+    methods (Test, TestTags = {'reference'})
+        function densityReference(tc)
+            % The 17 published cases of DOCUMENTATION §7 (printed with %E, 7 significant digits)
+            % must be reproduced digit for digit in every column: HE O N2 O2 AR RHO H N ANOM TINF TG.
+            [rhoA, spA, TA] = tc.msisCases(1:15, false);
+            [rhoB, spB, TB] = tc.msisCases(16:17, false);
+            rho = [rhoA rhoB]; sp = [spA spB]; T = [TA TB];
+            mine = [sp(1:5, :) / 1e6; rho / 1e3; sp(6:8, :) / 1e6; T];          % back to the reference's cgs
+            worst = 0; mismatches = strings(0, 1);
+            for i = 1:17
+                for j = 1:11
+                    a = sprintf('%.6E', mine(j, i)); b = sprintf('%.6E', tc.msisTable(i, j));
+                    if ~strcmp(a, b), mismatches(end+1) = sprintf("case %d col %d: %s vs %s", i - 1, j, a, b); end %#ok<AGROW>
+                    worst = max(worst, abs(mine(j, i) - tc.msisTable(i, j)) / max(abs(tc.msisTable(i, j)), 1e-300));
+                end
+            end
+            tc.verifyEmpty(mismatches, strjoin(mismatches, newline));
+            tc.verifyBoundAndRecord("msis00 vs DOCUMENTATION table (17 cases)", worst, 5e-7, "rel", "printed 7 digits; measured 4.8e-7");
+        end
+        function eclipseFactorReference(tc)
+            % Oracle: pure-Python numerical disc-overlap integration (eclipse_check.py); cylindrical bitwise.
+            E = tc.eclipse; r = [E.rx E.ry E.rz]'; s = [E.sx E.sy E.sz]';
+            nuC = NonGravForces.env.eclipseFactor(r, s); nuY = NonGravForces.env.eclipseFactor(r, s, 'Model', "cylindrical");
+            % HANDOVER accuracy: nu to 1e-12; the oracle's own truncation is ~1e-12. Bound 1e-11.
+            tc.verifyBoundAndRecord("eclipse conical vs Python disc integration", max(abs(nuC - E.nu_conical')), 1e-11, "-", "oracle ~1e-12; atan2 form (acos form measured 6.4e-10)");
+            tc.verifyEqual(nuY, E.nu_cylindrical', 'cylindrical is a pure geometric test: bitwise');
+            tc.verifyGreaterThan(nnz(nuC > 0 & nuC < 1), 3, 'the oracle must exercise the penumbra');
+        end
+        function earthRadianceReference(tc)
+            % Oracle: knocke_coefficients.csv (independent restatement of Table 1) and the formula evaluated here from it.
+            Lc = splitlines(strtrim(string(fileread(fullfile(tc.root, 'tools', 'pyxcheck', 'knocke_coefficients.csv'))))); Lc = Lc(2:end);
+            kv = split(Lc, ","); names = strtrim(kv(:, 1)); values = strtrim(kv(:, 2));
+            val = @(n) str2double(values(names == n));
+            ep = referenceSystem.datetimeToEpoch(datetime(1981, 12, 22) + days([0 100 200]), "UTC"); r = repmat([6.88e6; 0; 0], 1, 3);
+            t = NonGravForces.env.earthRadiance("knocke", ep, [12 24], r);
+            for n = ["a0","a1","a2","e0","e1","e2","period_days"], tc.verifyEqual(t.coefficients.(n), val(n), sprintf('coefficient %s', n)); end
+            tc.verifyEqual(t.coefficients.t0, values(names == "t0"));
+            x = sin(t.lat_rad); seasonal = cos(2 * pi / val("period_days") * [0 100 200]);
+            aExp = val("a0") + val("a1") * (x .* seasonal) + val("a2") * 0.5 * (3 * x.^2 - 1);
+            eExp = val("e0") + val("e1") * (x .* seasonal) + val("e2") * 0.5 * (3 * x.^2 - 1);
+            tc.verifyBoundAndRecord("Knocke albedo tile values vs Table 1 formula", max(abs(t.albedo(:) - aExp(:))), 1e-15, "-", "same arithmetic from an independent coefficient file");
+            tc.verifyBoundAndRecord("Knocke emissivity tile values vs Table 1 formula", max(abs(t.emissivity(:) - eExp(:))), 1e-15, "-", "");
+            tc.verifyEqual(t.daysSinceT0, [0 100 200]);
+        end
+        function radiationSourcesReference(tc)
+            % Oracle: knocke_check.py cap integration at 0.25 deg. Errors relative to the longwave flux, per grid.
+            % Measured 2026-09-07 (worst over the six zonal cases): [12 24] 2.3e-2, [24 48] 5.4e-3, [48 96] 1.4e-3;
+            % first-order convergence in the ring count. Bounds 3x-ish: 4e-2, 1e-2, 3e-3.
+            K = tc.knocke; zonal = find(~K.uniform)'; uni = find(K.uniform)';
+            bounds = struct('g12', 4e-2, 'g24', 1e-2, 'g48', 3e-3); grids = {[12 24], [24 48], [48 96]}; names = ["g12","g24","g48"];
+            for gi = 1:3
+                worst = 0;
+                for k = zonal
+                    [Ea, Ei] = tc.knockeCase(k, grids{gi}, "knocke");
+                    worst = max(worst, max(abs(Ea - K.E_albedo_W_m2(k)), abs(Ei - K.E_ir_W_m2(k))) / K.E_ir_W_m2(k));
+                end
+                tc.verifyBoundAndRecord("ERP cap grid " + mat2str(grids{gi}) + " vs Python integration", worst, bounds.(names(gi)), "rel", "relative to the longwave flux, worst of 6 cases");
+            end
+            % point source: the far-field Lambert sphere; at 100 R the finite-distance (R/r) terms are 1e-2 and the
+            % oracle's rim discretisation ~2e-3. Bound 2e-2 on albedo, 5e-3 on longwave (measured: see last_run).
+            far = uni(K.rx(uni).^2 + K.rz(uni).^2 > (50 * 6378137)^2);
+            worstA = 0; worstI = 0;
+            for k = far
+                [Ea, Ei, src] = tc.knockeCase(k, [], "pointSource");
+                tc.verifyEqual(src.M, 3);
+                worstA = max(worstA, abs(Ea - K.E_albedo_W_m2(k)) / K.E_albedo_W_m2(k)); worstI = max(worstI, abs(Ei - K.E_ir_W_m2(k)) / K.E_ir_W_m2(k));
+            end
+            tc.verifyBoundAndRecord("pointSource albedo vs uniform sphere at 100 R", worstA, 2e-2, "rel", "far-field law, O(R/r)");
+            tc.verifyBoundAndRecord("pointSource longwave vs uniform sphere at 100 R", worstI, 5e-3, "rel", "exact law; oracle rim tiles ~2e-3");
+            % SRP: at exactly 1 au and full light P = tsi / c (CODATA c, IAU 2015 B3 tsi 1361).
+            ep = referenceSystem.mjdToEpoch(58849.5, "UTC");
+            src = NonGravForces.env.radiationSources(ep, [7e6; 0; 0], [1; 0; 0; 0], NonGravForces.Options("standard", "erp.backend", "none"), 'Sun', [tc.au + 7e6; 0; 0]);
+            tc.verifyBoundAndRecord("SRP at 1 au vs tsi/c", abs(src.P(1) - 1361 / 299792458) / (1361 / 299792458), 1e-15, "rel", "one division");
+        end
+    end
+
+    % ===================================================================== precision
+    methods (Test, TestTags = {'precision'})
+        function densityPrecision(tc)
+            % Exponential model: rho(h0) = rho0 exactly; rho(h0 + H) = rho0/e to 4 eps (one exp, one multiply).
+            ep = referenceSystem.mjdToEpoch([58849.5; 58849.5], "UTC"); p = struct('rho0_kg_m3', 3e-12, 'h0_m', 450e3, 'H_m', 60e3);
+            rho = NonGravForces.env.density("exponential", ep, [0 0; 0 0; 450e3 510e3], [], 'Exponential', p);
+            tc.verifyEqual(rho(1), 3e-12);
+            tc.verifyBoundAndRecord("exponential density one scale height", abs(rho(2) - 3e-12 / exp(1)) / 3e-12, 4 * eps, "rel", "exp and a multiply");
+        end
+        function eclipseFactorPrecision(tc)
+            % Exact limits of the conical model: full light 1, umbra 0, annular 1 - b^2/a^2 (Sun larger than the body).
+            s = [tc.au; 0; 0]; R = referenceSystem.ellipsoidParameters("WGS84").a; Rs = NonGravForces.const().Rsun;
+            rFar = [-3e9; 0; 0];                                     % far behind the Earth: Earth's disc smaller than the Sun's
+            nu = NonGravForces.env.eclipseFactor([[7e6; 0; 0] [-6.9e6; 0; 0] rFar], s);
+            tc.verifyEqual(nu(1), 1); tc.verifyEqual(nu(2), 0);
+            a = asin(Rs / (tc.au + 3e9)); b = asin(R / 3e9);
+            tc.verifyBoundAndRecord("eclipse annular limit 1 - b^2/a^2", abs(nu(3) - (1 - b^2 / a^2)), 1e-15, "-", "same asin, one division");
+        end
+        function earthRadiancePrecision(tc)
+            % Cap area: sum of the tiles equals 2 pi R^2 (1 - cos alpha_max) (measured 4e-16); tile normals unit.
+            ep = referenceSystem.mjdToEpoch([58849.5; 58850.5], "UTC"); r = [[6.88e6; 0; 0] [0; 0; 7e6]];
+            t = NonGravForces.env.earthRadiance("knocke", ep, [12 24], r);
+            capArea = 2 * pi * t.radius_m^2 * (1 - cos(t.capAngle_rad));
+            tc.verifyBoundAndRecord("ERP cap tiles area closure", max(abs(sum(t.area_m2, 1) ./ capArea - 1)), 1e-14, "rel", "measured 4e-16");
+            tc.verifyBoundAndRecord("ERP tile normals unit norm", max(abs(vecnorm(t.n) - 1), [], 'all'), 1e-14, "-", "");
+        end
+        function radiationSourcesPrecision(tc)
+            % Anti-solar geometry: every albedo tile is unlit, so the albedo pressure is exactly zero while longwave is not;
+            % the Sun direction in the body frame with the identity attitude is the GCRS unit vector to 1e-15.
+            ep = referenceSystem.mjdToEpoch(58849.5, "UTC"); r = [-6.88e6; 0; 0]; sun = [tc.au; 0; 0];
+            src = NonGravForces.env.radiationSources(ep, r, [1; 0; 0; 0], NonGravForces.Options("standard", "srp.eclipse", "cylindrical"), 'Sun', sun);
+            Mt = (src.M - 1) / 2;
+            tc.verifyEqual(sum(src.P(2:1+Mt)), 0); tc.verifyGreaterThan(sum(src.P(2+Mt:end)), 0); tc.verifyEqual(src.nu, 0);
+            d = (sun - r) / norm(sun - r);
+            tc.verifyBoundAndRecord("Sun direction body vs GCRS for identity q", max(abs(src.dir(:, 1) - d)), 1e-15, "-", "identity rotation");
+        end
+    end
+
+    % ===================================================================== vectorization
+    methods (Test, TestTags = {'vectorization'})
+        function densityVectorization(tc)
+            % The 15 daily-ap published cases in one call equal the 15 single calls, bitwise (the MEX loop is per epoch).
+            [rhoAll, spAll, TAll] = tc.msisCases(1:15, true);
+            for i = 1:15
+                [rho1, sp1, T1] = tc.msisCases(i, true);
+                tc.verifyEqual(rhoAll(i), rho1); tc.verifyEqual(spAll(:, i), sp1); tc.verifyEqual(TAll(:, i), T1);
+            end
+        end
+        function eclipseFactorVectorization(tc)
+            E = tc.eclipse; r = [E.rx E.ry E.rz]'; s = [E.sx E.sy E.sz]';
+            nuAll = NonGravForces.env.eclipseFactor(r, s);
+            one = arrayfun(@(k) NonGravForces.env.eclipseFactor(r(:, k), s(:, k)), 1:size(r, 2));
+            tc.verifyEqual(nuAll, one);
+        end
+        function earthRadianceVectorization(tc)
+            ep = referenceSystem.mjdToEpoch([58849.5; 58900.25; 58950.1], "UTC"); r = [[6.88e6; 0; 0] [0; 0; 7e6] [4e6; 4e6; 4e6]];
+            t = NonGravForces.env.earthRadiance("knocke", ep, [12 24], r);
+            for k = 1:3
+                epk = ep; epk.day = ep.day(k); epk.sec = ep.sec(k);
+                t1 = NonGravForces.env.earthRadiance("knocke", epk, [12 24], r(:, k));
+                tc.verifyEqual(t.n(:, :, k), t1.n); tc.verifyEqual(t.area_m2(:, k), t1.area_m2); tc.verifyEqual(t.albedo(:, k), t1.albedo); tc.verifyEqual(t.emissivity(:, k), t1.emissivity);
+            end
+        end
+        function radiationSourcesVectorization(tc)
+            [ep, r, q] = tc.sampleState();
+            idx = [1 100 250 400 600];
+            epB = referenceSystem.daySecondToEpoch([ep.day(idx) ep.sec(idx)], "GPS");
+            src = NonGravForces.env.radiationSources(epB, r(:, idx), q(:, idx), NonGravForces.Options("standard"));
+            for k = 1:5
+                ep1 = referenceSystem.daySecondToEpoch([ep.day(idx(k)) ep.sec(idx(k))], "GPS");
+                s1 = NonGravForces.env.radiationSources(ep1, r(:, idx(k)), q(:, idx(k)), NonGravForces.Options("standard"));
+                tc.verifyEqual(src.P(:, k), s1.P); tc.verifyEqual(src.dir(:, :, k), s1.dir); tc.verifyEqual(src.nu(k), s1.nu);
+            end
+        end
+    end
+
+    % ===================================================================== robustness
+    methods (Test, TestTags = {'robustness'})
+        function densityRobustness(tc)
+            ep = referenceSystem.mjdToEpoch(58849.5, "UTC"); d = struct('f107', 70, 'f107a', 71, 'ap', 3);
+            tc.verifyErrorId(@() NonGravForces.env.density("msis00", ep, [0; NaN; 490e3], [], 'Drivers', d), 'NonGravForces:density:numericNaN');
+            tc.verifyErrorId(@() NonGravForces.env.density("msis00", ep, [0; 0; 490e3], [], 'Drivers', struct('f107', NaN, 'f107a', 71, 'ap', 3)), 'NonGravForces:density:numericNaN');
+            tc.verifyErrorId(@() NonGravForces.env.density("msis00", ep, [0; 0; 490e3], [], 'Drivers', struct('f107', [70 70], 'f107a', 71, 'ap', 3)), 'NonGravForces:density:inputDrivers');
+            tc.verifyErrorId(@() NonGravForces.env.density("msis00", ep, [0; 0; 490e3], [], 'Drivers', d, 'LocalSolarTime_h', [1 2]), 'NonGravForces:density:inputDrivers');
+            sj = NonGravForces.io.spaceWeather([string(fullfile(tc.root, 'data', 'spaceweather', 'SOLFSMY_2019-09_2020-03.TXT')) string(fullfile(tc.root, 'data', 'spaceweather', 'DTCFILE_2019-09_2020-03.TXT'))]);
+            tc.verifyErrorId(@() NonGravForces.env.density("msis00", ep, [0; 0; 490e3], sj), 'NonGravForces:density:inputDrivers');
+            % real drivers from the CelesTrak fixture, ground level and 1000 km both evaluate
+            sw = NonGravForces.io.spaceWeather(fullfile(tc.root, 'data', 'spaceweather', 'SW-All_2019-09_2020-03.csv'));
+            [rho, ~, ~, info] = NonGravForces.env.density("msis00", referenceSystem.mjdToEpoch([58849.5; 58849.5], "UTC"), [0 1; 0 1; 0 1000e3], sw);
+            tc.verifyTrue(rho(1) > 1 && rho(1) < 1.5, 'sea-level density about 1.2 kg/m^3'); tc.verifyTrue(rho(2) > 0 && rho(2) < 1e-13);
+            tc.verifyEqual(info.drivers.source, "spaceWeather"); tc.verifySize(info.drivers.ap, [7 2]);
+        end
+        function eclipseFactorRobustness(tc)
+            s = [tc.au; 0; 0]; r = [-(6378137 + 490e3) * cosd(68.25); 0; (6378137 + 490e3) * sind(68.25)];
+            nu = NonGravForces.env.eclipseFactor(r, s); tc.verifyTrue(nu > 0 && nu < 1, 'penumbra point');
+            tc.verifyEqual(NonGravForces.env.eclipseFactor(r, s, 'Moon', [2 * tc.au; 0; 0]), nu, 'a body beyond the Sun casts no shadow');
+            tc.verifyEqual(NonGravForces.env.eclipseFactor(r, s, 'Moon', [0; 0; -384400e3]), nu, 'a Moon off the line leaves nu');
+            tc.verifyEqual(NonGravForces.env.eclipseFactor([7e6; 0; 0], s, 'Moon', [3e8; 0; 0]), 0, 'a Moon between satellite and Sun gives the lunar umbra');
+            tc.verifyErrorId(@() NonGravForces.env.eclipseFactor([NaN; 0; 7e6], s), 'NonGravForces:eclipseFactor:numericNaN');
+            tc.verifyErrorId(@() NonGravForces.env.eclipseFactor(r, [NaN; 0; 0]), 'NonGravForces:eclipseFactor:numericNaN');
+            tc.verifyErrorId(@() NonGravForces.env.eclipseFactor(r, s, 'Moon', [1; 2]), 'NonGravForces:eclipseFactor:inputShape');
+            tc.verifyEqual(NonGravForces.env.eclipseFactor(zeros(3, 0), s), zeros(1, 0), 'empty in, empty out');
+        end
+        function earthRadianceRobustness(tc)
+            % Over the pole the tangent basis needs its fallback; a single tile; just above the surface.
+            ep = referenceSystem.mjdToEpoch(58849.5, "UTC");
+            tP = NonGravForces.env.earthRadiance("knocke", ep, [12 24], [0; 0; 7e6]);
+            tc.verifyLessThan(abs(sum(tP.area_m2) / (2 * pi * tP.radius_m^2 * (1 - cos(tP.capAngle_rad))) - 1), 1e-14);
+            tc.verifyTrue(all(isfinite(tP.n(:))));
+            t1 = NonGravForces.env.earthRadiance("knocke", ep, [1 1], [7e6; 0; 0]); tc.verifyEqual(t1.M, 1);
+            tc.verifyLessThan(abs(t1.area_m2 - 2 * pi * t1.radius_m^2 * (1 - cos(t1.capAngle_rad))), 1e-3);
+            tLow = NonGravForces.env.earthRadiance("knocke", ep, [12 24], [6378137 + 1; 0; 0]); tc.verifyLessThan(tLow.capAngle_rad, 1e-3);
+            tc.verifyErrorId(@() NonGravForces.env.earthRadiance("knocke", ep, [12 24], [NaN; 0; 7e6]), 'NonGravForces:earthRadiance:numericNaN');
+            tc.verifyErrorId(@() NonGravForces.env.earthRadiance("knocke", struct('x', 1), [12 24], [7e6; 0; 0]), 'NonGravForces:earthRadiance:inputShape');
+        end
+        function radiationSourcesRobustness(tc)
+            ep = referenceSystem.mjdToEpoch(58849.5, "UTC"); r = [-6.88e6; 0; 0]; q = [1; 0; 0; 0]; sun = [tc.au; 0; 0];
+            sNone = NonGravForces.env.radiationSources(ep, r, q, NonGravForces.Options("standard", "erp.backend", "none"), 'Sun', sun);
+            tc.verifyEqual(sNone.M, 1); tc.verifyEqual(sNone.P, 0, 'umbra: no solar pressure'); tc.verifyEqual(sNone.band, "vis");
+            sPt = NonGravForces.env.radiationSources(ep, r, q, NonGravForces.Options("standard", "erp.backend", "pointSource"), 'Sun', sun);
+            tc.verifyEqual(sPt.M, 3); tc.verifyEqual(sPt.band, ["vis","vis","ir"]); tc.verifyLessThan(sPt.P(2), 1e-20, 'anti-solar: albedo is the rounding of sin(pi) in the phase law'); tc.verifyGreaterThan(sPt.P(3), 0);
+            sL = NonGravForces.env.radiationSources(ep, r, q, NonGravForces.Options("standard", "srp.lunarEclipse", true));
+            tc.verifySize(sL.nu, [1 1]);
+            tc.verifyErrorId(@() NonGravForces.env.radiationSources(ep, r, q, NonGravForces.Options("standard", "srp.lunarEclipse", true), 'Sun', sun), 'NonGravForces:radiationSources:inputShape');
+            tc.verifyErrorId(@() NonGravForces.env.radiationSources(ep, r, [NaN; 0; 0; 0], NonGravForces.Options("standard")), 'NonGravForces:radiationSources:numericNaN');
+            tc.verifyErrorId(@() NonGravForces.env.radiationSources(ep, r, q, NonGravForces.Options("precise")), 'NonGravForces:radiationSources:depKernel');
+            tc.verifyErrorId(@() NonGravForces.env.radiationSources(ep, r, q, NonGravForces.Options("standard", "srp.eclipse", "solaarsCF")), 'NonGravForces:eclipseFactor:notImplemented');
+            % a non-unit quaternion is normalised by referenceSystem: directions agree to 1e-15
+            s1 = NonGravForces.env.radiationSources(ep, r, q, NonGravForces.Options("standard"), 'Sun', sun);
+            s2 = NonGravForces.env.radiationSources(ep, r, 2 * q, NonGravForces.Options("standard"), 'Sun', sun);
+            tc.verifyLessThan(max(abs(s1.dir(:) - s2.dir(:))), 1e-15); tc.verifyEqual(s1.P, s2.P);
+        end
+        function buildMexRobustness(tc)
+            % A tampered digest makes the state STALE by content; restoring it makes it current again.
+            rep = NonGravForces.buildMex('Check', true);
+            digestFile = fullfile(fileparts(rep.file), 'msisGateway.digest.txt');
+            original = fileread(digestFile);
+            tc.addTeardown(@() writelines(string(strtrim(original)), digestFile));
+            writelines("0000", digestFile);
+            tampered = NonGravForces.buildMex('Check', true);
+            tc.verifyTrue(tampered.present); tc.verifyFalse(tampered.upToDate); tc.verifyEqual(tampered.binaryDigest, "0000");
+            writelines(string(strtrim(original)), digestFile);
+            tc.verifyTrue(NonGravForces.buildMex('Check', true).upToDate);
+        end
+    end
+
+    % ===================================================================== metamorphic
+    methods (Test, TestTags = {'metamorphic'})
+        function densityMetamorphic(tc)
+            % gtd7d - gtd7: the mass density gains exactly 16 * 1.66e-24 g times the anomalous-oxygen number density
+            % (the reference's own arithmetic, nrlmsise-00.c gtd7d), in SI 16 * 1.66e-24 * 1e-3 * 1e6 kg per m^-3.
+            [rhoD, spD] = tc.msisCases(1:15, true); [rho7, sp7] = tc.msisCases(1:15, false);
+            tc.verifyEqual(spD, sp7, 'the number densities do not depend on the flag');
+            % SI: 16 * 1.66e-24 g per particle = 16 * 1.66e-24 * 1e-3 kg, times the number density in m^-3
+            tc.verifyBoundAndRecord("gtd7d - gtd7 vs 16 amu x anomalous O", max(abs((rhoD - rho7) - 16 * 1.66e-24 * 1e-3 * spD(8, :)) ./ rhoD), 1e-12, "rel", "two rounding operations, per case");
+            % exponential: one scale height down multiplies by e, whatever h0
+            ep = referenceSystem.mjdToEpoch([58849.5; 58849.5], "UTC"); p = struct('rho0_kg_m3', 3e-12, 'h0_m', 450e3, 'H_m', 60e3);
+            rho = NonGravForces.env.density("exponential", ep, [0 0; 0 0; 400e3 340e3], [], 'Exponential', p);
+            tc.verifyBoundAndRecord("exponential scale-height ratio", abs(rho(2) / rho(1) - exp(1)) / exp(1), 1e-14, "rel", "");
+        end
+        function eclipseFactorMetamorphic(tc)
+            % Mirror symmetry across the Sun line (bitwise), rotation of the whole geometry (1e-15),
+            % monotone through the penumbra along the oracle sweep.
+            E = tc.eclipse; r = [E.rx E.ry E.rz]'; s = [E.sx E.sy E.sz]';
+            nu = NonGravForces.env.eclipseFactor(r, s);
+            tc.verifyEqual(NonGravForces.env.eclipseFactor(r .* [1; -1; -1], s), nu, 'mirror y,z');
+            Rm = referenceSystem.rotationFromQuaternion([cos(0.4); sin(0.4) * [0.6; 0; 0.8]]);
+            % HANDOVER accuracy: nu to 1e-12. Position rounding of a rotation (1e-9 m) through the penumbra
+            % slope (~100 per rad) is 1e-14; the atan2 separation angle keeps it there (acos lost 8e-12).
+            tc.verifyBoundAndRecord("eclipse rotation invariance", max(abs(NonGravForces.env.eclipseFactor(Rm * r, Rm * s) - nu)), 1e-12, "-", "HANDOVER accuracy figure; measured see last_run");
+            sweep = nu(1:30);                                        % oracle cases 0..29 sweep psi from 0 to 180 deg
+            tc.verifyTrue(all(diff(sweep) >= 0), 'nu is non-decreasing from the anti-Sun point outwards');
+        end
+        function earthRadianceMetamorphic(tc)
+            % One period later the seasonal term repeats (1e-14); mirrored latitudes: the odd term cancels in the sum.
+            r = [6.88e6; 0; 0];
+            ep0 = referenceSystem.datetimeToEpoch(datetime(1981, 12, 22) + days([0 365.25]), "UTC");
+            t = NonGravForces.env.earthRadiance("knocke", ep0, [12 24], [r r]);
+            tc.verifyBoundAndRecord("Knocke annual periodicity", max(abs(t.albedo(:, 1) - t.albedo(:, 2))), 1e-14, "-", "cos of 2 pi");
+            epN = referenceSystem.datetimeToEpoch(datetime(1981, 12, 22) + days(50), "UTC");
+            tN = NonGravForces.env.earthRadiance("knocke", epN, [12 24], [0; 0; 7e6]); tS = NonGravForces.env.earthRadiance("knocke", epN, [12 24], [0; 0; -7e6]);
+            tc.verifyLessThan(max(abs(tN.lat_rad + tS.lat_rad)), 1e-12, 'mirrored caps');
+            co = tN.coefficients; even = 2 * (co.a0 + co.a2 * 0.5 * (3 * sin(tN.lat_rad).^2 - 1));
+            tc.verifyBoundAndRecord("Knocke odd term cancels over mirrored caps", max(abs(tN.albedo + tS.albedo - even)), 1e-14, "-", "");
+        end
+        function radiationSourcesMetamorphic(tc)
+            % Rotating the attitude rotates every direction and leaves every pressure (bitwise);
+            % scaling tsi scales every pressure by the same factor.
+            [ep, r, q] = tc.sampleState();
+            ep5 = referenceSystem.daySecondToEpoch([ep.day(1:5) ep.sec(1:5)], "GPS"); r5 = r(:, 1:5); q5 = q(:, 1:5);
+            qz = [cos(0.3); 0; 0; sin(0.3)];
+            s1 = NonGravForces.env.radiationSources(ep5, r5, q5, NonGravForces.Options("standard"));
+            s2 = NonGravForces.env.radiationSources(ep5, r5, referenceSystem.multiplyQuaternions(q5, qz), NonGravForces.Options("standard"));
+            tc.verifyEqual(s2.P, s1.P);
+            % convention-free: with R(q) BODY->GCRS, dir_gcrs = R1 dir1 and dir2 = R2' dir_gcrs
+            R1 = referenceSystem.rotationFromQuaternion(q5); R2 = referenceSystem.rotationFromQuaternion(referenceSystem.multiplyQuaternions(q5, qz));
+            expect = pagemtimes(R2, 'transpose', pagemtimes(R1, s1.dir), 'none');
+            tc.verifyBoundAndRecord("source directions rotate with the attitude", max(abs(expect - s2.dir), [], 'all'), 1e-14, "-", "two rotations");
+            % every pressure is linear in tsi: the ratio of two runs is the ratio of the two tsi values (1e-14: one division)
+            s3 = NonGravForces.env.radiationSources(ep5, r5, q5, NonGravForces.Options("standard", "srp.tsi", 1400));
+            nz = s1.P > 0;
+            tc.verifyBoundAndRecord("pressures scale with tsi", max(abs(s3.P(nz) ./ s1.P(nz) - 1400 / 1361)), 1e-14, "-", "one division");
+            % grid refinement moves the flux monotonically towards the oracle (first-order convergence)
+            K = tc.knocke; k = find(~K.uniform, 1);
+            err = zeros(1, 3); g = {[6 12], [12 24], [24 48]};
+            for i = 1:3, [~, Ei] = tc.knockeCase(k, g{i}, "knocke"); err(i) = abs(Ei - K.E_ir_W_m2(k)); end
+            tc.verifyTrue(all(diff(err) < 0), 'error decreases with the grid');
+            tc.verifyBoundAndRecord("ERP convergence ratio (err 12x24 / err 24x48)", err(2) / err(3), 6, "-", "first order expects ~4; measured 4.1");
+        end
+    end
+
+    % ===================================================================== speed
+    methods (Test, TestTags = {'speed'})
+        function densitySpeed(tc)
+            % Linear scaling of the MEX loop: 86400 epochs cost at most 2x ten times 8640 epochs (per-call overhead amortised).
+            sw = NonGravForces.io.spaceWeather(fullfile(tc.root, 'data', 'spaceweather', 'SW-All_2019-09_2020-03.csv'));
+            epBig = referenceSystem.daySecondToEpoch([repmat(58849, 86400, 1) (0:86399)'], "UTC"); llaBig = [zeros(2, 86400); 490e3 + 1e3 * sin((1:86400) / 1000)];
+            epSmall = referenceSystem.daySecondToEpoch([repmat(58849, 8640, 1) (0:8639)'], "UTC");
+            q = tc.speedRatio(@() NonGravForces.env.density("msis00", epBig, llaBig, sw), @() NonGravForces.env.density("msis00", epSmall, llaBig(:, 1:8640), sw));
+            tc.verifyBoundAndRecord("msis00 86400 / 8640 epochs time ratio", q / 10, 2, "-", "linear scaling; measured see last_run");
+        end
+        function eclipseFactorSpeed(tc)
+            % Conical over cylindrical for 86400 epochs: two asin, an acos and the lens area; measured see last_run. Bound 8.
+            psi = linspace(0, pi, 86400); r = (6378137 + 490e3) * [-cos(psi); zeros(1, 86400); sin(psi)]; s = [tc.au; 0; 0];
+            q = tc.speedRatio(@() NonGravForces.env.eclipseFactor(r, s), @() NonGravForces.env.eclipseFactor(r, s, 'Model', "cylindrical"));
+            tc.verifyBoundAndRecord("eclipse conical / cylindrical time ratio", q, 8, "-", "");
+        end
+        function earthRadianceSpeed(tc)
+            % Tile count scales the cost: [24 48] over [12 24] for 600 epochs, four times the tiles, bound 8.
+            [ep, r] = tc.sampleState();
+            q = tc.speedRatio(@() NonGravForces.env.earthRadiance("knocke", ep, [24 48], r), @() NonGravForces.env.earthRadiance("knocke", ep, [12 24], r));
+            tc.verifyBoundAndRecord("earthRadiance [24 48] / [12 24] time ratio", q, 8, "-", "4x the tiles");
+        end
+        function radiationSourcesSpeed(tc)
+            % The full source list over the bare tiling for the 600-epoch sample: pressures, visibility, rotation. Bound 6.
+            [ep, r, q] = tc.sampleState(); opt = NonGravForces.Options("standard");
+            ratio = tc.speedRatio(@() NonGravForces.env.radiationSources(ep, r, q, opt), @() NonGravForces.env.earthRadiance("knocke", ep, [12 24], r));
+            tc.verifyBoundAndRecord("radiationSources / earthRadiance time ratio (600 epochs)", ratio, 6, "-", "");
+        end
+    end
+end
