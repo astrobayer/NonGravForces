@@ -4,10 +4,18 @@ function T = auditTestCategories(options)
 %   T = auditTestCategories
 %
 %   A unit is a "done" or "partial" row of doc/functionlist.csv. A test method
-%   covers a unit when its class carries the tag "unit:<name>" or its method
-%   name contains the unit name (case-insensitive) and the method carries a
-%   category tag. Counting is mechanical (rule T1); exemptions come from
-%   tests/testCategoryExemptions.m with one reason each (rule T2).
+%   covers a unit when the suite name "<Class>/<method>" CONTAINS the unit name,
+%   case-insensitively, and the method carries a category tag. That is the whole
+%   rule: there is no "unit:<name>" class tag, and this help claimed one until
+%   2026-09-07. Two consequences the reader must know, because the instrument
+%   cannot see them: a substring match credits a unit whose name is contained in
+%   another (no such pair exists today, checked 2026-09-07), and a method testing
+%   one unit credits any other unit whose name appears in its method name.
+%   Counting is mechanical (rule T1); exemptions come from
+%   tests/testCategoryExemptions.m with one reason each (rule T2). An exemption
+%   credits ONLY the categories it names: the caller must filter on `complete`,
+%   never on `~complete & ~exempt`, or every unit holding one exemption becomes
+%   invisible for all seven categories.
 %
 % OUTPUT ARGUMENTS
 %   T   table   unit, categories (1x7 logical), complete, exempt, missing (string)

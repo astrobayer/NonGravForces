@@ -461,6 +461,15 @@ classdef tNgfGeometry < NgfTestCase
 
     % ===================================================================== speed
     methods (Test, TestTags = {'speed'})
+        function checkAttitudeSenseSpeed(tc)
+            % Its whole cost is two rotations of the same quaternion series plus two atan2 angles,
+            % so it must stay within a small multiple of one rotationFromQuaternion over the same K.
+            [~, r, v, q] = tc.sampleState();
+            base = @() referenceSystem.rotationFromQuaternion(q);
+            fcn = @() NonGravForces.geom.checkAttitudeSense(q, r, v);
+            ratio = tc.speedRatio(fcn, base);
+            tc.verifyBoundAndRecord("checkAttitudeSense vs one rotationFromQuaternion over 600 epochs", ratio, 12, "-", "budget 3x the expected 4: two rotations, one quaternion conjugation and two atan2 angles; 5 repeats, median");
+        end
         function selfShadowSpeed(tc)
             % A LUT query over the 600-epoch sample against the ray cast of the same directions: the table must pay off.
             % Measured 2026-09-07 (50 directions): ray cast 0.06 s, LUT 642 query 0.02 s; bound: LUT query <= ray cast.

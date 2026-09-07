@@ -30,7 +30,11 @@ import matlab.unittest.selectors.HasTag
 here = fileparts(mfilename('fullpath'));
 NgfTestCase.recordStore('reset');
 suite = TestSuite.fromFolder(here, 'Name', options.Name + "/*");
-if isempty(suite), suite = TestSuite.fromFolder(here); end
+if isempty(suite)
+    % Never silently widen to the whole folder: a mistyped pattern would then report a green
+    % run of tests the caller did not ask for.
+    NonGravForces.fail("runNgfTests", "inputName", "'Name' pattern '%s' selects no test class in %s -> check the pattern (the default is tNgf*)", options.Name, here);
+end
 if options.ExcludeSlow
     suite = suite.selectIf(~HasTag("speed"));
 end
@@ -41,7 +45,10 @@ result.duration_s = toc(t0);
 result.passed = nnz([res.Passed]); result.failed = nnz([res.Failed]); result.incomplete = nnz([res.Incomplete]);
 result.records = NgfTestCase.recordTable();
 result.audit = auditTestCategories('Verbose', false);
-shortfall = result.audit(~result.audit.complete & ~result.audit.exempt, :);
+% A unit that holds an exemption for ONE category is not thereby excused for the others:
+% auditTestCategories already credits the exempted categories into `complete`, so the only
+% honest filter is `~complete`. Until 2026-09-07 the extra `& ~exempt` term hid three units.
+shortfall = result.audit(~result.audit.complete, :);
 result.green = result.failed == 0 && result.incomplete == 0 && isempty(shortfall);
 % report
 result.logFile = fullfile(here, 'last_run.txt');

@@ -49,7 +49,7 @@ r = runNgfTests('ExcludeSlow', options.ExcludeSlow, 'Strict', false);
 reasons = strings(0, 1);
 if r.failed > 0,     reasons(end+1) = sprintf("%d failed", r.failed); end
 if r.incomplete > 0, reasons(end+1) = sprintf("%d incomplete", r.incomplete); end
-short = r.audit(~r.audit.complete & ~r.audit.exempt, :);
+short = r.audit(~r.audit.complete, :);          % an exemption for one category never excuses another
 if ~isempty(short), reasons(end+1) = "category audit shortfall: " + strjoin(short.unit, ", "); end
 if ~isfile(r.logFile), reasons(end+1) = "tests/last_run.txt was not written"; end
 if r.passed == 0,    reasons(end+1) = "no test passed (suite not discovered?)"; end
