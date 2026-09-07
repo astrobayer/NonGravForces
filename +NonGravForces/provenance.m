@@ -44,6 +44,9 @@ arguments
     options.Warnings (1,:) string = string.empty(1,0)
     options.Note (1,1) string = ""
 end
+% The dependency versions are read once per MATLAB session and cached: dependencyReport
+% shells out to each toolbox and is far too slow to run per provenance record. A session
+% that swaps a dependency underneath itself must `clear functions` to see the new version.
 persistent depCache
 if isempty(depCache)
     d = NonGravForces.dependencyReport('Verbose', false);

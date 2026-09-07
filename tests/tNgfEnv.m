@@ -241,6 +241,19 @@ classdef tNgfEnv < NgfTestCase
 
     % ===================================================================== precision
     methods (Test, TestTags = {'precision'})
+        function densitySpeciesSumPrecision(tc)
+            % kernel.dragPanelForce re-forms the mass density from the species and const.speciesMass,
+            % while NRLMSISE-00 forms its own total from ITS molecular masses. Its ACCURACY block
+            % quotes the difference, so the difference has to be measured here rather than asserted.
+            sw = NonGravForces.io.spaceWeather(fullfile(tc.root, 'data', 'spaceweather', 'SW-All_2019-09_2020-03.csv'));
+            ep = referenceSystem.mjdToEpoch([58849.2 58849.5 58849.8], "UTC");
+            lla = [0 0.5 -0.7; 0 1.0 2.0; 490e3 500e3 480e3];
+            [rho, sp] = NonGravForces.env.density("msis00", ep, lla, sw);
+            c = NonGravForces.const();
+            rel = abs(sum(sp .* (c.speciesMass(:) / c.NA), 1) ./ rho - 1);
+            tc.verifyBoundAndRecord("msis00 total vs the species sum over const.speciesMass", max(rel), 1e-3, "-", "the backend's molecular masses differ from CODATA/IUPAC values; measured 5.7e-4 on 2026-09-07 and quoted by kernel.dragPanelForce");
+            tc.verifyGreaterThan(max(rel), 1e-5, 'if this ever drops the ACCURACY block of dragPanelForce is stale in the other direction');
+        end
         function densityPrecision(tc)
             % Exponential model: rho(h0) = rho0 exactly; rho(h0 + H) = rho0/e to 4 eps (one exp, one multiply).
             ep = referenceSystem.mjdToEpoch([58849.5; 58849.5], "UTC"); p = struct('rho0_kg_m3', 3e-12, 'h0_m', 450e3, 'H_m', 60e3);

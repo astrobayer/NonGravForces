@@ -39,7 +39,7 @@ function [F, tau, info] = assemble(Fk, macro, options)
 % ERRORS
 %   NonGravForces:assemble:inputMacro   macro is not a MacroModel
 %   NonGravForces:assemble:inputShape   Fk not 3xNxK with N = macro.n, or CentreOfMass not 3x1
-%   NonGravForces:assemble:numericNaN   NaN/Inf in Fk or CentreOfMass
+%   NonGravForces:assemble:numericNaN   NaN/Inf in Fk or CentreOfMass, or non-finite panel centroids
 %
 % REFERENCES
 %   HANDOVER D.2 principle P2 and Part C defect D8; theory §7.
@@ -78,6 +78,9 @@ if any(~isfinite(Fk(:))) || any(~isfinite(rcm))
 end
 K = size(Fk, 3);
 lever = macro.C - rcm;                              % 3xN
+if any(~isfinite(lever(:)))
+    NonGravForces.fail(unit, "numericNaN", "the panel centroids are not all finite, so no torque can be formed -> build the MacroModel with real centroid_m (MacroModel permits all-NaN centroids for force-only models)");
+end
 F = zeros(3, K); tau = zeros(3, K);
 for k = 1:N
     f = reshape(Fk(:, k, :), 3, K);
