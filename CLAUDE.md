@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-07 (LP-5x) by Claude Opus 5. Toolbox version 0.5.1.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-07 (debt sweep) by Claude Opus 5. Toolbox version 0.5.2.
 
 ---
 
@@ -44,20 +44,20 @@ L3 geom     MacroModel, graceFO, boxWing, selfShadow, thermalState,
 L2 env      density, wind, eclipseFactor, earthRadiance, magneticField, radiationSources
 L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
             importCERES, igrfCoefficients
-L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options
+L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options, buildMex
 ```
 
-51 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
-both directions against the files on disk).
+52 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
+both directions against the files on disk, and this sentence's number against it).
 
 ### Dependencies — called by qualified name, never copied, wrapped or aliased
 
 | Toolbox | Owns |
 |---|---|
-| `referenceSystem` ≥ 2.1 (2.1.214) | time scales, EOP, ITRS↔GCRS with derivatives, geodesy, quaternions, attitude interpolation, Sun/Moon states |
-| `gracefoReading` ≥ 2.1 (2.3.0) | L1B ASCII reading, quality flags, GROOPS instrument export/import |
+| `referenceSystem` ≥ 2.1 (2.1.216) | time scales, EOP, ITRS↔GCRS with derivatives, geodesy, quaternions, attitude interpolation, Sun/Moon states |
+| `gracefoReading` ≥ 1.0 (1.0.0) | L1B ASCII reading, quality flags, GROOPS instrument export/import |
 | `gjToolbox` (odeSuite) | Gauss-Jackson integration; `Model.rhs()` hands it an acceleration handle |
-| `lsqvce` 1.0 | batch least squares, VCE, ARMA whitening; `app.calibrate` delegates the adjustment |
+| `lsqvce` ≥ 5.3 (5.3) | batch least squares, VCE, ARMA whitening; `app.calibrate` delegates the adjustment through `fit`/`layout`/`Options` (O-24) |
 
 ### Key design decisions
 
@@ -74,8 +74,8 @@ both directions against the files on disk).
   first-class, not retrofits.
 - **P10 one raise point**: `NonGravForces.fail(unit, mnemonic, message)`.
 - **MATLAB is normative.** A C/MEX port (LP-6b, hand-written, no MATLAB Coder)
-  and the numpy kernel mirror (WP-33) are verified *against* MATLAB, never the
-  reverse.
+  and the standard-library kernel mirror (WP-33) are verified *against* MATLAB, never
+  the reverse.
 
 ---
 
@@ -140,11 +140,14 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-09-06, after LP-2)
+## 5. Current status (2026-09-07, after LP-5x and the debt sweep)
 
-- **238/238 tests GREEN** (2026-09-07, R2026a Update 4, Tier A host run; predicted
-  238), Code Analyzer 0 findings, gate TRUE; log in `tests/last_run.txt`.
-  LP-5 was 231, LP-4 169, LP-3 142, LP-2 116 (2026-09-06), LP-0 74 (2026-08-27).
+- **244/244 tests GREEN** (2026-09-07, R2026a Update 4, Tier A host run; predicted 243,
+  244 ran — reconciled in HANDOVER Part I), Code Analyzer 0 findings, gate TRUE;
+  log in `tests/last_run.txt`.
+  LP-5x was 238, LP-5 231, LP-4 169, LP-3 142, LP-2 116 (2026-09-06), LP-0 74 (2026-08-27).
+  The six new tests came from the 2026-09-07 debt sweep: the gate's shortfall filter had
+  been excusing any unit that held one exemption, hiding four missing category slots.
 - Implemented (☑): L0 core, `geom.MacroModel`, `geom.graceFO`, `qc.hampel`,
   `qc.eventTable`, `sensor.Sensor` interface, test infrastructure, CI, and the
   LP-2 data I/O: `io.readACC1B`, `readSCA1B`, `readGNV1B`, `readTHR1B`,
@@ -201,7 +204,7 @@ HANDOVER Part G. Then LP-4 (geom), LP-5 (kernel + qc), LP-5x, LP-6 (Model/partia
 LP-6b (C/MEX), LP-R (release).
 
 **LP-5x cross-validation** (owner rulings of 2026-08-27):
-- WP-33: numpy mirror of the **kernel layer only** under
+- WP-33: standard-library mirror of the **kernel layer only** under
   `tools/pyxcheck/ngfkernel/`, written from the equations (not transcribed from
   the MATLAB), **frozen once LP-5 is GREEN** as a regression oracle.
 - WP-34: GROOPS as a **black box** (GPLv3 — no source transcribed in any
@@ -209,19 +212,13 @@ LP-6b (C/MEX), LP-R (release).
   under `tests/fixtures/groops/` and committed; neither CI nor the host needs a
   GROOPS installation.
 
-**Obligations** (`HANDOVER.md` Part H): O-1 `hampel` speed · O-2 handbook normal
-renormalisation · O-3 CERES SYN1deg variable names · O-4 `gjToolbox` not on the
-host path · O-5 `referenceSystem` MEX (loads on the host since 2026-09-06; open
-for the CI runner) · O-6 exact TRP oracle for GRACE-FO 2020 · O-7 DE440 kernels
-for `Options.sun.source = "rs.de440"` · O-8 no MAG1B file (`readMAG1B` stays a
-stub) · O-9 Dst/F30 in no space-weather source in hand · O-10 referenceSystem
-refuses the whole 1962-now C04 series (pre-1972 rows) · O-11 doc/html pages
-other than FunctionList are hand-edited until WP-21 · O-12 `readL1bMulti` crashes on
-an empty TimeRange result · O-13 SOLAARS-CF coefficients not in hand · O-14 closed: the CI
-runner builds the MEX (buildMex finds the MinGW support package itself) · O-15 rs.de440 Sun
-path delivered-untested.
+**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-24 with an owner
+and a re-entry condition each. This file deliberately does NOT list them: the copy that
+used to live here had drifted to O-15 of 21 and showed two closed items as open, and no
+check compared the two (R1). Read Part H.
 
-Housekeeping: the repository has no LICENSE file yet.
+Housekeeping: the repository has no LICENSE file, and the vendored NRLMSISE-00 sources
+carry no redistribution grant (O-22, the owner's to settle before the repository is public).
 
 **Version rule (decided 2026-09-06):** the numeric fields of `toolboxVersion`
 are the authority and `semantic` is composed from them; minor = levels
@@ -271,9 +268,9 @@ Every one of these was an actual defect found in a predecessor or a dependency.
 - **`case` is not usable as a MATLAB table variable name**; the mirror fixtures use `caseId`.
 - **The full suite exceeds the MATLAB MCP call budget**: run `matlab -batch ciGate` from a
   background shell and read the log; use the MCP session for single classes.
-- **`referenceSystem` refuses an EOP series with rows before 1972-01-01**
-  (`leapSecondTable:beforeUtcEpoch`): pass `finals2000A.all` or a C04 subset
-  from MJD 41317 on to `readGNV1B`, never the whole `eopc04_20.1962-now`.
+- **`referenceSystem` trims EOP rows before 1972-01-01 and warns** (since 2.1.216,
+  2026-09-07; it refused outright before, O-10). The whole `eopc04_20.1962-now` may
+  now be passed to `readGNV1B`, with 3652 of 23562 rows ignored.
 - **MAS1B samples start at 3599.99 s of the day**, so the first hour has no
   sample; `massModel` holds the nearest value for two sample intervals.
 - **Fixture excerpts are real data with `num_records` rewritten**; a test that
