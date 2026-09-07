@@ -149,7 +149,7 @@ classdef tNgfQcScreen < NgfTestCase
             [mask, ev, info] = NonGravForces.qc.screen(a', zeros(K, 3), t, 'Whitening', "highpass", 'Window', 61, 'Response', tc.crn);
             tc.verifySize(mask, [K 3]);
             tc.verifyBoundAndRecord("outliers flagged in the real 600-s ACT1B sample (fraction)", info.counts.outlier / (3 * K), 0.02, "-", "Hampel at 4 sigma on 1/f data: a few per 1000 expected; measured 2026-09-07");
-            tc.verifyBoundAndRecord("impulses found in the real 600-s sample (recorded, no oracle)", info.counts.impulse, 20, "-", "every 30-s window could fire; a 5-sigma threshold on 1/f data with a synthetic template found 7 on 2026-09-07");
+            tc.verifyBoundAndRecord("impulses found in the real 600-s sample (recorded, no oracle)", info.counts.impulse, 20, "-", "every 30-s window could fire; a 5-sigma threshold on 1/f data with a synthetic template found 11 on 2026-09-07");
             tc.verifyTrue(all(ismember(ev.class, ["outlier" "impulse" "jump"])));
         end
     end
@@ -188,7 +188,7 @@ classdef tNgfQcScreen < NgfTestCase
             y = s * randn(K, 1); y(501:end) = y(501:end) + 0.1 * s * (1:500)';
             [evS, infoS] = NonGravForces.qc.detectJumps(y, 'Epoch', t, 'Model', "slope", 'MinSegment', 10);
             tc.assertGreaterThanOrEqual(height(evS), 1);
-            tc.verifyBoundAndRecord("planted kink epoch error (slope model)", min(abs(infoS.changePoints{1} - 501)), 10, "samples", "a kink of 0.1 sigma/sample: the fitted lines separate by 1 sigma after 10 samples; measured 4 (a 0.02 sigma/sample kink was off by 28)");
+            tc.verifyBoundAndRecord("planted kink epoch error (slope model)", min(abs(infoS.changePoints{1} - 501)), 10, "samples", "a kink of 0.1 sigma/sample: the fitted lines separate by 1 sigma after 10 samples; measured 8 (a 0.02 sigma/sample kink was off by 28)");
         end
         function screenPrecision(tc)
             % the synthetic case end to end: spike masked, both pulses masked over their 30 samples, the step reported as a jump, nothing else
@@ -327,7 +327,7 @@ classdef tNgfQcScreen < NgfTestCase
         function residualsSpeed(tc)
             y = randn(86400, 3); m = randn(86400, 3);
             q = tc.speedRatio(@() NonGravForces.qc.residuals(y, m, 'Whitening', "highpass", 'Window', 601), @() movmean(y, 601, 1, 'omitnan'));
-            tc.verifyBoundAndRecord("residuals highpass on a day of 3 channels vs one movmean", q, 36, "-", "budget 3x the expected 12: one movmean plus two medians of 86400 per channel (sort-based); measured 11.3");
+            tc.verifyBoundAndRecord("residuals highpass on a day of 3 channels vs one movmean", q, 36, "-", "budget 3x the expected 12: one movmean plus two medians of 86400 per channel (sort-based); measured 11.3 to 14.1 across runs on the owner's host");
         end
         function detectImpulsesSpeed(tc)
             rng(10); x = randn(86400, 1); t = tc.epochs(86400);
