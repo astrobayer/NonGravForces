@@ -1,15 +1,17 @@
 function [nu, info] = eclipseFactor(r, r_sun, options)
-%ECLIPSEFACTOR Shadow function nu in [0,1]: cylindrical or conical Earth shadow, optional lunar shadow.
+%ECLIPSEFACTOR Shadow function nu in [0,1]: cylindrical, conical or SOLAARS-CF Earth shadow, optional lunar shadow.
 %
 %   nu = NonGravForces.env.eclipseFactor(r, r_sun)                       % conical
 %   [nu, info] = NonGravForces.env.eclipseFactor(r, r_sun, 'Model', "cylindrical")
+%   [nu, info] = NonGravForces.env.eclipseFactor(r, r_sun, 'Model', "solaarsCF", 'EclipticNormal', e)
 %   [nu, info] = NonGravForces.env.eclipseFactor(r, r_sun, 'Moon', r_moon)  % Earth x Moon factor
 %
-%   Fraction of the solar disc visible from the satellite, K-vectorised. The
-%   occulting bodies are spheres: the Earth of radius
+%   Fraction of the solar radiation reaching the satellite, K-vectorised. For
+%   the geometric models the occulting bodies are spheres: the Earth of radius
 %   referenceSystem.ellipsoidParameters("WGS84").a (the equatorial radius, the
 %   conservative, widest shadow) and, with 'Moon', the Moon of radius
-%   NonGravForces.const.Rmoon. The two factors multiply.
+%   NonGravForces.const.Rmoon. The Earth and Moon factors multiply (the lunar
+%   factor is always geometric-conical).
 %
 %   MODELS
 %     cylindrical  nu = 0 when the satellite is behind the body (r - r_B has a
@@ -24,8 +26,16 @@ function [nu, info] = eclipseFactor(r, r_sun, options)
 %                  evaluated with the arcs as atan2(y, x) and atan2(y, c-x) and the
 %                  separation c as atan2(|d x s|, d.s) (see ACCURACY).
 %                  Continuous, C^0 at the umbra edge (HANDOVER C.3).
-%     solaarsCF    refuses with notImplemented until the SOLAARS-CF coefficient
-%                  table is in hand (HANDOVER O-13).
+%     solaarsCF    Robertson (2015) Sect. 3.7: the SOLAARS curve fit, a sum of
+%                  three hyperbolic-tangent sigmoids in the distance rE of the
+%                  satellite from the Sun-Earth line, with coefficients that
+%                  depend on the distance rR behind the terminator plane
+%                  (Table 3.2), fitted to a full ray-tracing model of the
+%                  penumbra WITH Earth oblateness (rE's ecliptic-parallel part
+%                  scaled by a/b), atmospheric refraction, absorption and
+%                  scattering. Smooth (C^inf). Needs 'EclipticNormal'. The day
+%                  side (rR <= 0) is full light; rR is clamped to the fit
+%                  domain 2-45 Mm and the clamp count is reported.
 %
 % INPUT ARGUMENTS
 %   Name     Size      Type    Units  Description
@@ -34,19 +44,25 @@ function [nu, info] = eclipseFactor(r, r_sun, options)
 %   r_sun    3xK|3x1   double  m      Earth -> Sun vector (same for all K if 3x1).
 %
 % NAME-VALUE ARGUMENTS
-%   Name     Size      Type    Units  Description
-%   ----     ----      ----    -----  -----------
-%   Model    1x1       string  -      "conical" (default) | "cylindrical" | "solaarsCF"
-%   Moon     3xK|3x1   double  m      Earth -> Moon vector; adds the lunar factor.
-%                                     Default [] (no lunar shadow).
+%   Name            Size      Type    Units  Description
+%   ----            ----      ----    -----  -----------
+%   Model           1x1       string  -      "conical" (default) | "cylindrical" | "solaarsCF"
+%   Moon            3xK|3x1   double  m      Earth -> Moon vector; adds the lunar factor.
+%                                            Default [] (no lunar shadow).
+%   EclipticNormal  3xK|3x1   double  -      Unit normal of the ecliptic in the frame of
+%                                            r (e.g. r_sun x v_sun normalised, as
+%                                            radiationSources measures it). Required
+%                                            for solaarsCF, ignored otherwise. Default [].
 %
 % OUTPUT ARGUMENTS
 %   Name     Size  Type    Units  Description
 %   ----     ----  ----    -----  -----------
-%   nu       1xK   double  -      Visible fraction of the Sun, in [0, 1].
+%   nu       1xK   double  -      Fraction of the solar radiation, in [0, 1].
 %   info     1x1   struct  -      .model, .earth (1xK Earth factor), .moon (1xK
 %                                 or []), .radiusEarth_m, .radiusMoon_m,
-%                                 .radiusSun_m, .provenance.
+%                                 .radiusSun_m, .solaars (struct rR_Mm, rE_Mm
+%                                 1xK, oblatenessScale, clampedCount; solaarsCF
+%                                 only), .provenance.
 %
 % ACCURACY
 %   The conical formula treats the two discs in the tangent plane (small
@@ -57,21 +73,28 @@ function [nu, info] = eclipseFactor(r, r_sun, options)
 %   acos((c-x)/b) has its argument within 2e-3 of 1 and the lens area is a
 %   difference of terms 1e4 times larger than itself, which lost 3e-11 in nu;
 %   the atan2 forms restore full precision (tested as rotation invariance to
-%   1e-12, the HANDOVER accuracy figure). What it
-%   does not model: Earth oblateness (up to 21 km of limb height, ~2 % of the
-%   penumbra width) and atmospheric refraction and extinction (the penumbra
-%   is in reality wider and darker: Robertson 2015) - both are SOLAARS-CF's
-%   business. The Sun is a uniform disc (no limb darkening).
+%   1e-12, the HANDOVER accuracy figure). What the geometric models do not
+%   model: Earth oblateness (up to 21 km of limb height, ~2 % of the penumbra
+%   width) and atmospheric refraction and extinction (the penumbra is in
+%   reality wider and darker: Robertson 2015). The Sun is a uniform disc.
+%   SOLAARS-CF: the thesis quotes a curve-fit residual below 3 % of nu against
+%   the full SOLAARS model (Fig. 3.30); the coefficients here were transcribed
+%   from Table 3.2 by three agreeing text extractions and reproduce the
+%   sigmoid centres of Fig. 3.28 (tools/pyxcheck/solaars_check.py is the
+%   independent restatement); no published numeric nu value exists. Outside
+%   the fit domain (rR < 2 Mm, i.e. very low orbits near the terminator, or
+%   rR > 45 Mm beyond GEO) the coefficients are held at the domain edge.
 %
 % ERRORS
-%   NonGravForces:eclipseFactor:inputShape        r not 3xK; r_sun or Moon not 3xK / 3x1
-%   NonGravForces:eclipseFactor:numericNaN        NaN/Inf in a position
-%   NonGravForces:eclipseFactor:notImplemented    Model "solaarsCF" (O-13)
-%   referenceSystem:*                             propagated unwrapped
+%   NonGravForces:eclipseFactor:inputShape           r not 3xK; r_sun, Moon or EclipticNormal not 3xK / 3x1
+%   NonGravForces:eclipseFactor:numericNaN           NaN/Inf in a position
+%   NonGravForces:eclipseFactor:inputEclipticNormal  solaarsCF without EclipticNormal, or not unit
+%   referenceSystem:*                                propagated unwrapped
 %
 % REFERENCES
 %   Montenbruck O., Gill E. (2000) Satellite Orbits, Springer, sect. 3.4.2, eqs 3.79-3.87.
-%   Robertson R.V. (2015) PhD thesis, Virginia Tech (SOLAARS).
+%   Robertson R.V. (2015) Highly Physical Solar Radiation Pressure Modeling During Penumbra
+%   Transitions, PhD thesis, Virginia Tech, sect. 3.7, eqs 3.80-3.86, Table 3.2.
 %
 % EXAMPLE
 %   r = [-(6378137 + 490e3) * cosd(68.25); 0; (6378137 + 490e3) * sind(68.25)];
@@ -79,13 +102,14 @@ function [nu, info] = eclipseFactor(r, r_sun, options)
 %
 % See also NonGravForces.env.radiationSources, referenceSystem.geocentricBodyState.
 %
-% KEYWORDS eclipse shadow penumbra umbra conical cylindrical
+% KEYWORDS eclipse shadow penumbra umbra conical cylindrical SOLAARS
 % Created 2026-09-07 by Claude Fable 5.1 (Anthropic).
 arguments
     r double
     r_sun double
     options.Model (1,1) string {mustBeMember(options.Model, ["cylindrical","conical","solaarsCF"])} = "conical"
     options.Moon double = []
+    options.EclipticNormal double = []
 end
 unit = "eclipseFactor";
 if ~(ismatrix(r) && size(r, 1) == 3)
@@ -96,22 +120,32 @@ if any(~isfinite(r(:)))
 end
 K = size(r, 2);
 r_sun = localExpand(unit, r_sun, K, "r_sun");
-if options.Model == "solaarsCF"
-    NonGravForces.fail(unit, "notImplemented", "solaarsCF needs the SOLAARS-CF coefficient table (HANDOVER O-13) -> use conical or cylindrical");
-end
 c = NonGravForces.const;
 ell = referenceSystem.ellipsoidParameters("WGS84");
 info.model = options.Model;
 info.radiusEarth_m = ell.a;
 info.radiusSun_m = c.Rsun;
 info.radiusMoon_m = c.Rmoon;
-info.earth = localBody(r, r_sun, zeros(3, K), ell.a, c.Rsun, options.Model);
+if options.Model == "solaarsCF"
+    if isempty(options.EclipticNormal)
+        NonGravForces.fail(unit, "inputEclipticNormal", "solaarsCF needs 'EclipticNormal' (3x1 or 3xK unit vector, e.g. r_sun x v_sun normalised) -> pass it, or use conical");
+    end
+    e = localExpand(unit, options.EclipticNormal, K, "EclipticNormal");
+    if any(abs(vecnorm(e) - 1) > 1e-6)
+        NonGravForces.fail(unit, "inputEclipticNormal", "EclipticNormal must be unit vectors (norm off by %.2e) -> normalise", max(abs(vecnorm(e) - 1)));
+    end
+    [info.earth, info.solaars] = localSolaars(r, r_sun, e, ell.a, ell.b);
+else
+    info.earth = localBody(r, r_sun, zeros(3, K), ell.a, c.Rsun, options.Model);
+end
 nu = info.earth;
 if isempty(options.Moon)
     info.moon = [];
 else
     r_moon = localExpand(unit, options.Moon, K, "Moon");
-    info.moon = localBody(r, r_sun, r_moon, c.Rmoon, c.Rsun, options.Model);
+    moonModel = options.Model;
+    if moonModel == "solaarsCF", moonModel = "conical"; end
+    info.moon = localBody(r, r_sun, r_moon, c.Rmoon, c.Rsun, moonModel);
     nu = nu .* info.moon;
 end
 info.provenance = NonGravForces.provenance("env.eclipseFactor", 'Options', struct('Model', options.Model, 'moon', ~isempty(options.Moon)));
@@ -164,4 +198,47 @@ switch model
         end
         nu = min(1, max(0, nu));
 end
+end
+
+function [nu, sol] = localSolaars(r, rs, e, aE, bE)
+% Robertson (2015) SOLAARS-CF, Sect. 3.7: eqs 3.80-3.86 and Table 3.2. Distances in 1e6 m.
+Rhat = rs ./ vecnorm(rs);                          % Earth -> Sun unit vector, 3xK
+rR = -sum(r .* Rhat, 1);                           % eq. 3.80: distance behind the terminator plane [m]
+rEvec = r + rR .* Rhat;                            % eq. 3.81: r - (r.R)R
+rEperp = sum(e .* rEvec, 1);                       % eq. 3.82: component along the ecliptic normal
+rEpar2 = max(0, sum(rEvec.^2, 1) - rEperp.^2);     % eq. 3.83 (squared)
+sO = aE / bE;                                      % eq. 3.84
+rE = sqrt(rEperp.^2 + sO^2 * rEpar2) / 1e6;        % eq. 3.85, in Mm
+rRm = rR / 1e6;
+lo = 2.0; hi = 45.0;                               % the fit domain of the thesis (2000-45000 km)
+clamped = rRm > 0 & (rRm < lo | rRm > hi);
+rRc = min(hi, max(lo, rRm));
+T = localSolaarsTable();
+a = zeros(8, numel(rRm));
+for k = 1:8
+    b = T(k, 2:5);
+    switch T(k, 1)
+        case 1, a(k, :) = b(1) * exp(b(2) * rRc) + b(3) * exp(b(4) * rRc);
+        case 2, a(k, :) = b(1) * rRc + b(2);
+        case 3, a(k, :) = b(1) * rRc.^b(2) + b(3);
+    end
+end
+num = 1 + a(1,:) + a(2,:) + a(1,:) .* tanh(a(3,:) .* (rE - a(4,:))) + a(2,:) .* tanh(a(5,:) .* (rE - a(6,:))) + tanh(a(7,:) .* (rE - a(8,:)));
+nu = num ./ (2 + 2 * a(1,:) + 2 * a(2,:));         % eq. 3.86
+nu(rR <= 0) = 1;                                   % day side: the fit describes the night side only
+nu = min(1, max(0, nu));
+sol = struct('rR_Mm', rRm, 'rE_Mm', rE, 'oblatenessScale', sO, 'clampedCount', nnz(clamped));
+end
+
+function T = localSolaarsTable()
+% Robertson (2015) Table 3.2: form (1: b1 e^{b2 rR} + b3 e^{b4 rR}; 2: b1 rR + b2; 3: b1 rR^b2 + b3), b1..b4.
+% Independently restated in tools/pyxcheck/solaars_cf_coefficients.csv (tested to agree).
+T = [1,  0.1715,    -0.1423,     0.01061,  -0.01443;   % a1
+     2,  0.008162,   0.3401,     0,         0;         % a2
+     1,  260.9,     -0.4661,     27.81,    -0.009437;  % a3
+     3, -0.006119,   1.176,      6.385,     0;         % a4
+     1,  87.56,     -0.09188,    19.30,    -0.01089;   % a5
+     2,  0.002047,   6.409,      0,         0;         % a6
+     1,  61.98,     -0.1629,     27.87,    -0.02217;   % a7
+     1,  6.413,     -0.0002593, -0.01479,  -0.1318];   % a8
 end

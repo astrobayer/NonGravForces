@@ -107,7 +107,12 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyEqual(NonGravForces.env.eclipseFactor(r, repmat(s, 1, 3)), nu, 'a 3xK Sun equals the broadcast 3x1');
             tc.verifyErrorId(@() NonGravForces.env.eclipseFactor(r(1:2, :), s), 'NonGravForces:eclipseFactor:inputShape');
             tc.verifyErrorId(@() NonGravForces.env.eclipseFactor(r, [s s]), 'NonGravForces:eclipseFactor:inputShape');
-            tc.verifyErrorId(@() NonGravForces.env.eclipseFactor(r, s, 'Model', "solaarsCF"), 'NonGravForces:eclipseFactor:notImplemented');
+            tc.verifyErrorId(@() NonGravForces.env.eclipseFactor(r, s, 'Model', "solaarsCF"), 'NonGravForces:eclipseFactor:inputEclipticNormal');
+            tc.verifyErrorId(@() NonGravForces.env.eclipseFactor(r, s, 'Model', "solaarsCF", 'EclipticNormal', [0; 0; 2]), 'NonGravForces:eclipseFactor:inputEclipticNormal');
+            [nuS, infoS] = NonGravForces.env.eclipseFactor(r, s, 'Model', "solaarsCF", 'EclipticNormal', [0; 0; 1]);
+            tc.verifySize(nuS, [1 3]); tc.verifyEqual(nuS(1), 0); tc.verifyTrue(nuS(2) > 0 && nuS(2) < 1); tc.verifyEqual(nuS(3), 1);
+            ell = referenceSystem.ellipsoidParameters("WGS84");
+            tc.verifyEqual(infoS.solaars.clampedCount, 0); tc.verifyEqual(infoS.solaars.oblatenessScale, ell.a / ell.b);
             tc.verifyError(@() NonGravForces.env.eclipseFactor(r, s, 'Model', "flat"), 'MATLAB:validators:mustBeMember');
         end
         function earthRadianceContract(tc)
@@ -175,6 +180,16 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyBoundAndRecord("eclipse conical vs Python disc integration", max(abs(nuC - E.nu_conical')), 1e-11, "-", "oracle ~1e-12; atan2 form (acos form measured 6.4e-10)");
             tc.verifyEqual(nuY, E.nu_cylindrical', 'cylindrical is a pure geometric test: bitwise');
             tc.verifyGreaterThan(nnz(nuC > 0 & nuC < 1), 3, 'the oracle must exercise the penumbra');
+            % SOLAARS-CF: Table 3.2 against the independent restatement, and the formula against the pure-Python
+            % evaluation on a (rR, rE) grid; the satellite is displaced along the ecliptic normal, where the
+            % oblateness scaling does not act, so rE is exactly the grid value.
+            C = readtable(fullfile(tc.root, 'tools', 'pyxcheck', 'solaars_cf_coefficients.csv'), 'TextType', 'string');
+            O = readtable(fullfile(tc.root, 'tools', 'pyxcheck', 'solaars_oracle.csv'));
+            rS = [-O.rR_Mm' * 1e6; zeros(1, height(O)); O.rE_Mm' * 1e6];
+            [nuS, infoS] = NonGravForces.env.eclipseFactor(rS, [tc.au; 0; 0], 'Model', "solaarsCF", 'EclipticNormal', [0; 0; 1]);
+            tc.verifyEqual(infoS.solaars.rE_Mm, O.rE_Mm', 'AbsTol', 1e-12); tc.verifyEqual(infoS.solaars.rR_Mm, O.rR_Mm', 'AbsTol', 1e-12);
+            tc.verifyBoundAndRecord("SOLAARS-CF vs Python restatement of eq. 3.86", max(abs(nuS - O.nu')), 1e-14, "-", "same coefficients, tanh/exp rounding");
+            tc.verifyEqual(height(C), 8); tc.verifyEqual(C.b1(1), 0.1715); tc.verifyEqual(C.b4(8), -0.1318); tc.verifyEqual(C.b3(4), 6.385);
         end
         function earthRadianceReference(tc)
             % Oracle: knocke_coefficients.csv (independent restatement of Table 1) and the formula evaluated here from it.
@@ -241,6 +256,13 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyEqual(nu(1), 1); tc.verifyEqual(nu(2), 0);
             a = asin(Rs / (tc.au + 3e9)); b = asin(R / 3e9);
             tc.verifyBoundAndRecord("eclipse annular limit 1 - b^2/a^2", abs(nu(3) - (1 - b^2 / a^2)), 1e-15, "-", "same asin, one division");
+            % SOLAARS-CF limits: deep umbra (rE 6.0 Mm) and clear of the atmosphere (rE 7.0 Mm) at rR 2.56 Mm (490 km orbit):
+            % the sigmoids saturate, so nu and 1 - nu are below 1e-12 there; the day side is exactly 1.
+            rL = [-2.56e6 -2.56e6 +2.56e6; 0 0 0; 6.0e6 7.0e6 6.4e6];
+            nuL = NonGravForces.env.eclipseFactor(rL, s, 'Model', "solaarsCF", 'EclipticNormal', [0; 0; 1]);
+            tc.verifyBoundAndRecord("SOLAARS-CF umbra limit", nuL(1), 1e-12, "-", "three saturated sigmoids");
+            tc.verifyBoundAndRecord("SOLAARS-CF full-light limit", 1 - nuL(2), 1e-12, "-", "");
+            tc.verifyEqual(nuL(3), 1, 'day side');
         end
         function earthRadiancePrecision(tc)
             % Cap area: sum of the tiles equals 2 pi R^2 (1 - cos alpha_max) (measured 4e-16); tile normals unit.
@@ -277,6 +299,9 @@ classdef tNgfEnv < NgfTestCase
             nuAll = NonGravForces.env.eclipseFactor(r, s);
             one = arrayfun(@(k) NonGravForces.env.eclipseFactor(r(:, k), s(:, k)), 1:size(r, 2));
             tc.verifyEqual(nuAll, one);
+            nuSAll = NonGravForces.env.eclipseFactor(r, s, 'Model', "solaarsCF", 'EclipticNormal', [0; 0; 1]);
+            oneS = arrayfun(@(k) NonGravForces.env.eclipseFactor(r(:, k), s(:, k), 'Model', "solaarsCF", 'EclipticNormal', [0; 0; 1]), 1:size(r, 2));
+            tc.verifyEqual(nuSAll, oneS);
         end
         function earthRadianceVectorization(tc)
             ep = referenceSystem.mjdToEpoch([58849.5; 58900.25; 58950.1], "UTC"); r = [[6.88e6; 0; 0] [0; 0; 7e6] [4e6; 4e6; 4e6]];
@@ -350,7 +375,12 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyErrorId(@() NonGravForces.env.radiationSources(ep, r, q, NonGravForces.Options("standard", "srp.lunarEclipse", true), 'Sun', sun), 'NonGravForces:radiationSources:inputShape');
             tc.verifyErrorId(@() NonGravForces.env.radiationSources(ep, r, [NaN; 0; 0; 0], NonGravForces.Options("standard")), 'NonGravForces:radiationSources:numericNaN');
             tc.verifyErrorId(@() NonGravForces.env.radiationSources(ep, r, q, NonGravForces.Options("precise")), 'NonGravForces:radiationSources:depKernel');
-            tc.verifyErrorId(@() NonGravForces.env.radiationSources(ep, r, q, NonGravForces.Options("standard", "srp.eclipse", "solaarsCF")), 'NonGravForces:eclipseFactor:notImplemented');
+            % solaarsCF through the ephemeris path (ecliptic normal measured from the Sun state) and the caller path
+            sSol = NonGravForces.env.radiationSources(ep, r, q, NonGravForces.Options("standard", "srp.eclipse", "solaarsCF"));
+            tc.verifyEqual(sSol.meta.eclipse.model, "solaarsCF"); tc.verifyTrue(sSol.nu >= 0 && sSol.nu <= 1);
+            tc.verifyErrorId(@() NonGravForces.env.radiationSources(ep, r, q, NonGravForces.Options("standard", "srp.eclipse", "solaarsCF"), 'Sun', sun), 'NonGravForces:radiationSources:inputShape');
+            sSol2 = NonGravForces.env.radiationSources(ep, r, q, NonGravForces.Options("standard", "srp.eclipse", "solaarsCF"), 'Sun', sun, 'EclipticNormal', [0; 0; 1]);
+            tc.verifyEqual(sSol2.nu, 0, 'the anti-solar point is deep umbra in SOLAARS-CF too');
             % a non-unit quaternion is normalised by referenceSystem: directions agree to 1e-15
             s1 = NonGravForces.env.radiationSources(ep, r, q, NonGravForces.Options("standard"), 'Sun', sun);
             s2 = NonGravForces.env.radiationSources(ep, r, 2 * q, NonGravForces.Options("standard"), 'Sun', sun);
@@ -396,6 +426,24 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyBoundAndRecord("eclipse rotation invariance", max(abs(NonGravForces.env.eclipseFactor(Rm * r, Rm * s) - nu)), 1e-12, "-", "HANDOVER accuracy figure; measured see last_run");
             sweep = nu(1:30);                                        % oracle cases 0..29 sweep psi from 0 to 180 deg
             tc.verifyTrue(all(diff(sweep) >= 0), 'nu is non-decreasing from the anti-Sun point outwards');
+            % SOLAARS-CF: monotone and smooth through the penumbra; oblateness acts on the ecliptic-parallel component
+            % only, so a displacement rE along the normal equals a displacement rE / sO in the ecliptic plane.
+            sAu = [tc.au; 0; 0];
+            rE = linspace(6.30e6, 6.50e6, 2001); rSw = [-2.56e6 * ones(1, 2001); zeros(1, 2001); rE];
+            nuS = NonGravForces.env.eclipseFactor(rSw, sAu, 'Model', "solaarsCF", 'EclipticNormal', [0; 0; 1]);
+            tc.verifyTrue(all(diff(nuS) >= 0), 'SOLAARS-CF monotone in rE');
+            % tails of the tanh sum 100 km inside / outside the geometric limb (fit tails, not physics): measured 2026-09-07
+            tc.verifyBoundAndRecord("SOLAARS-CF tail 100 km inside the limb", nuS(1), 1e-4, "-", "");
+            tc.verifyBoundAndRecord("SOLAARS-CF tail 100 km outside the limb", 1 - nuS(end), 1e-4, "-", "");
+            d1 = diff(nuS) / 100;
+            tc.verifyBoundAndRecord("SOLAARS-CF derivative jump (C1 proxy, 100 m steps)", max(abs(diff(d1))) / max(abs(d1)), 1e-2, "-", "smooth tanh sum: second difference small against the slope");
+            ell = referenceSystem.ellipsoidParameters("WGS84"); sO = ell.a / ell.b;
+            rPar = [-2.56e6 * ones(1, 2001); rE / sO; zeros(1, 2001)];
+            nuP = NonGravForces.env.eclipseFactor(rPar, sAu, 'Model', "solaarsCF", 'EclipticNormal', [0; 0; 1]);
+            tc.verifyBoundAndRecord("SOLAARS-CF oblateness scaling relation", max(abs(nuP - nuS)), 1e-9, "-", "rE/sO*sO rounding through steep sigmoids (slope ~1e-4 per m)");
+            nuCn = NonGravForces.env.eclipseFactor(rSw, sAu);
+            [~, iS] = min(abs(nuS - 0.5)); [~, iC] = min(abs(nuCn - 0.5));
+            tc.verifyBoundAndRecord("SOLAARS-CF vs conical half-shadow radius shift", abs(rE(iS) - rE(iC)), 5e4, "m", "refraction and oblateness; measured see last_run");
         end
         function earthRadianceMetamorphic(tc)
             % One period later the seasonal term repeats (1e-14); mirrored latitudes: the odd term cancels in the sum.

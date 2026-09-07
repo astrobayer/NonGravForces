@@ -52,6 +52,9 @@ function [src, info] = radiationSources(epoch, r, q_body2gcrs, options, nv)
 %                                     for tests and external ephemerides. Default [].
 %   Moon          3xK   double  m      Caller-supplied Earth -> Moon vector, used with
 %                                     'Sun' when srp.lunarEclipse is true. Default [].
+%   EclipticNormal 3xK  double  -      Caller-supplied unit ecliptic normal, needed with
+%                                     'Sun' when srp.eclipse is solaarsCF (the ephemeris
+%                                     path measures it as r_sun x v_sun). Default [].
 %
 % OUTPUT ARGUMENTS
 %   Name     Size    Type    Units  Description
@@ -106,6 +109,7 @@ arguments
     nv.Ephemeris = []
     nv.Sun = []
     nv.Moon = []
+    nv.EclipticNormal = []
 end
 unit = "radiationSources";
 if ~all(isfield(epoch, ["day","sec","scale"]))
@@ -129,7 +133,10 @@ if ~isempty(nv.Sun)
     if ~(ismatrix(nv.Sun) && isequal(size(nv.Sun), [3 K])) || any(~isfinite(nv.Sun(:)))
         NonGravForces.fail(unit, "inputShape", "Sun must be a finite 3x%d array -> one Earth->Sun vector per epoch", K);
     end
-    rs = nv.Sun;
+    rs = nv.Sun; eclNormal = nv.EclipticNormal;
+    if options.srp.eclipse == "solaarsCF" && isempty(eclNormal)
+        NonGravForces.fail(unit, "inputShape", "srp.eclipse solaarsCF with a caller Sun needs 'EclipticNormal' 3x%d as well -> pass r_sun x v_sun normalised", K);
+    end
     if options.srp.lunarEclipse
         if ~(ismatrix(nv.Moon) && isequal(size(nv.Moon), [3 K]))
             NonGravForces.fail(unit, "inputShape", "srp.lunarEclipse with a caller Sun needs 'Moon' 3x%d as well -> pass both or neither", K);
@@ -142,18 +149,20 @@ if ~isempty(nv.Sun)
 else
 switch options.sun.source
     case "rs.analytic"
-        rs = referenceSystem.geocentricBodyState("sun", epoch);
+        [rs, vs] = referenceSystem.geocentricBodyState("sun", epoch);
+        eclNormal = cross(rs, vs, 1); eclNormal = eclNormal ./ vecnorm(eclNormal);   % measured ecliptic normal
         if options.srp.lunarEclipse, rm = referenceSystem.geocentricBodyState("moon", epoch); else, rm = []; end
     case "rs.de440"
         if ~(isstruct(nv.Ephemeris) && ~isempty(nv.Ephemeris))
             NonGravForces.fail(unit, "depKernel", "sun.source rs.de440 needs furnished kernels -> referenceSystem.downloadKernels once, then pass 'Ephemeris', referenceSystem.readEphemeris(files)");
         end
-        rs = referenceSystem.geocentricBodyState("sun", epoch, 'Source', "mice", 'Ephemeris', nv.Ephemeris);
+        [rs, vs] = referenceSystem.geocentricBodyState("sun", epoch, 'Source', "mice", 'Ephemeris', nv.Ephemeris);
+        eclNormal = cross(rs, vs, 1); eclNormal = eclNormal ./ vecnorm(eclNormal);
         if options.srp.lunarEclipse, rm = referenceSystem.geocentricBodyState("moon", epoch, 'Source', "mice", 'Ephemeris', nv.Ephemeris); else, rm = []; end
 end
 end
 % --- shadow and solar pressure
-[nu, ecl] = NonGravForces.env.eclipseFactor(r, rs, 'Model', options.srp.eclipse, 'Moon', rm);
+[nu, ecl] = NonGravForces.env.eclipseFactor(r, rs, 'Model', options.srp.eclipse, 'Moon', rm, 'EclipticNormal', eclNormal);
 d = rs - r; nd = vecnorm(d);
 sunUnitSat = d ./ nd;                                              % 3xK, satellite -> Sun
 Psun = options.srp.tsi / cLight * (c.au ./ nd).^2 .* nu;            % 1xK
@@ -211,6 +220,7 @@ info.sunSource = sunSource;
 info.sunDistance_m = nd;
 info.sunUnit_gcrs = sHat;
 info.eclipseModel = options.srp.eclipse;
+info.eclipse = ecl;
 info.lunarEclipse = options.srp.lunarEclipse;
 info.erpBackend = options.erp.backend;
 info.grid = options.erp.grid;
