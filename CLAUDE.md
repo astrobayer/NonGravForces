@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-07 (LP-5) by Claude Fable 5.1. Toolbox version 0.5.0.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-07 (LP-5x) by Claude Opus 5. Toolbox version 0.5.1.
 
 ---
 
@@ -142,9 +142,9 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-09-06, after LP-2)
 
-- **231/231 tests GREEN** (2026-09-07, R2026a Update 4, Tier A host run; predicted
-  231), Code Analyzer 0 findings, gate TRUE; log in `tests/last_run.txt`.
-  LP-4 was 169, LP-3 142, LP-2 116 (2026-09-06), LP-0 74 (2026-08-27).
+- **238/238 tests GREEN** (2026-09-07, R2026a Update 4, Tier A host run; predicted
+  238), Code Analyzer 0 findings, gate TRUE; log in `tests/last_run.txt`.
+  LP-5 was 231, LP-4 169, LP-3 142, LP-2 116 (2026-09-06), LP-0 74 (2026-08-27).
 - Implemented (☑): L0 core, `geom.MacroModel`, `geom.graceFO`, `qc.hampel`,
   `qc.eventTable`, `sensor.Sensor` interface, test infrastructure, CI, and the
   LP-2 data I/O: `io.readACC1B`, `readSCA1B`, `readGNV1B`, `readTHR1B`,
@@ -162,7 +162,9 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   constantCd), `accommodation` (fixed), `dragPanelForce` (per species), `radiationPanelForce`,
   `thermalRecoil`, `assemble`, `bodyTorques`; `qc.residuals`, `detectImpulses`, `detectJumps`
   (PELT), `screen` (tests in `tests/tNgfKernel.m`, `tests/tNgfQcScreen.m`; oracles
-  `tools/pyxcheck/sentman_check.py`, `pelt_check.py`).
+  `tools/pyxcheck/sentman_check.py`, `pelt_check.py`); and the LP-5x cross-validation tooling:
+  `tools/pyxcheck/ngfkernel/`, an independent standard-library Python mirror of the frozen
+  kernel with its parity driver and `tests/tNgfMirror.m` (WP-33; WP-34 needs GROOPS, O-19).
 - **12 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
 - Repository `github.com/astrobayer/NonGravForces` (the account was renamed
   from `matweigelt` on 2026-09-06; `referenceSystem` and `gracefoReading` moved
@@ -188,9 +190,14 @@ dtm2020/jb2008 (LP-3b), and the furnished-kernel Sun path (O-15).
 CLL/Schamberg (O-17); O-2 closed (unit normals). Upstream issues filed:
 referenceSystem#15 (O-10), gracefoReading#6 (O-12).
 
-**Next: LP-5x (cross-validation tooling)** — WP-33 numpy mirror of the frozen
-kernel under `tools/pyxcheck/ngfkernel/` (written from the equations), WP-34 GROOPS
-black-box fixtures; or LP-6 (Model, series, partials, rhs) per HANDOVER Part G. Then LP-4 (geom), LP-5 (kernel + qc), LP-5x, LP-6 (Model/partials),
+**Done 2026-09-07: LP-5x (WP-33)** — the kernel is mirrored by an independently derived
+standard-library Python package and checked against it (`tests/tNgfMirror.m`). WP-34 needs a
+GROOPS installation the host does not have (O-19).
+
+**Next: LP-6 (Model and partials)** — WP-14 `Model.accel/torque`, WP-15 `series`
+(chunked, parfor-optional, bit-identical), WP-16 `partials` and `kernel.partials`
+(analytic, verified by complex step), WP-17 `rhs()` for gjToolbox; oracles in
+HANDOVER Part G. Then LP-4 (geom), LP-5 (kernel + qc), LP-5x, LP-6 (Model/partials),
 LP-6b (C/MEX), LP-R (release).
 
 **LP-5x cross-validation** (owner rulings of 2026-08-27):
@@ -237,9 +244,12 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   velocity). A GPS tag is not UT1.
 - **SCA1B is ICRF→SRF**; conjugate exactly **once** to get BODY→GCRS. Check
   against `referenceSystem.attitudeConvention`, do not assume.
-- **Sentman**: the shear term divides by s², not s (v1 was ×8 wrong at LEO
-  s≈8); the ambient gas is atomic O, not air — `R = 287 J/kg/K` is wrong by
-  √(29/16) = 1.35 at 500 km.
+- **Sentman**: name the coefficient before quoting a power of s. In this toolbox's
+  normal/tangential convention the TANGENTIAL coefficient is l·[E/(s√π) + γZ] and has
+  **no 1/s² term**; the lone Z/(2s²) belongs to the LIFT coefficient of the drag/lift
+  pair. (v1 divided its shear by s instead of s² in the drag/lift convention it used,
+  ×8 wrong at LEO s≈8 — HANDOVER C.1 D1.) The ambient gas is atomic O, not air:
+  `R = 287 J/kg/K` is wrong by √(29/16) = 1.35 at 500 km.
 - **One solar constant**: `const.S0 = 1361` W/m² everywhere. 1367 (Behzadpour
   Table 1) is only an `Options.srp.tsi` override for legacy comparisons.
 - **Geodetic conversion must use the ellipsoid**; a spherical Earth gives
@@ -255,6 +265,12 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   verified against a real GROOPS installation — WP-34 closes this.
 - `clear classes` wipes workspace variables inside a batched MATLAB script;
   split the script if state must survive.
+- **Every oracle generator must run on both tiers**: no numpy anywhere (the host has none
+  and the ubuntu audit job installs nothing). `hampel_check.py` had imported it and could
+  not be regenerated at all until 2026-09-07.
+- **`case` is not usable as a MATLAB table variable name**; the mirror fixtures use `caseId`.
+- **The full suite exceeds the MATLAB MCP call budget**: run `matlab -batch ciGate` from a
+  background shell and read the log; use the MCP session for single classes.
 - **`referenceSystem` refuses an EOP series with rows before 1972-01-01**
   (`leapSecondTable:beforeUtcEpoch`): pass `finals2000A.all` or a C04 subset
   from MJD 41317 on to `readGNV1B`, never the whole `eopc04_20.1962-now`.
@@ -281,7 +297,11 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   where a vectorisation test must be bitwise.
 - **Sentman's published C_D/C_L are drag and lift, not normal and tangential**; the kernel
   derives Cp (normal) and Ctau (tangential) from the momentum integrals and asserts both
-  projections. The theory document §2.3 mislabels them (to be corrected at LP-R).
+  projections. The theory document §2.3 mislabels them (to be corrected at LP-R). Three
+  independent derivations reached the same conclusion in LP-5x. The limit that settles it:
+  edge-on, Cp = 1/(2s^2) and Ctau = l/(s*sqrt(pi)).
+- **The speed ratio is per SPECIES, not from a mean molar mass**: the mean-mass form is
+  harmless on a ram face, -24 % at 100 deg incidence and collapses at 135 deg (measured 2026-09-07).
 - **1 + erf(x) cancels for x << 0**: use erfc(-x). **1 + a(x - 1) loses 1e-8 at a = 1**: write
   (1 - a) + a x.
 - **Hampel flags the peaks of a strong pulse** (runs of several samples); replace only
