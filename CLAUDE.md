@@ -154,8 +154,8 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-09-07, after LP-5x and the debt sweep)
 
-- **269/270 on the CI runner** (2026-09-08, LP-6b; the single failure a guessed absolute speed
-  bound, fixed in the same session). Before that: **262/262 tests GREEN** (2026-09-08, R2026a Update 4, Tier A host run; predicted 263,
+- **270/270 GREEN on the CI runner** (2026-09-08, LP-6b, R2026a Update 5, 218.9 s; the first run
+  was 269/270 on a guessed absolute speed bound, decomposed in the same session). Before that: **262/262 tests GREEN** (2026-09-08, R2026a Update 4, Tier A host run; predicted 263,
   261 on the branch and 262 after merging main — reconciled in HANDOVER Part I),
   Code Analyzer 0 findings, gate TRUE;
   log in `tests/last_run.txt`.
@@ -222,8 +222,8 @@ against the real day, at 0.98 correlation with ACT1B cross-track. `rhs()` stays 
 `gjToolbox`, which is not on the host (O-4).
 
 **Done 2026-09-08: LP-6b (single-epoch C/MEX)** — ☑. Written on Tier B and verified through the
-CI `matlab` job when the MCP bridge would not answer: predicted 270, ran 270, **269 passed**, the
-one failure a 500 us absolute speed bound this session set by guess (decomposed, not widened).
+CI `matlab` job when the MCP bridge would not answer: predicted 270, ran 270, **270/270 GREEN** after
+one 500 us absolute speed bound this session had set by guess was decomposed (not widened).
 The 1e-14 parity is measured: 4.5e-16 on the force, 1.9e-15 on the torque, bitwise on `gamma`
 and the speed ratios. The compiled kernel is 901.8 us per epoch against 4149.6 us for the MATLAB
 chain, ratio 0.217 — for a 3-source scene, so it does not settle O-31. Two rulings recorded and
