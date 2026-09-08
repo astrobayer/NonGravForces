@@ -135,7 +135,13 @@ taxonomy, banned constructs) → job `matlab` on the **self-hosted Windows
 runner** (checks out `astrobayer/referenceSystem` and `astrobayer/gracefoReading`
 as siblings, MATLAB probe from `astrobayer/ci-actions/matlab-probe`, `codeIssues`
 must be empty, then `ciGate`). Every third-party action is pinned to a commit SHA.
-`main` is protected: PR required, both checks required, strict, no force push.
+`main` is protected by a **ruleset** (not classic branch protection — the classic
+`/branches/main/protection` endpoint answers "Branch not protected" and reading only that
+would say `main` is wide open): `required_status_checks` on both jobs with strict, plus
+`deletion` and `non_fast_forward`, no bypass actors. **A pull request is NOT required by any
+rule** — this file claimed it was until 2026-09-08. Changes arriving by PR is a convention
+here, not a guardrail. A second ruleset protects `~ALL` tags against deletion and
+non-fast-forward, which is what makes a tag genuinely immutable.
 Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
@@ -145,9 +151,11 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 - **244/244 tests GREEN** (2026-09-07, R2026a Update 4, Tier A host run; predicted 243,
   244 ran — reconciled in HANDOVER Part I), Code Analyzer 0 findings, gate TRUE;
   log in `tests/last_run.txt`.
-  **0.5.3 (2026-09-08) has NOT been run**: the O-12 discharge was written on Tier B and adds
-  one robustness method, `tNgfIo/readACC1BMultiEmptyRobustness`. **Predicted 245**; reconcile
-  after the run and do not mark it ☑ before a read report (◐ until then).
+- **245/245 tests GREEN** (2026-09-08, self-hosted Windows runner, `main` after PR #16;
+  **predicted 245, 245 ran** — exact, 244 plus the one robustness method
+  `tNgfIo/readACC1BMultiEmptyRobustness`), 0 audit shortfalls, gate TRUE. This is the
+  0.5.3 (O-12 discharge) run report, so 0.5.3 is ☑, not ◐: it was written on Tier B and
+  verified on the runner afterwards.
   LP-5x was 238, LP-5 231, LP-4 169, LP-3 142, LP-2 116 (2026-09-06), LP-0 74 (2026-08-27).
   The six new tests came from the 2026-09-07 debt sweep: the gate's shortfall filter had
   been excusing any unit that held one exemption, hiding four missing category slots.
