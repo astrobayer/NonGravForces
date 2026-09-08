@@ -384,6 +384,22 @@ classdef tNgfIo < NgfTestCase
             bad = tc.corrupt(tc.f.act, 'ACT1B_nocol.txt', @(L, k) regexprep(L, '^(\s*- )lin_accl_z(:)', '$1lin_accl_z_renamed$2'));
             tc.verifyErrorId(@() NonGravForces.io.readACC1B(bad), 'NonGravForces:readACC1B:dataColumn');
         end
+        function readACC1BMultiEmptyRobustness(tc)
+            % O-12 discharge. Until gracefoReading 1.0.1, l1bLoad sent one file
+            % through readL1b and several through readL1bMulti, because the
+            % multi-file reader raised MATLAB:badsubscript on an all-empty
+            % TimeRange. dataEmpty was therefore guaranteed for one file and
+            % UNREACHABLE for several. The split is gone; this asserts the path
+            % that could not be tested before.
+            % The same fixture twice is enough: the range excludes every record,
+            % so the concatenation is empty and no ordering check is reached.
+            two = [string(tc.f.act) string(tc.f.act)];
+            tc.verifyErrorId(@() NonGravForces.io.readACC1B(two, 'TimeRange', [58850 58851]), ...
+                'NonGravForces:readACC1B:dataEmpty');
+            % and one file still refuses identically, through the same path
+            tc.verifyErrorId(@() NonGravForces.io.readACC1B(tc.f.act, 'TimeRange', [58850 58851]), ...
+                'NonGravForces:readACC1B:dataEmpty');
+        end
         function readSCA1BRobustness(tc)
             % A quaternion off the unit sphere is refused, not repaired.
             bad = tc.corrupt(tc.f.sca, 'SCA1B_bad.txt', @(L, k) localScaleToken(L, k, 4, 2));

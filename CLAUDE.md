@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-07 (debt sweep) by Claude Opus 5. Toolbox version 0.5.2.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (O-12 discharge) by Claude Opus 5. Toolbox version 0.5.3.
 
 ---
 
@@ -55,7 +55,7 @@ both directions against the files on disk, and this sentence's number against it
 | Toolbox | Owns |
 |---|---|
 | `referenceSystem` ≥ 2.1 (2.1.216) | time scales, EOP, ITRS↔GCRS with derivatives, geodesy, quaternions, attitude interpolation, Sun/Moon states |
-| `gracefoReading` ≥ 1.0 (1.0.0) | L1B ASCII reading, quality flags, GROOPS instrument export/import |
+| `gracefoReading` ≥ 1.0.1 (1.0.1) | L1B ASCII reading, quality flags, GROOPS instrument export/import. The PATCH minimum is deliberate and is the one exception to VERSIONING.md's MAJOR.MINOR rule (HANDOVER O-12, O-25) |
 | `gjToolbox` (odeSuite) | Gauss-Jackson integration; `Model.rhs()` hands it an acceleration handle |
 | `lsqvce` ≥ 5.3 (5.3) | batch least squares, VCE, ARMA whitening; `app.calibrate` delegates the adjustment through `fit`/`layout`/`Options` (O-24) |
 
@@ -145,6 +145,9 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 - **244/244 tests GREEN** (2026-09-07, R2026a Update 4, Tier A host run; predicted 243,
   244 ran — reconciled in HANDOVER Part I), Code Analyzer 0 findings, gate TRUE;
   log in `tests/last_run.txt`.
+  **0.5.3 (2026-09-08) has NOT been run**: the O-12 discharge was written on Tier B and adds
+  one robustness method, `tNgfIo/readACC1BMultiEmptyRobustness`. **Predicted 245**; reconcile
+  after the run and do not mark it ☑ before a read report (◐ until then).
   LP-5x was 238, LP-5 231, LP-4 169, LP-3 142, LP-2 116 (2026-09-06), LP-0 74 (2026-08-27).
   The six new tests came from the 2026-09-07 debt sweep: the gate's shortfall filter had
   been excusing any unit that held one exemption, hiding four missing category slots.
@@ -191,7 +194,8 @@ dtm2020/jb2008 (LP-3b), and the furnished-kernel Sun path (O-15).
 
 **Done 2026-09-07: LP-5 (kernel + qc)** except `partials` (LP-6), SESAM (O-16),
 CLL/Schamberg (O-17); O-2 closed (unit normals). Upstream issues filed:
-referenceSystem#15 (O-10), gracefoReading#6 (O-12).
+referenceSystem#15 (O-10), gracefoReading#6 (O-12 — **fixed and closed upstream 2026-09-08**,
+gracefoReading 1.0.1; the `l1bLoad` split is gone).
 
 **Done 2026-09-07: LP-5x (WP-33)** — the kernel is mirrored by an independently derived
 standard-library Python package and checked against it (`tests/tNgfMirror.m`). WP-34 needs a
