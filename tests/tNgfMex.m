@@ -24,6 +24,7 @@ classdef tNgfMex < NgfTestCase
         mm            % geom.graceFO("C")
         species       % 8x1 number densities, the oxygen-dominated 490 km case
         rho           % 1x1 mass density re-formed from the species
+        eop, sw, ep, r, v, att, Mfast, expo   % the real-arc fixture for the end-to-end check
     end
     methods (TestClassSetup)
         function setup(tc)
@@ -37,6 +38,16 @@ classdef tNgfMex < NgfTestCase
             tc.species = [2.0e13; 8.0e13; 4.0e11; 1.0e10; 2.0e9; 5.0e10; 1.0e12; 1.0e12];
             c = NonGravForces.const();
             tc.rho = sum(tc.species .* (c.speciesMass(:) / c.NA));
+            % The real-arc fixture, for the one test that closes the loop against Model.accel.
+            f = @(varargin) fullfile(tc.root, varargin{:});
+            tc.eop = referenceSystem.readEop(f('data', 'eop', 'finals2000A_2019-09_2020-03.all'));
+            tc.sw = NonGravForces.io.spaceWeather(f('data', 'spaceweather', 'SW-All_2019-09_2020-03.csv'));
+            [tc.ep, tc.r, tc.v] = NonGravForces.io.readGNV1B(f('data', 'samples', 'GNV1B_2020-01-01_C_04.txt'), 'Eop', tc.eop);
+            [eps2, qq] = NonGravForces.io.readSCA1B(f('data', 'samples', 'SCA1B_2020-01-01_C_04.txt'));
+            tc.att = NonGravForces.geom.AttitudeProvider(eps2, qq);
+            tc.expo = struct('rho0_kg_m3', 3e-12, 'h0_m', 450e3, 'H_m', 60e3);
+            tc.Mfast = NonGravForces.Model(tc.mm, NonGravForces.Options("fast"), ...
+                'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'Exponential', tc.expo);
         end
     end
     methods
@@ -244,6 +255,52 @@ classdef tNgfMex < NgfTestCase
             tc.verifyBoundAndRecord("singleEpoch gamma vs the MATLAB kernel", max(abs(info.gamma - di.gamma)), 1e-15, "-", "one dot product per plate");
             tc.verifyBoundAndRecord("singleEpoch speed ratio vs the MATLAB kernel", max(abs(info.speedRatio - di.speedRatio) ./ di.speedRatio), 1e-15, "-", "U / sqrt(2 k T / m) per species");
             tc.verifyBoundAndRecord("singleEpoch mixture Cp vs the MATLAB kernel", max(abs(info.Cp - di.Cp) ./ max(abs(di.Cp), realmin)), 1e-13, "-", "mass-weighted sum over eight species in the same order");
+        end
+        function singleEpochEndToEndPrecision(tc)
+            % THE TWO PATHS MUST AGREE, and this is where that is checked at the level a user sees.
+            % Owner ruling of 2026-09-08: the vectorised MATLAB path and the pointwise C path are
+            % BOTH first class; neither replaces the other. Two paths that are both kept are two
+            % paths that must be kept in step, so this test composes the environment exactly as
+            % Model.evaluate composes it, hands one epoch to the compiled kernel, and requires the
+            % acceleration back to be the one Model.accel returns for that epoch.
+            %
+            % The fast preset is used deliberately: it sets geom.selfShadow "none" and
+            % thermal.model "none", so the shadow arrays are all ones and the recoil is zero, and
+            % what is left under test is the composition itself rather than two more interpolators.
+            o = tc.Mfast.options;
+            idx = 7;                                            % an arbitrary epoch of the real arc
+            ep = referenceSystem.daySecondToEpoch([tc.ep.day(idx) tc.ep.sec(idx)], tc.ep.scale);
+            rr = tc.r(:, idx); vv = tc.v(:, idx);
+            q = tc.att.at(ep);
+            [aRef, ai] = tc.Mfast.accel(ep, rr, vv, q);
+
+            % --- the same environment, through the same public units, in the same order
+            vrel = NonGravForces.env.wind(o.drag.wind, ep, rr, vv, 'Eop', tc.eop);
+            R = referenceSystem.rotationFromQuaternion(q);
+            vrelBody = R' * vrel;
+            Ritrs = referenceSystem.rotationItrsToGcrs(ep, 'Eop', tc.eop);
+            lla = referenceSystem.cartesianToGeodetic((Ritrs' * rr)', 'Ellipsoid', "WGS84")';
+            [rho, sp, T] = NonGravForces.env.density("exponential", ep, lla, [], 'Exponential', tc.expo);
+            src = NonGravForces.env.radiationSources(ep, rr, q, o);
+            gas = struct('rho', rho, 'species', sp, 'T_K', T(2), 'vrel_body', vrelBody, 'shadow', []);
+
+            [F, ~, info] = NonGravForces.kernel.singleEpoch(tc.mm, gas, src, [], ...
+                'Model', o.drag.gsi, 'Cd', o.drag.cd, 'CdScale', o.drag.cdScale, 'CrScale', o.srp.crScale);
+            m = ai.mass_kg;
+            got = [F(:, 1) / m, F(:, 2) / m, F(:, 3) / m];
+            want = [ai.drag, ai.radiation, ai.thermal];
+            scale = max(max(abs(want), [], 'all'), realmin);
+            tc.verifyBoundAndRecord("compiled single epoch vs the vectorised path, per effect", ...
+                max(abs(got - want), [], 'all') / scale, 1e-13, "-", ...
+                "the same environment, the same panel loop, the same reduction: only the association of the mass division and the C rounding may differ");
+            tc.verifyBoundAndRecord("compiled single epoch vs the vectorised path, total acceleration", ...
+                max(abs(sum(got, 2) - aRef)) / max(max(abs(aRef)), realmin), 1e-13, "-", ...
+                "Model.accel adds three quotients, this adds three forces and divides once");
+            % The relative velocity is the input most easily got wrong (co-rotation, not omega x r),
+            % so it is asserted against the Model's own report rather than assumed to match.
+            tc.verifyBoundAndRecord("the relative velocity handed to the C equals the Model's", ...
+                max(abs(vrelBody - ai.vrel_body)), 0, "m/s", "both come from env.wind through the same rotation");
+            tc.verifyEqual(numel(info.gamma), tc.mm.n);
         end
     end
 

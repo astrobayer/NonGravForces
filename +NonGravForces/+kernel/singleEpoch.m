@@ -20,12 +20,16 @@ function [F, tau, info] = singleEpoch(macro, gas, src, Tpanel_K, options)
 %   Model.budget reports them one by one; summing here would force every caller
 %   to re-split what it needs.
 %
-%   WHY IT EXISTS. Model.accel evaluates K epochs at once and is the path to
-%   use for a series. An integrator's right-hand side has one epoch and calls it
-%   thousands of times per arc, where MATLAB's per-call overhead and the
-%   interpreted panel loop are paid once per call and never amortised. This unit
-%   is that path. It is NOT faster than Model.accel per epoch for large K and it
-%   does not try to be.
+%   WHY IT EXISTS. Two evaluation paths are kept side by side by design
+%   (HANDOVER D.1 P-11, owner ruling 2026-09-08): Model.accel evaluates K epochs
+%   at once and is the path for an arc; this unit evaluates one epoch in C and is
+%   the path for an integrator's right-hand side, called once per step and never
+%   amortised over K. Neither is a fidelity tier of the other, neither is a
+%   fallback for the other, and neither is justified by being the faster one.
+%   What the pair costs is that they must AGREE, which
+%   tests/tNgfMex/singleEpochEndToEndPrecision measures over the real arc: the
+%   environment composed as Model.evaluate composes it, one epoch through here,
+%   and the acceleration back must be Model.accel's.
 %
 %   WHAT IT DOES NOT DO. No environment: the density, the composition, the
 %   radiation source list, the attitude, the self-shadowing and the panel
