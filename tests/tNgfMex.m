@@ -308,9 +308,15 @@ classdef tNgfMex < NgfTestCase
                 max(abs(sum(got, 2) - aRef)) / max(max(abs(aRef)), realmin), 1e-13, "-", ...
                 "Model.accel adds three quotients, this adds three forces and divides once");
             % The relative velocity is the input most easily got wrong (co-rotation, not omega x r),
-            % so it is asserted against the Model's own report rather than assumed to match.
+            % so it is asserted against the Model's own report rather than assumed to match. NOT
+            % bitwise, and the bound said 0 until the runner measured 9.095e-13 m/s on 2026-09-08:
+            % Model.evaluate rotates with pagemtimes over K pages and this line with a plain
+            % matrix-vector product, and a BLAS product sums in a batch-size-dependent order (the
+            % pitfall list has carried that since LP-6). 9.1e-13 on 7600 m/s is 1.2e-16 relative,
+            % i.e. one rounding step, so the claim is relative agreement and the reason is named.
             tc.verifyBoundAndRecord("the relative velocity handed to the C equals the Model's", ...
-                max(abs(vrelBody - ai.vrel_body)), 0, "m/s", "both come from env.wind through the same rotation");
+                max(abs(vrelBody - ai.vrel_body)) / max(vecnorm(ai.vrel_body), realmin), 1e-15, "-", ...
+                "same env.wind, same rotation, different product routine: pagemtimes over pages vs one matrix-vector product");
             tc.verifyEqual(numel(info.gamma), tc.mm.n);
         end
     end
