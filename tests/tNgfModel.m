@@ -46,6 +46,13 @@ classdef tNgfModel < NgfTestCase
         function [e, rr, vv] = arc(tc, n)
             idx = 1:n; e = tc.slice(idx); rr = tc.r(:, idx); vv = tc.v(:, idx);
         end
+        function c = correlation(~, x, y)
+            %CORRELATION Pearson correlation in base MATLAB. `corr` is Statistics Toolbox, which
+            % HANDOVER D.7 C2 keeps off every code path: it exists on the owner's host and not on
+            % the CI runner, so using it turned a green local run into a red CI one on 2026-09-08.
+            a = x(:) - mean(x(:)); b = y(:) - mean(y(:));
+            c = (a' * b) / (norm(a) * norm(b));
+        end
         function q = speedRatio(~, fcn, base)
             fcn(); base();
             rr = zeros(1, 3);
@@ -108,7 +115,7 @@ classdef tNgfModel < NgfTestCase
             am = aMeas(:, loc(tf));
             rho = zeros(1, 3);
             for i = 1:3
-                rho(i) = corr(am(i, :)', a(i, :)');
+                rho(i) = tc.correlation(am(i, :), a(i, :));
             end
             tc.verifyBoundAndRecord("ACT1B cross-track correlation shortfall", 1 - rho(2), 0.10, "-", "measured 0.980; the cross-track is radiation-dominated and the model reproduces its shape");
             tc.verifyBoundAndRecord("ACT1B radial correlation shortfall", 1 - rho(3), 0.10, "-", "measured 0.994");

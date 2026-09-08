@@ -303,6 +303,9 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   intersect (a spurious 2.5 % self-shadow from straight above was the symptom).
 - **A BLAS matrix product sums in a batch-size-dependent order**; use column-wise sums
   where a vectorisation test must be bitwise.
+- **The owner's host has Signal Processing and Statistics; the CI runner does not.** Anything
+  from them (`corr`, `filtfilt`, `prctile`, ...) passes locally and fails on CI. `auditPackage.py`
+  scans for them since 2026-09-08; base MATLAB and the PCT only (HANDOVER D.7 C2).
 - **`max`, `min` and `sum` omit NaN by default**, so a test bound can read 0 while the unit
   returned NaN. `NgfTestCase.verifyBoundAndRecord` now refuses a non-finite measurement; that
   is how a four-level-old NaN in `geom.selfShadow` was finally seen (2026-09-08).
