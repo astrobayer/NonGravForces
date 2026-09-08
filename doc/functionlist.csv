@@ -6,7 +6,7 @@ NonGravForces,toolboxVersion,function,L0,WP-00,done,Semantic version (single aut
 NonGravForces,dependencyReport,function,L0,WP-01,done,Presence and version of the ecosystem toolboxes
 NonGravForces,fail,function,L0,WP-00,done,Uniform error raising with identifier taxonomy and correction hints
 NonGravForces,provenance,function,L0,WP-00,done,Metadata record that travels with every result
-NonGravForces,buildMex,function,L0,WP-05b,done,Build the NRLMSISE-00 MEX gateway from mex/ (never committed) or report its state
+NonGravForces,buildMex,function,L0,WP-05b,done,Build the MEX gateways in mex/ (msis kernel; never committed) or report their state
 io,readACC1B,function,L1,WP-18,done,ACC1B/ACT1B/ACH1B reader over gracefoReading (3xK SRF accelerations + aux)
 io,readSCA1B,function,L1,WP-18,done,SCA1B reader: ICRF->SRF quaternions conjugated once to BODY->GCRS
 io,readGNV1B,function,L1,WP-18,done,GNV1B reader: ITRS state rotated to GCRS via referenceSystem
@@ -38,6 +38,7 @@ kernel,thermalRecoil,function,L4,WP-12,done,Per-panel thermal re-emission recoil
 kernel,assemble,function,L4,WP-14,done,Reductions: F = sum F_k and tau = sum (r_k - r_cm) x F_k
 kernel,bodyTorques,function,L4,WP-24,done,Gravity-gradient and magnetic body torques
 kernel,partials,function,L4,WP-16,done,Analytic per-panel derivatives: alpha densityScale speed pressureScale temperature
+kernel,singleEpoch,function,L4,WP-17b,done,Compiled single-epoch kernel: gas radiation and thermal recoil with their reductions
 sensor,Sensor,class,L6,WP-29,interface,Abstract measurement model: observe / partials / noiseModel
 sensor,Electrostatic,class,L6,WP-29,stub,Electrostatic accelerometer: bias scale-matrix CoM coupling CRN filter
 sensor,AtomInterferometer,class,L6,WP-29,stub,Cold-atom interferometer: phase = k_eff a T^2 with dead time and rotation

@@ -1,5 +1,5 @@
 % NONGRAVFORCES  Non-gravitational forces, torques and partials for LEO satellites.
-% Version 0.6.0  08-Sep-2026
+% Version 0.6.1  08-Sep-2026
 %
 % Single point of access
 %   Model              - Configure once, evaluate many: accel | torque | series |
@@ -12,14 +12,16 @@
 %   dependencyReport   - Presence and version of the four ecosystem toolboxes
 %   fail               - The one place errors are raised from (identifier
 %                        taxonomy, correction hints)
-%   buildMex             - Build the NRLMSISE-00 MEX gateway from mex/ (never committed) or report its state
+%   buildMex           - Build the MEX gateways in mex/ (msis, kernel; never
+%                        committed) or report their state
 %   provenance         - Metadata record that travels with every result
 %
 % Layers (see doc)
 %   io      - readers over gracefoReading, space weather, mass, CERES, IGRF
 %   env     - density, wind, eclipse, Earth radiance, magnetic field, sources
 %   geom    - macro models, self-shadowing, thermal state, attitude provider
-%   kernel  - per-panel gas-surface and radiation forces, body torques, partials
+%   kernel  - per-panel gas-surface and radiation forces, body torques,
+%             partials, and the compiled single-epoch path
 %   sensor  - measurement models: electrostatic, atom interferometer, drag-free
 %   qc      - outlier, impulse and jump detection on residuals
 %   app     - calibration (via lsqvce), force budget, density inversion

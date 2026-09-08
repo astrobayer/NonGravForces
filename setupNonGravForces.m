@@ -24,7 +24,8 @@ function info = setupNonGravForces(options)
 %   info      1x1   struct   -      .root (char), .version (char),
 %                                   .dependencies (struct array with fields
 %                                   name, required, present, version, setup),
-%                                   .mex (NonGravForces.buildMex('Check') report).
+%                                   .mex (1xT NonGravForces.buildMex('Check') report,
+%                                   one element per MEX target: msis, kernel).
 %
 % ERRORS
 %   None raised for absent dependencies: absence is REPORTED (rule R4/R5).
@@ -51,9 +52,15 @@ end
 info.root    = root;
 info.version = NonGravForces.toolboxVersion('string');
 info.dependencies = NonGravForces.dependencyReport('Verbose', options.Verbose);
-info.mex = NonGravForces.buildMex('Check', true);
+info.mex = NonGravForces.buildMex('Check', true);      % 1xT since 0.6.1: msis, kernel
 if options.Verbose
-    if info.mex.upToDate, state = 'built, current'; elseif info.mex.present, state = 'built, STALE (sources changed): run NonGravForces.buildMex'; else, state = 'NOT BUILT: run NonGravForces.buildMex (density msis00 refuses until then)'; end
-    fprintf('MEX  msisGateway  %s\n', state);
+    for m = 1:numel(info.mex)
+        if info.mex(m).upToDate, state = 'built, current';
+        elseif info.mex(m).present, state = 'built, STALE (sources changed): run NonGravForces.buildMex';
+        else, state = 'NOT BUILT: run NonGravForces.buildMex (the caller of this gateway refuses until then)';
+        end
+        [~, gw] = fileparts(info.mex(m).file);
+        fprintf('MEX  %-14s %s\n', gw, state);
+    end
 end
 end

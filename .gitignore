@@ -2,9 +2,11 @@
 doc/html/helpsearch-v4_en/
 doc/html/custom_toolbox.json
 
-# Compiled MEX gateway, one extension per platform; built by NonGravForces.buildMex, never committed
+# Compiled MEX gateways, one extension per platform; built by NonGravForces.buildMex, never committed
 +NonGravForces/+env/private/msisGateway.mex*
 +NonGravForces/+env/private/msisGateway.digest.txt
++NonGravForces/+kernel/private/kernelGateway.mex*
++NonGravForces/+kernel/private/kernelGateway.digest.txt
 
 # Python bytecode caches of the audit and build scripts
 __pycache__/
