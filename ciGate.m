@@ -40,7 +40,9 @@ end
 cd(here);
 info = setupNonGravForces('Verbose', true);
 mexReport = NonGravForces.buildMex();          % O-14: a runner without a compiler turns the gate red here, by design
-fprintf("ciGate: MEX %s built with %s\n", mexReport.file, mexReport.compiler);
+for m = 1:numel(mexReport)                     % one element per target since 0.6.1 (msis, kernel)
+    fprintf("ciGate: MEX %s (%s) built with %s\n", mexReport(m).file, mexReport(m).target, mexReport(m).compiler);
+end
 req = info.dependencies([info.dependencies.required]);
 if ~all([req.present])
     error("NonGravForces:ciGate:depMissing", "a required dependency did not answer after its setup -> read the table above");

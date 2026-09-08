@@ -35,7 +35,7 @@ classdef tNgfEnv < NgfTestCase
             tc.knocke  = readtable(fullfile(tc.root, 'tools', 'pyxcheck', 'knocke_oracle.csv'), 'VariableNamingRule', 'preserve');
             tc.au = NonGravForces.const().au;
             tc.cLight = referenceSystem.iersConstants().speedOfLight;
-            tc.assertTrue(NonGravForces.buildMex('Check', true).present, 'the MSIS MEX must be built before this class runs (ciGate builds it)');
+            tc.assertTrue(NonGravForces.buildMex('Check', true, 'Target', "msis").present, 'the MSIS MEX must be built before this class runs (ciGate builds it)');
         end
     end
     methods
@@ -163,11 +163,17 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyError(@() NonGravForces.env.radiationSources(ep5, r5, q5, struct()), 'MATLAB:validation:UnableToConvert');
         end
         function buildMexContract(tc)
-            rep = NonGravForces.buildMex('Check', true);
+            % 'Target' names one gateway and the report is scalar; the default "all" returns one
+            % element per target and is asserted at the end of this method.
+            rep = NonGravForces.buildMex('Check', true, 'Target', "msis");
             tc.verifyTrue(rep.present); tc.verifyTrue(rep.upToDate); tc.verifyFalse(rep.built); tc.verifyEqual(rep.compiler, "");
             tc.verifyEqual(strlength(rep.sourceDigest), 64); tc.verifyEqual(rep.sourceDigest, rep.binaryDigest);
             tc.verifyTrue(all(isfile(rep.sources))); tc.verifyEqual(numel(rep.sources), 4);
             tc.verifyTrue(endsWith(rep.file, "msisGateway." + mexext));
+            tc.verifyEqual(rep.target, "msis");
+            all2 = NonGravForces.buildMex('Check', true);
+            tc.verifyEqual([all2.target], ["msis" "kernel"]);
+            tc.verifyError(@() NonGravForces.buildMex('Check', true, 'Target', "nosuch"), 'MATLAB:validators:mustBeMember');
         end
     end
 
@@ -479,15 +485,15 @@ classdef tNgfEnv < NgfTestCase
         end
         function buildMexRobustness(tc)
             % A tampered digest makes the state STALE by content; restoring it makes it current again.
-            rep = NonGravForces.buildMex('Check', true);
+            rep = NonGravForces.buildMex('Check', true, 'Target', "msis");
             digestFile = fullfile(fileparts(rep.file), 'msisGateway.digest.txt');
             original = fileread(digestFile);
             tc.addTeardown(@() writelines(string(strtrim(original)), digestFile));
             writelines("0000", digestFile);
-            tampered = NonGravForces.buildMex('Check', true);
+            tampered = NonGravForces.buildMex('Check', true, 'Target', "msis");
             tc.verifyTrue(tampered.present); tc.verifyFalse(tampered.upToDate); tc.verifyEqual(tampered.binaryDigest, "0000");
             writelines(string(strtrim(original)), digestFile);
-            tc.verifyTrue(NonGravForces.buildMex('Check', true).upToDate);
+            tc.verifyTrue(NonGravForces.buildMex('Check', true, 'Target', "msis").upToDate);
         end
     end
 

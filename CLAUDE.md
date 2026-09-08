@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-6, over the same day's O-12 discharge) by Claude Opus 5. Toolbox version 0.6.0.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-6b, over the same day's LP-6) by Claude Opus 5. Toolbox version 0.6.1.
 
 ---
 
@@ -38,7 +38,7 @@ L7 qc       residuals, hampel, detectImpulses, detectJumps, eventTable, screen
 L6 sensor   Sensor (abstract), Electrostatic, AtomInterferometer, DragFree
 L5 Model    accel | torque | series | partials | rhs | budget   <- single point of access
 L4 kernel   gsiCoefficients, accommodation, dragPanelForce, radiationPanelForce,
-            thermalRecoil, assemble, bodyTorques, partials
+            thermalRecoil, assemble, bodyTorques, partials, singleEpoch (C/MEX)
 L3 geom     MacroModel, graceFO, boxWing, selfShadow, thermalState,
             AttitudeProvider, checkAttitudeSense
 L2 env      density, wind, eclipseFactor, earthRadiance, magneticField, radiationSources
@@ -47,7 +47,7 @@ L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
 L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options, buildMex
 ```
 
-52 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
+53 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
 both directions against the files on disk, and this sentence's number against it).
 
 ### Dependencies — called by qualified name, never copied, wrapped or aliased
@@ -73,9 +73,11 @@ both directions against the files on disk, and this sentence's number against it
   filter, frame). Quantum (atom-interferometer) and drag-free sensors are
   first-class, not retrofits.
 - **P10 one raise point**: `NonGravForces.fail(unit, mnemonic, message)`.
-- **MATLAB is normative.** A C/MEX port (LP-6b, hand-written, no MATLAB Coder)
-  and the standard-library kernel mirror (WP-33) are verified *against* MATLAB, never
-  the reverse.
+- **MATLAB is normative.** The C/MEX port (LP-6b, hand-written, no MATLAB Coder,
+  `mex/ngfKernel.c` + `kernel.singleEpoch`) and the standard-library kernel mirror
+  (WP-33) are verified *against* MATLAB, never the reverse. The C is written in the
+  same association order as the MATLAB lines it ports, on purpose: that is why the
+  two agree to rounding instead of to "about 1e-12".
 
 ---
 
@@ -125,6 +127,10 @@ cd('...\NonGravForces'); setupNonGravForces          % adds root, tests/, tools/
 runNgfTests                                          % 'ExcludeSlow',false adds the speed tag
 doc NonGravForces
 ```
+
+`bash mex/test/runCChecks.sh` is the C-side gate and needs no MATLAB: it compiles
+the MEX gateway against a `mex.h` shim and runs `mex/ngfKernel.c` against the frozen
+mirror fixtures. CI runs it in the `audit` job.
 
 `matlab -batch ciGate` is the same gate CI runs (installs dependencies from
 sibling folders, runs the suite, judges, raises `NonGravForces:ciGate:red`).
@@ -214,11 +220,18 @@ GROOPS installation the host does not have (O-19).
 against the real day, at 0.98 correlation with ACT1B cross-track. `rhs()` stays ◐ against
 `gjToolbox`, which is not on the host (O-4).
 
-**Next: LP-6b (single-epoch C/MEX)** or **LP-7 (sensors and applications)** — WP-17b
-transcribes the frozen kernel to C against the Python mirror; LP-7 brings `sensor.Electrostatic`,
-`app.calibrate` (against lsqvce 5.3, O-24), `app.forceBudget` (moved here, WP-30) and
-`app.densityInversion`; oracles in HANDOVER Part G. Then LP-4 (geom), LP-5 (kernel + qc), LP-5x, LP-6 (Model/partials),
-LP-6b (C/MEX), LP-R (release).
+**Done 2026-09-08: LP-6b (single-epoch C/MEX)** — ◐, written on Tier B. The C is measured
+against the frozen mirror (`runCChecks.sh`, numbers in HANDOVER Part G); `kernel.singleEpoch`,
+`tests/tNgfMex.m` and the second `buildMex` target have never been run in MATLAB (O-30,
+predicted count 270). Two rulings recorded and awaiting confirmation: `thermalRecoil` was
+ported although the prompt did not name it, and `rsApiRotation` is NOT linked because it is
+ITRS→GCRS and the kernel is body frame. D.6's speed justification was contradicted by O-29
+and has been rewritten; whether `Model` should route through the compiled path is O-31 and
+is not to be decided before the number is read.
+
+**Next: LP-7 (sensors and applications)** — `sensor.Electrostatic`, `app.calibrate` (against
+lsqvce 5.3, O-24), `app.forceBudget` (moved here, WP-30) and `app.densityInversion`; oracles
+in HANDOVER Part G. Then LP-R (release).
 
 **LP-5x cross-validation** (owner rulings of 2026-08-27):
 - WP-33: standard-library mirror of the **kernel layer only** under
@@ -229,7 +242,7 @@ LP-6b (C/MEX), LP-R (release).
   under `tests/fixtures/groops/` and committed; neither CI nor the host needs a
   GROOPS installation.
 
-**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-24 with an owner
+**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-31 with an owner
 and a re-entry condition each. This file deliberately does NOT list them: the copy that
 used to live here had drifted to O-15 of 21 and showed two closed items as open, and no
 check compared the two (R1). Read Part H.
@@ -333,3 +346,12 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   PELT must keep not-yet-admissible candidates in its set.
 - **`MacroModel.N` holds unit normals** (renormalised); `panels(k).normal` keeps the printed
   handbook digits (norm 1 - 7.3e-7, measured).
+- **`M_PI` is not in C99** and is absent under MSVC without `_USE_MATH_DEFINES`; `ngfKernel.c`
+  defines its own `NGF_PI`.
+- **`struct('a', {})` builds a 0x0 struct ARRAY**, not a scalar with an empty field; only cell
+  values distribute. Assignment into an element of a struct array also needs the same fields in
+  the same ORDER, which is why `buildMex/localState` rebuilds the record instead of extending it.
+- **A MATLAB function call result cannot be indexed** (`f('dx')(1)` is a syntax error); a dynamic
+  field can (`r.(name)(1)`), which is how the mirror fixtures are read.
+- **`rsApiRotation` is ITRS-to-GCRS** and has nothing to do with the body-frame kernel; the plan
+  said the single-epoch MEX would link it and the plan was wrong (HANDOVER B.1).
