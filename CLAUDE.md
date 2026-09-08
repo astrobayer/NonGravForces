@@ -375,6 +375,10 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   interface at all. Both repositories are readable through the GitHub API from any tier.
 - **The `fast` preset sets `thermal.model = "none"`**, so a thermal invariance asserted on a fast
   model asserts 0 == 0 and measures nothing.
+- **`env.density("exponential")` returns species and T as NaN on purpose** — it models neither.
+  Any unit that screens an input it does not read will refuse the fast preset's own environment;
+  `kernel.singleEpoch` did exactly that until 2026-09-08. Build a test's inputs from the real
+  units, not from literals, or this class of defect stays invisible.
 - **Never assert a host-dependent absolute** (rule T5). A 500 us per-epoch bound written from a
   guess reddened the gate on a runner that measured 901.8 us, in the same session that quoted the
   rule. Assert the ratio; record the absolute with a ceiling an order of magnitude above it.

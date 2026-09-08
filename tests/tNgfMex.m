@@ -146,6 +146,17 @@ classdef tNgfMex < NgfTestCase
             g3 = g2; g3.T_K = 1400;
             F2 = NonGravForces.kernel.singleEpoch(tc.mm, g3, src, Tp, 'Model', "constantCd", 'Cd', 2.2);
             tc.verifyBoundAndRecord("constantCd ignores the gas temperature", max(abs(F1 - F2), [], 'all'), 0, "N", "the model has no speed ratio, so T cannot enter");
+            % AND IT MUST NOT VALIDATE IT EITHER. env.density("exponential") returns species and T
+            % as NaN by design, and the fast preset pairs that backend with constantCd; screening
+            % them for every model refused the fast preset's own environment (found 2026-09-08).
+            g4 = g2; g4.T_K = NaN; g4.species = nan(8, 1);
+            F3 = NonGravForces.kernel.singleEpoch(tc.mm, g4, src, Tp, 'Model', "constantCd", 'Cd', 2.2);
+            tc.verifyBoundAndRecord("constantCd accepts the NaN temperature the exponential backend returns", ...
+                max(abs(F1 - F3), [], 'all'), 0, "N", "an input the model does not read is not validated");
+            % The refusal is still there for the models that DO read it (rule T6).
+            g5 = g2; g5.species = tc.species; g5.T_K = NaN;
+            tc.verifyErrorId(@() NonGravForces.kernel.singleEpoch(tc.mm, g5, src, Tp, 'Model', "sentman", 'Alpha', 0.85, 'Tw_K', 300), ...
+                'NonGravForces:singleEpoch:numericNaN');
         end
     end
 

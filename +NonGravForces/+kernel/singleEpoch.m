@@ -49,7 +49,10 @@ function [F, tau, info] = singleEpoch(macro, gas, src, Tpanel_K, options)
 %   gas         1x1    struct      -      .rho 1x1 kg/m^3 total mass density (used by constantCd)
 %                                         .species 8x1 1/m^3 number densities in const.speciesName
 %                                          order, or [] for constantCd
-%                                         .T_K 1x1 K gas kinetic temperature (density's T(2))
+%                                         .T_K 1x1 K gas kinetic temperature (density's T(2)).
+%                                          READ ONLY by sentman and maxwell: constantCd neither
+%                                          reads nor validates it, so the NaN that
+%                                          env.density("exponential") returns by design is legal
 %                                         .vrel_body 3x1 m/s satellite velocity relative to the gas,
 %                                          body frame, |v| > 0
 %                                         .shadow Nx1 self-shadow fraction of each plate for the gas
@@ -216,7 +219,19 @@ end
 % --- finiteness, then ranges. Both are checked here because the compiled path
 % does not go through the MATLAB units that would otherwise check them; the C
 % guards behind this are a backstop, not the contract.
-probe = [gas.rho; gas.T_K; gas.vrel_body; species; shadowGas; d(:); P; shadowRad(:); Tp; options.CdScale; options.CrScale];
+%
+% AN INPUT THE MODEL DOES NOT READ IS NOT VALIDATED. env.density("exponential")
+% returns species and T as NaN ON PURPOSE, because it models neither, and that
+% is exactly the backend the fast preset pairs with constantCd. Screening the
+% temperature for every model therefore refused the fast preset's own
+% environment and made the compiled path unusable with it — found 2026-09-08 by
+% tNgfMex/singleEpochEndToEndPrecision on its first run, and the reason that
+% test composes the real environment instead of a hand-made one. species is
+% already emptied for constantCd above; T_K joins it here.
+probe = [gas.rho; gas.vrel_body; species; shadowGas; d(:); P; shadowRad(:); Tp; options.CdScale; options.CrScale];
+if model ~= "constantCd"
+    probe = [probe; gas.T_K];
+end
 if any(~isfinite(probe))
     NonGravForces.fail(unit, "numericNaN", "an input contains NaN/Inf -> screen the density, sources, temperatures and velocity");
 end
