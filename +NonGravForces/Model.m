@@ -401,7 +401,7 @@ classdef Model
                 % geom.thermalState takes ONE exposure per panel and epoch, while self-shadowing is
                 % per source. The Sun carries the great majority of the absorbed flux, so its column
                 % is the one passed; the Earth tiles' self-shadowing does not reach the panel
-                % temperature (HANDOVER O-26).
+                % temperature (HANDOVER O-27).
                 Tpanel = NonGravForces.geom.thermalState(obj.macro, src, 'Model', o.thermal.model, ...
                     'InternalPower_W', o.thermal.internalPower_W, 'Exposed', fRad(:, :, 1));
             end

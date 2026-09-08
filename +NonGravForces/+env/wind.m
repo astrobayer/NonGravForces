@@ -23,7 +23,7 @@ function [vrel, info] = wind(model, epoch, r_gcrs, v_gcrs, options)
 %                   omega x r contains (rule R1, one authority per fact; the
 %                   predecessor's hand-written term was defect D4).
 %     "hwm14"       Horizontal Wind Model 14 (Drob et al. 2015) on top of the
-%                   co-rotation. REFUSED: the model is not in hand (HANDOVER O-25).
+%                   co-rotation. REFUSED: the model is not in hand (HANDOVER O-26).
 %                   Quiet-time winds are 40-80 m/s RMS, 1 % of the relative speed
 %                   and the leading term in cross-track drag, so any cross-track
 %                   claim made without it is bounded by that.
@@ -63,10 +63,10 @@ function [vrel, info] = wind(model, epoch, r_gcrs, v_gcrs, options)
 %   omega*r*cos(lat) of 255.9 m/s; the difference is the polar motion and the
 %   length-of-day term that a nominal rate omits. The model error is the rigid
 %   co-rotation assumption itself: real thermospheric winds reach 40-80 m/s RMS
-%   in quiet conditions and several hundred m/s in storms ("hwm14", O-25).
+%   in quiet conditions and several hundred m/s in storms ("hwm14", O-26).
 %
 % ERRORS
-%   NonGravForces:wind:notImplemented  model "hwm14" (O-25)
+%   NonGravForces:wind:notImplemented  model "hwm14" (O-26)
 %   NonGravForces:wind:inputShape      r or v not 3xK with K matching the epoch
 %   NonGravForces:wind:inputEop        "corotation" without 'Eop'
 %   NonGravForces:wind:numericNaN      NaN/Inf in r, v or the supplied wind
@@ -99,7 +99,7 @@ end
 unit = "wind";
 if model == "hwm14"
     NonGravForces.fail(unit, "notImplemented", ...
-        "the HWM14 tables are not in this toolbox (HANDOVER O-25) -> use corotation, or supply a wind field through 'Wind_m_s'");
+        "the HWM14 tables are not in this toolbox (HANDOVER O-26) -> use corotation, or supply a wind field through 'Wind_m_s'");
 end
 K = numel(epoch.sec);
 if ~(ismatrix(r_gcrs) && isequal(size(r_gcrs), [3 K]) && isequal(size(v_gcrs), [3 K]))
