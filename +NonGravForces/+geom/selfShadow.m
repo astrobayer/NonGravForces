@@ -72,6 +72,8 @@ function [f, info] = selfShadow(macro, dir_body, options)
 %   NonGravForces:selfShadow:inputShape       dir_body not 3xK, not unit, or NaN
 %   NonGravForces:selfShadow:inputResolution  LutResolution not of the form 10*4^n + 2
 %   NonGravForces:selfShadow:inputLut         'Lut' built for another macro model or resolution
+%   NonGravForces:selfShadow:numericNaN       a direction lies in no icosphere face, or the look-up
+%                                             interpolation produced a non-finite fraction
 %
 % REFERENCES
 %   Wöske et al. (2019) Adv. Space Res. 63:1096 (finite-element ray tracing vs plates);
@@ -232,16 +234,39 @@ for k = 1:K
     dk = d(:, k);
     % barycentric coordinates of the central projection of dk onto each face plane
     nrm = cross(B - A, C - A, 1);                       % face normals (outward, consistent winding)
-    s = sum(nrm .* A, 1) ./ max(sum(nrm .* dk, 1), 1e-300);   % ray scale to the plane
+    den = sum(nrm .* dk, 1);                            % the ray is parallel to the plane where this is 0
+    s = sum(nrm .* A, 1) ./ den;                        % ray scale to the plane; Inf or NaN where den = 0
     X = s .* dk;                                          % 3xF intersection points
     % barycentric via areas
     w0 = sum(cross(B - X, C - X, 1) .* nrm, 1); w1 = sum(cross(C - X, A - X, 1) .* nrm, 1); w2 = sum(cross(A - X, B - X, 1) .* nrm, 1);
     tot = sum(nrm.^2, 1);
     bc = [w0; w1; w2] ./ tot;
-    ok = all(bc >= -1e-9, 1) & s > 0;
+    % den > 0 AND weights summing to one are both required. Without them a face the ray is nearly
+    % parallel to passes the test: s explodes to 1e16, X runs off with it, and the three areas come
+    % out [0 0 0], which satisfies bc >= 0 and then divides by zero. Measured 2026-09-08 at
+    % resolution 162: 8 of the first 40 icosphere vertices returned NaN for every plate that way,
+    % and the metamorphic test could not see it because max omits NaN.
+    ok = den > 0 & s > 0 & all(bc >= -1e-9, 1) & abs(sum(bc, 1) - 1) <= 1e-6;
     idx = find(ok, 1);
-    if isempty(idx), [~, idx] = max(min(bc, [], 1)); end
+    if isempty(idx)
+        cand = find(den > 0 & s > 0 & abs(sum(bc, 1) - 1) <= 1e-6);
+        if isempty(cand)
+            NonGravForces.fail("selfShadow", "numericNaN", "direction %d lies in no icosphere face -> check that it is a unit vector", k);
+        end
+        [~, m] = max(min(bc(:, cand), [], 1));
+        idx = cand(m);
+    end
     b = max(0, bc(:, idx)); b = b / sum(b);
     f(:, k) = lut.f(:, lut.faces(1, idx)) * b(1) + lut.f(:, lut.faces(2, idx)) * b(2) + lut.f(:, lut.faces(3, idx)) * b(3);
 end
+% The interpolant is a convex combination of three vertex values that all lie in [0, 1], so the
+% result does too - mathematically. In floating point the weighted sum can land one ulp above 1
+% (measured 2026-09-08: 2210 of 20000 random directions, worst excess 2.22e-16, never below 0),
+% which a consumer checking 0 <= f <= 1 refuses. Clamping restores what the algebra guarantees.
+% A non-finite value is NOT clamped away: min and max would turn a NaN into 0 in silence, which is
+% how the face-selection defect above stayed hidden for four levels (rule R4).
+if any(~isfinite(f(:)))
+    NonGravForces.fail("selfShadow", "numericNaN", "the look-up interpolation produced a non-finite fraction -> report this: the face selection should make it impossible");
+end
+f = min(1, max(0, f));
 end

@@ -41,6 +41,13 @@ classdef NgfTestCase < matlab.unittest.TestCase
             end
             rec = struct('name', name, 'measured', measured, 'bound', bound, 'units', units, 'note', note, 'class', string(class(tc)));
             NgfTestCase.recordStore('add', rec);
+            % A NaN measurement must never pass. MATLAB's max, min and sum omit NaN by default, so a
+            % unit that returns one can reach here as a clean number; on 2026-09-08 exactly that hid a
+            % NaN from geom.selfShadow behind a bound that read 0 (rule R4).
+            if ~all(isfinite(measured))
+                tc.verifyFail(sprintf('%s: the measurement is %s, not a number (%s). A NaN here usually means the unit under test returned one and an omitnan reduction hid it.', name, mat2str(measured), note));
+                return
+            end
             tc.verifyLessThanOrEqual(measured, bound, sprintf('%s: %.3e exceeds %.3e %s (%s)', name, measured, bound, units, note));
         end
         function verifyRelClose(tc, actual, expected, relTol, name)

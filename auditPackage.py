@@ -117,6 +117,33 @@ try:
 except SystemExit as e:
     note(f"tools/buildFunctionList.py: {e}")
 
+# 6b. Only base MATLAB and the Parallel Computing Toolbox may appear on any code path
+#     (HANDOVER D.7 C2). The owner's host has Signal Processing and Statistics installed and the
+#     CI runner does not, so a call to one of them passes locally and fails on CI: that is exactly
+#     what `corr` in a test did on 2026-09-08. Names below are functions with no base equivalent.
+TOOLBOX_ONLY = {
+    "corr": "Statistics", "partialcorr": "Statistics", "nanmean": "Statistics",
+    "nanstd": "Statistics", "nanmedian": "Statistics", "normpdf": "Statistics",
+    "normcdf": "Statistics", "norminv": "Statistics", "ttest": "Statistics",
+    "ttest2": "Statistics", "regress": "Statistics", "fitlm": "Statistics",
+    "pca": "Statistics", "kmeans": "Statistics", "prctile": "Statistics",
+    "zscore": "Statistics", "mvnrnd": "Statistics", "boxplot": "Statistics",
+    "filtfilt": "Signal", "butter": "Signal", "cheby1": "Signal", "freqz": "Signal",
+    "periodogram": "Signal", "pwelch": "Signal", "findpeaks": "Signal",
+    "spectrogram": "Signal", "resample": "Signal", "designfilt": "Signal",
+    "xcorr": "Signal", "hann": "Signal", "hamming": "Signal",
+}
+for rel in sorted(glob.glob(os.path.join(ROOT, "+NonGravForces", "**", "*.m"), recursive=True)
+                  + glob.glob(os.path.join(ROOT, "tests", "*.m"))
+                  + [os.path.join(ROOT, "ciGate.m")]):
+    src = open(rel, encoding="utf-8").read()
+    body = "\n".join(ln for ln in src.splitlines() if not ln.lstrip().startswith("%"))
+    for fn, box in TOOLBOX_ONLY.items():
+        if re.search(r"(?<![\w.])" + fn + r"\s*\(", body):
+            note(f"{os.path.relpath(rel, ROOT)} calls {fn}(), which is the {box} toolbox -> "
+                 f"HANDOVER D.7 C2 allows base MATLAB and PCT only; it is installed on the owner's "
+                 f"host and absent from the CI runner")
+
 # 7. the catalogue must survive a naive CSV read: an unquoted comma inside an h1 silently
 #    truncated env.eclipseFactor's purpose into Contents.m and FunctionList.html until 2026-09-07.
 for i, raw in enumerate(open(os.path.join(ROOT, "doc", "functionlist.csv"), encoding="utf-8").read().splitlines(), 1):

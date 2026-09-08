@@ -398,7 +398,8 @@ classdef tNgfGeometry < NgfTestCase
             tc.verifyBoundAndRecord("selfShadow 40 vs 100 samples", max(abs(f40(:) - f100(:))), 2 / 40, "-", "one edge row of the coarser grid");
             lut = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut", 'LutResolution', 162, 'Samples', 30);
             fv = NonGravForces.geom.selfShadow(tc.mm, lut.verts(:, 1:40), 'Method', "lut", 'Lut', lut);
-            tc.verifyBoundAndRecord("LUT at its vertices vs the table", max(abs(fv - lut.f(:, 1:40)), [], 'all'), 1e-14, "-", "barycentric weights (1,0,0)");
+            tc.verifyTrue(all(isfinite(fv(:))), 'the interpolation must return a number for every vertex direction');
+            tc.verifyBoundAndRecord("LUT at its vertices vs the table", max(abs(fv - lut.f(:, 1:40)), [], 'all'), 1e-14, "-", "barycentric weights (1,0,0); this read 0 while 8 of the 40 columns were NaN until 2026-09-08, because max omits NaN");
             rng(7); dr = randn(3, 40); dr = dr ./ vecnorm(dr); fr = NonGravForces.geom.selfShadow(tc.mm, dr, 'Samples', 30);
             err = zeros(1, 3); res = [42 162 642];
             for i = 1:3, fl = NonGravForces.geom.selfShadow(tc.mm, dr, 'Method', "lut", 'LutResolution', res(i), 'Samples', 30); err(i) = mean(abs(fl(:) - fr(:))); end

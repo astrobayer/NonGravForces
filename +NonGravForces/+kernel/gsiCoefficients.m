@@ -66,6 +66,10 @@ function [Cp, Ctau, info] = gsiCoefficients(model, s, theta, alpha, Tw_K, Tinf_K
 %   ----              ----  ----    -----  -----------
 %   Cd                1x1   double  -      Drag coefficient for constantCd, > 0 (required by that model)
 %   SpecularFraction  1x1   double  -      Specular fraction for maxwell, in [0, 1] (required by that model)
+%   Derivatives       1x1   logical -      Also return the analytic derivatives of the coefficients with
+%                                          respect to alpha and to the speed ratio s, in info (default false).
+%                                          They live here, beside the closed form they differentiate, so the
+%                                          two cannot drift apart (rule R1); kernel.partials assembles them.
 %
 % OUTPUT ARGUMENTS
 %   Name     Size     Type    Units  Description
@@ -73,7 +77,10 @@ function [Cp, Ctau, info] = gsiCoefficients(model, s, theta, alpha, Tw_K, Tinf_K
 %   Cp       expanded double  -      Normal coefficient (>= 0)
 %   Ctau     expanded double  -      Tangential coefficient (>= 0)
 %   info     1x1      struct  -      .model, .CD, .CL (same size as Cp), .vRatio (re-emission
-%                                    speed ratio; empty for constantCd), .provenance
+%                                    speed ratio; empty for constantCd), .provenance. With
+%                                    'Derivatives': .dCp_dalpha, .dCtau_dalpha (identically zero:
+%                                    alpha enters only the re-emitted normal momentum),
+%                                    .dCp_ds, .dCtau_ds, all the size of Cp.
 %
 % ACCURACY
 %   Closed forms evaluated once per array (erfc and exp): rounding only, 1e-15
@@ -118,6 +125,7 @@ arguments
     Tinf_K double
     options.Cd double = []
     options.SpecularFraction double = []
+    options.Derivatives (1,1) logical = false
 end
 unit = "gsiCoefficients";
 if any(model == ["cll","schamberg"])
@@ -140,6 +148,11 @@ if model == "constantCd"
     Cp = options.Cd .* max(g, 0) .* g;
     Ctau = options.Cd .* max(g, 0) .* l;
     info.vRatio = [];
+    if options.Derivatives
+        % constantCd has neither an accommodation coefficient nor a speed ratio.
+        info.dCp_dalpha = zeros(size(Cp)); info.dCtau_dalpha = zeros(size(Cp));
+        info.dCp_ds = zeros(size(Cp));     info.dCtau_ds = zeros(size(Cp));
+    end
 else
     for v = {s, alpha, Tw_K, Tinf_K}
         if any(~isfinite(v{1}(:)))
@@ -174,6 +187,35 @@ else
             Ctau = (1 - sig) * CtauInc + zeros(size(Cp));
     end
     info.vRatio = vRatio + zeros(size(Cp));
+    if options.Derivatives
+        % Differentiated from the lines above, in the same order, so a change to one is visible
+        % against the other. E = exp(-(g s)^2) is the exponential inside P and dZ/ds.
+        E = exp(-(g .* s).^2);
+        dP_ds = -E .* (2 * (g .* s).^2 + 1) ./ s.^2;
+        dZ_ds = 2 * g .* E / sqrt(pi);
+        dCpInc_ds = g / sqrt(pi) .* dP_ds - Z ./ s.^3 + (g.^2 + 1 ./ (2 * s.^2)) .* dZ_ds;
+        dCtauInc_ds = l .* (dP_ds / sqrt(pi) + g .* dZ_ds);
+        b = 2 * Tw_K ./ (Tinf_K .* s.^2);                 % the alpha-weighted term inside vRatio^2
+        vSafe = max(vRatio, realmin);                     % vRatio = 0 only at alpha = 1, Tw = 0
+        dv_dalpha = 0.25 * (b - 1) ./ vSafe;
+        dv_ds = -alpha .* b ./ (2 * s .* vSafe);
+        bracket = g * sqrt(pi) .* Z + P;
+        dCpRe_dalpha = 0.5 * dv_dalpha .* bracket;
+        dCpRe_ds = 0.5 * dv_ds .* bracket + 0.5 * vRatio .* (g * sqrt(pi) .* dZ_ds + dP_ds);
+        switch model
+            case "sentman"
+                info.dCp_ds = dCpInc_ds + dCpRe_ds;
+                info.dCtau_ds = dCtauInc_ds + zeros(size(Cp));
+                info.dCp_dalpha = dCpRe_dalpha + zeros(size(Cp));
+            case "maxwell"
+                info.dCp_ds = (1 - sig) * (dCpInc_ds + dCpRe_ds) + sig * 2 * dCpInc_ds;
+                info.dCtau_ds = (1 - sig) * dCtauInc_ds + zeros(size(Cp));
+                info.dCp_dalpha = (1 - sig) * dCpRe_dalpha + zeros(size(Cp));
+        end
+        % alpha reaches the tangential coefficient through nothing: the re-emitted molecules leave
+        % diffusely and carry no net tangential momentum.
+        info.dCtau_dalpha = zeros(size(Cp));
+    end
 end
 info.CD = Cp .* g + Ctau .* l;
 info.CL = Cp .* l - Ctau .* g;

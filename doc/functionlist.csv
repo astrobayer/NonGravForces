@@ -1,5 +1,5 @@
 package,name,kind,level,wp,status,h1
-NonGravForces,Model,class,L5,WP-14,partial,Single point of access: accel | torque | series | partials | rhs | budget
+NonGravForces,Model,class,L5,WP-14,done,Single point of access: accel | torque | series | partials | rhs | budget
 NonGravForces,Options,class,L0,WP-00,done,Validated option set with fidelity presets
 NonGravForces,const,function,L0,WP-00,done,Constants owned by the toolbox
 NonGravForces,toolboxVersion,function,L0,WP-00,done,Semantic version (single authority)
@@ -18,7 +18,7 @@ io,spaceWeather,function,L1,WP-04,done,Space-weather provider with query(epoch):
 io,importCERES,function,L1,WP-08,stub,CERES SYN1deg/EBAF netCDF import into radiance grids
 io,igrfCoefficients,function,L1,WP-23,stub,IGRF-14 coefficient loader
 env,density,function,L2,WP-05,done,Thermosphere density and composition dispatcher (exponential msis00 msis21 dtm2020 jb2008)
-env,wind,function,L2,WP-25,stub,Relative-velocity builder: co-rotation plus optional HWM14 wind
+env,wind,function,L2,WP-25,done,Relative-velocity builder: co-rotation from referenceSystem plus an optional wind field
 env,eclipseFactor,function,L2,WP-07,done,Shadow function nu from 0 to 1: cylindrical conical solaarsCF plus lunar
 env,earthRadiance,function,L2,WP-08,done,Earth albedo and IR radiance grids (pointSource knocke ceres) with ADM anisotropy
 env,magneticField,function,L2,WP-23,stub,IGRF-14 geomagnetic field in ITRS and body frame
@@ -37,7 +37,7 @@ kernel,radiationPanelForce,function,L4,WP-12,done,Per-panel radiation force for 
 kernel,thermalRecoil,function,L4,WP-12,done,Per-panel thermal re-emission recoil force
 kernel,assemble,function,L4,WP-14,done,Reductions: F = sum F_k and tau = sum (r_k - r_cm) x F_k
 kernel,bodyTorques,function,L4,WP-24,done,Gravity-gradient and magnetic body torques
-kernel,partials,function,L4,WP-16,stub,Analytic partials of a w.r.t. r v Cd Cr; complex-step verifier
+kernel,partials,function,L4,WP-16,done,Analytic per-panel derivatives: alpha densityScale speed pressureScale temperature
 sensor,Sensor,class,L6,WP-29,interface,Abstract measurement model: observe / partials / noiseModel
 sensor,Electrostatic,class,L6,WP-29,stub,Electrostatic accelerometer: bias scale-matrix CoM coupling CRN filter
 sensor,AtomInterferometer,class,L6,WP-29,stub,Cold-atom interferometer: phase = k_eff a T^2 with dead time and rotation

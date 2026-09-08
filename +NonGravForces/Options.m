@@ -28,8 +28,13 @@ classdef Options
 % PROPERTIES (read-only after construction; change through set())
 %   preset      string    "fast" | "standard" | "precise"
 %   drag        struct    .density .wind .gsi .accommodation .alpha .Tw_K
-%                         .cdScale
+%                         .cdScale (estimated scale on the whole drag force)
+%                         .cd (the coefficient the constantCd gsi uses, 2.2 for a
+%                         convex LEO body; Montenbruck & Gill 2005)
 %   srp         struct    .tsi [W/m^2] .eclipse .lunarEclipse (logical)
+%                         .crScale (estimated scale on the whole radiation force,
+%                         the counterpart of drag.cdScale; this toolbox has no lumped
+%                         reflectivity coefficient, the optics are per panel)
 %   erp         struct    .backend .grid [nRings nSectors of the visible cap] .anisotropy
 %   thermal     struct    .model .internalPower_W
 %   torques     struct    .gravityGradient .magnetic (logical)
@@ -123,8 +128,8 @@ classdef Options
                 case "precise",  dens = "msis21";      gsi = "sentman";    acc = "sesam"; ecl = "solaarsCF"; erpB = "ceres";  grid = [24 48]; th = "steadyState"; ss = "raycast"; sunS = "rs.de440";
             end
             obj.drag     = struct('density', dens, 'wind', "corotation", 'gsi', gsi, ...
-                                  'accommodation', acc, 'alpha', 0.85, 'Tw_K', 300, 'cdScale', 1.0);
-            obj.srp      = struct('tsi', NonGravForces.const().S0, 'eclipse', ecl, 'lunarEclipse', false);
+                                  'accommodation', acc, 'alpha', 0.85, 'Tw_K', 300, 'cdScale', 1.0, 'cd', 2.2);
+            obj.srp      = struct('tsi', NonGravForces.const().S0, 'eclipse', ecl, 'lunarEclipse', false, 'crScale', 1.0);
             obj.erp      = struct('backend', erpB, 'grid', grid, 'anisotropy', "lambert");
             obj.thermal  = struct('model', th, 'internalPower_W', 0);
             obj.torques  = struct('gravityGradient', false, 'magnetic', false);
@@ -156,7 +161,7 @@ classdef Options
                 end
                 return
             end
-            ranges = struct('drag_alpha', [0 1], 'drag_Tw_K', [1 2000], 'drag_cdScale', [0.1 10], ...
+            ranges = struct('drag_alpha', [0 1], 'drag_Tw_K', [1 2000], 'drag_cdScale', [0.1 10], 'drag_cd', [0.5 10], 'srp_crScale', [0.1 10], ...
                 'srp_tsi', [1300 1400], 'thermal_internalPower_W', [0 1e4], 'series_chunk', [1 1e7], ...
                 'geom_lutResolution', [12 1e5]);
             if isfield(ranges, key)
