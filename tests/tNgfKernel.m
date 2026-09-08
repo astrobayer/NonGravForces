@@ -49,6 +49,10 @@ classdef tNgfKernel < NgfTestCase
             d = d / norm(d);
             src = struct('dir', reshape(d, 3, 1, 1), 'P', P, 'band', band);
         end
+        function s = scaledSource(~, src, factor)
+            %SCALEDSOURCE the same source list with every pressure scaled, for a numerical derivative
+            s = src; s.P = src.P * factor;
+        end
         function q = speedRatio(~, fcn, base)
             fcn(); base();
             r = zeros(1, 5);
@@ -61,6 +65,30 @@ classdef tNgfKernel < NgfTestCase
 
     % ===================================================================== contract
     methods (Test, TestTags = {'contract'})
+        function partialsContract(tc)
+            [rho, sp, T] = tc.gas(3);
+            vb = 7600 * [1 0.99 0.98; 0.02 0.05 0.1; -0.01 0 0.02];
+            vb = vb ./ vecnorm(vb) * 7600;
+            p = @(varargin) NonGravForces.kernel.partials(varargin{:});
+            args = {'Rho', rho, 'Species', sp, 'T_K', T, 'Vrel_body', vb, 'Model', "sentman", 'Alpha', 0.85, 'Tw_K', 300};
+            [dF, info] = p("drag", "alpha", tc.mm, args{:});
+            tc.verifySize(dF, [3 tc.mm.n 3]); tc.verifyEqual(info.what, "drag"); tc.verifyEqual(info.wrt, "alpha");
+            tc.verifyEqual(info.N, tc.mm.n); tc.verifyEqual(info.K, 3); tc.verifyEqual(info.unit, "N");
+            tc.verifySize(p("drag", "speed", tc.mm, args{:}), [3 tc.mm.n 3]);
+            tc.verifySize(p("drag", "densityScale", tc.mm, args{:}), [3 tc.mm.n 3]);
+            src = tc.pointSource([0.3; -0.4; sqrt(0.75)], 4.56e-6, "vis");
+            tc.verifySize(p("radiation", "pressureScale", tc.mm, 'Sources', src), [3 tc.mm.n 1]);
+            Tp = 280 + zeros(tc.mm.n, 3);
+            tc.verifySize(p("thermal", "temperature", tc.mm, 'Temperature_K', Tp), [3 tc.mm.n 3]);
+            tc.verifyErrorId(@() p("drag", "alpha", struct(), args{:}), 'NonGravForces:partials:inputMacro');
+            tc.verifyErrorId(@() p("drag", "r", tc.mm, args{:}), 'NonGravForces:partials:unsupportedWrt');
+            tc.verifyErrorId(@() p("radiation", "alpha", tc.mm, 'Sources', src), 'NonGravForces:partials:unsupportedWrt');
+            tc.verifyErrorId(@() p("drag", "alpha", tc.mm), 'NonGravForces:partials:inputMissing');
+            tc.verifyErrorId(@() p("radiation", "pressureScale", tc.mm), 'NonGravForces:partials:inputMissing');
+            tc.verifyErrorId(@() p("thermal", "temperature", tc.mm), 'NonGravForces:partials:inputMissing');
+            tc.verifyErrorId(@() p("drag", "alpha", tc.mm, 'Rho', rho, 'Vrel_body', vb(:, 1:2), 'Model', "sentman"), 'NonGravForces:partials:inputShape');
+            tc.verifyError(@() p("lift", "alpha", tc.mm, args{:}), 'MATLAB:validators:mustBeMember');
+        end
         function gsiCoefficientsContract(tc)
             [Cp, Ct, info] = NonGravForces.kernel.gsiCoefficients("sentman", [5 8], [0; pi/4; pi/2], 0.85, 300, 1000);
             tc.verifySize(Cp, [3 2]); tc.verifySize(Ct, [3 2]); tc.verifySize(info.CD, [3 2]); tc.verifyEqual(info.model, "sentman");
@@ -180,6 +208,35 @@ classdef tNgfKernel < NgfTestCase
 
     % ===================================================================== reference
     methods (Test, TestTags = {'reference'})
+        function partialsReference(tc)
+            % Richardson-extrapolated central differences of the force itself: an independent
+            % numerical route to the same derivative. A complex step is impossible here and the
+            % toolbox says so rather than pretending: MATLAB's erf and erfc raise notFullReal on
+            % a complex argument and abs/vecnorm discard the imaginary part (measured 2026-09-08).
+            [rho, sp, T] = tc.gas(3);
+            vb = 7600 * [1 0.99 0.98; 0.02 0.05 0.1; -0.01 0 0.02]; vb = vb ./ vecnorm(vb) * 7600;
+            rich = @(f, h) (4 * (f(h) - f(-h)) / (2 * h) - (f(2*h) - f(-2*h)) / (4 * h)) / 3;
+            rel = @(a, b) max(abs(a(:) - b(:))) / max(abs(b(:)));
+            args = {'Rho', rho, 'Species', sp, 'T_K', T, 'Vrel_body', vb, 'Model', "sentman", 'Alpha', 0.85, 'Tw_K', 300};
+            dA = NonGravForces.kernel.partials("drag", "alpha", tc.mm, args{:});
+            fa = @(d) NonGravForces.kernel.dragPanelForce(tc.mm, rho, sp, T, vb, 'Model', "sentman", 'Alpha', 0.85 + d, 'Tw_K', 300);
+            tc.verifyBoundAndRecord("d(drag)/d(alpha) vs Richardson central differences", rel(dA, rich(fa, 1e-4)), 1e-9, "-", "the extrapolation's own truncation dominates; measured 1e-12");
+            U0 = vecnorm(vb);
+            dU = NonGravForces.kernel.partials("drag", "speed", tc.mm, args{:});
+            fu = @(d) NonGravForces.kernel.dragPanelForce(tc.mm, rho, sp, T, vb .* ((U0 + d) ./ U0), 'Model', "sentman", 'Alpha', 0.85, 'Tw_K', 300);
+            tc.verifyBoundAndRecord("d(drag)/d(speed) vs Richardson central differences", rel(dU, rich(fu, 1e-2)), 1e-9, "-", "measured 7e-11");
+            dR = NonGravForces.kernel.partials("drag", "densityScale", tc.mm, args{:});
+            fr = @(d) NonGravForces.kernel.dragPanelForce(tc.mm, rho * (1 + d), sp * (1 + d), T, vb, 'Model', "sentman", 'Alpha', 0.85, 'Tw_K', 300);
+            tc.verifyBoundAndRecord("d(drag)/d(densityScale) vs Richardson", rel(dR, rich(fr, 1e-5)), 1e-9, "-", "measured 2e-11");
+            src = tc.pointSource([0.3; -0.4; sqrt(0.75)], 4.56e-6, "vis");
+            dP = NonGravForces.kernel.partials("radiation", "pressureScale", tc.mm, 'Sources', src);
+            fp = @(d) NonGravForces.kernel.radiationPanelForce(tc.mm, tc.scaledSource(src, 1 + d));
+            tc.verifyBoundAndRecord("d(radiation)/d(pressureScale) vs Richardson", rel(dP, rich(fp, 1e-5)), 1e-9, "-", "measured 8e-11");
+            Tp = 280 + 20 * cos((1:tc.mm.n)') + zeros(tc.mm.n, 3);
+            dT = NonGravForces.kernel.partials("thermal", "temperature", tc.mm, 'Temperature_K', Tp);
+            ft = @(d) NonGravForces.kernel.thermalRecoil(tc.mm, Tp + d);
+            tc.verifyBoundAndRecord("d(thermal)/d(temperature) vs Richardson", rel(dT, rich(ft, 1e-3)), 1e-9, "-", "measured 2e-11");
+        end
         function gsiCoefficientsReference(tc)
             % kinetic-theory integration (Simpson, no erf) vs the closed forms; oracle error < 1e-10
             o = tc.oracle; Tinf = 1000;
@@ -250,6 +307,23 @@ classdef tNgfKernel < NgfTestCase
 
     % ===================================================================== precision
     methods (Test, TestTags = {'precision'})
+        function partialsPrecision(tc)
+            % The linear parameters have exact derivatives: the force itself, bitwise.
+            [rho, sp, T] = tc.gas(2);
+            vb = 7600 * [1 0.99; 0.02 0.05; -0.01 0]; vb = vb ./ vecnorm(vb) * 7600;
+            args = {'Rho', rho, 'Species', sp, 'T_K', T, 'Vrel_body', vb, 'Model', "sentman", 'Alpha', 0.85, 'Tw_K', 300};
+            F = NonGravForces.kernel.dragPanelForce(tc.mm, rho, sp, T, vb, 'Model', "sentman", 'Alpha', 0.85, 'Tw_K', 300);
+            dR = NonGravForces.kernel.partials("drag", "densityScale", tc.mm, args{:});
+            tc.verifyBoundAndRecord("d(drag)/d(densityScale) minus the force", max(abs(dR - F), [], 'all'), 0, "N", "the force is linear in the density: the derivative IS the force, bitwise");
+            src = tc.pointSource([0; 0; 1], 4.56e-6, "vis");
+            Fr = NonGravForces.kernel.radiationPanelForce(tc.mm, src);
+            dP = NonGravForces.kernel.partials("radiation", "pressureScale", tc.mm, 'Sources', src);
+            tc.verifyBoundAndRecord("d(radiation)/d(pressureScale) minus the force", max(abs(dP - Fr), [], 'all'), 0, "N", "as above, bitwise");
+            Tp = 300 + zeros(tc.mm.n, 2);
+            Ft = NonGravForces.kernel.thermalRecoil(tc.mm, Tp);
+            dT = NonGravForces.kernel.partials("thermal", "temperature", tc.mm, 'Temperature_K', Tp);
+            tc.verifyBoundAndRecord("d(thermal)/d(T) minus 4F/T", max(abs(dT - 4 * Ft / 300), [], 'all'), 1e-30, "N/K", "a T^4 law differentiated once");
+        end
         function gsiCoefficientsPrecision(tc)
             % hyperthermal limit at s = 1e4: Cp -> 2 g^2, Ctau -> 2 g l up to the re-emission sqrt(pi) sqrt(Tw/(Tinf s^2)) g and 1/(2 s^2)
             th = linspace(0, pi / 2, 9); s = 1e4; Tw = 300; Tinf = 1000;
@@ -334,6 +408,20 @@ classdef tNgfKernel < NgfTestCase
 
     % ===================================================================== vectorization
     methods (Test, TestTags = {'vectorization'})
+        function partialsVectorization(tc)
+            [rho, sp, T] = tc.gas(4);
+            vb = 7600 * [1 0.99 0.98 0.97; 0.02 0.05 0.1 0.15; -0.01 0 0.02 0.03];
+            vb = vb ./ vecnorm(vb) * 7600;
+            for wrt = ["alpha", "speed", "densityScale"]
+                dAll = NonGravForces.kernel.partials("drag", wrt, tc.mm, 'Rho', rho, 'Species', sp, ...
+                    'T_K', T, 'Vrel_body', vb, 'Model', "sentman", 'Alpha', 0.85, 'Tw_K', 300);
+                for k = 1:4
+                    d1 = NonGravForces.kernel.partials("drag", wrt, tc.mm, 'Rho', rho(k), 'Species', sp(:, k), ...
+                        'T_K', T(k), 'Vrel_body', vb(:, k), 'Model', "sentman", 'Alpha', 0.85, 'Tw_K', 300);
+                    tc.verifyEqual(dAll(:, :, k), d1, sprintf('%s, epoch %d batched vs alone', wrt, k));
+                end
+            end
+        end
         function gsiCoefficientsVectorization(tc)
             s = [3 8 12]; th = [0.1; 1.0; 2.0; 3.0]; a = [0.7 0.85 1];
             [Cp, Ct, info] = NonGravForces.kernel.gsiCoefficients("sentman", s, th, a, 300, [900 1000 1100]);
@@ -387,6 +475,27 @@ classdef tNgfKernel < NgfTestCase
 
     % ===================================================================== robustness
     methods (Test, TestTags = {'robustness'})
+        function partialsRobustness(tc)
+            [rho, sp, T] = tc.gas(2);
+            vb = 7600 * [1 0.99; 0.02 0.05; -0.01 0]; vb = vb ./ vecnorm(vb) * 7600;
+            % constantCd has no accommodation coefficient, so that derivative is exactly zero
+            dA = NonGravForces.kernel.partials("drag", "alpha", tc.mm, 'Rho', rho, 'Species', sp, 'T_K', T, ...
+                'Vrel_body', vb, 'Model', "constantCd", 'Cd', 2.2);
+            tc.verifyEqual(dA, zeros(3, tc.mm.n, 2), 'constantCd carries no alpha');
+            % and its speed derivative is exactly 2F/U, the dynamic pressure alone
+            F = NonGravForces.kernel.dragPanelForce(tc.mm, rho, [], [], vb, 'Model', "constantCd", 'Cd', 2.2);
+            dU = NonGravForces.kernel.partials("drag", "speed", tc.mm, 'Rho', rho, 'Species', sp, 'T_K', T, ...
+                'Vrel_body', vb, 'Model', "constantCd", 'Cd', 2.2);
+            tc.verifyBoundAndRecord("constantCd d/dU minus 2F/U", max(abs(dU - 2 * F ./ reshape(vecnorm(vb), 1, 1, 2)), [], 'all'), 1e-30, "N/(m/s)", "no coefficient depends on the speed there");
+            % an empty species column must not produce NaN
+            spz = sp; spz(:, 2) = 0;
+            d0 = NonGravForces.kernel.partials("drag", "alpha", tc.mm, 'Rho', [rho(1) 0], 'Species', spz, 'T_K', T, ...
+                'Vrel_body', vb, 'Model', "sentman", 'Alpha', 0.85, 'Tw_K', 300);
+            tc.verifyTrue(all(isfinite(d0(:))));
+            % a panel at 0 K emits nothing and its derivative is finite
+            dz = NonGravForces.kernel.partials("thermal", "temperature", tc.mm, 'Temperature_K', zeros(tc.mm.n, 1));
+            tc.verifyTrue(all(isfinite(dz(:))));
+        end
         function gsiCoefficientsRobustness(tc)
             % leeward plates: exponentially small, finite, non-negative; theta = pi exactly; extreme s finite
             [Cp, Ct] = NonGravForces.kernel.gsiCoefficients("sentman", [0.01 8 1e6], [pi/2 + 0.1; 2.5; pi], 0.85, 300, 1000);
@@ -437,6 +546,22 @@ classdef tNgfKernel < NgfTestCase
 
     % ===================================================================== metamorphic
     methods (Test, TestTags = {'metamorphic'})
+        function partialsMetamorphic(tc)
+            [rho, sp, T] = tc.gas(2);
+            vb = 7600 * [1 0.99; 0.02 0.05; -0.01 0]; vb = vb ./ vecnorm(vb) * 7600;
+            a1 = {'Rho', rho, 'Species', sp, 'T_K', T, 'Vrel_body', vb, 'Model', "sentman", 'Alpha', 0.85, 'Tw_K', 300};
+            a2 = {'Rho', 2 * rho, 'Species', 2 * sp, 'T_K', T, 'Vrel_body', vb, 'Model', "sentman", 'Alpha', 0.85, 'Tw_K', 300};
+            for wrt = ["alpha", "speed", "densityScale"]
+                d1 = NonGravForces.kernel.partials("drag", wrt, tc.mm, a1{:});
+                d2 = NonGravForces.kernel.partials("drag", wrt, tc.mm, a2{:});
+                tc.verifyBoundAndRecord("d(drag)/d(" + wrt + ") doubles with the density", ...
+                    max(abs(d2 - 2 * d1), [], 'all') / max(abs(d1), [], 'all'), 1e-15, "-", "an exact power of two through a linear factor");
+            end
+            f = 0.5 * ones(tc.mm.n, 2);
+            ds = NonGravForces.kernel.partials("drag", "alpha", tc.mm, a1{:}, 'Shadow', f);
+            d0 = NonGravForces.kernel.partials("drag", "alpha", tc.mm, a1{:});
+            tc.verifyBoundAndRecord("half the exposure halves d/d(alpha)", max(abs(ds - 0.5 * d0), [], 'all') / max(abs(d0), [], 'all'), 1e-15, "-", "the shadow multiplies the same scale");
+        end
         function gsiCoefficientsMetamorphic(tc)
             % maxwell with sigma = 0 is sentman bitwise; sigma = 1 has no re-emission (alpha has no effect); the drag/lift projections invert
             s = [2 8]; th = [0.2; 1.1; 2.3]; [Cp, Ct, info] = NonGravForces.kernel.gsiCoefficients("sentman", s, th, 0.85, 300, 1000);
@@ -507,6 +632,16 @@ classdef tNgfKernel < NgfTestCase
 
     % ===================================================================== speed
     methods (Test, TestTags = {'speed'})
+        function partialsSpeed(tc)
+            % One derivative costs about one force evaluation: the coefficients are computed once more.
+            [rho, sp, T] = tc.gas(200);
+            vb = 7600 * [ones(1, 200); 0.02 * cos(1:200); 0.01 * sin(1:200)];
+            vb = vb ./ vecnorm(vb) * 7600;
+            args = {'Rho', rho, 'Species', sp, 'T_K', T, 'Vrel_body', vb, 'Model', "sentman", 'Alpha', 0.85, 'Tw_K', 300};
+            base = @() NonGravForces.kernel.dragPanelForce(tc.mm, rho, sp, T, vb, 'Model', "sentman", 'Alpha', 0.85, 'Tw_K', 300);
+            fcn = @() NonGravForces.kernel.partials("drag", "alpha", tc.mm, args{:});
+            tc.verifyBoundAndRecord("d(drag)/d(alpha) vs one force evaluation", tc.speedRatio(fcn, base), 9, "-", "budget 3x the expected 3: the derivative evaluates the force and the coefficients again; 5 repeats, median");
+        end
         function gsiCoefficientsSpeed(tc)
             % 1e5 elements at once vs 100 scalar calls: the array form must be at least 20x cheaper per element (measured ~200x)
             th = rand(1, 1e5) * pi; th1 = th(1:100);

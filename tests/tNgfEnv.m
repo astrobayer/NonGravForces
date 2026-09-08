@@ -52,9 +52,9 @@ classdef tNgfEnv < NgfTestCase
             d = struct('f107', in.f107(idx), 'f107a', in.f107a(idx), 'ap', ap);
             [rho, sp, T] = NonGravForces.env.density("msis00", ep, lla, [], 'Drivers', d, 'AnomalousOxygen', anomalous, 'LocalSolarTime_h', in.lst(idx));
         end
-        function [ep, r, q, eop] = sampleState(tc)
+        function [ep, r, q, eop, v] = sampleState(tc)
             eop = referenceSystem.readEop(fullfile(tc.root, 'data', 'eop', 'finals2000A_2019-09_2020-03.all'));
-            [ep, r] = NonGravForces.io.readGNV1B(fullfile(tc.root, 'data', 'samples', 'GNV1B_2020-01-01_C_04.txt'), 'Eop', eop);
+            [ep, r, v] = NonGravForces.io.readGNV1B(fullfile(tc.root, 'data', 'samples', 'GNV1B_2020-01-01_C_04.txt'), 'Eop', eop);
             [~, q] = NonGravForces.io.readSCA1B(fullfile(tc.root, 'data', 'samples', 'SCA1B_2020-01-01_C_04.txt'));
         end
         function [Ea, Ei, src] = knockeCase(tc, k, grid, backend)
@@ -79,6 +79,25 @@ classdef tNgfEnv < NgfTestCase
 
     % ===================================================================== contract
     methods (Test, TestTags = {'contract'})
+        function windContract(tc)
+            [ep, r, ~, eop, v] = tc.sampleState();
+            [vrel, info] = NonGravForces.env.wind("corotation", ep, r, v, 'Eop', eop);
+            tc.verifySize(vrel, size(v)); tc.verifyEqual(info.model, "corotation");
+            tc.verifySize(info.corotation_m_s, size(v)); tc.verifyEqual(info.K, size(v, 2));
+            tc.verifyFalse(info.windGiven);
+            [vn, iN] = NonGravForces.env.wind("none", ep, r, v);
+            tc.verifyEqual(vn, v, 'the none model returns the inertial velocity untouched');
+            tc.verifyEqual(iN.corotation_m_s, zeros(size(v)));
+            w = @(varargin) NonGravForces.env.wind(varargin{:});
+            tc.verifyErrorId(@() w("hwm14", ep, r, v, 'Eop', eop), 'NonGravForces:wind:notImplemented');
+            tc.verifyErrorId(@() w("corotation", ep, r, v), 'NonGravForces:wind:inputEop');
+            tc.verifyErrorId(@() w("corotation", ep, r(:, 1:2), v, 'Eop', eop), 'NonGravForces:wind:inputShape');
+            tc.verifyErrorId(@() w("none", ep, r, v, 'Wind_m_s', zeros(3, 2)), 'NonGravForces:wind:inputShape');
+            bad = r; bad(1) = NaN;
+            tc.verifyErrorId(@() w("none", ep, bad, v), 'NonGravForces:wind:numericNaN');
+            tc.verifyErrorId(@() w("none", ep, r, v, 'Wind_m_s', nan(size(v))), 'NonGravForces:wind:numericNaN');
+            tc.verifyError(@() w("hwm07", ep, r, v), 'MATLAB:validators:mustBeMember');
+        end
         function densityContract(tc)
             ep = referenceSystem.mjdToEpoch([58849.5; 58849.6], "UTC"); lla = [0 0.1; 0 0.2; 490e3 500e3];
             d = struct('f107', [70 71], 'f107a', [71 71], 'ap', [3 4]);
@@ -154,6 +173,28 @@ classdef tNgfEnv < NgfTestCase
 
     % ===================================================================== reference
     methods (Test, TestTags = {'reference'})
+        function windReference(tc)
+            % An independent route to the same number: the nominal rigid rotation omega x r,
+            % with omega from referenceSystem's own IERS constant and the position in ITRS.
+            % The two agree to the polar motion and length-of-day terms the nominal rate omits.
+            [ep, r, ~, eop, v] = tc.sampleState();
+            [~, info] = NonGravForces.env.wind("corotation", ep, r, v, 'Eop', eop);
+            R = referenceSystem.rotationItrsToGcrs(ep, 'Eop', eop);
+            K = size(r, 2);
+            rI = reshape(pagemtimes(pagetranspose(R), reshape(r, 3, 1, K)), 3, K);
+            om = referenceSystem.iersConstants().earthRotationRate;
+            nominalI = [-om * rI(2, :); om * rI(1, :); zeros(1, K)];
+            nominalG = reshape(pagemtimes(R, reshape(nominalI, 3, 1, K)), 3, K);
+            rel = max(vecnorm(info.corotation_m_s - nominalG)) / max(vecnorm(nominalG));
+            tc.verifyBoundAndRecord("co-rotation vs a nominal omega x r", rel, 5e-3, "-", "Rdot carries polar motion and the length-of-day term that a nominal rate omits");
+            % The magnitude must follow omega * sqrt(x^2 + y^2) in ITRS at EVERY epoch, which is the
+            % rigid-rotation law itself. The arc spans -59.5 to -21.6 deg latitude, so the speed runs
+            % from 255.8 to 467.3 m/s: asserting one number would only have described its first epoch.
+            nominalSpeed = om * hypot(rI(1, :), rI(2, :));
+            tc.verifyBoundAndRecord("co-rotation speed vs omega * sqrt(x^2 + y^2) over the arc", ...
+                max(abs(vecnorm(info.corotation_m_s) - nominalSpeed) ./ nominalSpeed), 5e-3, "-", ...
+                "the residual is the polar motion and the length-of-day term; measured 2e-6 over 600 epochs spanning 256 to 467 m/s");
+        end
         function densityReference(tc)
             % The 17 published cases of DOCUMENTATION §7 (printed with %E, 7 significant digits)
             % must be reproduced digit for digit in every column: HE O N2 O2 AR RHO H N ANOM TINF TG.
@@ -241,6 +282,18 @@ classdef tNgfEnv < NgfTestCase
 
     % ===================================================================== precision
     methods (Test, TestTags = {'precision'})
+        function windPrecision(tc)
+            % The corotation branch subtracts exactly Rdot*(R'*r) and nothing else.
+            [ep, r, ~, eop, v] = tc.sampleState();
+            [vrel, info] = NonGravForces.env.wind("corotation", ep, r, v, 'Eop', eop);
+            [R, Rdot] = referenceSystem.rotationItrsToGcrs(ep, 'Eop', eop);
+            K = size(r, 2);
+            rI = reshape(pagemtimes(pagetranspose(R), reshape(r, 3, 1, K)), 3, K);
+            want = reshape(pagemtimes(Rdot, reshape(rI, 3, 1, K)), 3, K);
+            tc.verifyBoundAndRecord("co-rotation term vs Rdot*(R'*r)", max(abs(info.corotation_m_s - want), [], 'all'), 0, "m/s", "the same two products in the same order: bitwise");
+            tc.verifyEqual(vrel, v - want, 'and the relative velocity is that difference, bitwise');
+            tc.verifyEqual(info.speed_m_s, vecnorm(vrel));
+        end
         function densitySpeciesSumPrecision(tc)
             % kernel.dragPanelForce re-forms the mass density from the species and const.speciesMass,
             % while NRLMSISE-00 forms its own total from ITS molecular masses. Its ACCURACY block
@@ -299,6 +352,15 @@ classdef tNgfEnv < NgfTestCase
 
     % ===================================================================== vectorization
     methods (Test, TestTags = {'vectorization'})
+        function windVectorization(tc)
+            [ep, r, ~, eop, v] = tc.sampleState();
+            vrel = NonGravForces.env.wind("corotation", ep, r, v, 'Eop', eop);
+            for k = [1 3 numel(ep.sec)]
+                e1 = referenceSystem.daySecondToEpoch([ep.day(k) ep.sec(k)], ep.scale);
+                v1 = NonGravForces.env.wind("corotation", e1, r(:, k), v(:, k), 'Eop', eop);
+                tc.verifyEqual(vrel(:, k), v1, sprintf('epoch %d batched vs alone', k));
+            end
+        end
         function densityVectorization(tc)
             % The 15 daily-ap published cases in one call equal the 15 single calls, bitwise (the MEX loop is per epoch).
             [rhoAll, spAll, TAll] = tc.msisCases(1:15, true);
@@ -340,6 +402,22 @@ classdef tNgfEnv < NgfTestCase
 
     % ===================================================================== robustness
     methods (Test, TestTags = {'robustness'})
+        function windRobustness(tc)
+            [ep, r, ~, eop, v] = tc.sampleState();
+            K = size(r, 2);
+            w = repmat([10; -20; 5], 1, K);
+            [v1, i1] = NonGravForces.env.wind("none", ep, r, v, 'Wind_m_s', w);
+            tc.verifyEqual(v1, v - w); tc.verifyTrue(i1.windGiven);
+            v2 = NonGravForces.env.wind("corotation", ep, r, v, 'Eop', eop, 'Wind_m_s', w);
+            v0 = NonGravForces.env.wind("corotation", ep, r, v, 'Eop', eop);
+            tc.verifyEqual(v2, v0 - w, 'the wind is removed after the co-rotation, not instead of it');
+            % a satellite on the rotation axis has no co-rotation at all
+            e1 = referenceSystem.daySecondToEpoch([ep.day(1) ep.sec(1)], ep.scale);
+            R = referenceSystem.rotationItrsToGcrs(e1, 'Eop', eop);
+            rPole = R * [0; 0; 6.87e6];
+            [~, iP] = NonGravForces.env.wind("corotation", e1, rPole, v(:, 1), 'Eop', eop);
+            tc.verifyBoundAndRecord("co-rotation on the rotation axis", norm(iP.corotation_m_s), 1e-2, "m/s", "omega x r vanishes on the axis; what remains is the polar-motion and nutation rate");
+        end
         function densityRobustness(tc)
             ep = referenceSystem.mjdToEpoch(58849.5, "UTC"); d = struct('f107', 70, 'f107a', 71, 'ap', 3);
             tc.verifyErrorId(@() NonGravForces.env.density("msis00", ep, [0; NaN; 490e3], [], 'Drivers', d), 'NonGravForces:density:numericNaN');
@@ -415,6 +493,19 @@ classdef tNgfEnv < NgfTestCase
 
     % ===================================================================== metamorphic
     methods (Test, TestTags = {'metamorphic'})
+        function windMetamorphic(tc)
+            [ep, r, ~, eop, v] = tc.sampleState();
+            [~, i1] = NonGravForces.env.wind("corotation", ep, r, v, 'Eop', eop);
+            [~, i2] = NonGravForces.env.wind("corotation", ep, 2 * r, v, 'Eop', eop);
+            tc.verifyBoundAndRecord("co-rotation doubles with the position", max(abs(i2.corotation_m_s - 2 * i1.corotation_m_s), [], 'all') / max(abs(i1.corotation_m_s), [], 'all'), 1e-15, "-", "an exact power of two through two matrix products");
+            [~, i3] = NonGravForces.env.wind("corotation", ep, r, 3 * v, 'Eop', eop);
+            tc.verifyEqual(i3.corotation_m_s, i1.corotation_m_s, 'the co-rotation cannot depend on the satellite velocity');
+            % Adding the co-rotation back as a wind field returns the inertial velocity, but (v - c) + c
+            % is not v in floating point: the claim is one rounding of a 7.6 km/s quantity, not equality.
+            vn = NonGravForces.env.wind("none", ep, r, v);
+            vc = NonGravForces.env.wind("corotation", ep, r, v, 'Eop', eop, 'Wind_m_s', -i1.corotation_m_s);
+            tc.verifyBoundAndRecord("co-rotation removed and added back", max(abs(vc - vn), [], 'all') / max(abs(vn), [], 'all'), 1e-15, "-", "two roundings of a 7.6 km/s velocity; measured 1.3e-16");
+        end
         function densityMetamorphic(tc)
             % gtd7d - gtd7: the mass density gains exactly 16 * 1.66e-24 g times the anomalous-oxygen number density
             % (the reference's own arithmetic, nrlmsise-00.c gtd7d), in SI 16 * 1.66e-24 * 1e-3 * 1e6 kg per m^-3.
@@ -498,6 +589,13 @@ classdef tNgfEnv < NgfTestCase
 
     % ===================================================================== speed
     methods (Test, TestTags = {'speed'})
+        function windSpeed(tc)
+            % Its whole cost is the frame rotation it delegates, plus two page products.
+            [ep, r, ~, eop, v] = tc.sampleState();
+            base = @() referenceSystem.rotationItrsToGcrs(ep, 'Eop', eop);
+            fcn = @() NonGravForces.env.wind("corotation", ep, r, v, 'Eop', eop);
+            tc.verifyBoundAndRecord("wind vs the rotationItrsToGcrs it calls", tc.speedRatio(fcn, base), 4.5, "-", "budget 3x the expected 1.4: one rotation call plus two page products; 5 repeats, median");
+        end
         function densitySpeed(tc)
             % Linear scaling of the MEX loop: 86400 epochs cost at most 2x ten times 8640 epochs (per-call overhead amortised).
             sw = NonGravForces.io.spaceWeather(fullfile(tc.root, 'data', 'spaceweather', 'SW-All_2019-09_2020-03.csv'));
