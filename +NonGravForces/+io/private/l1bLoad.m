@@ -1,5 +1,5 @@
 function [epoch, obs, raw, common] = l1bLoad(unit, files, expectedProducts, options)
-%L1BLOAD Shared loader of the io readers: gracefoReading.readL1b / readL1bMulti plus the common checks.
+%L1BLOAD Shared loader of the io readers: gracefoReading.readL1bMulti plus the common checks.
 %
 %   [epoch, obs, raw, common] = l1bLoad(unit, files, expectedProducts, options)
 %
@@ -8,13 +8,20 @@ function [epoch, obs, raw, common] = l1bLoad(unit, files, expectedProducts, opti
 %   epoch struct through referenceSystem, and collect the fields every reader
 %   reports. Private to the io package; not a public unit.
 %
-%   ONE FILE GOES THROUGH readL1b, SEVERAL THROUGH readL1bMulti. The single-
-%   file reader returns clean empties when TimeRange excludes every record
-%   (so dataEmpty can be raised here); readL1bMulti 1.0.0 indexes the empty
-%   concatenation and raises MATLAB:badsubscript instead (gracefoReading
-%   defect, HANDOVER O-12). The two aux layouts differ in name only
-%   (product/fileName vs products/fileNames) and are normalised to the plural
-%   form here.
+%   EVERY READ GOES THROUGH readL1bMulti, one file or many (rule R1). It
+%   accepts a single file and returns what readL1b returns, so no branch is
+%   needed and no aux field is fabricated here. Until gracefoReading 1.0.1
+%   the multi-file reader raised MATLAB:badsubscript on an all-empty
+%   TimeRange (its issue #6, this repository's O-12), so one file had to go
+%   through readL1b to keep dataEmpty reachable; that split is now gone and
+%   dataEmpty is reachable for any number of files.
+%
+%   When TimeRange or the mask removes every record, readL1bMulti first
+%   warns gracefoReading:readL1bMulti:noRecordsInRange and then dataEmpty is
+%   raised below. The foreign warning is deliberately not suppressed: it
+%   names the parsed record count and which filters were active, which the
+%   NonGravForces error does not, and foreign diagnostics propagate unwrapped
+%   here as foreign errors do.
 %
 % INPUT ARGUMENTS
 %   Name              Size  Type    Units  Description
@@ -36,21 +43,14 @@ function [epoch, obs, raw, common] = l1bLoad(unit, files, expectedProducts, opti
 % ERRORS
 %   NonGravForces:<unit>:dataProduct     a file is not one of expectedProducts
 %   NonGravForces:<unit>:dataSatellite   files of different satellites
-%   NonGravForces:<unit>:dataEmpty       no record left after TimeRange / QualityBitMask (one file)
+%   NonGravForces:<unit>:dataEmpty       no record left after TimeRange / QualityBitMask,
+%                                        for any number of files
 %   gracefoReading:*, MATLAB:validators:mustBeFile   propagated unwrapped
-%   MATLAB:badsubscript                  from readL1bMulti when SEVERAL files and TimeRange
-%                                        exclude every record (HANDOVER O-12)
 %
 % KEYWORDS private loader L1B
-% Created 2026-09-06 by Claude Fable 5.1 (Anthropic).
+% Created 2026-09-06 by Claude Fable 5.1 (Anthropic); split removed 2026-09-08 by Claude Opus 5 (O-12 discharged).
 fwd = {'TimeRange', options.TimeRange, 'QualityBitMask', options.QualityBitMask};
-if isscalar(files)
-    [time, obs, raw] = gracefoReading.readL1b(files, fwd{:});
-    raw.products  = {raw.product};
-    raw.fileNames = {char(raw.fileName)};
-else
-    [time, obs, raw] = gracefoReading.readL1bMulti(cellstr(files), fwd{:});
-end
+[time, obs, raw] = gracefoReading.readL1bMulti(files, fwd{:});
 products = unique(string(raw.products));
 bad = products(~ismember(products, expectedProducts));
 if ~isempty(bad)

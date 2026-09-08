@@ -1,4 +1,4 @@
-# NonGravForces 0.5.2
+# NonGravForces 0.5.3
 
 Non-gravitational forces, torques and partials for LEO satellites (GRACE-FO reference case). Third concept, designed from scratch after the audits of `SatelliteNonGravToolbox` v1 and `NonGravToolbox` v0.1.1.
 
