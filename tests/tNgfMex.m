@@ -412,8 +412,15 @@ classdef tNgfMex < NgfTestCase
             tc.verifyBoundAndRecord("single-epoch kernel: compiled / MATLAB chain (median of 5 x 200)", ...
                 mex_s / mat_s, 1.0, "-", ...
                 sprintf("compiled %.1f us, MATLAB %.1f us per epoch on this host; a value above 1 is a FINDING, not a flake: it says the port buys nothing and D.6 must be rewritten", 1e6 * mex_s, 1e6 * mat_s));
-            tc.verifyBoundAndRecord("single-epoch compiled kernel, absolute cost per epoch", 1e6 * mex_s, 500, "us", ...
-                "host-dependent and recorded for the record; the ratio above is the claim");
+            % NOT a claim about this host, and the 500 us written here on 2026-09-08 was a guess with
+            % nothing behind it: the CI runner measured 901.8 us and the test went red for no reason
+            % but the guess (rule T5 forbids exactly this, and rule A.4 records the same mistake being
+            % made once before). Decomposed rather than widened: the assertion above is the ratio, and
+            % this ceiling sits an order of magnitude above the measured value so that a pathological
+            % rebuild -- a MEX linked without -O, a marshalling path that starts copying per call --
+            % still turns the gate red while a slower machine does not.
+            tc.verifyBoundAndRecord("single-epoch compiled kernel, absolute cost per epoch", 1e6 * mex_s, 10000, "us", ...
+                "smoke ceiling, not a claim; 901.8 us measured on the CI runner 2026-09-08, MATLAB chain 4149.6 us");
         end
     end
 end

@@ -154,7 +154,8 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-09-07, after LP-5x and the debt sweep)
 
-- **262/262 tests GREEN** (2026-09-08, R2026a Update 4, Tier A host run; predicted 263,
+- **269/270 on the CI runner** (2026-09-08, LP-6b; the single failure a guessed absolute speed
+  bound, fixed in the same session). Before that: **262/262 tests GREEN** (2026-09-08, R2026a Update 4, Tier A host run; predicted 263,
   261 on the branch and 262 after merging main — reconciled in HANDOVER Part I),
   Code Analyzer 0 findings, gate TRUE;
   log in `tests/last_run.txt`.
@@ -220,10 +221,13 @@ GROOPS installation the host does not have (O-19).
 against the real day, at 0.98 correlation with ACT1B cross-track. `rhs()` stays ◐ against
 `gjToolbox`, which is not on the host (O-4).
 
-**Done 2026-09-08: LP-6b (single-epoch C/MEX)** — ◐, written on Tier B. The C is measured
-against the frozen mirror (`runCChecks.sh`, numbers in HANDOVER Part G); `kernel.singleEpoch`,
-`tests/tNgfMex.m` and the second `buildMex` target have never been run in MATLAB (O-30,
-predicted count 270). Two rulings recorded and awaiting confirmation: `thermalRecoil` was
+**Done 2026-09-08: LP-6b (single-epoch C/MEX)** — ☑. Written on Tier B and verified through the
+CI `matlab` job when the MCP bridge would not answer: predicted 270, ran 270, **269 passed**, the
+one failure a 500 us absolute speed bound this session set by guess (decomposed, not widened).
+The 1e-14 parity is measured: 4.5e-16 on the force, 1.9e-15 on the torque, bitwise on `gamma`
+and the speed ratios. The compiled kernel is 901.8 us per epoch against 4149.6 us for the MATLAB
+chain, ratio 0.217 — for a 3-source scene, so it does not settle O-31. Two rulings recorded and
+awaiting confirmation: `thermalRecoil` was
 ported although the prompt did not name it, and `rsApiRotation` is NOT linked because it is
 ITRS→GCRS and the kernel is body frame. D.6's speed justification was contradicted by O-29
 and has been rewritten; whether `Model` should route through the compiled path is O-31 and
@@ -355,3 +359,8 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   field can (`r.(name)(1)`), which is how the mirror fixtures are read.
 - **`rsApiRotation` is ITRS-to-GCRS** and has nothing to do with the body-frame kernel; the plan
   said the single-epoch MEX would link it and the plan was wrong (HANDOVER B.1).
+- **Never assert a host-dependent absolute** (rule T5). A 500 us per-epoch bound written from a
+  guess reddened the gate on a runner that measured 901.8 us, in the same session that quoted the
+  rule. Assert the ratio; record the absolute with a ceiling an order of magnitude above it.
+- **When the MCP bridge is down, CI is still a MATLAB tier**: push the branch, let the `matlab`
+  job run `ciGate`, read `tests/last_run.txt` from the run artefact. That is how LP-6b was verified.
