@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-07 (debt sweep) by Claude Opus 5. Toolbox version 0.5.2.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-6) by Claude Opus 5. Toolbox version 0.6.0.
 
 ---
 
@@ -142,10 +142,10 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-09-07, after LP-5x and the debt sweep)
 
-- **244/244 tests GREEN** (2026-09-07, R2026a Update 4, Tier A host run; predicted 243,
-  244 ran — reconciled in HANDOVER Part I), Code Analyzer 0 findings, gate TRUE;
+- **261/261 tests GREEN** (2026-09-08, R2026a Update 4, Tier A host run; predicted 263,
+  261 ran — reconciled in HANDOVER Part I), Code Analyzer 0 findings, gate TRUE;
   log in `tests/last_run.txt`.
-  LP-5x was 238, LP-5 231, LP-4 169, LP-3 142, LP-2 116 (2026-09-06), LP-0 74 (2026-08-27).
+  The debt sweep was 244, LP-5x 238, LP-5 231, LP-4 169, LP-3 142, LP-2 116 (2026-09-06), LP-0 74 (2026-08-27).
   The six new tests came from the 2026-09-07 debt sweep: the gate's shortfall filter had
   been excusing any unit that held one exemption, hiding four missing category slots.
 - Implemented (☑): L0 core, `geom.MacroModel`, `geom.graceFO`, `qc.hampel`,
@@ -168,7 +168,9 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   `tools/pyxcheck/sentman_check.py`, `pelt_check.py`); and the LP-5x cross-validation tooling:
   `tools/pyxcheck/ngfkernel/`, an independent standard-library Python mirror of the frozen
   kernel with its parity driver and `tests/tNgfMirror.m` (WP-33; WP-34 needs GROOPS, O-19).
-- **12 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
+- **10 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
+- LP-6 added the six `Model` evaluation methods (`accel`, `torque`, `series`, `partials`,
+  `rhs`, `budget`), `env.wind` (co-rotation) and `kernel.partials` (analytic derivatives).
 - Repository `github.com/astrobayer/NonGravForces` (the account was renamed
   from `matweigelt` on 2026-09-06; `referenceSystem` and `gracefoReading` moved
   with it), local clone at
@@ -197,10 +199,14 @@ referenceSystem#15 (O-10), gracefoReading#6 (O-12).
 standard-library Python package and checked against it (`tests/tNgfMirror.m`). WP-34 needs a
 GROOPS installation the host does not have (O-19).
 
-**Next: LP-6 (Model and partials)** — WP-14 `Model.accel/torque`, WP-15 `series`
-(chunked, parfor-optional, bit-identical), WP-16 `partials` and `kernel.partials`
-(analytic, verified by complex step), WP-17 `rhs()` for gjToolbox; oracles in
-HANDOVER Part G. Then LP-4 (geom), LP-5 (kernel + qc), LP-5x, LP-6 (Model/partials),
+**Done 2026-09-08: LP-6 (Model and partials)** — the whole chain evaluates end to end
+against the real day, at 0.98 correlation with ACT1B cross-track. `rhs()` stays ◐ against
+`gjToolbox`, which is not on the host (O-4).
+
+**Next: LP-6b (single-epoch C/MEX)** or **LP-7 (sensors and applications)** — WP-17b
+transcribes the frozen kernel to C against the Python mirror; LP-7 brings `sensor.Electrostatic`,
+`app.calibrate` (against lsqvce 5.3, O-24), `app.forceBudget` (moved here, WP-30) and
+`app.densityInversion`; oracles in HANDOVER Part G. Then LP-4 (geom), LP-5 (kernel + qc), LP-5x, LP-6 (Model/partials),
 LP-6b (C/MEX), LP-R (release).
 
 **LP-5x cross-validation** (owner rulings of 2026-08-27):
@@ -292,6 +298,12 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   intersect (a spurious 2.5 % self-shadow from straight above was the symptom).
 - **A BLAS matrix product sums in a batch-size-dependent order**; use column-wise sums
   where a vectorisation test must be bitwise.
+- **`max`, `min` and `sum` omit NaN by default**, so a test bound can read 0 while the unit
+  returned NaN. `NgfTestCase.verifyBoundAndRecord` now refuses a non-finite measurement; that
+  is how a four-level-old NaN in `geom.selfShadow` was finally seen (2026-09-08).
+- **Sentman's shear is lift**: the gas force is NOT antiparallel to the relative velocity
+  (0.34 deg off on GRACE-FO). Only `constantCd` is, by construction.
+- **The co-rotation term is `v - Rdot*(R'*r)`**, from `env.wind`, never a hand-written omega x r.
 - **Sentman's published C_D/C_L are drag and lift, not normal and tangential**; the kernel
   derives Cp (normal) and Ctau (tangential) from the momentum integrals and asserts both
   projections. The theory document §2.3 mislabels them (to be corrected at LP-R). Three
