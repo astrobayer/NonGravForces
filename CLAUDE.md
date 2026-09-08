@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-6b, over the same day's LP-6) by Claude Opus 5. Toolbox version 0.6.1.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.6.2.
 
 ---
 
@@ -56,7 +56,7 @@ both directions against the files on disk, and this sentence's number against it
 |---|---|
 | `referenceSystem` ≥ 2.1 (2.1.216) | time scales, EOP, ITRS↔GCRS with derivatives, geodesy, quaternions, attitude interpolation, Sun/Moon states |
 | `gracefoReading` ≥ 1.0.1 (1.0.1) | L1B ASCII reading, quality flags, GROOPS instrument export/import. The PATCH minimum is deliberate and is the one exception to VERSIONING.md's MAJOR.MINOR rule (HANDOVER O-12, O-25) |
-| `gjToolbox` (odeSuite) | Gauss-Jackson integration; `Model.rhs()` hands it an acceleration handle |
+| `gjToolbox` (odeSuite) | Gauss-Jackson integration. **At level L0: no integrator and no dynamics interface yet, and `Model.rhs()`'s 4-argument handle does not match the 3-argument one its validator documents — HANDOVER B.3, O-4** |
 | `lsqvce` ≥ 5.3 (5.3) | batch least squares, VCE, ARMA whitening; `app.calibrate` delegates the adjustment through `fit`/`layout`/`Options` (O-24) |
 
 ### Key design decisions
@@ -154,8 +154,8 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-09-07, after LP-5x and the debt sweep)
 
-- **270/270 GREEN on the CI runner** (2026-09-08, LP-6b, R2026a Update 5, 218.9 s; the first run
-  was 269/270 on a guessed absolute speed bound, decomposed in the same session). Before that: **262/262 tests GREEN** (2026-09-08, R2026a Update 4, Tier A host run; predicted 263,
+- **276/276 GREEN on the CI runner** (2026-09-08, LP-7 WP-30, R2026a Update 5, 219.6 s; predicted
+  276). Before that LP-6b at 270/270, and: **262/262 tests GREEN** (2026-09-08, R2026a Update 4, Tier A host run; predicted 263,
   261 on the branch and 262 after merging main — reconciled in HANDOVER Part I),
   Code Analyzer 0 findings, gate TRUE;
   log in `tests/last_run.txt`.
@@ -185,7 +185,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   `tools/pyxcheck/sentman_check.py`, `pelt_check.py`); and the LP-5x cross-validation tooling:
   `tools/pyxcheck/ngfkernel/`, an independent standard-library Python mirror of the frozen
   kernel with its parity driver and `tests/tNgfMirror.m` (WP-33; WP-34 needs GROOPS, O-19).
-- **10 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
+- **9 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
 - LP-6 added the six `Model` evaluation methods (`accel`, `torque`, `series`, `partials`,
   `rhs`, `budget`), `env.wind` (co-rotation) and `kernel.partials` (analytic derivatives).
 - Repository `github.com/astrobayer/NonGravForces` (the account was renamed
@@ -233,9 +233,16 @@ ITRS→GCRS and the kernel is body frame. D.6's speed justification was contradi
 and has been rewritten; whether `Model` should route through the compiled path is O-31 and
 is not to be decided before the number is read.
 
-**Next: LP-7 (sensors and applications)** — `sensor.Electrostatic`, `app.calibrate` (against
-lsqvce 5.3, O-24), `app.forceBudget` (moved here, WP-30) and `app.densityInversion`; oracles
-in HANDOVER Part G. Then LP-R (release).
+**Opened 2026-09-08: LP-7** — `app.forceBudget` (WP-30) is delivered and GREEN (276/276 on the
+CI runner, predicted 276): a chunked, multi-model
+reduction over `Model.accel` whose oracle is `Model.budget` bitwise at one chunk. The two
+dependency surfaces were read at last and both findings are in HANDOVER Part B: odeSuite is at
+L0 with no dynamics interface and a signature that does not match `Model.rhs()` (O-4 narrowed),
+and lsqvce 5.3's `fit` takes three declaration kinds with regularisation declared in the data,
+which fixes `app.calibrate` as a kind-C batched declaration (O-24 discharged as a blocker).
+
+**Still in LP-7:** WP-29 `sensor.Electrostatic`, `AtomInterferometer`, `DragFree` · WP-19
+`calibrate` · WP-32 `densityInversion`. Then LP-R (release).
 
 **LP-5x cross-validation** (owner rulings of 2026-08-27):
 - WP-33: standard-library mirror of the **kernel layer only** under
@@ -359,6 +366,11 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   field can (`r.(name)(1)`), which is how the mirror fixtures are read.
 - **`rsApiRotation` is ITRS-to-GCRS** and has nothing to do with the body-frame kernel; the plan
   said the single-epoch MEX would link it and the plan was wrong (HANDOVER B.1).
+- **A dependency's surface is a guess until its source is read.** Two records in Part B described
+  toolboxes that had moved on: lsqvce's flat 1.0 surface was gone, and gjToolbox has no dynamics
+  interface at all. Both repositories are readable through the GitHub API from any tier.
+- **The `fast` preset sets `thermal.model = "none"`**, so a thermal invariance asserted on a fast
+  model asserts 0 == 0 and measures nothing.
 - **Never assert a host-dependent absolute** (rule T5). A 500 us per-epoch bound written from a
   guess reddened the gate on a runner that measured 901.8 us, in the same session that quoted the
   rule. Assert the ratio; record the absolute with a ceiling an order of magnitude above it.
