@@ -154,8 +154,8 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-09-07, after LP-5x and the debt sweep)
 
-- **270/270 GREEN on the CI runner** (2026-09-08, LP-6b, R2026a Update 5, 218.9 s; the first run
-  was 269/270 on a guessed absolute speed bound, decomposed in the same session). Before that: **262/262 tests GREEN** (2026-09-08, R2026a Update 4, Tier A host run; predicted 263,
+- **276/276 GREEN on the CI runner** (2026-09-08, LP-7 WP-30, R2026a Update 5, 219.6 s; predicted
+  276). Before that LP-6b at 270/270, and: **262/262 tests GREEN** (2026-09-08, R2026a Update 4, Tier A host run; predicted 263,
   261 on the branch and 262 after merging main — reconciled in HANDOVER Part I),
   Code Analyzer 0 findings, gate TRUE;
   log in `tests/last_run.txt`.
@@ -233,7 +233,8 @@ ITRS→GCRS and the kernel is body frame. D.6's speed justification was contradi
 and has been rewritten; whether `Model` should route through the compiled path is O-31 and
 is not to be decided before the number is read.
 
-**Opened 2026-09-08: LP-7** — `app.forceBudget` (WP-30) is delivered: a chunked, multi-model
+**Opened 2026-09-08: LP-7** — `app.forceBudget` (WP-30) is delivered and GREEN (276/276 on the
+CI runner, predicted 276): a chunked, multi-model
 reduction over `Model.accel` whose oracle is `Model.budget` bitwise at one chunk. The two
 dependency surfaces were read at last and both findings are in HANDOVER Part B: odeSuite is at
 L0 with no dynamics interface and a signature that does not match `Model.rhs()` (O-4 narrowed),
