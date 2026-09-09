@@ -263,6 +263,8 @@ O-33 are void.
 `sensor.AtomInterferometer` (WP-29) is delivered: the triangular sensitivity kernel (a phase is an
 average, not a sample), one reading per cycle with nothing interpolated across the dead time, and
 the 2 pi ambiguity kept explicit — full phase, wrapped phase, and the fringe integer between them.
+The Coriolis phase at orbital rates is **6.7e7 rad**, an apparent 16.7 m/s^2: not a correction to
+the measurement but larger than everything the instrument exists to see.
 
 **Still in LP-7:** WP-29 `sensor.DragFree`. Then LP-R (release).
 
