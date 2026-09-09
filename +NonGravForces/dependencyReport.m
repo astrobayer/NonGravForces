@@ -42,10 +42,13 @@ spec = { ...
 % gracefoReading 1.0.1 (its issue #6, this repository's O-12). Declaring 1.0 would state
 % a minimum this toolbox does not actually run on. NOTE (R3): this column is REPORTED,
 % never COMPARED - nothing here or in ciGate refuses an older dependency. See O-25.
+% The lsqvce minimum said 1.0 until 2026-09-09 and that surface no longer exists: 5.3 replaced it
+% with five user names (HANDOVER B.4), so 1.0 named a version this toolbox cannot use. The setup
+% entry point is unchanged.
   "referenceSystem", true,  "2.1", "setupReferenceSystem", "time, frames, ephemerides, attitude kinematics", @() string(referenceSystem.toolboxVersion().version); ...
   "gracefoReading",  true,  "1.0.1", "setupGraceFOReading",  "GRACE-FO Level-1B reading",                        @() string(gracefoReading.version()); ...
   "gjToolbox",       false, "0.1", "gjToolboxSetup",       "orbit integration (Gauss-Jackson)",                @() string(gjToolbox.versionInfo("string")); ...
-  "lsqvce",          false, "1.0", "lsqvce_setup",         "least squares, VCE, whitening, snooping",          @() localContentsVersion("lsqvce")};
+  "lsqvce",          false, "5.3", "lsqvce_setup",         "least squares with variance components (fit / layout / Options / Results / report)", @() localContentsVersion("lsqvce")};
 n = size(spec,1);
 deps = repmat(struct('name',"",'required',false,'present',false,'version',"",'minimum',"",'setup',"",'role',""), 1, n);
 for k = 1:n

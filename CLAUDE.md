@@ -250,8 +250,13 @@ an FIR filter, with the omega sign convention pinned in its own help (`skew(omeg
 R body→inertial) because `referenceSystem`'s unit takes R the other way and carries a configurable
 sense — the relation between them is RECORDED from the run, not guessed (O-32).
 
-**Still in LP-7:** WP-29 `AtomInterferometer`, `DragFree` · WP-19 `calibrate` · WP-32
-`densityInversion`. Then LP-R (release).
+`app.densityInversion` (WP-32) is delivered too: the inversion is a DIVISION, because the gas force
+is exactly linear in the species densities, so one model evaluation gives the whole sensitivity.
+It does not calibrate and says so; it subtracts the modelled radiation and reports what is left
+across the drag direction, which is the only honest quality flag it can offer.
+
+**Still in LP-7:** WP-29 `AtomInterferometer`, `DragFree` · WP-19 `calibrate` — the last is blocked
+on the runner, not on design: `lsqvce` is not checked out by CI (O-33). Then LP-R (release).
 
 **LP-5x cross-validation** (owner rulings of 2026-08-27):
 - WP-33: standard-library mirror of the **kernel layer only** under

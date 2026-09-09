@@ -1,5 +1,5 @@
 classdef tNgfApp < NgfTestCase
-%TNGFAPP Tests of the application layer (LP-7): app.forceBudget.
+%TNGFAPP Tests of the application layer (LP-7): app.forceBudget, app.densityInversion.
 %
 %   The oracle for a reduction is the thing it reduces. app.forceBudget computes
 %   no physics: with one chunk it must be BITWISE Model.budget, and that is the
@@ -209,4 +209,171 @@ classdef tNgfApp < NgfTestCase
                 "four Model.accel calls instead of one on the same 20 epochs; the per-call overhead is what this measures, and a ratio near 4 would mean the evaluation does not vectorise over epochs at all");
         end
     end
+
+    % ============================================================ densityInversion
+    methods
+        function [e, rr, vv, qq, a, ai] = invScene(tc, n, scale)
+            %INVSCENE A model-generated measurement whose gas part is scaled by a known factor.
+            % The truth is therefore known exactly, which is the only situation in which an
+            % inversion can be tested at all: against real data the answer is unknown by definition.
+            idx = 1:n;
+            e = referenceSystem.daySecondToEpoch([tc.ep.day(idx) tc.ep.sec(idx)], tc.ep.scale);
+            rr = tc.r(:, idx); vv = tc.v(:, idx);
+            qq = tc.att.at(e);
+            [~, ai] = tc.Mfast.accel(e, rr, vv, qq);
+            a = ai.radiation + ai.thermal + scale * ai.drag;
+        end
+    end
+    methods (Test, TestTags = {'contract'})
+        function densityInversionContract(tc)
+            [e, rr, vv, qq, a] = tc.invScene(6, 1);
+            [T, info] = NonGravForces.app.densityInversion(tc.Mfast, e, rr, vv, qq, a);
+            tc.verifyEqual(height(T), 6);
+            tc.verifyEqual(string(T.Properties.VariableNames), ...
+                ["rho_kg_m3" "rho_model_kg_m3" "scale" "dragProjected_m_s2" "dragModel_m_s2" "residualPerp_m_s2" "usable"]);
+            tc.verifyTrue(all(T.usable));
+            tc.verifyEqual(info.K, 6); tc.verifyEqual(info.usable, 6);
+            tc.verifyTrue(istimetable(T));
+
+            D = @NonGravForces.app.densityInversion;
+            tc.verifyErrorId(@() D(struct(), e, rr, vv, qq, a), 'NonGravForces:densityInversion:inputModel');
+            tc.verifyErrorId(@() D(tc.Mfast, e, rr(:, 1:3), vv, qq, a), 'NonGravForces:densityInversion:inputShape');
+            tc.verifyErrorId(@() D(tc.Mfast, e, rr, vv, qq, a(:, 1:3)), 'NonGravForces:densityInversion:inputShape');
+            tc.verifyErrorId(@() D(tc.Mfast, e, rr, vv, zeros(4, 3), a), 'NonGravForces:densityInversion:inputShape');
+            bad = a; bad(1) = NaN;
+            tc.verifyErrorId(@() D(tc.Mfast, e, rr, vv, qq, bad), 'NonGravForces:densityInversion:numericNaN');
+            tc.verifyErrorId(@() D(tc.Mfast, e, rr, vv, qq, a, 'Chunk', 0), 'NonGravForces:densityInversion:inputRange');
+            tc.verifyErrorId(@() D(tc.Mfast, e, rr, vv, qq, a, 'MinDrag', -1), 'NonGravForces:densityInversion:inputRange');
+            tc.verifyError(@() D(tc.Mfast, e, rr, vv, qq, a, 'Frame', "rsw"), 'MATLAB:validators:mustBeMember');
+        end
+    end
+    methods (Test, TestTags = {'reference'})
+        function densityInversionReference(tc)
+            % THE ROUND TRIP IS THE ORACLE. A model's own acceleration, fed back in, must return
+            % the model's own density: the inversion undoes exactly what the forward model did, and
+            % anything else would mean the two disagree about what the gas force is.
+            [e, rr, vv, qq, a, ai] = tc.invScene(12, 1);
+            T = NonGravForces.app.densityInversion(tc.Mfast, e, rr, vv, qq, a);
+            tc.verifyBoundAndRecord("density round trip: the model's own acceleration returns its own density", ...
+                max(abs(T.rho_kg_m3 - ai.rho(:)) ./ ai.rho(:)), 1e-14, "-", ...
+                "the gas force is exactly linear in rho, so the inversion is a division and the round trip is exact to rounding");
+            tc.verifyBoundAndRecord("density round trip: the recovered scale is one", ...
+                max(abs(T.scale - 1)), 1e-14, "-", "same statement, read off the scale column");
+            % A KNOWN scale must come back, not just unity: a test that only ever recovers 1 would
+            % pass for an inversion that returns the model's density and ignores the measurement.
+            for s = [0.5, 1.7, 3.25]
+                [e2, r2, v2, q2, a2, i2] = tc.invScene(8, s);
+                T2 = NonGravForces.app.densityInversion(tc.Mfast, e2, r2, v2, q2, a2);
+                tc.verifyBoundAndRecord("density inversion recovers a planted scale of " + s, ...
+                    max(abs(T2.scale - s)) / s, 1e-13, "-", ...
+                    "the measurement's gas part was scaled by a known factor and nothing else was touched");
+                tc.verifyBoundAndRecord("planted scale " + s + ": the perpendicular residual stays at zero", ...
+                    max(T2.residualPerp_m_s2) / max(max(abs(i2.drag), [], 'all'), realmin), 1e-13, "-", ...
+                    "scaling along the drag direction cannot create a component across it");
+            end
+        end
+    end
+    methods (Test, TestTags = {'precision'})
+        function densityInversionPrecision(tc)
+            % Chunking must not move the answer: every epoch is inverted on its own, so a different
+            % grouping is a different loop over the same independent divisions.
+            [e, rr, vv, qq, a] = tc.invScene(40, 1.3);
+            T1 = NonGravForces.app.densityInversion(tc.Mfast, e, rr, vv, qq, a, 'Chunk', 40);
+            T7 = NonGravForces.app.densityInversion(tc.Mfast, e, rr, vv, qq, a, 'Chunk', 7);
+            tc.verifyBoundAndRecord("densityInversion, chunks of 7 vs one chunk", ...
+                max(abs(T7.rho_kg_m3 - T1.rho_kg_m3)), 0, "kg/m^3", ...
+                "each epoch is an independent division; unlike an RMS there is nothing to associate differently");
+            % The scale and the density must be consistent with the model density to the last bit.
+            tc.verifyBoundAndRecord("rho equals scale times the model density", ...
+                max(abs(T1.rho_kg_m3 - T1.scale .* T1.rho_model_kg_m3)), 0, "kg/m^3", ...
+                "one multiplication, reported twice");
+        end
+    end
+    methods (Test, TestTags = {'vectorization'})
+        function densityInversionVectorization(tc)
+            % One epoch at a time must equal the whole arc, epoch by epoch.
+            [e, rr, vv, qq, a] = tc.invScene(10, 0.8);
+            T = NonGravForces.app.densityInversion(tc.Mfast, e, rr, vv, qq, a);
+            worst = 0;
+            for k = 1:10
+                e1 = referenceSystem.daySecondToEpoch([tc.ep.day(k) tc.ep.sec(k)], tc.ep.scale);
+                T1 = NonGravForces.app.densityInversion(tc.Mfast, e1, rr(:, k), vv(:, k), qq(:, k), a(:, k));
+                worst = max(worst, abs(T1.rho_kg_m3 - T.rho_kg_m3(k)));
+            end
+            tc.verifyBoundAndRecord("densityInversion, one epoch at a time vs the whole arc", worst, 0, "kg/m^3", ...
+                "the inversion has no state and no cross-epoch term, so a batch may not change a single value");
+        end
+    end
+    methods (Test, TestTags = {'robustness'})
+        function densityInversionRobustness(tc)
+            [e, rr, vv, qq, a] = tc.invScene(8, 1);
+            % A modelled drag below MinDrag is refused, not divided by: usable false and rho NaN.
+            T = NonGravForces.app.densityInversion(tc.Mfast, e, rr, vv, qq, a, 'MinDrag', 1);
+            tc.verifyFalse(any(T.usable));
+            tc.verifyTrue(all(isnan(T.rho_kg_m3)) && all(isnan(T.scale)));
+            tc.verifyTrue(all(isfinite(T.rho_model_kg_m3)), 'the model density is still reported where the inversion is refused');
+
+            % A NEGATIVE scale is returned, not clipped. Clipping would turn a visible failure -
+            % a measurement pointing against the modelled drag - into a plausible density floor.
+            [e2, r2, v2, q2, aNeg] = tc.invScene(8, -0.5);
+            T2 = NonGravForces.app.densityInversion(tc.Mfast, e2, r2, v2, q2, aNeg);
+            tc.verifyTrue(all(T2.usable));
+            tc.verifyBoundAndRecord("a measurement against the modelled drag returns a negative scale", ...
+                max(abs(T2.scale + 0.5)) / 0.5, 1e-13, "-", ...
+                "the sign is data, not an error: clipping it at zero would hide the case it reports");
+            tc.verifyTrue(all(T2.rho_kg_m3 < 0), 'a negative scale must carry through to the density it implies');
+
+            % An error that is NOT along the drag direction lands in the perpendicular residual and
+            % changes the density only by its projection. That is the whole point of reporting it.
+            perpDir = null(reshape(a(:, 1) / norm(a(:, 1)), 1, 3));
+            bump = 0.1 * norm(a(:, 1)) * repmat(perpDir(:, 1), 1, 8);
+            T3 = NonGravForces.app.densityInversion(tc.Mfast, e, rr, vv, qq, a + bump);
+            tc.verifyTrue(all(T3.residualPerp_m_s2 > 0));
+            tc.verifyTrue(all(isfinite(T3.rho_kg_m3)));
+        end
+    end
+    methods (Test, TestTags = {'metamorphic'})
+        function densityInversionMetamorphic(tc)
+            [e, rr, vv, qq, a, ai] = tc.invScene(10, 1);
+            T1 = NonGravForces.app.densityInversion(tc.Mfast, e, rr, vv, qq, a);
+            % 1. Doubling the measurement's gas part doubles the inverted density, exactly.
+            T2 = NonGravForces.app.densityInversion(tc.Mfast, e, rr, vv, qq, ai.radiation + ai.thermal + 2 * ai.drag);
+            tc.verifyBoundAndRecord("doubling the measured gas part doubles the density", ...
+                max(abs(T2.rho_kg_m3 - 2 * T1.rho_kg_m3) ./ (2 * T1.rho_kg_m3)), 1e-13, "-", ...
+                "linearity in rho, seen from the other side");
+            % 2. An error in the modelled radiation moves the density by its projection on the drag
+            %    direction and by exactly that: this is the failure mode the help warns about, and
+            %    it is asserted rather than described.
+            dRad = 0.05 * ai.drag;                              % a radiation error along the drag
+            T3 = NonGravForces.app.densityInversion(tc.Mfast, e, rr, vv, qq, a + dRad);
+            tc.verifyBoundAndRecord("a radiation error along the drag direction moves rho by exactly its size", ...
+                max(abs((T3.rho_kg_m3 - T1.rho_kg_m3) ./ T1.rho_kg_m3 - 0.05)), 1e-12, "-", ...
+                "nothing separates the two along that direction, which is why residualPerp is reported beside every value");
+            % 3. An error ACROSS the drag direction does not move rho at all.
+            cross1 = cross(ai.drag, repmat([0; 0; 1], 1, size(ai.drag, 2)));
+            cross1 = 0.2 * cross1 ./ max(vecnorm(cross1), realmin) .* vecnorm(ai.drag);
+            T4 = NonGravForces.app.densityInversion(tc.Mfast, e, rr, vv, qq, a + cross1);
+            tc.verifyBoundAndRecord("an error across the drag direction leaves rho untouched", ...
+                max(abs(T4.rho_kg_m3 - T1.rho_kg_m3) ./ T1.rho_kg_m3), 1e-12, "-", ...
+                "the projection is what the inversion reads, so an orthogonal error can only reach residualPerp");
+            tc.verifyTrue(all(T4.residualPerp_m_s2 > T1.residualPerp_m_s2));
+        end
+    end
+    methods (Test, TestTags = {'speed'})
+        function densityInversionSpeed(tc)
+            % The cost is Model.accel and nothing else; the inversion itself is a division per
+            % epoch. So chunking must cost what the extra Model.accel calls cost and no more.
+            [e, rr, vv, qq, a] = tc.invScene(20, 1);
+            NonGravForces.app.densityInversion(tc.Mfast, e, rr, vv, qq, a, 'Chunk', 20);
+            t1 = zeros(1, 3); t4 = zeros(1, 3);
+            for k = 1:3
+                t0 = tic; NonGravForces.app.densityInversion(tc.Mfast, e, rr, vv, qq, a, 'Chunk', 20); t1(k) = toc(t0);
+                t0 = tic; NonGravForces.app.densityInversion(tc.Mfast, e, rr, vv, qq, a, 'Chunk', 5);  t4(k) = toc(t0);
+            end
+            tc.verifyBoundAndRecord("densityInversion, 4 chunks / 1 chunk over 20 epochs", ...
+                median(t4) / median(t1), 4.0, "-", ...
+                "four Model.accel calls instead of one; the divisions are free by comparison");
+        end
+    end
+
 end
