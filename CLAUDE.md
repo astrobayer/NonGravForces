@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.6.2.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.6.3.
 
 ---
 
@@ -73,6 +73,12 @@ both directions against the files on disk, and this sentence's number against it
   filter, frame). Quantum (atom-interferometer) and drag-free sensors are
   first-class, not retrofits.
 - **P10 one raise point**: `NonGravForces.fail(unit, mnemonic, message)`.
+- **P11 two evaluation paths, both first class** (owner ruling 2026-09-08): the
+  vectorised MATLAB path (`Model.accel`, `series`) for an arc, and the pointwise
+  compiled path (`kernel.singleEpoch`) for a right-hand side. Neither replaces the
+  other, neither is justified by speed, and `Model` gains no `'Backend'` option —
+  that would make one a mode of the other. The price is that they must agree, and
+  `tNgfMex/singleEpochEndToEndPrecision` is where that is checked.
 - **MATLAB is normative.** The C/MEX port (LP-6b, hand-written, no MATLAB Coder,
   `mex/ngfKernel.c` + `kernel.singleEpoch`) and the standard-library kernel mirror
   (WP-33) are verified *against* MATLAB, never the reverse. The C is written in the
@@ -226,12 +232,10 @@ CI `matlab` job when the MCP bridge would not answer: predicted 270, ran 270, **
 one 500 us absolute speed bound this session had set by guess was decomposed (not widened).
 The 1e-14 parity is measured: 4.5e-16 on the force, 1.9e-15 on the torque, bitwise on `gamma`
 and the speed ratios. The compiled kernel is 901.8 us per epoch against 4149.6 us for the MATLAB
-chain, ratio 0.217 — for a 3-source scene, so it does not settle O-31. Two rulings recorded and
-awaiting confirmation: `thermalRecoil` was
-ported although the prompt did not name it, and `rsApiRotation` is NOT linked because it is
-ITRS→GCRS and the kernel is body frame. D.6's speed justification was contradicted by O-29
-and has been rewritten; whether `Model` should route through the compiled path is O-31 and
-is not to be decided before the number is read.
+chain, ratio 0.217 — for a 3-source scene, so it does not settle O-31. Both scope rulings were APPROVED by the owner on
+2026-09-08: `thermalRecoil` is ported although the prompt did not name it, and `rsApiRotation`
+is NOT linked because it is ITRS→GCRS while the kernel is body frame. D.6's speed justification was contradicted by O-29
+and has been rewritten; under P-11 the speed ratio decides nothing and O-31 is informational.
 
 **Opened 2026-09-08: LP-7** — `app.forceBudget` (WP-30) is delivered and GREEN (276/276 on the
 CI runner, predicted 276): a chunked, multi-model
@@ -371,6 +375,10 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   interface at all. Both repositories are readable through the GitHub API from any tier.
 - **The `fast` preset sets `thermal.model = "none"`**, so a thermal invariance asserted on a fast
   model asserts 0 == 0 and measures nothing.
+- **`env.density("exponential")` returns species and T as NaN on purpose** — it models neither.
+  Any unit that screens an input it does not read will refuse the fast preset's own environment;
+  `kernel.singleEpoch` did exactly that until 2026-09-08. Build a test's inputs from the real
+  units, not from literals, or this class of defect stays invisible.
 - **Never assert a host-dependent absolute** (rule T5). A 500 us per-epoch bound written from a
   guess reddened the gate on a runner that measured 901.8 us, in the same session that quoted the
   rule. Assert the ratio; record the absolute with a ceiling an order of magnitude above it.

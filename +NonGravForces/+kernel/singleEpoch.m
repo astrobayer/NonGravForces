@@ -20,12 +20,16 @@ function [F, tau, info] = singleEpoch(macro, gas, src, Tpanel_K, options)
 %   Model.budget reports them one by one; summing here would force every caller
 %   to re-split what it needs.
 %
-%   WHY IT EXISTS. Model.accel evaluates K epochs at once and is the path to
-%   use for a series. An integrator's right-hand side has one epoch and calls it
-%   thousands of times per arc, where MATLAB's per-call overhead and the
-%   interpreted panel loop are paid once per call and never amortised. This unit
-%   is that path. It is NOT faster than Model.accel per epoch for large K and it
-%   does not try to be.
+%   WHY IT EXISTS. Two evaluation paths are kept side by side by design
+%   (HANDOVER D.1 P-11, owner ruling 2026-09-08): Model.accel evaluates K epochs
+%   at once and is the path for an arc; this unit evaluates one epoch in C and is
+%   the path for an integrator's right-hand side, called once per step and never
+%   amortised over K. Neither is a fidelity tier of the other, neither is a
+%   fallback for the other, and neither is justified by being the faster one.
+%   What the pair costs is that they must AGREE, which
+%   tests/tNgfMex/singleEpochEndToEndPrecision measures over the real arc: the
+%   environment composed as Model.evaluate composes it, one epoch through here,
+%   and the acceleration back must be Model.accel's.
 %
 %   WHAT IT DOES NOT DO. No environment: the density, the composition, the
 %   radiation source list, the attitude, the self-shadowing and the panel
@@ -45,7 +49,10 @@ function [F, tau, info] = singleEpoch(macro, gas, src, Tpanel_K, options)
 %   gas         1x1    struct      -      .rho 1x1 kg/m^3 total mass density (used by constantCd)
 %                                         .species 8x1 1/m^3 number densities in const.speciesName
 %                                          order, or [] for constantCd
-%                                         .T_K 1x1 K gas kinetic temperature (density's T(2))
+%                                         .T_K 1x1 K gas kinetic temperature (density's T(2)).
+%                                          READ ONLY by sentman and maxwell: constantCd neither
+%                                          reads nor validates it, so the NaN that
+%                                          env.density("exponential") returns by design is legal
 %                                         .vrel_body 3x1 m/s satellite velocity relative to the gas,
 %                                          body frame, |v| > 0
 %                                         .shadow Nx1 self-shadow fraction of each plate for the gas
@@ -212,7 +219,19 @@ end
 % --- finiteness, then ranges. Both are checked here because the compiled path
 % does not go through the MATLAB units that would otherwise check them; the C
 % guards behind this are a backstop, not the contract.
-probe = [gas.rho; gas.T_K; gas.vrel_body; species; shadowGas; d(:); P; shadowRad(:); Tp; options.CdScale; options.CrScale];
+%
+% AN INPUT THE MODEL DOES NOT READ IS NOT VALIDATED. env.density("exponential")
+% returns species and T as NaN ON PURPOSE, because it models neither, and that
+% is exactly the backend the fast preset pairs with constantCd. Screening the
+% temperature for every model therefore refused the fast preset's own
+% environment and made the compiled path unusable with it — found 2026-09-08 by
+% tNgfMex/singleEpochEndToEndPrecision on its first run, and the reason that
+% test composes the real environment instead of a hand-made one. species is
+% already emptied for constantCd above; T_K joins it here.
+probe = [gas.rho; gas.vrel_body; species; shadowGas; d(:); P; shadowRad(:); Tp; options.CdScale; options.CrScale];
+if model ~= "constantCd"
+    probe = [probe; gas.T_K];
+end
 if any(~isfinite(probe))
     NonGravForces.fail(unit, "numericNaN", "an input contains NaN/Inf -> screen the density, sources, temperatures and velocity");
 end
