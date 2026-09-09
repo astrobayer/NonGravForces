@@ -95,7 +95,7 @@ SW_URL = "https://celestrak.org/SpaceData/SW-All.csv";
 % it is fetched only when the sample files are missing and only the needed members are kept.
 L1B_BASE = "https://isdc-data.gfz.de/grace-fo/Level-1B/JPL/INSTRUMENT/RL04";
 L1B_DAY = "2020-01-01";
-L1B_MEMBERS = ["GNV1B_2020-01-01_C_04.txt", "SCA1B_2020-01-01_C_04.txt"];
+L1B_MEMBERS = ["GNV1B_2020-01-01_C_04.txt", "SCA1B_2020-01-01_C_04.txt", "MAG1B_2020-01-01_C_04.txt"];
 root = fileparts(mfilename('fullpath'));
 addpath(root, fullfile(root,'tests'), fullfile(root,'tools'), fullfile(root,'demos'));
 % Help-browser registration: info.xml at the root is picked up by doc.

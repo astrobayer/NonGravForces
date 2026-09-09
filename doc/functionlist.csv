@@ -12,7 +12,7 @@ io,readSCA1B,function,L1,WP-18,done,SCA1B reader: ICRF->SRF quaternions conjugat
 io,readGNV1B,function,L1,WP-18,done,GNV1B reader: ITRS state rotated to GCRS via referenceSystem
 io,readTHR1B,function,L1,WP-18,done,THR1B thruster event reader (impulse priors for qc)
 io,readMAS1B,function,L1,WP-18,done,MAS1B tank-mass reader (NOT spacecraft mass)
-io,readMAG1B,function,L1,WP-18,stub,MAG1B magnetometer/magnetorquer reader (magnetic torque priors)
+io,readMAG1B,function,L1,WP-18,done,MAG1B reader: measured field (SI) and magnetorquer branch and net currents
 io,massModel,function,L1,WP-18,done,Spacecraft mass model: handbook constant or MAS1B-driven variable mass
 io,spaceWeather,function,L1,WP-04,done,Space-weather provider with query(epoch): F10.7 F30 S/M/Y10.7 Ap Kp Dst
 io,importCERES,function,L1,WP-08,stub,CERES SYN1deg/EBAF netCDF import into radiance grids
