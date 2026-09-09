@@ -73,20 +73,21 @@ have a real arc to run on. They are redistributed under the terms their
 providers publish; they are not covered by the MIT licence above and are not
 this toolbox's to relicense.
 
-**A packaged `.mltbx` carries none of them** (owner's ruling, 2026-09-09):
-`setupNonGravForces` downloads what can be had without an account, only when it
-is missing, and otherwise supplying the data is the user's responsibility.
+The toolbox is published **via git only** — `.mltbx` packaging was deprecated on
+2026-09-09 — so the question of what a package may carry does not arise.
+`setupNonGravForces` downloads these, only when they are missing, and otherwise
+supplying them is the user's responsibility.
 
 | source | fetched by setup | where from |
 |---|---|---|
 | Earth orientation | yes | `https://datacenter.iers.org/data/9/finals2000A.all` |
 | space weather | yes, with one retry | `https://celestrak.org/SpaceData/SW-All.csv` |
-| GRACE-FO Level-1B | **no** | PO.DAAC, and it requires an Earthdata login |
+| GRACE-FO Level-1B | yes, 147 MB, members only | `https://isdc-data.gfz.de/grace-fo/Level-1B/JPL/INSTRUMENT/RL04/` |
 
-The third row is the honest one. Probed on 2026-09-09: IERS answered 200 with
-the fixed-format file, CelesTrak answered 503 once and 200 on the retry, and no
-anonymous GRACE-FO mirror was established. Setup therefore names the source and
-the filenames it expects and downloads nothing, rather than shipping a URL that
-would fail in front of a reader.
+Every endpoint was fetched before it was written down. IERS answered 200 with the
+fixed-format file; CelesTrak answered 503 once and 200 on the retry, which is why
+that fetch retries; the GFZ archive for 2020-01-01 holds all 65 products under
+exactly the filenames this toolbox's fixtures use, so setup keeps only the two it
+needs and discards the rest.
 
 `'FetchData', "never"` leaves the network alone entirely.

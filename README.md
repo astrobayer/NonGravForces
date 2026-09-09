@@ -1,4 +1,4 @@
-# NonGravForces 0.8.7
+# NonGravForces 0.8.8
 
 Non-gravitational forces, torques and partials for LEO satellites (GRACE-FO reference case). Third concept, designed from scratch after the audits of `SatelliteNonGravToolbox` v1 and `NonGravToolbox` v0.1.1.
 
@@ -18,4 +18,4 @@ Licensed MIT (see `LICENSE`). The NRLMSISE-00 C source is **not** in this reposi
 setupNonGravForces      % puts the toolbox on the path AND clones NRLMSISE-00 at the pinned commit
 ```
 
-Setup is the only place in the toolbox that touches the network, it does so only when something is missing, and it prints a line when it does. It fetches the IERS and CelesTrak data files the same way. **GRACE-FO Level-1B needs an Earthdata login and is not fetched** — setup names the source; supplying it is yours. `'FetchMsis', "never"` leaves the network alone; `NGF_NRLMSISE00` points at a copy you already have. `NonGravForces.buildMex` never fetches — it refuses and names setup. Everything except the `msis00` density backend works without any of it. See `THIRD-PARTY-NOTICES.md`. The authority is `doc/functionlist.csv`; `HANDOVER.md` Part A carries the level-by-level record.
+Setup is the only place in the toolbox that touches the network, it does so only when something is missing, and it prints a line when it does. It fetches the IERS and CelesTrak data files the same way. GRACE-FO Level-1B comes from the GFZ ISDC archive (147 MB for one day; setup keeps only the two files it needs). The toolbox is published via git only. `'FetchMsis', "never"` leaves the network alone; `NGF_NRLMSISE00` points at a copy you already have. `NonGravForces.buildMex` never fetches — it refuses and names setup. Everything except the `msis00` density backend works without any of it. See `THIRD-PARTY-NOTICES.md`. The authority is `doc/functionlist.csv`; `HANDOVER.md` Part A carries the level-by-level record.
