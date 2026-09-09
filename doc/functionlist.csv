@@ -49,6 +49,6 @@ qc,detectImpulses,function,L7,WP-31,done,Matched filter on the CRN impulse respo
 qc,detectJumps,function,L7,WP-31,done,Piecewise-constant/linear change-point detection (PELT + BIC)
 qc,eventTable,function,L7,WP-31,done,Canonical event table constructor and schema
 qc,screen,function,L7,WP-31,done,Orchestrator: residuals -> outliers -> impulses -> jumps -> mask
-app,calibrate,function,L8,WP-19,stub,Accelerometer calibration bridge to lsqvce (bias spline + 3x3 scale + jumps)
+app,calibrate,function,L8,WP-19,done,Accelerometer calibration: bias basis + 3x3 scale + jumps by separable weighted least squares
 app,forceBudget,function,L8,WP-30,done,Per-effect per-axis acceleration budget over an arc; chunked and across models
 app,densityInversion,function,L8,WP-32,done,Thermosphere density from calibrated accelerations; the inversion is a division

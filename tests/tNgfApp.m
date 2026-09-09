@@ -1,5 +1,5 @@
 classdef tNgfApp < NgfTestCase
-%TNGFAPP Tests of the application layer (LP-7): app.forceBudget, app.densityInversion.
+%TNGFAPP Tests of the application layer (LP-7): app.forceBudget, app.densityInversion, app.calibrate.
 %
 %   The oracle for a reduction is the thing it reduces. app.forceBudget computes
 %   no physics: with one chunk it must be BITWISE Model.budget, and that is the
@@ -381,6 +381,235 @@ classdef tNgfApp < NgfTestCase
             tc.verifyBoundAndRecord("densityInversion, 4 chunks / 1 chunk over 20 epochs", ...
                 median(t4) / median(t1), 4.0, "-", ...
                 "four Model.accel calls instead of one; the divisions are free by comparison");
+        end
+    end
+
+    % =================================================================== calibrate
+    methods
+        function [e, aM, y, truth] = calScene(tc, K, biasKind, noise)
+            %CALSCENE A measurement built from KNOWN parameters, so the answer is known exactly.
+            % An estimator can only be tested where the truth is; on real data it is not, which is
+            % why the real-arc check further down asserts an order of magnitude and not a value.
+            idx = 1:K;
+            e = referenceSystem.daySecondToEpoch([tc.ep.day(idx) tc.ep.sec(idx)], tc.ep.scale);
+            [~, ai] = tc.Mfast.accel(e, tc.r(:, idx), tc.v(:, idx), tc.att.at(e));
+            aM = ai.drag + ai.radiation + ai.thermal;
+            t = (tc.ep.sec(idx) - tc.ep.sec(1))';
+            truth = struct('scale', diag([1.05 0.96 1.01]), 'b0', [1e-6; -3e-6; 2e-7]);
+            switch biasKind
+                case "constant", b = repmat(truth.b0, 1, K);
+                otherwise
+                    truth.rate = [2e-10; -5e-10; 1e-10];        % per second
+                    b = truth.b0 + truth.rate .* t(:)';
+            end
+            truth.bias = b;
+            rng(20260909);                                       % fixed: a test that drifts with
+            y = b + truth.scale * aM + noise * randn(3, K);      % the seed is not a measurement
+        end
+    end
+    methods (Test, TestTags = {'contract'})
+        function calibrateContract(tc)
+            [e, aM, y] = tc.calScene(40, "constant", 0);
+            [cal, info] = NonGravForces.app.calibrate(y, aM, e);
+            tc.verifySize(cal.scale, [3 3]); tc.verifySize(cal.bias, [3 40]);
+            tc.verifySize(cal.sigma0, [3 1]); tc.verifyEqual(numel(cal.covariance), 3);
+            tc.verifyEqual(cal.dof, repmat(40 - 2, 3, 1));
+            tc.verifyEqual(info.nBasis, 1); tc.verifyEqual(info.nScale, 1);
+            tc.verifyEqual(cal.names, ["bias0", "scale_ii"]);
+            tc.verifyTrue(all(isfinite(cal.condition)));
+
+            C = @NonGravForces.app.calibrate;
+            tc.verifyErrorId(@() C(y(:, 1:5), aM, e), 'NonGravForces:calibrate:inputShape');
+            tc.verifyErrorId(@() C(y, aM, e, 'Weights', ones(2, 40)), 'NonGravForces:calibrate:inputShape');
+            tc.verifyErrorId(@() C(y, aM, e, 'Mask', true(2, 40)), 'NonGravForces:calibrate:inputShape');
+            tc.verifyErrorId(@() C(y, aM, e, 'Weights', -ones(3, 40)), 'NonGravForces:calibrate:inputRange');
+            tc.verifyErrorId(@() C(y, aM, e, 'Bias', "hat", 'KnotInterval_s', 0), 'NonGravForces:calibrate:inputRange');
+            tc.verifyErrorId(@() C(y, aM, e, 'Events', 1e9), 'NonGravForces:calibrate:inputRange');
+            bad = y; bad(1, 3) = NaN;
+            tc.verifyErrorId(@() C(bad, aM, e), 'NonGravForces:calibrate:numericNaN');
+            % ...unless the offending sample is masked out, which is the point of the mask.
+            m = true(3, 40); m(1, 3) = false;
+            tc.verifyWarningFree(@() C(bad, aM, e, 'Mask', m));
+            % Fewer usable samples than unknowns is refused, not solved.
+            tc.verifyErrorId(@() C(y(:, 1:2), aM(:, 1:2), ...
+                referenceSystem.daySecondToEpoch([tc.ep.day(1:2) tc.ep.sec(1:2)], tc.ep.scale), ...
+                'Bias', "hat", 'KnotInterval_s', 1), 'NonGravForces:calibrate:numericSingular');
+        end
+    end
+    methods (Test, TestTags = {'reference'})
+        function calibrateReference(tc)
+            % PLANTED PARAMETERS ARE THE ORACLE. The model is linear, so a noise-free arc must
+            % return the truth to the conditioning of the QR and to nothing else.
+            [e, aM, y, truth] = tc.calScene(60, "constant", 0);
+            cal = NonGravForces.app.calibrate(y, aM, e, 'Scale', "diag");
+            tc.verifyBoundAndRecord("calibrate recovers a planted diagonal scale", ...
+                max(abs(diag(cal.scale) - diag(truth.scale)) ./ diag(truth.scale)), 1e-10, "-", ...
+                "noise-free and linear: what is left is the conditioning of the equilibrated solve");
+            tc.verifyBoundAndRecord("calibrate recovers a planted constant bias", ...
+                max(abs(cal.bias(:, 1) - truth.b0) ./ abs(truth.b0)), 1e-9, "-", ...
+                "the bias and the scale are separable here because the modelled acceleration varies over the arc");
+            tc.verifyBoundAndRecord("calibrate residuals vanish on an exact fit", ...
+                max(abs(cal.residual), [], 'all') / max(abs(y), [], 'all'), 1e-12, "-", ...
+                "the truth is in the column space, so the projection removes all of it");
+            % A drifting bias needs a basis that can hold it: "constant" cannot, "linear" can, and
+            % the difference is what the residual reports. Both halves asserted.
+            [e2, aM2, y2, truth2] = tc.calScene(60, "linear", 0);
+            calC = NonGravForces.app.calibrate(y2, aM2, e2, 'Bias', "constant");
+            calL = NonGravForces.app.calibrate(y2, aM2, e2, 'Bias', "linear");
+            tc.verifyBoundAndRecord("a linear basis recovers a drifting bias", ...
+                max(abs(calL.bias - truth2.bias), [], 'all') / max(abs(truth2.bias), [], 'all'), 1e-9, "-", ...
+                "the drift is in the column space of [1, tau]");
+            tc.verifyBoundAndRecord("a constant basis cannot, and the residual says so", ...
+                max(abs(calC.residual), [], 'all') / max(abs(calL.residual), [], 'all'), 1e12, "-", ...
+                "recorded, not bounded from above by a guess: the point is that it is orders larger, and the run report carries the number");
+            tc.verifyGreaterThan(max(abs(calC.residual), [], 'all'), 1e3 * max(abs(calL.residual), [], 'all'));
+        end
+    end
+    methods (Test, TestTags = {'precision'})
+        function calibratePrecision(tc)
+            % THE 1/sqrt(K) LAW HOLDS FOR A CONSTANT DESIGN COLUMN AND FOR NOTHING ELSE. The
+            % scale's column is the modelled acceleration, and what determines its sigma is the
+            % SPREAD of that acceleration over the arc; 240 epochs of a GRACE orbit do not carry
+            % four times the spread of 60. So the law is asserted where it is a law and the
+            % scale's ratio is RECORDED beside it rather than bounded by a wish.
+            sig = 2e-9;
+            [e1, a1, y1] = tc.calScene(60, "constant", sig);
+            [e2, a2, y2] = tc.calScene(240, "constant", sig);
+            % SEPARATE THE ALGEBRA FROM THE STATISTICS. The 1/sqrt(K) law is an exact identity of
+            % the covariance formula for a constant design column, so it is asserted EXACTLY and
+            % with no sampling spread to argue about: sigma_bias * sqrt(K) / sigma0 = 1. Two
+            % earlier versions of this test asserted a ratio between two arcs instead and measured
+            % 8.3 and then 0.49 against expectations of 2 -- the first because the scale's sigma is
+            % not governed by K at all, the second because 'Scale', "none" leaves the modelled
+            % acceleration in the residual, so sigma0 stopped measuring the noise and started
+            % measuring the signal. A ratio between two realisations was never the right vehicle.
+            bA = NonGravForces.app.calibrate(y1, zeros(3, 60), e1, 'Scale', "none");
+            bB = NonGravForces.app.calibrate(y2, zeros(3, 240), e2, 'Scale', "none");
+            ident = [bA.sigma(:, 1) * sqrt(60) ./ bA.sigma0; bB.sigma(:, 1) * sqrt(240) ./ bB.sigma0];
+            tc.verifyBoundAndRecord("formal bias sigma is exactly sigma0/sqrt(K) for a constant column", ...
+                max(abs(ident - 1)), 1e-12, "-", ...
+                "an identity of sigma0^2 (A'A)^-1 with A a column of ones, so it holds per arc and carries no sampling spread");
+            c1 = NonGravForces.app.calibrate(y1, a1, e1);
+            c2 = NonGravForces.app.calibrate(y2, a2, e2);
+            tc.verifyBoundAndRecord("formal scale sigma, 60 epochs / 240 epochs (recorded, not a law)", ...
+                max(c1.sigma(:, end) ./ c2.sigma(:, end)), 20, "-", ...
+                "determined by the spread of the modelled acceleration over the arc, not by the sample count; the bound only catches a runaway");
+            tc.verifyBoundAndRecord("sigma0 recovers the planted noise level", ...
+                max(abs(c2.sigma0 - sig)) / sig, 0.2, "-", ...
+                "a-posteriori sigma from a 240-sample arc: the chi-square spread at 237 degrees of freedom is about 9 per cent");
+            tc.verifyBoundAndRecord("the scale estimate stays within three formal sigmas of the truth", ...
+                max(abs(diag(c2.scale) - [1.05; 0.96; 1.01]) ./ c2.sigma(:, end)), 3, "-", ...
+                "unbiasedness, tested the only way one realisation allows");
+        end
+    end
+
+    methods (Test, TestTags = {'vectorization'})
+        function calibrateVectorization(tc)
+            % THE PROBLEM SEPARATES BY AXIS, and that is a claim about the estimator, not an
+            % implementation detail: perturbing one axis of the measurement may not move another
+            % axis's parameters at all. If it did, the three solves would be sharing something.
+            [e, aM, y] = tc.calScene(50, "constant", 1e-9);
+            c0 = NonGravForces.app.calibrate(y, aM, e, 'Scale', "diag");
+            yp = y; yp(2, :) = yp(2, :) + 1e-6;
+            cp = NonGravForces.app.calibrate(yp, aM, e, 'Scale', "diag");
+            tc.verifyBoundAndRecord("perturbing axis y leaves the x and z parameters untouched", ...
+                max(abs([cp.scale(1,1) - c0.scale(1,1); cp.scale(3,3) - c0.scale(3,3); ...
+                         cp.bias([1 3], 1) - c0.bias([1 3], 1)])), 0, "-", ...
+                "a diagonal scale makes the three axes independent problems; a shared factorisation would leak here");
+            % With a FULL scale they are no longer independent, by construction, and that must show.
+            cf0 = NonGravForces.app.calibrate(y, aM, e, 'Scale', "full");
+            cfp = NonGravForces.app.calibrate(yp, aM, e, 'Scale', "full");
+            tc.verifyBoundAndRecord("a full scale still leaves the OTHER rows untouched", ...
+                max(abs(cfp.scale([1 3], :) - cf0.scale([1 3], :)), [], 'all'), 0, "-", ...
+                "row i of S is fitted to row i of the measurement, so only row 2 may move");
+            tc.verifyGreaterThan(max(abs(cfp.scale(2, :) - cf0.scale(2, :))), 0);
+        end
+    end
+    methods (Test, TestTags = {'robustness'})
+        function calibrateRobustness(tc)
+            % An outlier must not carry the fit. Huber IRLS is asserted against the ordinary
+            % solution on the same data: both are computed, and the robust one must stay near the
+            % truth while the ordinary one does not.
+            [e, aM, y, truth] = tc.calScene(120, "constant", 1e-9);
+            yBad = y; yBad(1, 40:44) = yBad(1, 40:44) + 5e-6;    % five gross outliers on one axis
+            cOls = NonGravForces.app.calibrate(yBad, aM, e);
+            cRob = NonGravForces.app.calibrate(yBad, aM, e, 'Robust', "huber");
+            eOls = abs(cOls.scale(1,1) - truth.scale(1,1));
+            eRob = abs(cRob.scale(1,1) - truth.scale(1,1));
+            tc.verifyBoundAndRecord("Huber IRLS beats the ordinary solve on five gross outliers", ...
+                eRob / max(eOls, realmin), 1, "-", ...
+                "the ratio is the claim; the absolute errors depend on where the outliers fall and are recorded in the run log");
+            tc.verifyGreaterThan(cRob.iterations(1), 1, 'the robust path must actually iterate');
+            % A masked gap is not a zero: the estimate must match a call on the trimmed arc.
+            m = true(3, 120); m(:, 40:44) = false;
+            cMask = NonGravForces.app.calibrate(yBad, aM, e, 'Mask', m);
+            keep = [1:39, 45:120];
+            eTrim = referenceSystem.daySecondToEpoch([tc.ep.day(keep) tc.ep.sec(keep)], tc.ep.scale);
+            cTrim = NonGravForces.app.calibrate(yBad(:, keep), aM(:, keep), eTrim);
+            tc.verifyBoundAndRecord("masking samples equals removing them", ...
+                max(abs(diag(cMask.scale) - diag(cTrim.scale)) ./ diag(cTrim.scale)), 1e-12, "-", ...
+                "the masked samples never enter a sum, so the two problems are the same problem");
+            % A weight of zero is a mask.
+            w = ones(3, 120); w(:, 40:44) = 0;
+            cW = NonGravForces.app.calibrate(yBad, aM, e, 'Weights', w);
+            tc.verifyBoundAndRecord("a zero weight equals a mask", ...
+                max(abs(diag(cW.scale) - diag(cMask.scale))), 0, "-", "both drop the sample before the design matrix is built");
+            % MORE UNKNOWNS THAN SAMPLES is refused, not fitted. A 2 s knot interval was tried
+            % here first and did NOT refuse, correctly: at this sampling it still leaves more
+            % samples than knots, so it is estimable and merely useless. 0.5 s puts the knot count
+            % above the sample count whatever the fixture's rate, which is the guard's actual job.
+            tc.verifyErrorId(@() NonGravForces.app.calibrate(y, aM, e, 'Bias', "hat", 'KnotInterval_s', 0.5), ...
+                'NonGravForces:calibrate:numericSingular');
+            % The condition guard is a separate branch and gets its own provocation, paired with
+            % the call that must succeed (rule T6).
+            tc.verifyErrorId(@() NonGravForces.app.calibrate(y, aM, e, 'MaxCondition', 1), ...
+                'NonGravForces:calibrate:numericSingular');
+            tc.verifyWarningFree(@() NonGravForces.app.calibrate(y, aM, e, 'MaxCondition', 1e12));
+        end
+    end
+    methods (Test, TestTags = {'metamorphic'})
+        function calibrateMetamorphic(tc)
+            [e, aM, y, truth] = tc.calScene(60, "constant", 0);
+            c = NonGravForces.app.calibrate(y, aM, e);
+            % 1. Adding a constant to the measurement moves the bias by it and the scale not at all.
+            c2 = NonGravForces.app.calibrate(y + 7e-6, aM, e);
+            tc.verifyBoundAndRecord("a constant added to the measurement lands entirely in the bias", ...
+                max(abs((c2.bias - c.bias) - 7e-6), [], 'all') / 7e-6, 1e-9, "-", ...
+                "the constant is in the bias basis, so the projection puts it there and nowhere else");
+            tc.verifyBoundAndRecord("...and leaves the scale alone", ...
+                max(abs(diag(c2.scale) - diag(c.scale))) / max(diag(c.scale)), 1e-9, "-", ...
+                "the scale column is orthogonalised against the constant by the solve");
+            % 2. Doubling the modelled acceleration halves the scale and leaves the bias.
+            c3 = NonGravForces.app.calibrate(y, 2 * aM, e);
+            tc.verifyBoundAndRecord("doubling the model halves the scale", ...
+                max(abs(diag(c3.scale) - diag(c.scale) / 2) ./ (diag(c.scale) / 2)), 1e-9, "-", ...
+                "the product S a is what is observed, so only the product is determined");
+            % 3. A declared jump is recovered where a constant basis alone would smear it.
+            yJ = y; yJ(:, 31:end) = yJ(:, 31:end) + [4e-6; -2e-6; 1e-6];
+            tJump = tc.ep.sec(31) - tc.ep.sec(1);
+            cJ = NonGravForces.app.calibrate(yJ, aM, e, 'Events', tJump);
+            tc.verifyBoundAndRecord("a declared jump is recovered", ...
+                max(abs(cJ.jump - [4e-6; -2e-6; 1e-6]) ./ abs([4e-6; -2e-6; 1e-6])), 1e-9, "-", ...
+                "the step is in the column space once it is declared");
+            tc.verifyBoundAndRecord("...and the scale survives the jump", ...
+                max(abs(diag(cJ.scale) - diag(truth.scale)) ./ diag(truth.scale)), 1e-9, "-", ...
+                "a jump absorbed by its own column cannot bias the scale");
+        end
+    end
+    methods (Test, TestTags = {'speed'})
+        function calibrateSpeed(tc)
+            % Three QR solves of a few unknowns: the cost must be linear in the arc length, because
+            % the design matrix grows in rows only. Four times the epochs, not sixteen times the cost.
+            [e1, a1, y1] = tc.calScene(60, "constant", 1e-9);
+            [e2, a2, y2] = tc.calScene(240, "constant", 1e-9);
+            NonGravForces.app.calibrate(y2, a2, e2);
+            t1 = zeros(1, 3); t2 = zeros(1, 3);
+            for k = 1:3
+                t0 = tic; NonGravForces.app.calibrate(y1, a1, e1); t1(k) = toc(t0);
+                t0 = tic; NonGravForces.app.calibrate(y2, a2, e2); t2(k) = toc(t0);
+            end
+            tc.verifyBoundAndRecord("calibrate, 240 epochs / 60 epochs", median(t2) / median(t1), 8, "-", ...
+                "linear in rows would be 4 and a fixed overhead pulls it below; quadratic would be 16");
         end
     end
 

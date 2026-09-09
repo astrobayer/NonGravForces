@@ -42,13 +42,13 @@ spec = { ...
 % gracefoReading 1.0.1 (its issue #6, this repository's O-12). Declaring 1.0 would state
 % a minimum this toolbox does not actually run on. NOTE (R3): this column is REPORTED,
 % never COMPARED - nothing here or in ciGate refuses an older dependency. See O-25.
-% The lsqvce minimum said 1.0 until 2026-09-09 and that surface no longer exists: 5.3 replaced it
-% with five user names (HANDOVER B.4), so 1.0 named a version this toolbox cannot use. The setup
-% entry point is unchanged.
+% lsqvce was listed here as an optional dependency for app.calibrate until 2026-09-09, when the
+% owner ruled it overkill for this estimation problem and WP-19 got the toolbox's own solver. A
+% dependency table that names a toolbox nothing calls is a table that will be believed, so the row
+% is gone rather than kept as a courtesy. If a future unit needs variance components, it comes back.
   "referenceSystem", true,  "2.1", "setupReferenceSystem", "time, frames, ephemerides, attitude kinematics", @() string(referenceSystem.toolboxVersion().version); ...
   "gracefoReading",  true,  "1.0.1", "setupGraceFOReading",  "GRACE-FO Level-1B reading",                        @() string(gracefoReading.version()); ...
-  "gjToolbox",       false, "0.1", "gjToolboxSetup",       "orbit integration (Gauss-Jackson)",                @() string(gjToolbox.versionInfo("string")); ...
-  "lsqvce",          false, "5.3", "lsqvce_setup",         "least squares with variance components (fit / layout / Options / Results / report)", @() localContentsVersion("lsqvce")};
+  "gjToolbox",       false, "0.1", "gjToolboxSetup",       "orbit integration (Gauss-Jackson)",                @() string(gjToolbox.versionInfo("string"))};
 n = size(spec,1);
 deps = repmat(struct('name',"",'required',false,'present',false,'version',"",'minimum',"",'setup',"",'role',""), 1, n);
 for k = 1:n
@@ -76,12 +76,7 @@ if options.Verbose
 end
 end
 
-function v = localContentsVersion(pkg)
-% Read "Version x.y" from the package Contents.m - measured, not declared (R3).
-f = which(pkg + ".Contents");
-if isempty(f), f = which("+" + pkg + "/Contents.m"); end
-if isempty(f), error("NonGravForces:dependencyReport:depMissing", "no Contents.m for %s", pkg); end
-tok = regexp(fileread(f), 'Version\s+([0-9][0-9.]*)', 'tokens', 'once');
-if isempty(tok), error("NonGravForces:dependencyReport:depMissing", "no Version line in %s", f); end
-v = string(tok{1});
-end
+% localContentsVersion lived here until 2026-09-09. It read a version out of a package's
+% Contents.m and lsqvce was its only caller, so dropping that dependency left it dead. Code
+% Analyzer caught it on the first run (DEFNU) and it is removed rather than kept "in case":
+% every other dependency publishes a version function, which is the better probe anyway.
