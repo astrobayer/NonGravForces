@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.7.1.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.7.2.
 
 ---
 
@@ -191,7 +191,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   `tools/pyxcheck/sentman_check.py`, `pelt_check.py`); and the LP-5x cross-validation tooling:
   `tools/pyxcheck/ngfkernel/`, an independent standard-library Python mirror of the frozen
   kernel with its parity driver and `tests/tNgfMirror.m` (WP-33; WP-34 needs GROOPS, O-19).
-- **6 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
+- **5 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
 - LP-6 added the six `Model` evaluation methods (`accel`, `torque`, `series`, `partials`,
   `rhs`, `budget`), `env.wind` (co-rotation) and `kernel.partials` (analytic derivatives).
 - Repository `github.com/astrobayer/NonGravForces` (the account was renamed
@@ -260,7 +260,11 @@ on 2026-09-09, and it is — the problem is linear and separates by axis, so it 
 dozen unknowns on an equilibrated design matrix. lsqvce is gone from the dependency table; O-24 and
 O-33 are void.
 
-**Still in LP-7:** WP-29 `sensor.AtomInterferometer`, `sensor.DragFree`. Then LP-R (release).
+`sensor.AtomInterferometer` (WP-29) is delivered: the triangular sensitivity kernel (a phase is an
+average, not a sample), one reading per cycle with nothing interpolated across the dead time, and
+the 2 pi ambiguity kept explicit — full phase, wrapped phase, and the fringe integer between them.
+
+**Still in LP-7:** WP-29 `sensor.DragFree`. Then LP-R (release).
 
 **LP-5x cross-validation** (owner rulings of 2026-08-27):
 - WP-33: standard-library mirror of the **kernel layer only** under
