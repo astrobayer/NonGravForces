@@ -11,8 +11,8 @@ Mechanisms, not reminders (HANDOVER P-5). Each check names the rule it enforces.
   5. Every copy of the version string (Contents.m "Version" lines, README.md
      first line, doc/html footers) equals the one composed from the numeric
      fields of toolboxVersion.m (R1, decision 2026-09-06).
-  6. doc/html/FunctionList.html equals what tools/buildFunctionList.py renders
-     from the catalogue: staleness by content, not by stamp (O-11).
+  6. EVERY page of doc/html equals what tools/buildDocs.py renders from the
+     sources that own the facts: staleness by content, not by stamp (O-11).
 """
 import hashlib
 import csv, glob, os, re, sys
@@ -105,44 +105,20 @@ else:
             if v != version:
                 note(f"{os.path.relpath(h, ROOT)}: mentions version {v}, toolbox is {version}")
 
-# 6. FunctionList.html is what the generator renders
+# 6. Every doc/html page is what the generator renders. Until 2026-09-09 only FunctionList.html
+#    was covered and the rest carried a hand-edited footer checked for its version string alone:
+#    by then Sensors.html credited a class with a filter it deliberately does not build. A page
+#    nobody generates is a page that lies eventually (O-11, WP-21).
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 try:
-    import buildFunctionList
-    rendered = buildFunctionList.render()
-    fl = os.path.join(ROOT, "doc", "html", "FunctionList.html")
-    current = open(fl, encoding="utf-8").read() if os.path.isfile(fl) else ""
-    if current != rendered:
-        note("doc/html/FunctionList.html is stale -> python tools/buildFunctionList.py")
-except SystemExit as e:
-    note(f"tools/buildFunctionList.py: {e}")
-
-# 6b. Only base MATLAB and the Parallel Computing Toolbox may appear on any code path
-#     (HANDOVER D.7 C2). The owner's host has Signal Processing and Statistics installed and the
-#     CI runner does not, so a call to one of them passes locally and fails on CI: that is exactly
-#     what `corr` in a test did on 2026-09-08. Names below are functions with no base equivalent.
-TOOLBOX_ONLY = {
-    "corr": "Statistics", "partialcorr": "Statistics", "nanmean": "Statistics",
-    "nanstd": "Statistics", "nanmedian": "Statistics", "normpdf": "Statistics",
-    "normcdf": "Statistics", "norminv": "Statistics", "ttest": "Statistics",
-    "ttest2": "Statistics", "regress": "Statistics", "fitlm": "Statistics",
-    "pca": "Statistics", "kmeans": "Statistics", "prctile": "Statistics",
-    "zscore": "Statistics", "mvnrnd": "Statistics", "boxplot": "Statistics",
-    "filtfilt": "Signal", "butter": "Signal", "cheby1": "Signal", "freqz": "Signal",
-    "periodogram": "Signal", "pwelch": "Signal", "findpeaks": "Signal",
-    "spectrogram": "Signal", "resample": "Signal", "designfilt": "Signal",
-    "xcorr": "Signal", "hann": "Signal", "hamming": "Signal",
-}
-for rel in sorted(glob.glob(os.path.join(ROOT, "+NonGravForces", "**", "*.m"), recursive=True)
-                  + glob.glob(os.path.join(ROOT, "tests", "*.m"))
-                  + [os.path.join(ROOT, "ciGate.m")]):
-    src = open(rel, encoding="utf-8").read()
-    body = "\n".join(ln for ln in src.splitlines() if not ln.lstrip().startswith("%"))
-    for fn, box in TOOLBOX_ONLY.items():
-        if re.search(r"(?<![\w.])" + fn + r"\s*\(", body):
-            note(f"{os.path.relpath(rel, ROOT)} calls {fn}(), which is the {box} toolbox -> "
-                 f"HANDOVER D.7 C2 allows base MATLAB and PCT only; it is installed on the owner's "
-                 f"host and absent from the CI runner")
+    import buildDocs
+    for name, text in buildDocs.render_all().items():
+        path = os.path.join(ROOT, "doc", "html", name)
+        current = open(path, encoding="utf-8").read() if os.path.isfile(path) else ""
+        if current != text:
+            note(f"doc/html/{name} is stale -> python tools/buildDocs.py")
+except Exception as exc:                      # a broken generator must be a finding, not a crash
+    note(f"tools/buildDocs.py could not render the documentation: {exc}")
 
 # 7. the catalogue must survive a naive CSV read: an unquoted comma inside an h1 silently
 #    truncated env.eclipseFactor's purpose into Contents.m and FunctionList.html until 2026-09-07.
