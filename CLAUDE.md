@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.7.2.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.8.0.
 
 ---
 
@@ -191,7 +191,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   `tools/pyxcheck/sentman_check.py`, `pelt_check.py`); and the LP-5x cross-validation tooling:
   `tools/pyxcheck/ngfkernel/`, an independent standard-library Python mirror of the frozen
   kernel with its parity driver and `tests/tNgfMirror.m` (WP-33; WP-34 needs GROOPS, O-19).
-- **5 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
+- **4 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
 - LP-6 added the six `Model` evaluation methods (`accel`, `torque`, `series`, `partials`,
   `rhs`, `budget`), `env.wind` (co-rotation) and `kernel.partials` (analytic derivatives).
 - Repository `github.com/astrobayer/NonGravForces` (the account was renamed
@@ -266,7 +266,15 @@ the 2 pi ambiguity kept explicit — full phase, wrapped phase, and the fringe i
 The Coriolis phase at orbital rates is **6.7e7 rad**, an apparent 16.7 m/s^2: not a correction to
 the measurement but larger than everything the instrument exists to see.
 
-**Still in LP-7:** WP-29 `sensor.DragFree`. Then LP-R (release).
+`sensor.DragFree` (WP-29) closes the level: the residual a loop FAILS to remove, as a cascade of
+bilinear high-pass sections with actuator saturation and a masked start-up transient.
+
+**LP-7 IS COMPLETE.** The four remaining stubs are blocked on data the project does not hold, so
+they are not level debt. **Next is LP-R (release).** Two owner rulings of 2026-09-09 shape it: the
+toolbox is **MIT** (`LICENSE`), and **O-29 is accepted** — 88 ms per epoch in the standard preset
+ships as a stated cost, not a blocker. **O-34 is the one thing that must be settled before the
+repository goes public**: the vendored NRLMSISE-00 source carries no redistribution grant, and
+`THIRD-PARTY-NOTICES.md` recommends removing it in favour of a user-supplied copy.
 
 **LP-5x cross-validation** (owner rulings of 2026-08-27):
 - WP-33: standard-library mirror of the **kernel layer only** under
