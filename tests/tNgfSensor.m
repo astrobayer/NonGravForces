@@ -1,5 +1,5 @@
 classdef tNgfSensor < NgfTestCase
-%TNGFSENSOR Tests of the sensor layer (LP-7, WP-29): sensor.Electrostatic, sensor.AtomInterferometer.
+%TNGFSENSOR Tests of the sensor layer (LP-7, WP-29): sensor.Electrostatic, sensor.AtomInterferometer, sensor.DragFree.
 %
 %   ORACLES, none of them this class's own arithmetic:
 %     - the rotational coupling against a FINITE-DIFFERENCE of the position of the
@@ -351,6 +351,11 @@ classdef tNgfSensor < NgfTestCase
     end
 
     methods (Static)
+        function r = rmsOf(x)
+            %RMSOF Root mean square. rms() lives in the Signal Processing Toolbox, which C2 rules
+            % out, and a test may not depend on a product the toolbox itself refuses to need.
+            r = sqrt(mean(x.^2));
+        end
         function el = timeIt(f)
             %TIMEIT The median of five runs: one scheduling hiccup should not decide a ratio (T5).
             t = zeros(1, 5);
@@ -577,6 +582,216 @@ classdef tNgfSensor < NgfTestCase
             r = tNgfSensor.timeIt(@() s.observe(big)) / max(tNgfSensor.timeIt(@() s.observe(small)), eps);
             tc.verifyBoundAndRecord("AtomInterferometer observe, 2000 epochs / 200 epochs", r, 10, "-", ...
                 "linear in K would be 10 and a fixed overhead pulls it below; the convolution is the only term that grows");
+        end
+    end
+
+    % ==================================================================== DragFree
+    methods (Static)
+        function [s, t] = df(K, varargin)
+            %DF A loop with a 0.1 Hz bandwidth on a 10 Hz grid: 1.6 s time constant, 80 to settle.
+            s = NonGravForces.sensor.DragFree(0.1, 1, 'SampleRate', 10, varargin{:});
+            t = (0:K-1) / 10;
+        end
+    end
+    methods (Test, TestTags = {'contract'})
+        function DragFreeContract(tc)
+            [s, t] = tNgfSensor.df(500);
+            tc.verifyEqual(s.numParameters(), 4);
+            tc.verifyEqual(s.name, "dragFree");
+            tc.verifyTrue(isa(s, 'NonGravForces.sensor.Sensor'));
+            dyn = struct('a', [3e-7 * ones(size(t)); 1e-7 * sin(t); zeros(size(t))]);
+            y = s.observe(dyn);
+            tc.verifySize(y.value, [3 500]); tc.verifySize(y.mask, [3 500]);
+            tc.verifyEqual(y.frame, "body");
+            tc.verifyFalse(any(y.mask(:, 1)), 'the start-up transient must be masked, not delivered');
+            tc.verifyTrue(all(y.mask(:, end)));
+            tc.verifyEqual(y.info.settleSamples, ceil(5 / (2 * pi * 0.1) * 10));
+            [J, names] = s.partials(dyn);
+            tc.verifySize(J, [1500 4]);
+            tc.verifyEqual(names, ["bias_x", "bias_y", "bias_z", "gainError"]);
+            tc.verifySize(s.noiseModel([1e-3 1e-2]), [3 2]);
+
+            D = @NonGravForces.sensor.DragFree;
+            tc.verifyErrorId(@() D(0, 1, 'SampleRate', 10), 'NonGravForces:DragFree:inputRange');
+            tc.verifyErrorId(@() D(0.1, 0, 'SampleRate', 10), 'NonGravForces:DragFree:inputRange');
+            tc.verifyErrorId(@() D(0.1, 1.5, 'SampleRate', 10), 'NonGravForces:DragFree:inputRange');
+            tc.verifyErrorId(@() D(0.1, 1, 'SampleRate', 10, 'Authority', 0), 'NonGravForces:DragFree:inputRange');
+            tc.verifyErrorId(@() D(0.1, 1, 'SampleRate', 0.1), 'NonGravForces:DragFree:inputRange');
+            tc.verifyErrorId(@() D(0.1, 1, 'SampleRate', 10, 'Bias', [1; 2]), 'NonGravForces:DragFree:inputShape');
+            tc.verifyErrorId(@() D(NaN, 1, 'SampleRate', 10), 'NonGravForces:DragFree:numericNaN');
+            tc.verifyErrorId(@() s.observe(struct('b', 1)), 'NonGravForces:DragFree:inputDyn');
+            tc.verifyErrorId(@() s.observe(struct('a', ones(2, 4))), 'NonGravForces:DragFree:inputShape');
+            bad = dyn; bad.a(1) = NaN;
+            tc.verifyErrorId(@() s.observe(bad), 'NonGravForces:DragFree:numericNaN');
+            tc.verifyErrorId(@() s.noiseModel(-1), 'NonGravForces:DragFree:inputShape');
+        end
+    end
+    methods (Test, TestTags = {'reference'})
+        function DragFreeReference(tc)
+            % THE ORACLE IS THE FREQUENCY RESPONSE, derived on the unit circle from the same
+            % difference-equation coefficients but evaluated analytically -- a different route
+            % through the same definition, which is what a reference for a filter can be. A
+            % steady-state sinusoid in must come out scaled by exactly |S(f)|.
+            K = 4000;
+            [s, t] = tNgfSensor.df(K);
+            settled = 1001:K;                             % 60 time constants in: the transient is gone
+            worst = 0;
+            for f = [0.01, 0.1, 1]                        % below, at, and above the corner
+                x = [sin(2 * pi * f * t); zeros(2, K)];
+                y = s.observe(struct('a', x));
+                got = tNgfSensor.rmsOf(y.value(1, settled)) / tNgfSensor.rmsOf(x(1, settled));
+                want = s.magnitudeResponse(f);
+                worst = max(worst, abs(got - want) / want);
+            end
+            tc.verifyBoundAndRecord("DragFree rejection vs the analytic |S(f)|, three decades", ...
+                worst, 1e-6, "-", ...
+                "an integer number of periods after 60 time constants; what is left is the residue of the transient, not a modelling difference");
+            % The asymptotes are the whole point, so they are asserted as such: full rejection at
+            % DC, none well above the corner, and 1/sqrt(2) at the corner for one section.
+            tc.verifyBoundAndRecord("DragFree gain at the bandwidth is 1/sqrt(2) for one section", ...
+                abs(s.magnitudeResponse(0.1) - 1 / sqrt(2)), 1e-3, "-", ...
+                "the bilinear transform warps the corner slightly; 1e-3 is that warping at f_c = fs/100, not a slack bound");
+            tc.verifyEqual(s.magnitudeResponse(0), 0, 'a high-pass rejects a constant completely');
+            % And a genuinely constant drag is driven to zero, which is what drag-free MEANS.
+            yDC = s.observe(struct('a', repmat([3e-7; 0; 0], 1, K)));
+            tc.verifyBoundAndRecord("a constant drag is rejected to nothing", ...
+                max(abs(yDC.value(:, settled)), [], 'all') / 3e-7, 1e-12, "-", ...
+                "the loop has all the time in the world against a constant; what remains is the decayed transient");
+        end
+    end
+    methods (Test, TestTags = {'precision'})
+        function DragFreePrecision(tc)
+            % Both parameters are linear, so a large step makes the central difference exact.
+            K = 600;
+            [~, t] = tNgfSensor.df(K);
+            dyn = struct('a', [3e-7 + 1e-7 * sin(2 * pi * 0.3 * t); 5e-8 * cos(2 * pi * 0.05 * t); zeros(1, K)]);
+            base = [1e-9; 2e-9; -1e-9; 0.03];
+            mk = @(th) NonGravForces.sensor.DragFree(0.1, 1, 'SampleRate', 10, ...
+                'Bias', th(1:3), 'GainError', th(4));
+            sBase = mk(base);
+            J = sBase.partials(dyn);
+            step = [1e-7 * ones(3, 1); 1e-2];
+            worst = 0;
+            for p = 1:4
+                tp = base; tp(p) = tp(p) + step(p);
+                tm = base; tm(p) = tm(p) - step(p);
+                sp = mk(tp); sm = mk(tm);
+                yp = sp.observe(dyn); ym = sm.observe(dyn);
+                num = reshape((yp.value - ym.value) / (2 * step(p)), [], 1);
+                sc = max(max(abs(num)), realmin);
+                worst = max(worst, max(abs(J(:, p) - num)) / sc);
+            end
+            tc.verifyBoundAndRecord("DragFree partials vs central differences", worst, 1e-9, "-", ...
+                "bias and gain both enter linearly; the step is large enough that cancellation is not the limit");
+        end
+    end
+    methods (Test, TestTags = {'vectorization'})
+        function DragFreeVectorization(tc)
+            % The three axes go through the same filter but share no state. Perturbing one may not
+            % touch another, exactly -- a shared accumulator would show here and nowhere else.
+            K = 400;
+            [s, t] = tNgfSensor.df(K);
+            a = [3e-7 * ones(1, K); 1e-7 * sin(t); 2e-8 * cos(t)];
+            y0 = s.observe(struct('a', a));
+            aP = a; aP(2, :) = aP(2, :) + 4e-7 * sin(3 * t);
+            y1 = s.observe(struct('a', aP));
+            tc.verifyBoundAndRecord("perturbing the y axis leaves x and z untouched", ...
+                max(abs(y1.value([1 3], :) - y0.value([1 3], :)), [], 'all'), 0, "m/s^2", ...
+                "one filter state per axis; a shared accumulator would leak here");
+            tc.verifyGreaterThan(max(abs(y1.value(2, :) - y0.value(2, :))), 0);
+        end
+    end
+    methods (Test, TestTags = {'robustness'})
+        function DragFreeRobustness(tc)
+            K = 600;
+            [~, t] = tNgfSensor.df(K);
+            % SATURATION is the failure mode this class exists to show. A drag far above the
+            % authority passes through minus what the thrusters can cancel, and no further.
+            big = [2e-5 * ones(1, K); zeros(2, K)];
+            sSat = NonGravForces.sensor.DragFree(0.1, 1, 'SampleRate', 10, 'Authority', 5e-6);
+            ySat = sSat.observe(struct('a', big));
+            settled = 401:K;
+            tc.verifyTrue(all(ySat.info.saturated(settled)), 'a 2e-5 drag against 5e-6 of authority must saturate');
+            tc.verifyBoundAndRecord("the saturated residual is the drag minus the authority", ...
+                max(abs(vecnorm(ySat.value(:, settled)) - (2e-5 - 5e-6))) / (2e-5 - 5e-6), 1e-9, "-", ...
+                "the command is clipped in its own direction and the excess is what reaches the payload");
+            % An ideal loop (Authority Inf) never saturates and is linear again.
+            sIdeal = NonGravForces.sensor.DragFree(0.1, 1, 'SampleRate', 10);
+            yIdeal = sIdeal.observe(struct('a', big));
+            tc.verifyFalse(any(yIdeal.info.saturated));
+            tc.verifyBoundAndRecord("an ideal loop rejects the same constant to nothing", ...
+                max(abs(yIdeal.value(:, settled)), [], 'all') / 2e-5, 1e-12, "-", ...
+                "with infinite authority the constant is entirely inside the loop's reach");
+            % Zero in, zero out, exactly: a filter with zero state and zero input invents nothing.
+            yZero = sIdeal.observe(struct('a', zeros(3, K)));
+            tc.verifyBoundAndRecord("zero drag gives exactly zero residual", ...
+                max(abs(yZero.value), [], 'all'), 0, "m/s^2", "no bias, no input, no state: nothing to produce");
+            % One epoch is legal, and it is entirely transient, so nothing is valid.
+            yOne = sIdeal.observe(struct('a', [3e-7; 0; 0]));
+            tc.verifySize(yOne.value, [3 1]);
+            tc.verifyFalse(any(yOne.mask(:)), 'a single sample is all transient and must be masked');
+            % A higher order settles longer and is masked longer, which the report must say.
+            s3 = NonGravForces.sensor.DragFree(0.1, 3, 'SampleRate', 10);
+            y3 = s3.observe(struct('a', [3e-7 * ones(1, K); zeros(2, K)]));
+            yRef = sIdeal.observe(struct('a', zeros(3, 2)));
+            tc.verifyEqual(y3.info.settleSamples, 3 * yRef.info.settleSamples);
+            tc.verifyTrue(all(isfinite(y3.value(:))));
+            % The noise model is the COMPLEMENT of the rejection: loudest where the loop is active.
+            asd = s3.noiseModel([1e-3, 0.1, 10]);
+            tc.verifyTrue(asd(1, 1) > asd(1, 2) && asd(1, 2) > asd(1, 3), ...
+                'thruster noise is injected inside the bandwidth and not outside it');
+        end
+    end
+    methods (Test, TestTags = {'metamorphic'})
+        function DragFreeMetamorphic(tc)
+            K = 600;
+            [s, t] = tNgfSensor.df(K);
+            a = [3e-7 * ones(1, K); 1e-7 * sin(2 * pi * 0.3 * t); zeros(1, K)];
+            y = s.observe(struct('a', a));
+            settled = 201:K;
+            % 1. Below saturation the loop is linear: double the drag, double the residual.
+            y2 = s.observe(struct('a', 2 * a));
+            tc.verifyBoundAndRecord("the residual doubles with the drag below saturation", ...
+                max(abs(y2.value(:, settled) - 2 * y.value(:, settled)), [], 'all') / max(abs(2 * y.value(:, settled)), [], 'all'), ...
+                1e-14, "-", "an unsaturated loop is a linear filter and nothing else");
+            % 2. Reversing the drag reverses the residual.
+            yM = s.observe(struct('a', -a));
+            tc.verifyBoundAndRecord("reversing the drag reverses the residual", ...
+                max(abs(yM.value + y.value), [], 'all') / max(abs(y.value), [], 'all'), 1e-14, "-", ...
+                "linearity again, in the sign");
+            % 3. A bias is additive and reaches nothing else.
+            sB = NonGravForces.sensor.DragFree(0.1, 1, 'SampleRate', 10, 'Bias', [1e-9; -2e-9; 3e-9]);
+            yB = sB.observe(struct('a', a));
+            tc.verifyBoundAndRecord("a bias is a rigid shift of the residual", ...
+                max(abs((yB.value - y.value) - [1e-9; -2e-9; 3e-9]), [], 'all'), ...
+                1e-24, "m/s^2", "it is added outside the filter and outside the gain");
+            % 4. MORE BANDWIDTH IS MORE REJECTION at a fixed low frequency, and that is the design
+            %    trade the noise model pays for: the same widening lets more thruster noise in.
+            fLow = 0.02;
+            xs = [sin(2 * pi * fLow * t); zeros(2, K)];
+            sNarrow = NonGravForces.sensor.DragFree(0.05, 1, 'SampleRate', 10);
+            sWide = NonGravForces.sensor.DragFree(0.4, 1, 'SampleRate', 10);
+            yN = sNarrow.observe(struct('a', xs));
+            yW = sWide.observe(struct('a', xs));
+            rN = tNgfSensor.rmsOf(yN.value(1, settled));
+            rW = tNgfSensor.rmsOf(yW.value(1, settled));
+            tc.verifyBoundAndRecord("a wider loop rejects a low frequency harder", rW / rN, 1, "-", ...
+                "eight times the bandwidth against a 0.02 Hz signal: the ratio must be below one, and how far below is the design trade");
+            tc.verifyGreaterThan(sWide.noiseModel(0.1), sNarrow.noiseModel(0.1), ...
+                'and it pays for that with thruster noise, which is why the bandwidth is a choice');
+        end
+    end
+    methods (Test, TestTags = {'speed'})
+        function DragFreeSpeed(tc)
+            % The filter is a per-sample recursion, so it is linear in K by construction. What is
+            % measured is that nothing quadratic crept into the surrounding bookkeeping.
+            s = NonGravForces.sensor.DragFree(0.1, 1, 'SampleRate', 10);
+            small = struct('a', ones(3, 500) * 3e-7);
+            big = struct('a', ones(3, 5000) * 3e-7);
+            s.observe(big);
+            r = tNgfSensor.timeIt(@() s.observe(big)) / max(tNgfSensor.timeIt(@() s.observe(small)), eps);
+            tc.verifyBoundAndRecord("DragFree observe, 5000 epochs / 500 epochs", r, 20, "-", ...
+                "linear in K would be 10; the allowance covers an interpreted loop whose per-sample cost is small next to the timer");
         end
     end
 
