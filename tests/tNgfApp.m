@@ -300,8 +300,16 @@ classdef tNgfApp < NgfTestCase
                 T1 = NonGravForces.app.densityInversion(tc.Mfast, e1, rr(:, k), vv(:, k), qq(:, k), a(:, k));
                 worst = max(worst, abs(T1.rho_kg_m3 - T.rho_kg_m3(k)));
             end
-            tc.verifyBoundAndRecord("densityInversion, one epoch at a time vs the whole arc", worst, 0, "kg/m^3", ...
-                "the inversion has no state and no cross-epoch term, so a batch may not change a single value");
+            % NOT bitwise, and the bound said 0 until the runner measured 1.01e-28 kg/m^3 on
+            % densities of order 1e-13, i.e. 1e-15 relative. The inversion itself has no
+            % cross-epoch term, but Model.accel underneath it does not take the same route for
+            % K = 1 as for K = 10 -- vectorised products and norms associate by batch size, which
+            % this project has now met three times (pagemtimes in Model.evaluate, the chunked RMS
+            % in forceBudget, and here). THE RULE: never claim bitwise across a change in batch
+            % size. Claim it only across a change in grouping that leaves the arithmetic alone.
+            tc.verifyBoundAndRecord("densityInversion, one epoch at a time vs the whole arc", ...
+                worst / max(T.rho_kg_m3), 1e-13, "-", ...
+                "the inversion has no cross-epoch term; what is left is Model.accel associating differently at K = 1 than at K = 10");
         end
     end
     methods (Test, TestTags = {'robustness'})

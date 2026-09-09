@@ -389,6 +389,11 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   Any unit that screens an input it does not read will refuse the fast preset's own environment;
   `kernel.singleEpoch` did exactly that until 2026-09-08. Build a test's inputs from the real
   units, not from literals, or this class of defect stays invisible.
+- **Never claim bitwise across a change in BATCH SIZE.** Vectorised products and norms associate
+  by batch size, so K = 1 and K = 10 are not the same arithmetic even when they are the same
+  formula. Met three times now: `pagemtimes` in `Model.evaluate`, the chunked RMS in
+  `forceBudget`, and one epoch vs an arc in `densityInversion`. Bitwise IS claimable across a
+  change of grouping that leaves the arithmetic alone — two models stacked, a maximum of maxima.
 - **A numerical bound written from an estimate is a red gate waiting to happen.** Three sessions
   in a row have lost a run to one. Where cancellation governs, COMPUTE the bound in the test from
   `eps` of the terms involved instead of writing a literal. Where the model is exactly linear, a
