@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.8.3.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.8.4.
 
 ---
 
@@ -272,7 +272,11 @@ bilinear high-pass sections with actuator saturation and a masked start-up trans
 **LP-7 IS COMPLETE; LP-R is open** — the C2 toolbox scan (`auditPackage.py` check 9) is delivered:
 no call into Signal Processing, Statistics, Optimization, Curve Fitting, Symbolic, Aerospace or
 Mapping, in code **or help text**, since an example that needs a forbidden product misleads the
-reader who copies it. A name the file assigns to is treated as a variable, not a call. The four remaining stubs are blocked on data the project does not hold, so
+reader who copies it. A name the file assigns to is treated as a variable, not a call.
+**`tools/buildDocs.py` now generates every `doc/html` page and `helptoc.xml`**, each fact from its
+own authority, and the audit refuses a stale one by CONTENT. O-11 is closed. It had already
+failed: `Sensors.html` credited `Electrostatic` with a CRN filter the class deliberately does not
+build, and called all three sensors future work months after two shipped. The four remaining stubs are blocked on data the project does not hold, so
 they are not level debt. **Next is LP-R (release).** Two owner rulings of 2026-09-09 shape it: the
 toolbox is **MIT** (`LICENSE`), and **O-29 is accepted** — 88 ms per epoch in the standard preset
 ships as a stated cost, not a blocker. **O-34 is closed** (2026-09-09): NRLMSISE-00 is no longer in this repository. `setupNonGravForces` clones it at
@@ -304,7 +308,7 @@ carry no redistribution grant (O-22, the owner's to settle before the repository
 are the authority and `semantic` is composed from them; minor = levels
 delivered, patch = HANDOVER amendment. `auditPackage.py` compares every copy
 (Contents.m, README, doc/html footers) and checks `FunctionList.html` against
-`tools/buildFunctionList.py`; run both before every push.
+`tools/buildDocs.py`, which regenerates every page of `doc/html` and `helptoc.xml`; run both before every push.
 
 ---
 
