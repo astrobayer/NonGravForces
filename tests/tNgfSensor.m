@@ -1,5 +1,5 @@
 classdef tNgfSensor < NgfTestCase
-%TNGFSENSOR Tests of the sensor layer (LP-7, WP-29): sensor.Electrostatic.
+%TNGFSENSOR Tests of the sensor layer (LP-7, WP-29): sensor.Electrostatic, sensor.AtomInterferometer.
 %
 %   ORACLES, none of them this class's own arithmetic:
 %     - the rotational coupling against a FINITE-DIFFERENCE of the position of the
@@ -362,4 +362,222 @@ classdef tNgfSensor < NgfTestCase
             s = NonGravForces.sensor.Electrostatic(theta(1:3), reshape(theta(4:12), 3, 3), theta(13:15));
         end
     end
+
+    % =========================================================== AtomInterferometer
+    methods (Static)
+        function s = ai(varargin)
+            %AI A rubidium two-photon instrument on a 10 Hz grid, the CARIOQA-class configuration.
+            s = NonGravForces.sensor.AtomInterferometer(1.610e7, 0.5, 2, [1; 0; 0], ...
+                'SampleRate', 10, varargin{:});
+        end
+    end
+    methods (Test, TestTags = {'contract'})
+        function AtomInterferometerContract(tc)
+            s = tNgfSensor.ai();
+            tc.verifyEqual(s.numParameters(), 2);
+            tc.verifyEqual(s.name, "atomInterferometer");
+            tc.verifyTrue(isa(s, 'NonGravForces.sensor.Sensor'));
+            K = 200;
+            dyn = struct('a', [3e-7 * ones(1, K); zeros(2, K)]);
+            y = s.observe(dyn);
+            tc.verifySize(y.value, [1 K]); tc.verifySize(y.mask, [1 K]);
+            tc.verifyEqual(y.frame, "beam");
+            tc.verifyEqual(y.info.deadTime_s, 1, 'cycle 2 s minus 2T = 1 s of interrogation leaves 1 s blind');
+            [J, names] = s.partials(dyn);
+            tc.verifySize(J, [K 2]);
+            tc.verifyEqual(names, ["phaseBias", "gainError"]);
+            tc.verifySize(s.noiseModel([1e-3 1e-2]), [1 2]);
+
+            A = @NonGravForces.sensor.AtomInterferometer;
+            tc.verifyErrorId(@() A(1.6e7, 0.5, 0.5, [1; 0; 0]), 'NonGravForces:AtomInterferometer:inputRange');
+            tc.verifyErrorId(@() A(-1, 0.5, 2, [1; 0; 0]), 'NonGravForces:AtomInterferometer:inputRange');
+            tc.verifyErrorId(@() A(1.6e7, 0.5, 2, [0; 0; 0]), 'NonGravForces:AtomInterferometer:inputRange');
+            tc.verifyErrorId(@() A(1.6e7, 0.5, 2, [1; 0]), 'NonGravForces:AtomInterferometer:inputShape');
+            tc.verifyErrorId(@() A(NaN, 0.5, 2, [1; 0; 0]), 'NonGravForces:AtomInterferometer:numericNaN');
+            tc.verifyErrorId(@() s.observe(struct('b', 1)), 'NonGravForces:AtomInterferometer:inputDyn');
+            tc.verifyErrorId(@() s.observe(struct('a', ones(2, 5))), 'NonGravForces:AtomInterferometer:inputShape');
+            bad = dyn; bad.a(1) = Inf;
+            tc.verifyErrorId(@() s.observe(bad), 'NonGravForces:AtomInterferometer:numericNaN');
+            sr = tNgfSensor.ai('Rotation', true);
+            tc.verifyErrorId(@() sr.observe(dyn), 'NonGravForces:AtomInterferometer:inputDyn');
+            tc.verifyErrorId(@() sr.observe(struct('a', dyn.a, 'omega', ones(3, 5), 'velocity', ones(3, K))), ...
+                'NonGravForces:AtomInterferometer:inputDyn');
+            tc.verifyErrorId(@() s.noiseModel(0), 'NonGravForces:AtomInterferometer:inputShape');
+        end
+    end
+    methods (Test, TestTags = {'reference'})
+        function AtomInterferometerReference(tc)
+            % THE IDENTITY IS THE ORACLE: for a CONSTANT acceleration the triangular weighting has
+            % unit sum, so the phase must be exactly k_eff a T^2 -- the textbook result, and the
+            % thing that would break first if the kernel were normalised wrongly.
+            s = tNgfSensor.ai();
+            a0 = 3.2e-7; K = 400;
+            y = s.observe(struct('a', [a0 * ones(1, K); zeros(2, K)]));
+            want = 1.610e7 * a0 * 0.5^2;
+            tc.verifyBoundAndRecord("constant acceleration gives exactly k_eff a T^2", ...
+                max(abs(y.value(y.mask) - want)) / want, 1e-15, "-", ...
+                "the kernel is normalised to unit sum, so a constant passes through untouched");
+            % The Coriolis phase against an independent evaluation of -2 k_eff T^2 <n, omega x v>,
+            % with omega and v constant so the weighting is again exact.
+            sr = tNgfSensor.ai('Rotation', true);
+            w0 = [0; 0; 1.1e-3]; v0 = [0; 7600; 0];
+            dyn = struct('a', zeros(3, K), 'omega', repmat(w0, 1, K), 'velocity', repmat(v0, 1, K));
+            yr = sr.observe(dyn);
+            wantCor = -2 * 1.610e7 * 0.5^2 * dot([1; 0; 0], cross(w0, v0));
+            tc.verifyBoundAndRecord("the Coriolis phase matches -2 k_eff T^2 <n, omega x v>", ...
+                max(abs(yr.value(yr.mask) - wantCor)) / abs(wantCor), 1e-15, "-", ...
+                "an independent evaluation of the same closed form on constant inputs");
+            % THE NUMBER IS 6.73e7 RADIANS, and the first version of this test said "thousands"
+            % from an estimate that was four orders out. Worth getting right, because the correct
+            % figure is the whole argument: 2 |omega x v| = 16.7 m/s^2 is an apparent acceleration
+            % larger than gravity, 1.07e7 fringes across the readout. An orbiting interferometer
+            % that does not counter-rotate its Raman mirror does not measure a small bias on top
+            % of the drag -- it has no fringe left to read.
+            tc.verifyBoundAndRecord("Coriolis phase for a GRACE-like rate and speed", ...
+                abs(wantCor), 1e9, "rad", ...
+                sprintf("6.73e7 rad = 1.07e7 fringes = an apparent 16.7 m/s^2, against a drag of 1e-7; the bound is a smoke ceiling, the number is the point"));
+            tc.verifyBoundAndRecord("Coriolis phase as an equivalent acceleration", ...
+                abs(wantCor) / (1.610e7 * 0.5^2), 1e3, "m/s^2", ...
+                "16.7 m/s^2: the rotation term is not a correction to the measurement, it is larger than everything the instrument is there to see");
+        end
+    end
+    methods (Test, TestTags = {'precision'})
+        function AtomInterferometerPrecision(tc)
+            % The two parameters enter linearly, so central differences with a LARGE step are exact
+            % and the only error is cancellation -- the lesson from the Electrostatic partials.
+            K = 300;
+            t = (0:K-1) / 10;
+            dyn = struct('a', [3e-7 + 5e-8 * sin(2 * pi * 0.05 * t); zeros(2, K)]);
+            base = [0.3; 0.02];                       % phaseBias, gainError
+            s = tNgfSensor.ai('PhaseBias', base(1), 'GainError', base(2));
+            J = s.partials(dyn);
+            step = [1e-2; 1e-3];
+            worst = 0;
+            for p = 1:2
+                th = base; th(p) = th(p) + step(p);
+                sp = tNgfSensor.ai('PhaseBias', th(1), 'GainError', th(2));
+                th = base; th(p) = th(p) - step(p);
+                sm = tNgfSensor.ai('PhaseBias', th(1), 'GainError', th(2));
+                num = (sp.observe(dyn).value - sm.observe(dyn).value)' / (2 * step(p));
+                sc = max(max(abs(num)), realmin);
+                worst = max(worst, max(abs(J(:, p) - num)) / sc);
+            end
+            tc.verifyBoundAndRecord("AtomInterferometer partials vs central differences", worst, 1e-10, "-", ...
+                "both parameters are exactly linear, so a large step leaves only rounding");
+            % The full phase, the wrapped phase and the fringe integer must reconstruct exactly.
+            y = s.observe(dyn);
+            tc.verifyBoundAndRecord("wrapped phase plus 2 pi times the fringe reconstructs the phase", ...
+                max(abs(y.value - (y.info.wrapped + 2 * pi * y.info.fringe))), 1e-12, "rad", ...
+                "the split is exact by construction; a caller resolving the ambiguity must get back what was modelled");
+            tc.verifyTrue(all(abs(y.info.wrapped) <= pi + eps), 'the wrapped phase must lie in (-pi, pi]');
+        end
+    end
+    methods (Test, TestTags = {'vectorization'})
+        function AtomInterferometerVectorization(tc)
+            % THE KERNEL HAS FINITE SUPPORT, so an interior sample cannot depend on data outside
+            % its own window. That is an exact statement -- perturb a distant sample and the
+            % interior phase may not move at all -- and it is stronger than comparing two arcs,
+            % which would only measure how the edges are handled.
+            s = tNgfSensor.ai();
+            K = 300; h = 5;                              % T * fs = 5 samples each side
+            a = [3e-7 * ones(1, K); zeros(2, K)];
+            y0 = s.observe(struct('a', a));
+            aP = a; aP(1, 250) = aP(1, 250) + 1e-6;      % a spike far from sample 100
+            y1 = s.observe(struct('a', aP));
+            % Relative, not exact zero: conv may take an FFT route for a long input, and whether
+            % it does is MATLAB's business, not this claim's. The claim is locality, and locality
+            % survives either route at the rounding level.
+            d = abs(y1.value - y0.value) / max(abs(y0.value));
+            tc.verifyBoundAndRecord("a sample outside the window cannot move the phase", ...
+                max(d(1:200)), 1e-14, "-", ...
+                "the triangular kernel is supported on 2T+1 samples and nothing else enters");
+            tc.verifyGreaterThan(d(250), 1e-9, 'and inside the window it must move');
+            tc.verifyEqual(nnz(d > 1e-14), 2 * h + 1, ...
+                'exactly the window width of samples may change');
+        end
+    end
+    methods (Test, TestTags = {'robustness'})
+        function AtomInterferometerRobustness(tc)
+            K = 200;
+            a = [3e-7 * ones(1, K); zeros(2, K)];
+            % DEAD TIME: one reading per cycle and nothing between. 2 s at 10 Hz is every 20th.
+            s = tNgfSensor.ai();
+            y = s.observe(struct('a', a));
+            idx = find(y.mask);
+            tc.verifyEqual(unique(diff(idx)), 20, 'a 2 s cycle at 10 Hz leaves one valid sample in twenty');
+            % An interrogation window shorter than one sample is not weighted at all, and says so
+            % rather than silently convolving with a degenerate kernel.
+            sFast = NonGravForces.sensor.AtomInterferometer(1.610e7, 0.02, 1, [1; 0; 0], 'SampleRate', 10);
+            yF = sFast.observe(struct('a', a));
+            tc.verifyBoundAndRecord("an unresolved window leaves the acceleration unweighted", ...
+                max(abs(yF.info.weighted - a(1, :))), 0, "m/s^2", ...
+                "T * fs below one sample: the window IS a sample, and pretending otherwise would invent a kernel");
+            % An arc shorter than the window leaves nothing valid.
+            yShort = s.observe(struct('a', a(:, 1:6)));
+            tc.verifyFalse(any(yShort.mask), 'six samples cannot hold an 11-sample window');
+            % Rotation with the velocity along the rotation axis produces no Coriolis phase at all.
+            sr = tNgfSensor.ai('Rotation', true);
+            ax = [0; 0; 1];
+            yPar = sr.observe(struct('a', zeros(3, K), 'omega', repmat(2e-3 * ax, 1, K), ...
+                'velocity', repmat(7600 * ax, 1, K)));
+            tc.verifyBoundAndRecord("velocity along the rotation axis gives no Coriolis phase", ...
+                max(abs(yPar.value)), 0, "rad", "omega x v vanishes identically when the two are parallel");
+            % Above the cycle Nyquist the noise model reports Inf rather than a number.
+            asd = s.noiseModel([1e-3, 1, 10]);
+            tc.verifyTrue(isfinite(asd(1)) && all(isinf(asd(2:3))), ...
+                'nothing is measured faster than half the cycle rate, and the ASD must say so');
+        end
+    end
+    methods (Test, TestTags = {'metamorphic'})
+        function AtomInterferometerMetamorphic(tc)
+            K = 400;
+            a0 = 3e-7;
+            a = [a0 * ones(1, K); zeros(2, K)];
+            s = tNgfSensor.ai();
+            y = s.observe(struct('a', a));
+            % 1. The phase is linear in the acceleration.
+            y2 = s.observe(struct('a', 2 * a));
+            tc.verifyBoundAndRecord("the phase doubles with the acceleration", ...
+                max(abs(y2.value - 2 * y.value)) / max(abs(2 * y.value)), 1e-15, "-", ...
+                "k_eff T^2 multiplies a linearly and nothing else touches it");
+            % 2. It goes as T^2, which is the whole reason these instruments are sensitive.
+            sT = NonGravForces.sensor.AtomInterferometer(1.610e7, 1.0, 4, [1; 0; 0], 'SampleRate', 10);
+            yT = sT.observe(struct('a', a));
+            tc.verifyBoundAndRecord("doubling the interrogation time quadruples the phase", ...
+                abs(max(yT.value) - 4 * max(y.value)) / (4 * max(y.value)), 1e-15, "-", ...
+                "T enters squared; for a constant acceleration the weighting is exact at both T");
+            % 3. Reversing the beam reverses the sign and nothing else.
+            sB = NonGravForces.sensor.AtomInterferometer(1.610e7, 0.5, 2, [-1; 0; 0], 'SampleRate', 10);
+            yB = sB.observe(struct('a', a));
+            tc.verifyBoundAndRecord("reversing the beam reverses the phase", ...
+                max(abs(yB.value + y.value)) / max(abs(y.value)), 1e-15, "-", ...
+                "the projection <n, a> is the only place the direction enters");
+            % 4. The Coriolis phase is odd in omega: reversing the rotation reverses it.
+            sr = tNgfSensor.ai('Rotation', true);
+            w0 = repmat([0; 0; 1.1e-3], 1, K); v0 = repmat([0; 7600; 0], 1, K);
+            yP = sr.observe(struct('a', zeros(3, K), 'omega', w0, 'velocity', v0));
+            yM = sr.observe(struct('a', zeros(3, K), 'omega', -w0, 'velocity', v0));
+            tc.verifyBoundAndRecord("the Coriolis phase is odd in omega", ...
+                max(abs(yP.value + yM.value)) / max(abs(yP.value)), 1e-15, "-", ...
+                "omega x v contains omega once");
+            % 5. A phase bias is additive and reaches nothing else.
+            sBias = tNgfSensor.ai('PhaseBias', 1.234);
+            tc.verifyBoundAndRecord("a phase bias is a rigid shift", ...
+                max(abs((sBias.observe(struct('a', a)).value - y.value) - 1.234)), 1e-12, "rad", ...
+                "it enters outside the gain and outside the weighting");
+        end
+    end
+    methods (Test, TestTags = {'speed'})
+        function AtomInterferometerSpeed(tc)
+            % One convolution and a handful of vector operations: linear in K.
+            s = tNgfSensor.ai();
+            small = struct('a', [3e-7 * ones(1, 200); zeros(2, 200)]);
+            big = struct('a', [3e-7 * ones(1, 2000); zeros(2, 2000)]);
+            s.observe(big);
+            r = tNgfSensor.timeIt(@() s.observe(big)) / max(tNgfSensor.timeIt(@() s.observe(small)), eps);
+            tc.verifyBoundAndRecord("AtomInterferometer observe, 2000 epochs / 200 epochs", r, 10, "-", ...
+                "linear in K would be 10 and a fixed overhead pulls it below; the convolution is the only term that grows");
+        end
+    end
+
 end
