@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.6.3.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.7.0.
 
 ---
 
@@ -191,7 +191,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   `tools/pyxcheck/sentman_check.py`, `pelt_check.py`); and the LP-5x cross-validation tooling:
   `tools/pyxcheck/ngfkernel/`, an independent standard-library Python mirror of the frozen
   kernel with its parity driver and `tests/tNgfMirror.m` (WP-33; WP-34 needs GROOPS, O-19).
-- **9 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
+- **8 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
 - LP-6 added the six `Model` evaluation methods (`accel`, `torque`, `series`, `partials`,
   `rhs`, `budget`), `env.wind` (co-rotation) and `kernel.partials` (analytic derivatives).
 - Repository `github.com/astrobayer/NonGravForces` (the account was renamed
@@ -245,8 +245,13 @@ L0 with no dynamics interface and a signature that does not match `Model.rhs()` 
 and lsqvce 5.3's `fit` takes three declaration kinds with regularisation declared in the data,
 which fixes `app.calibrate` as a kind-C batched declaration (O-24 discharged as a blocker).
 
-**Still in LP-7:** WP-29 `sensor.Electrostatic`, `AtomInterferometer`, `DragFree` · WP-19
-`calibrate` · WP-32 `densityInversion`. Then LP-R (release).
+`sensor.Electrostatic` (WP-29) is delivered too: bias, 3x3 scale, proof-mass offset coupling and
+an FIR filter, with the omega sign convention pinned in its own help (`skew(omega) = R' Rdot` for
+R body→inertial) because `referenceSystem`'s unit takes R the other way and carries a configurable
+sense — the relation between them is RECORDED from the run, not guessed (O-32).
+
+**Still in LP-7:** WP-29 `AtomInterferometer`, `DragFree` · WP-19 `calibrate` · WP-32
+`densityInversion`. Then LP-R (release).
 
 **LP-5x cross-validation** (owner rulings of 2026-08-27):
 - WP-33: standard-library mirror of the **kernel layer only** under
@@ -379,6 +384,14 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   Any unit that screens an input it does not read will refuse the fast preset's own environment;
   `kernel.singleEpoch` did exactly that until 2026-09-08. Build a test's inputs from the real
   units, not from literals, or this class of defect stays invisible.
+- **A numerical bound written from an estimate is a red gate waiting to happen.** Three sessions
+  in a row have lost a run to one. Where cancellation governs, COMPUTE the bound in the test from
+  `eps` of the terms involved instead of writing a literal. Where the model is exactly linear, a
+  LARGER finite-difference step is strictly better, the opposite of the usual rule.
+- **`skew(omega) = R' Rdot` is the sensor's convention**, and
+  `referenceSystem.angularVelocityFromRotationRate(R, Rdot, 'Resolution', "reference")` returns its
+  NEGATIVE (ratio -1.0, measured). Reading the skew entries off `R' Rdot` without projecting the
+  symmetric part out leaves the differencing error in (6e-7 relative).
 - **Never assert a host-dependent absolute** (rule T5). A 500 us per-epoch bound written from a
   guess reddened the gate on a runner that measured 901.8 us, in the same session that quoted the
   rule. Assert the ratio; record the absolute with a ceiling an order of magnitude above it.

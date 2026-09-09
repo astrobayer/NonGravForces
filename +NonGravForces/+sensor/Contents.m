@@ -1,7 +1,7 @@
 % SENSOR  NonGravForces.sensor - L6 layer.
-% Version 0.6.3  08-Sep-2026
+% Version 0.7.0  08-Sep-2026
 %
 %   Sensor               - Abstract measurement model: observe / partials / noiseModel [interface]
-%   Electrostatic        - Electrostatic accelerometer: bias scale-matrix CoM coupling CRN filter [stub]
+%   Electrostatic        - Electrostatic accelerometer: bias scale matrix proof-mass offset coupling FIR filter
 %   AtomInterferometer   - Cold-atom interferometer: phase = k_eff a T^2 with dead time and rotation [stub]
 %   DragFree             - Drag-free residual acceleration model [stub]
