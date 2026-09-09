@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.8.7.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.8.8.
 
 ---
 
@@ -284,9 +284,11 @@ numbers — those are already bounded by the tests of the units the demo calls.
 measured once by hand and repeated ever since) and is deliberately NOT gated; `tools/packageToolbox.m`
 builds the `.mltbx` from a programmatic options object and commits no `.prj`. Both live in `tools/`:
 a development instrument is not part of the scientific surface. **O-35 answered** (2026-09-09): data is optionally downloaded during setup (`'FetchData'`, the same
-three settings as `'FetchMsis'`) and otherwise the user supplies it. IERS and CelesTrak are
-fetched; **GRACE-FO Level-1B is not fetchable without an Earthdata account**, so setup names the
-source and downloads nothing rather than pretending. The four remaining stubs are blocked on data the project does not hold, so
+three settings as `'FetchMsis'`) and otherwise the user supplies it. IERS, CelesTrak **and GRACE-FO
+Level-1B** are all fetched — the last from the GFZ ISDC archive the owner supplied after my probe
+guessed two wrong hosts and concluded it needed a login. **Two failed guesses at a URL are not a
+finding.** The 2020-01-01 archive holds all 65 products, including MAG1B and ACT1B, which unblocks
+O-8. `.mltbx` packaging is deprecated (O-36): publication is via git only. The four remaining stubs are blocked on data the project does not hold, so
 they are not level debt. **Next is LP-R (release).** Two owner rulings of 2026-09-09 shape it: the
 toolbox is **MIT** (`LICENSE`), and **O-29 is accepted** — 88 ms per epoch in the standard preset
 ships as a stated cost, not a blocker. **O-34 is closed** (2026-09-09): NRLMSISE-00 is no longer in this repository. `setupNonGravForces` clones it at

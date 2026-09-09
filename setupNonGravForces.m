@@ -88,7 +88,14 @@ MSIS_COMMIT = "bc9a2feba4344e74201281e563332688a4d09cc3";
 % get it instead of pretending it can.
 EOP_URL = "https://datacenter.iers.org/data/9/finals2000A.all";
 SW_URL = "https://celestrak.org/SpaceData/SW-All.csv";
-L1B_SOURCE = "PO.DAAC (Earthdata login required): GRACE-FO Level-1B, GNV1B and SCA1B";
+% GRACE-FO Level-1B IS anonymously available after all, at GFZ's ISDC -- the owner supplied the
+% path on 2026-09-09 after my probe went to the wrong host and concluded it needed an Earthdata
+% login. Verified the same day: the directory lists one archive per day and the 2020-01-01 one
+% holds every product under exactly the filenames this toolbox's fixtures use. It is 147 MB, so
+% it is fetched only when the sample files are missing and only the needed members are kept.
+L1B_BASE = "https://isdc-data.gfz.de/grace-fo/Level-1B/JPL/INSTRUMENT/RL04";
+L1B_DAY = "2020-01-01";
+L1B_MEMBERS = ["GNV1B_2020-01-01_C_04.txt", "SCA1B_2020-01-01_C_04.txt"];
 root = fileparts(mfilename('fullpath'));
 addpath(root, fullfile(root,'tests'), fullfile(root,'tools'), fullfile(root,'demos'));
 % Help-browser registration: info.xml at the root is picked up by doc.
@@ -101,7 +108,7 @@ info.root    = root;
 info.version = NonGravForces.toolboxVersion('string');
 info.dependencies = NonGravForces.dependencyReport('Verbose', options.Verbose);
 info.msis = localFetchMsis(root, MSIS_URL, MSIS_COMMIT, options.FetchMsis);
-info.data = localFetchData(root, EOP_URL, SW_URL, L1B_SOURCE, options.FetchData);
+info.data = localFetchData(root, EOP_URL, SW_URL, L1B_BASE, L1B_DAY, L1B_MEMBERS, options.FetchData);
 info.mex = NonGravForces.buildMex('Check', true);      % 1xT since 0.6.1: msis, kernel
 if options.Verbose
     for m = 1:numel(info.mex)
@@ -119,7 +126,7 @@ if options.Verbose
 end
 end
 
-function d = localFetchData(root, eopUrl, swUrl, l1bSource, mode)
+function d = localFetchData(root, eopUrl, swUrl, l1bBase, l1bDay, l1bMembers, mode)
 %LOCALFETCHDATA The two files that can be had without an account, and an honest word about the third.
 items = struct('name', {}, 'action', {}, 'file', {}, 'source', {});
 targets = {"eop", fullfile(root, 'data', 'eop'), "finals2000A.all", eopUrl, "*.all"; ...
@@ -154,14 +161,43 @@ for t = 1:size(targets, 1)
     end
     items(end+1) = rec; %#ok<AGROW>
 end
-% The third source cannot be automated, so it is named rather than attempted.
-have = ~isempty(dir(fullfile(root, 'data', 'samples', '*1B*')));
-action = "present";
-if ~have
-    action = "not fetchable: " + l1bSource;
+% GRACE-FO Level-1B: one archive per day, 147 MB, so only fetched when the members are absent
+% and only the members are kept. The archive holds far more than this toolbox reads --
+% ACT1B, MAG1B, MAS1B, THR1B among them -- which is worth knowing before writing a reader.
+samples = fullfile(root, 'data', 'samples');
+url = l1bBase + "/" + extractBefore(l1bDay, 5) + "/gracefo_1B_" + l1bDay + "_RL04.ascii.noLRI.tgz";
+missing = l1bMembers(~isfile(fullfile(samples, l1bMembers)));
+rec = struct('name', "samples", 'action', "present", 'file', "", 'source', url);
+if mode == "never" || (isempty(missing) && mode ~= "force")
+    if ~isempty(missing), rec.action = "missing (FetchData never)"; end
+else
+    if ~isfolder(samples), mkdir(samples); end
+    tmp = [tempname '.tgz'];
+    cleanup = onCleanup(@() localQuietDelete(tmp));
+    fprintf('setupNonGravForces: fetching GRACE-FO Level-1B %s (about 147 MB) from %s\n', l1bDay, url);
+    try
+        websave(tmp, char(url));
+        untar(tmp, samples, cellstr(l1bMembers));
+        got = l1bMembers(isfile(fullfile(samples, l1bMembers)));
+        if numel(got) == numel(l1bMembers)
+            rec.action = "fetched";
+        else
+            rec.action = "incomplete: the archive did not hold " + strjoin(setdiff(l1bMembers, got), ", ");
+        end
+    catch err
+        rec.action = "failed: " + string(err.message);
+        fprintf('setupNonGravForces: %s -> download it by hand from %s\n', rec.action, url);
+    end
 end
-items(end+1) = struct('name', "samples", 'action', action, 'file', "", 'source', l1bSource);
+items(end+1) = rec;
 d = struct('items', items, 'mode', mode);
+end
+
+function localQuietDelete(f)
+%LOCALQUIETDELETE Remove a temporary file without turning a cleanup into an error.
+if isfile(f)
+    try, delete(f); catch, end
+end
 end
 
 function m = localFetchMsis(root, url, commit, mode)

@@ -1,13 +1,20 @@
 %DEMOGRACEFOCALIBRATION Recover an accelerometer's bias and scale from a modelled arc.
 %
-%   NO ACT1B FILE IS IN THIS REPOSITORY, and that is not an oversight: none is
-%   on the owner's host either (HANDOVER obligation O-8), so there is no measured
-%   series to calibrate against. This demo therefore does the only honest thing
-%   available: it PLANTS a known bias and scale on the model's own output and
-%   recovers them, which is how the estimator is tested and is what a real
-%   calibration looks like with the truth replaced by a measurement.
+%   THIS DEMO PLANTS ITS MEASUREMENT, and the reason changed on 2026-09-09. It
+%   used to be that no ACT1B file existed anywhere. That is no longer true: the
+%   GFZ ISDC archive setupNonGravForces fetches carries ACT1B for the same day,
+%   under the same naming as every other product, and NonGravForces.io.readACC1B
+%   already reads it.
 %
-%   Swap `measured` for a real ACT1B series and nothing else changes.
+%   It still plants, for a reason that is about DEMONSTRATION rather than data: a
+%   planted bias and scale are KNOWN, so this page can show the recovered numbers
+%   beside the truth and you can see the estimator work. Against real ACT1B the
+%   truth is what you are trying to find, and a demo that prints an answer nobody
+%   can check demonstrates nothing.
+%
+%   To run it on the real series: add ACT1B to the members setupNonGravForces
+%   extracts, read it with NonGravForces.io.readACC1B, and put it in `measured`.
+%   Nothing else changes.
 %
 %   Run:  demoGraceFOCalibration
 %
