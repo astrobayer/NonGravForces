@@ -467,17 +467,27 @@ classdef tNgfApp < NgfTestCase
     end
     methods (Test, TestTags = {'precision'})
         function calibratePrecision(tc)
-            % With noise the estimate must be unbiased and the formal sigma must fall as 1/sqrt(K).
-            % Two arc lengths, one seed: the ratio is the claim, the absolute values are not.
+            % THE 1/sqrt(K) LAW HOLDS FOR THE BIAS AND NOT FOR THE SCALE, and the first version of
+            % this test asserted it for the scale and measured 8.3 where it expected 2. The reason
+            % is worth keeping: a constant bias has a constant design column, so its formal sigma
+            % is exactly sigma0/sqrt(K); the scale's column is the modelled acceleration, whose
+            % spread over the arc is what determines it, and 240 epochs of a GRACE orbit do not
+            % carry four times the spread of 60. So the law is asserted where it is a law, and the
+            % scale's ratio is RECORDED beside it rather than bounded by a wish.
             sig = 2e-9;
             [e1, a1, y1] = tc.calScene(60, "constant", sig);
             [e2, a2, y2] = tc.calScene(240, "constant", sig);
+            b1 = NonGravForces.app.calibrate(y1, a1, e1, 'Scale', "none");
+            b2 = NonGravForces.app.calibrate(y2, a2, e2, 'Scale', "none");
+            ratio = b1.sigma(:, 1) ./ b2.sigma(:, 1);
+            tc.verifyBoundAndRecord("formal bias sigma falls as sqrt(K): 240 vs 60 epochs", ...
+                max(abs(ratio - 2)) / 2, 0.15, "-", ...
+                "a constant column gives sigma0/sqrt(K) exactly; the only spread left is in sigma0 itself, about 5 per cent at 59 degrees of freedom");
             c1 = NonGravForces.app.calibrate(y1, a1, e1);
             c2 = NonGravForces.app.calibrate(y2, a2, e2);
-            ratio = c1.sigma(:, end) ./ c2.sigma(:, end);
-            tc.verifyBoundAndRecord("formal scale sigma falls as sqrt(K): 240 vs 60 epochs", ...
-                max(abs(ratio - 2)) / 2, 0.6, "-", ...
-                "the expectation is exactly 2 for white noise; the spread is the sampling of one realisation, not a modelling error");
+            tc.verifyBoundAndRecord("formal scale sigma, 60 epochs / 240 epochs (recorded, not a law)", ...
+                max(c1.sigma(:, end) ./ c2.sigma(:, end)), 20, "-", ...
+                "determined by the spread of the modelled acceleration over the arc, not by the sample count; the bound only catches a runaway");
             tc.verifyBoundAndRecord("sigma0 recovers the planted noise level", ...
                 max(abs(c2.sigma0 - sig)) / sig, 0.2, "-", ...
                 "a-posteriori sigma from a 240-sample arc: the chi-square spread at 237 degrees of freedom is about 9 per cent");
@@ -486,6 +496,7 @@ classdef tNgfApp < NgfTestCase
                 "unbiasedness, tested the only way one realisation allows");
         end
     end
+
     methods (Test, TestTags = {'vectorization'})
         function calibrateVectorization(tc)
             % THE PROBLEM SEPARATES BY AXIS, and that is a claim about the estimator, not an
@@ -537,9 +548,17 @@ classdef tNgfApp < NgfTestCase
             cW = NonGravForces.app.calibrate(yBad, aM, e, 'Weights', w);
             tc.verifyBoundAndRecord("a zero weight equals a mask", ...
                 max(abs(diag(cW.scale) - diag(cMask.scale))), 0, "-", "both drop the sample before the design matrix is built");
-            % An arc too short to separate a fine bias basis from the scale is REFUSED, not fitted.
-            tc.verifyErrorId(@() NonGravForces.app.calibrate(y, aM, e, 'Bias', "hat", 'KnotInterval_s', 2), ...
+            % MORE UNKNOWNS THAN SAMPLES is refused, not fitted. A 2 s knot interval was tried
+            % here first and did NOT refuse, correctly: at this sampling it still leaves more
+            % samples than knots, so it is estimable and merely useless. 0.5 s puts the knot count
+            % above the sample count whatever the fixture's rate, which is the guard's actual job.
+            tc.verifyErrorId(@() NonGravForces.app.calibrate(y, aM, e, 'Bias', "hat", 'KnotInterval_s', 0.5), ...
                 'NonGravForces:calibrate:numericSingular');
+            % The condition guard is a separate branch and gets its own provocation, paired with
+            % the call that must succeed (rule T6).
+            tc.verifyErrorId(@() NonGravForces.app.calibrate(y, aM, e, 'MaxCondition', 1), ...
+                'NonGravForces:calibrate:numericSingular');
+            tc.verifyWarningFree(@() NonGravForces.app.calibrate(y, aM, e, 'MaxCondition', 1e12));
         end
     end
     methods (Test, TestTags = {'metamorphic'})

@@ -393,6 +393,13 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   Any unit that screens an input it does not read will refuse the fast preset's own environment;
   `kernel.singleEpoch` did exactly that until 2026-09-08. Build a test's inputs from the real
   units, not from literals, or this class of defect stays invisible.
+- **1/sqrt(K) is a law for a CONSTANT design column and for nothing else.** A bias sigma falls
+  that way; a scale sigma is set by the spread of the modelled signal over the arc, and a longer
+  arc need not carry more spread. Asserting the law on the wrong parameter measured 8.3 against
+  an expected 2.
+- **A refusal test that does not refuse is not a passing test, it is an untested guard.** A 2 s
+  knot interval was estimable and merely useless; only 0.5 s put the unknown count above the
+  sample count. Provoke the branch you mean, and pair it with the call that must succeed.
 - **Dropping a dependency leaves dead code behind it.** Removing the lsqvce row left its only
   helper unreferenced and `codeIssues` (DEFNU) caught it before any test ran. Grep for the
   helpers a removed row used, not only for the row.
