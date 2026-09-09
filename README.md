@@ -1,4 +1,4 @@
-# NonGravForces 0.6.3
+# NonGravForces 0.7.0
 
 Non-gravitational forces, torques and partials for LEO satellites (GRACE-FO reference case). Third concept, designed from scratch after the audits of `SatelliteNonGravToolbox` v1 and `NonGravToolbox` v0.1.1.
 
@@ -10,4 +10,4 @@ Non-gravitational forces, torques and partials for LEO satellites (GRACE-FO refe
 run('../referenceSystem/setupReferenceSystem.m'); run('../gracefoReading/setupGraceFOReading.m')
 setupNonGravForces; runNgfTests
 ```
-Status: 44 of 53 catalogued units delivered and verified in MATLAB, 9 documented stubs. LP-6b (the single-epoch C kernel) is green; LP-7 has begun with `app.forceBudget`. The authority is `doc/functionlist.csv`; `HANDOVER.md` Part A carries the level-by-level record.
+Status: 45 of 53 catalogued units delivered and verified in MATLAB, 8 documented stubs. LP-7 is under way: `app.forceBudget` and `sensor.Electrostatic` are delivered; `AtomInterferometer`, `DragFree`, `app.calibrate` and `app.densityInversion` remain. The authority is `doc/functionlist.csv`; `HANDOVER.md` Part A carries the level-by-level record.

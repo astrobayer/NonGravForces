@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.6.3.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.7.0.
 
 ---
 
@@ -191,7 +191,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   `tools/pyxcheck/sentman_check.py`, `pelt_check.py`); and the LP-5x cross-validation tooling:
   `tools/pyxcheck/ngfkernel/`, an independent standard-library Python mirror of the frozen
   kernel with its parity driver and `tests/tNgfMirror.m` (WP-33; WP-34 needs GROOPS, O-19).
-- **9 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
+- **8 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
 - LP-6 added the six `Model` evaluation methods (`accel`, `torque`, `series`, `partials`,
   `rhs`, `budget`), `env.wind` (co-rotation) and `kernel.partials` (analytic derivatives).
 - Repository `github.com/astrobayer/NonGravForces` (the account was renamed
@@ -245,8 +245,13 @@ L0 with no dynamics interface and a signature that does not match `Model.rhs()` 
 and lsqvce 5.3's `fit` takes three declaration kinds with regularisation declared in the data,
 which fixes `app.calibrate` as a kind-C batched declaration (O-24 discharged as a blocker).
 
-**Still in LP-7:** WP-29 `sensor.Electrostatic`, `AtomInterferometer`, `DragFree` · WP-19
-`calibrate` · WP-32 `densityInversion`. Then LP-R (release).
+`sensor.Electrostatic` (WP-29) is delivered too: bias, 3x3 scale, proof-mass offset coupling and
+an FIR filter, with the omega sign convention pinned in its own help (`skew(omega) = R' Rdot` for
+R body→inertial) because `referenceSystem`'s unit takes R the other way and carries a configurable
+sense — the relation between them is RECORDED from the run, not guessed (O-32).
+
+**Still in LP-7:** WP-29 `AtomInterferometer`, `DragFree` · WP-19 `calibrate` · WP-32
+`densityInversion`. Then LP-R (release).
 
 **LP-5x cross-validation** (owner rulings of 2026-08-27):
 - WP-33: standard-library mirror of the **kernel layer only** under
