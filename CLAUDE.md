@@ -250,8 +250,13 @@ an FIR filter, with the omega sign convention pinned in its own help (`skew(omeg
 R body→inertial) because `referenceSystem`'s unit takes R the other way and carries a configurable
 sense — the relation between them is RECORDED from the run, not guessed (O-32).
 
-**Still in LP-7:** WP-29 `AtomInterferometer`, `DragFree` · WP-19 `calibrate` · WP-32
-`densityInversion`. Then LP-R (release).
+`app.densityInversion` (WP-32) is delivered too: the inversion is a DIVISION, because the gas force
+is exactly linear in the species densities, so one model evaluation gives the whole sensitivity.
+It does not calibrate and says so; it subtracts the modelled radiation and reports what is left
+across the drag direction, which is the only honest quality flag it can offer.
+
+**Still in LP-7:** WP-29 `AtomInterferometer`, `DragFree` · WP-19 `calibrate` — the last is blocked
+on the runner, not on design: `lsqvce` is not checked out by CI (O-33). Then LP-R (release).
 
 **LP-5x cross-validation** (owner rulings of 2026-08-27):
 - WP-33: standard-library mirror of the **kernel layer only** under
@@ -384,6 +389,11 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   Any unit that screens an input it does not read will refuse the fast preset's own environment;
   `kernel.singleEpoch` did exactly that until 2026-09-08. Build a test's inputs from the real
   units, not from literals, or this class of defect stays invisible.
+- **Never claim bitwise across a change in BATCH SIZE.** Vectorised products and norms associate
+  by batch size, so K = 1 and K = 10 are not the same arithmetic even when they are the same
+  formula. Met three times now: `pagemtimes` in `Model.evaluate`, the chunked RMS in
+  `forceBudget`, and one epoch vs an arc in `densityInversion`. Bitwise IS claimable across a
+  change of grouping that leaves the arithmetic alone — two models stacked, a maximum of maxima.
 - **A numerical bound written from an estimate is a red gate waiting to happen.** Three sessions
   in a row have lost a run to one. Where cancellation governs, COMPUTE the bound in the test from
   `eps` of the terms involved instead of writing a literal. Where the model is exactly linear, a
