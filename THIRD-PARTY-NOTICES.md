@@ -67,7 +67,26 @@ makes tracking upstream safe rather than merely convenient.
 
 ## Data files under data/
 
-`data/eop/`, `data/spaceweather/` and `data/samples/` hold small excerpts of
-IERS, CelesTrak and NASA/JPL GRACE-FO Level-1B products, kept for testing. They
-are redistributed under the terms their providers publish; they are not covered
-by the MIT licence above and are not this toolbox's to relicense.
+`data/eop/`, `data/spaceweather/` and `data/samples/` hold small excerpts of IERS,
+CelesTrak and NASA/JPL GRACE-FO Level-1B products, kept so the tests and demos
+have a real arc to run on. They are redistributed under the terms their
+providers publish; they are not covered by the MIT licence above and are not
+this toolbox's to relicense.
+
+**A packaged `.mltbx` carries none of them** (owner's ruling, 2026-09-09):
+`setupNonGravForces` downloads what can be had without an account, only when it
+is missing, and otherwise supplying the data is the user's responsibility.
+
+| source | fetched by setup | where from |
+|---|---|---|
+| Earth orientation | yes | `https://datacenter.iers.org/data/9/finals2000A.all` |
+| space weather | yes, with one retry | `https://celestrak.org/SpaceData/SW-All.csv` |
+| GRACE-FO Level-1B | **no** | PO.DAAC, and it requires an Earthdata login |
+
+The third row is the honest one. Probed on 2026-09-09: IERS answered 200 with
+the fixed-format file, CelesTrak answered 503 once and 200 on the retry, and no
+anonymous GRACE-FO mirror was established. Setup therefore names the source and
+the filenames it expects and downloads nothing, rather than shipping a URL that
+would fail in front of a reader.
+
+`'FetchData', "never"` leaves the network alone entirely.
