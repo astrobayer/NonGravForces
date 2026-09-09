@@ -15,7 +15,9 @@ classdef Model
 %   the Earth-orientation and space-weather sources, the resolved Options and the
 %   self-shadow look-up table. It computes forces and torques and nothing else:
 %   time, frames and attitude kinematics are referenceSystem, reading is
-%   gracefoReading, integration is gjToolbox, estimation is lsqvce.
+%   gracefoReading, integration is gjToolbox. Calibration is app.calibrate, whose
+%   solver is this toolbox's own: the problem is a small separable linear least
+%   squares and an external estimator was ruled overkill for it (2026-09-09).
 %
 %   ONE KERNEL (principle P2). accel and torque are two reductions of the same
 %   per-panel force array F_k: F = sum_k F_k and tau = sum_k (c_k - r_cm) x F_k,

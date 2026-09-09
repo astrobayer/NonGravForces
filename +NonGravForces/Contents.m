@@ -1,5 +1,5 @@
 % NONGRAVFORCES  Non-gravitational forces, torques and partials for LEO satellites.
-% Version 0.7.0  08-Sep-2026
+% Version 0.7.1  08-Sep-2026
 %
 % Single point of access
 %   Model              - Configure once, evaluate many: accel | torque | series |
@@ -24,10 +24,9 @@
 %             partials, and the compiled single-epoch path
 %   sensor  - measurement models: electrostatic, atom interferometer, drag-free
 %   qc      - outlier, impulse and jump detection on residuals
-%   app     - calibration (via lsqvce), force budget, density inversion
+%   app     - calibration (own linear solver), force budget, density inversion
 %
 % Dependencies (called by qualified name, never copied or wrapped)
 %   referenceSystem >= 2.1   time, frames, ephemerides, attitude kinematics
 %   gracefoReading  >= 2.1   GRACE-FO Level-1B reading
 %   gjToolbox (odeSuite)     orbit integration (optional, for rhs)
-%   lsqvce                   least squares, VCE, whitening (optional, for app)

@@ -62,7 +62,9 @@ classdef tNgfCore < NgfTestCase
         function dependencyReportContract(tc)
             d = NonGravForces.dependencyReport('Verbose', false);
             tc.verifyEqual(numel(d), 4);
-            tc.verifyEqual([d.name], ["referenceSystem","gracefoReading","gjToolbox","lsqvce"]);
+            % lsqvce left this table on 2026-09-09 with the owner's ruling that it is overkill for
+            % WP-19; app.calibrate carries its own solver now, so nothing in the toolbox calls it.
+            tc.verifyEqual([d.name], ["referenceSystem","gracefoReading","gjToolbox"]);
             tc.verifyTrue(all(islogical([d.present])));
         end
     end

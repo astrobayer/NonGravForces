@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.7.0.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.7.1.
 
 ---
 
@@ -191,7 +191,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   `tools/pyxcheck/sentman_check.py`, `pelt_check.py`); and the LP-5x cross-validation tooling:
   `tools/pyxcheck/ngfkernel/`, an independent standard-library Python mirror of the frozen
   kernel with its parity driver and `tests/tNgfMirror.m` (WP-33; WP-34 needs GROOPS, O-19).
-- **8 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
+- **6 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
 - LP-6 added the six `Model` evaluation methods (`accel`, `torque`, `series`, `partials`,
   `rhs`, `budget`), `env.wind` (co-rotation) and `kernel.partials` (analytic derivatives).
 - Repository `github.com/astrobayer/NonGravForces` (the account was renamed
@@ -255,8 +255,12 @@ is exactly linear in the species densities, so one model evaluation gives the wh
 It does not calibrate and says so; it subtracts the modelled radiation and reports what is left
 across the drag direction, which is the only honest quality flag it can offer.
 
-**Still in LP-7:** WP-29 `AtomInterferometer`, `DragFree` · WP-19 `calibrate` — the last is blocked
-on the runner, not on design: `lsqvce` is not checked out by CI (O-33). Then LP-R (release).
+`app.calibrate` (WP-19) is delivered with the TOOLBOX'S OWN SOLVER: the owner ruled lsqvce overkill
+on 2026-09-09, and it is — the problem is linear and separates by axis, so it is three QRs of a few
+dozen unknowns on an equilibrated design matrix. lsqvce is gone from the dependency table; O-24 and
+O-33 are void.
+
+**Still in LP-7:** WP-29 `sensor.AtomInterferometer`, `sensor.DragFree`. Then LP-R (release).
 
 **LP-5x cross-validation** (owner rulings of 2026-08-27):
 - WP-33: standard-library mirror of the **kernel layer only** under
