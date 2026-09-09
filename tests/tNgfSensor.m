@@ -352,7 +352,7 @@ classdef tNgfSensor < NgfTestCase
 
     methods (Static)
         function r = rmsOf(x)
-            %RMSOF Root mean square. rms() lives in the Signal Processing Toolbox, which C2 rules
+            %RMSOF Root mean square. rms() lives in the Signal Processing Toolbox, which C2 rules  % toolboxScan:allow
             % out, and a test may not depend on a product the toolbox itself refuses to need.
             r = sqrt(mean(x.^2));
         end

@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.8.2.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.8.3.
 
 ---
 
@@ -269,7 +269,10 @@ the measurement but larger than everything the instrument exists to see.
 `sensor.DragFree` (WP-29) closes the level: the residual a loop FAILS to remove, as a cascade of
 bilinear high-pass sections with actuator saturation and a masked start-up transient.
 
-**LP-7 IS COMPLETE.** The four remaining stubs are blocked on data the project does not hold, so
+**LP-7 IS COMPLETE; LP-R is open** — the C2 toolbox scan (`auditPackage.py` check 9) is delivered:
+no call into Signal Processing, Statistics, Optimization, Curve Fitting, Symbolic, Aerospace or
+Mapping, in code **or help text**, since an example that needs a forbidden product misleads the
+reader who copies it. A name the file assigns to is treated as a variable, not a call. The four remaining stubs are blocked on data the project does not hold, so
 they are not level debt. **Next is LP-R (release).** Two owner rulings of 2026-09-09 shape it: the
 toolbox is **MIT** (`LICENSE`), and **O-29 is accepted** — 88 ms per epoch in the standard preset
 ships as a stated cost, not a blocker. **O-34 is closed** (2026-09-09): NRLMSISE-00 is no longer in this repository. `setupNonGravForces` clones it at

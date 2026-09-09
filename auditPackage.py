@@ -151,23 +151,74 @@ for i, raw in enumerate(open(os.path.join(ROOT, "doc", "functionlist.csv"), enco
         note(f"doc/functionlist.csv line {i} has {raw.count(',') + 1} comma-separated fields, not 7 "
              f"-> remove the comma from the h1 text (the catalogue is read unquoted)")
 
-# 8. the vendored NRLMSISE-00 sources must match the digests their README records, or a silent
-#    edit to third-party C would ship unnoticed. The digests were recorded when it was vendored.
+# 8. NRLMSISE-00 is no longer vendored (O-34), so there is nothing here to digest. Its integrity
+#    is covered by two other mechanisms: setupNonGravForces pins the upstream commit, and
+#    buildMex digests whatever source it actually compiled, so a different release marks the
+#    binary stale. This check refuses only a PARTIAL tree, which is the one state that would
+#    compile into something nobody chose.
 mexdir = os.path.join(ROOT, "mex", "nrlmsise00")
-readme = os.path.join(mexdir, "README.md")
-if os.path.isfile(readme):
-    recorded = dict(re.findall(r"\|\s*`([\w.\-]+)`\s*\|\s*([0-9a-f]{64})\s*\|", open(readme, encoding="utf-8").read()))
-    if not recorded:
-        note("mex/nrlmsise00/README.md records no SHA-256 digests -> the vendored sources are unverifiable")
-    for fname, want in recorded.items():
-        fpath = os.path.join(mexdir, fname)
-        if not os.path.isfile(fpath):
-            note(f"mex/nrlmsise00/{fname} is recorded with a digest but missing")
+if os.path.isdir(mexdir):
+    need = ["nrlmsise-00.c", "nrlmsise-00.h", "nrlmsise-00_data.c"]
+    absent = [f for f in need if not os.path.isfile(os.path.join(mexdir, f))]
+    if absent and len(absent) != len(need):
+        note(f"mex/nrlmsise00 exists but is incomplete (missing {', '.join(absent)}) "
+             f"-> delete the folder and let setupNonGravForces clone it again")
+
+# 9. NO TOOLBOX CALLS. Constraint C2 allows base MATLAB and the Parallel Computing Toolbox and
+#    nothing else, and that constraint has been broken twice by hand in one day: rms() reached
+#    both a docstring EXAMPLE and a test before anyone noticed. A reader who copies an example
+#    that needs a product the toolbox refuses to need has been misled by the toolbox itself, so
+#    the scan covers comments and help text as well as code.
+#
+#    The list is deliberately CONSERVATIVE: only names that are unambiguous calls into a
+#    product. fit, smooth, filter and median are left out because they collide with ordinary
+#    variable names and a false positive here costs more than a missed exotic call -- a check
+#    people learn to work around is worse than no check.
+#
+#    A NAME THAT THE FILE ASSIGNS TO IS A VARIABLE, NOT A CALL. Model.m and forceBudget.m both
+#    keep a matrix called rms and index it; flagging those would have been the scan teaching
+#    people to ignore it on its first run. So each file's assignment targets are collected first
+#    and excluded within that file, which is sound: MATLAB cannot mean both at once in one scope.
+#
+#    A line that legitimately NAMES one of these (this comment, for instance) carries the marker
+#    toolboxScan:allow, so every exception is visible in the diff that introduced it.
+TOOLBOX_FUNCTIONS = {
+    "rms": "Signal Processing", "filtfilt": "Signal Processing", "butter": "Signal Processing",
+    "freqz": "Signal Processing", "periodogram": "Signal Processing", "pwelch": "Signal Processing",
+    "findpeaks": "Signal Processing", "resample": "Signal Processing", "medfilt1": "Signal Processing",
+    "sgolayfilt": "Signal Processing", "spectrogram": "Signal Processing", "hann": "Signal Processing",
+    "hamming": "Signal Processing", "blackman": "Signal Processing", "xcorr": "Signal Processing",
+    "normpdf": "Statistics", "normcdf": "Statistics", "prctile": "Statistics", "quantile": "Statistics",
+    "nanmean": "Statistics", "nanstd": "Statistics", "regress": "Statistics", "fitlm": "Statistics",
+    "robustfit": "Statistics", "ttest": "Statistics", "mvnrnd": "Statistics", "boxplot": "Statistics",
+    "fmincon": "Optimization", "fminunc": "Optimization", "lsqnonlin": "Optimization",
+    "lsqcurvefit": "Optimization", "fsolve": "Optimization", "quadprog": "Optimization",
+    "csaps": "Curve Fitting", "cfit": "Curve Fitting",
+    "sym": "Symbolic Math", "syms": "Symbolic Math", "vpa": "Symbolic Math",
+    "dcm2quat": "Aerospace", "quatmultiply": "Aerospace", "quatrotate": "Aerospace",
+    "geoshow": "Mapping", "wgs84Ellipsoid": "Mapping", "geodetic2ecef": "Mapping",
+}
+scan_roots = [os.path.join(ROOT, "+NonGravForces"), os.path.join(ROOT, "tests"),
+              os.path.join(ROOT, "tools")]
+scan_files = [os.path.join(ROOT, f) for f in ("setupNonGravForces.m", "ciGate.m", "runNgfTests.m")
+              if os.path.isfile(os.path.join(ROOT, f))]
+for r in scan_roots:
+    for dirpath, _, filenames in os.walk(r):
+        scan_files += [os.path.join(dirpath, f) for f in filenames if f.endswith(".m")]
+pattern = re.compile(r"(?<![\w.])(" + "|".join(sorted(TOOLBOX_FUNCTIONS)) + r")\s*\(")
+for f in sorted(scan_files):
+    rel = os.path.relpath(f, ROOT).replace(os.sep, "/")
+    text = open(f, encoding="utf-8").read()
+    assigned = set(re.findall(r"(?<![\w.])(" + "|".join(sorted(TOOLBOX_FUNCTIONS)) +
+                              r")\s*(?:\([^)\n]*\))?\s*=(?!=)", text))
+    for n, line in enumerate(text.splitlines(), 1):
+        if "toolboxScan:allow" in line:
             continue
-        got = hashlib.sha256(open(fpath, "rb").read()).hexdigest()
-        if got != want:
-            note(f"mex/nrlmsise00/{fname} digest {got[:16]} does not match the recorded {want[:16]} "
-                 f"-> the vendored third-party source was edited")
+        m = pattern.search(line)
+        if m and m.group(1) not in assigned:
+            note(f"{rel}:{n} calls {m.group(1)}(), which needs the {TOOLBOX_FUNCTIONS[m.group(1)]} "
+                 f"Toolbox -> constraint C2 allows base MATLAB and Parallel Computing only; "
+                 f"write it out, or mark the line toolboxScan:allow if it only names the function")
 
 if findings:
     print(f"auditPackage: {len(findings)} finding(s)")
