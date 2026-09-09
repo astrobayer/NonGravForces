@@ -18,3 +18,4 @@ __pycache__/
 # Third-party papers and theses read while building the toolbox (80 MB, copyrighted,
 # not redistributable). Kept locally, never committed; the toolbox cites them by DOI.
 doc/references/
+tools/benchmark_last.txt
