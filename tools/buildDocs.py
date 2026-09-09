@@ -152,6 +152,13 @@ def render_all():
          "copy you already have. Everything except the <code>msis00</code> density backend works without it.</p>"
          "<pre>NonGravForces.buildMex          %% compile the two MEX gateways, once per machine\n"
          "matlab -batch ciGate            %% the gate: Code Analyzer clean, then the whole suite</pre>"
+         "<p>Then run a demo. Each is a working sequence of public calls, and each is EXECUTED BY "
+         "THE GATE (<code>tests/tNgfDemos.m</code>), so an API that moves breaks the demo in CI "
+         "rather than in front of a reader:</p>"
+         "<pre>demoForceBudget         %% per-effect budget, two presets side by side\n"
+         "demoDensityInversion    %% recover a planted density scale\n"
+         "demoGraceFOCalibration  %% recover a planted bias and scale\n"
+         "demoCAI                 %% cold-atom accelerometer, and why it needs the attitude rate</pre>"
          "<p>The toolbox is MIT licensed. See <code>THIRD-PARTY-NOTICES.md</code> for what that does not "
          "cover.</p>"]
     out["GettingStarted.html"] = page("Getting Started", "".join(p), version, date, model)
