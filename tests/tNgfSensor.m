@@ -762,9 +762,14 @@ classdef tNgfSensor < NgfTestCase
             % 3. A bias is additive and reaches nothing else.
             sB = NonGravForces.sensor.DragFree(0.1, 1, 'SampleRate', 10, 'Bias', [1e-9; -2e-9; 3e-9]);
             yB = sB.observe(struct('a', a));
+            % The bound is COMPUTED from the cancellation floor, not written. Recovering a 1e-9
+            % shift by differencing two residuals of order 1e-7 cannot beat eps of the larger, and
+            % 1e-24 written from an estimate reddened the gate at 4.5e-24 -- eps(1e-7) is 1.3e-23,
+            % so the guess was below the floor it was measuring against.
+            biasFloor = 10 * eps(max(abs(y), [], 'all'));
             tc.verifyBoundAndRecord("a bias is a rigid shift of the residual", ...
                 max(abs((yB.value - y.value) - [1e-9; -2e-9; 3e-9]), [], 'all'), ...
-                1e-24, "m/s^2", "it is added outside the filter and outside the gain");
+                biasFloor, "m/s^2", "it is added outside the filter and outside the gain; the bound is ten times eps of the residual it is differenced out of");
             % 4. MORE BANDWIDTH IS MORE REJECTION at a fixed low frequency, and that is the design
             %    trade the noise model pays for: the same widening lets more thruster noise in.
             fLow = 0.02;
