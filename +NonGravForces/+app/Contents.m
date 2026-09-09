@@ -1,5 +1,5 @@
 % APP  NonGravForces.app - L8 layer.
-% Version 0.8.0  08-Sep-2026
+% Version 0.8.1  08-Sep-2026
 %
 %   calibrate            - Accelerometer calibration: bias basis + 3x3 scale + jumps by separable weighted least squares
 %   forceBudget          - Per-effect per-axis acceleration budget over an arc; chunked and across models

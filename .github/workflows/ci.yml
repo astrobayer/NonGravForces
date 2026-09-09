@@ -1,5 +1,9 @@
 # NonGravForces CI - modelled on referenceSystem's ci.yml (same owner, same
 # runner, same MATLAB release). Two gates, cheapest first:
+#   The matlab job FETCHES the NRLMSISE-00 C source at a pinned commit before it
+#   runs: that source is not in this repository (O-34) and the density backend
+#   cannot build without it.
+#
 #   audit    auditPackage.py, stdlib only, seconds: catalogue <-> files, help
 #            template, fail taxonomy, banned constructs (HANDOVER E.2/E.3, R1),
 #            then the C-side checks that need no MATLAB: the MEX gateway is
@@ -98,6 +102,27 @@ jobs:
       # composite-action schema rejects the key on a step.
       - uses: astrobayer/ci-actions/matlab-probe@v1.0.0
         timeout-minutes: 2
+      # NRLMSISE-00 is NOT redistributed by this repository: its package carries
+      # no redistribution grant (THIRD-PARTY-NOTICES.md, obligation O-34), so the
+      # source is fetched from its maintainer here instead of being vendored.
+      #
+      # PINNED TO A COMMIT, not to a branch. The owner's ruling of 2026-09-09 is
+      # to track upstream and take its bug fixes, and this is that ruling made
+      # reproducible: tracking a moving HEAD would let someone else's push change
+      # this repository's density numbers with nothing in its diff to explain it.
+      # Moving the pin is a deliberate act with a run behind it.
+      #
+      # bc9a2fe is "gtd7: fix output at 32.5 km" and carries, over the 2007
+      # release this toolbox used until 2026-09-09, fixes for Argon densities,
+      # a memory corruption, and compiler warnings. Its DOCUMENTATION section 7
+      # table -- the published oracle tests/tNgfEnv parses -- is byte-identical
+      # to the old one, so the reference values are unchanged by the move.
+      - name: Fetch NRLMSISE-00 C source (not redistributed here; see THIRD-PARTY-NOTICES.md)
+        working-directory: NonGravForces
+        run: |
+          git clone --quiet https://git.linta.de/~brodo/nrlmsise-00.git mex/nrlmsise00
+          git -C mex/nrlmsise00 checkout --quiet bc9a2feba4344e74201281e563332688a4d09cc3
+        shell: bash
 
       - uses: matlab-actions/run-command@37b454c384483087929a3d652be474ba585a9659 # v2
         with:
