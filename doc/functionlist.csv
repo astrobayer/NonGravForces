@@ -16,7 +16,7 @@ io,readMAG1B,function,L1,WP-18,done,MAG1B reader: measured field (SI) and magnet
 io,massModel,function,L1,WP-18,done,Spacecraft mass model: handbook constant or MAS1B-driven variable mass
 io,spaceWeather,function,L1,WP-04,done,Space-weather provider with query(epoch): F10.7 F30 S/M/Y10.7 Ap Kp Dst
 io,importCERES,function,L1,WP-08,stub,CERES SYN1deg/EBAF netCDF import into radiance grids
-io,igrfCoefficients,function,L1,WP-23,stub,IGRF-14 coefficient loader
+io,igrfCoefficients,function,L1,WP-23,done,IGRF-14 coefficient loader with the model's own interpolation and SV rule
 env,density,function,L2,WP-05,done,Thermosphere density and composition dispatcher (exponential msis00 msis21 dtm2020 jb2008)
 env,wind,function,L2,WP-25,done,Relative-velocity builder: co-rotation from referenceSystem plus an optional wind field
 env,eclipseFactor,function,L2,WP-07,done,Shadow function nu from 0 to 1: cylindrical conical solaarsCF plus lunar

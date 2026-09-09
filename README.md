@@ -1,4 +1,4 @@
-# NonGravForces 0.9.0
+# NonGravForces 0.9.1
 
 Non-gravitational forces, torques and partials for LEO satellites (GRACE-FO reference case). Third concept, designed from scratch after the audits of `SatelliteNonGravToolbox` v1 and `NonGravToolbox` v0.1.1.
 
@@ -10,7 +10,7 @@ Non-gravitational forces, torques and partials for LEO satellites (GRACE-FO refe
 run('../referenceSystem/setupReferenceSystem.m'); run('../gracefoReading/setupGraceFOReading.m')
 setupNonGravForces; runNgfTests
 ```
-Status: 50 of 53 catalogued units delivered and verified in MATLAB, 3 documented stubs. **LP-7 is complete**; the four remaining stubs are blocked on data the project does not hold (a MAG1B file, a CERES granule, IGRF-14 coefficients). Next is LP-R, the release level.
+Status: 51 of 53 catalogued units delivered and verified in MATLAB, 2 documented stubs. **LP-7 is complete**; the four remaining stubs are blocked on data the project does not hold (a MAG1B file, a CERES granule, IGRF-14 coefficients). Next is LP-R, the release level.
 
 Licensed MIT (see `LICENSE`). The NRLMSISE-00 C source is **not** in this repository — it carries no redistribution grant, so it is fetched from its maintainer instead:
 

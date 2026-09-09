@@ -88,6 +88,9 @@ MSIS_COMMIT = "bc9a2feba4344e74201281e563332688a4d09cc3";
 % get it instead of pretending it can.
 EOP_URL = "https://datacenter.iers.org/data/9/finals2000A.all";
 SW_URL = "https://celestrak.org/SpaceData/SW-All.csv";
+% IGRF-14, IAGA V-MOD. Verified 2026-09-09: the file fetched is byte-identical to the SHA-256
+% data/igrf/README.md recorded on 2026-09-07, so upstream has not moved under us.
+IGRF_URL = "https://www.ngdc.noaa.gov/IAGA/vmod/coeffs/igrf14coeffs.txt";
 % GRACE-FO Level-1B IS anonymously available after all, at GFZ's ISDC -- the owner supplied the
 % path on 2026-09-09 after my probe went to the wrong host and concluded it needed an Earthdata
 % login. Verified the same day: the directory lists one archive per day and the 2020-01-01 one
@@ -108,7 +111,7 @@ info.root    = root;
 info.version = NonGravForces.toolboxVersion('string');
 info.dependencies = NonGravForces.dependencyReport('Verbose', options.Verbose);
 info.msis = localFetchMsis(root, MSIS_URL, MSIS_COMMIT, options.FetchMsis);
-info.data = localFetchData(root, EOP_URL, SW_URL, L1B_BASE, L1B_DAY, L1B_MEMBERS, options.FetchData);
+info.data = localFetchData(root, EOP_URL, SW_URL, IGRF_URL, L1B_BASE, L1B_DAY, L1B_MEMBERS, options.FetchData);
 info.mex = NonGravForces.buildMex('Check', true);      % 1xT since 0.6.1: msis, kernel
 if options.Verbose
     for m = 1:numel(info.mex)
@@ -126,11 +129,12 @@ if options.Verbose
 end
 end
 
-function d = localFetchData(root, eopUrl, swUrl, l1bBase, l1bDay, l1bMembers, mode)
+function d = localFetchData(root, eopUrl, swUrl, igrfUrl, l1bBase, l1bDay, l1bMembers, mode)
 %LOCALFETCHDATA The two files that can be had without an account, and an honest word about the third.
 items = struct('name', {}, 'action', {}, 'file', {}, 'source', {});
 targets = {"eop", fullfile(root, 'data', 'eop'), "finals2000A.all", eopUrl, "*.all"; ...
-           "spaceweather", fullfile(root, 'data', 'spaceweather'), "SW-All.csv", swUrl, "*.csv"};
+           "spaceweather", fullfile(root, 'data', 'spaceweather'), "SW-All.csv", swUrl, "*.csv"; ...
+           "igrf", fullfile(root, 'data', 'igrf'), "igrf14coeffs.txt", igrfUrl, "igrf*coeffs.txt"};
 for t = 1:size(targets, 1)
     folder = targets{t, 2};
     present = ~isempty(dir(fullfile(folder, targets{t, 5})));

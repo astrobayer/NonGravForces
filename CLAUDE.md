@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.9.0.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.9.1.
 
 ---
 
@@ -191,7 +191,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   `tools/pyxcheck/sentman_check.py`, `pelt_check.py`); and the LP-5x cross-validation tooling:
   `tools/pyxcheck/ngfkernel/`, an independent standard-library Python mirror of the frozen
   kernel with its parity driver and `tests/tNgfMirror.m` (WP-33; WP-34 needs GROOPS, O-19).
-- **3 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
+- **2 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
 - LP-6 added the six `Model` evaluation methods (`accel`, `torque`, `series`, `partials`,
   `rhs`, `budget`), `env.wind` (co-rotation) and `kernel.partials` (analytic derivatives).
 - Repository `github.com/astrobayer/NonGravForces` (the account was renamed
@@ -444,6 +444,8 @@ Every one of these was an actual defect found in a predecessor or a dependency.
 - **Dropping a dependency leaves dead code behind it.** Removing the lsqvce row left its only
   helper unreferenced and `codeIssues` (DEFNU) caught it before any test ran. Grep for the
   helpers a removed row used, not only for the row.
+- **A status code is not a file.** `https://www.ngdc.noaa.gov/IAGA/vmod/igrf14.f` answers `200`
+  with an HTML error page. Check the content, not the response code — met twice in two days.
 - **Never claim bitwise across a change in BATCH SIZE.** Vectorised products and norms associate
   by batch size, so K = 1 and K = 10 are not the same arithmetic even when they are the same
   formula. Met three times now: `pagemtimes` in `Model.evaluate`, the chunked RMS in
