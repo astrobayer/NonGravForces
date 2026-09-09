@@ -9,8 +9,16 @@ function info = setupNonGravForces(options)
 %   ecosystem dependencies are reachable. It never adds a dependency to the path
 %   itself: each dependency ships its own setup function and owns its own path.
 %
-%   IT ALSO FETCHES THE NRLMSISE-00 C SOURCE WHEN THAT IS MISSING, and this is
-%   the one place in the toolbox that touches the network. The source is not
+%   IT ALSO FETCHES WHAT THE TOOLBOX NEEDS AND DOES NOT SHIP, and it is the one
+%   place in the toolbox that touches the network: the NRLMSISE-00 C source, the
+%   IERS Earth-orientation file and the CelesTrak space-weather file. Everything
+%   it fetches is optional and only when missing; what it cannot fetch, it names.
+%
+%   GRACE-FO LEVEL-1B IS NOT FETCHABLE HERE. PO.DAAC requires an Earthdata login
+%   and no anonymous mirror was established (probed 2026-09-09), so setup reports
+%   where the files come from and what to call them, and never pretends. Beyond
+%   that, supplying data is the user's responsibility -- the owner's ruling of
+%   2026-09-09. The source is not
 %   redistributed here -- its package carries no such grant
 %   (THIRD-PARTY-NOTICES.md, obligation O-34) -- so it is cloned from its
 %   maintainer into mex/nrlmsise00 the first time this runs. An installer is the
@@ -35,6 +43,9 @@ function info = setupNonGravForces(options)
 %                                   when it is absent; "never" leaves the network alone;
 %                                   "force" re-clones and moves to the pinned commit even if a
 %                                   copy is there.
+%   FetchData  1x1  string   -      Same three settings for the Earth-orientation and space-weather
+%                                   files. GRACE-FO Level-1B is NOT downloadable without an
+%                                   Earthdata account, so it is reported and never fetched.
 %
 % OUTPUT ARGUMENTS
 %   Name      Size  Type     Units  Description
@@ -61,6 +72,7 @@ function info = setupNonGravForces(options)
 arguments
     options.Verbose (1,1) logical = true
     options.FetchMsis (1,1) string {mustBeMember(options.FetchMsis, ["ifMissing","never","force"])} = "ifMissing"
+    options.FetchData (1,1) string {mustBeMember(options.FetchData, ["ifMissing","never","force"])} = "ifMissing"
 end
 % THE PIN LIVES HERE AND NOWHERE ELSE (rule R1). The owner's ruling of 2026-09-09 is to track
 % upstream and take its bug fixes; pinning a COMMIT rather than a branch is what makes that
@@ -69,6 +81,14 @@ end
 % toolbox used until 2026-09-09, fixes for Argon densities and a memory corruption.
 MSIS_URL = "https://git.linta.de/~brodo/nrlmsise-00.git";
 MSIS_COMMIT = "bc9a2feba4344e74201281e563332688a4d09cc3";
+% The two data sources that can be fetched WITHOUT an account, probed 2026-09-09. Both were
+% downloaded end to end before these lines were written; CelesTrak answered 503 once and 200 on
+% the retry, which is why localFetchData retries. GRACE-FO Level-1B is NOT here: it needs an
+% Earthdata login at PO.DAAC and no anonymous mirror was established, so setup reports where to
+% get it instead of pretending it can.
+EOP_URL = "https://datacenter.iers.org/data/9/finals2000A.all";
+SW_URL = "https://celestrak.org/SpaceData/SW-All.csv";
+L1B_SOURCE = "PO.DAAC (Earthdata login required): GRACE-FO Level-1B, GNV1B and SCA1B";
 root = fileparts(mfilename('fullpath'));
 addpath(root, fullfile(root,'tests'), fullfile(root,'tools'), fullfile(root,'demos'));
 % Help-browser registration: info.xml at the root is picked up by doc.
@@ -81,6 +101,7 @@ info.root    = root;
 info.version = NonGravForces.toolboxVersion('string');
 info.dependencies = NonGravForces.dependencyReport('Verbose', options.Verbose);
 info.msis = localFetchMsis(root, MSIS_URL, MSIS_COMMIT, options.FetchMsis);
+info.data = localFetchData(root, EOP_URL, SW_URL, L1B_SOURCE, options.FetchData);
 info.mex = NonGravForces.buildMex('Check', true);      % 1xT since 0.6.1: msis, kernel
 if options.Verbose
     for m = 1:numel(info.mex)
@@ -92,7 +113,55 @@ if options.Verbose
         fprintf('MEX  %-14s %s\n', gw, state);
     end
     fprintf('MSIS %-14s %s (%s)\n', 'nrlmsise00', info.msis.action, info.msis.dir);
+    for d = 1:numel(info.data.items)
+        fprintf('DATA %-14s %s\n', info.data.items(d).name, info.data.items(d).action);
+    end
 end
+end
+
+function d = localFetchData(root, eopUrl, swUrl, l1bSource, mode)
+%LOCALFETCHDATA The two files that can be had without an account, and an honest word about the third.
+items = struct('name', {}, 'action', {}, 'file', {}, 'source', {});
+targets = {"eop", fullfile(root, 'data', 'eop'), "finals2000A.all", eopUrl, "*.all"; ...
+           "spaceweather", fullfile(root, 'data', 'spaceweather'), "SW-All.csv", swUrl, "*.csv"};
+for t = 1:size(targets, 1)
+    folder = targets{t, 2};
+    present = ~isempty(dir(fullfile(folder, targets{t, 5})));
+    rec = struct('name', targets{t, 1}, 'action', "present", 'file', "", 'source', targets{t, 4});
+    if mode == "never" || (present && mode ~= "force")
+        if ~present, rec.action = "missing (FetchData never)"; end
+        items(end+1) = rec; %#ok<AGROW>
+        continue
+    end
+    if ~isfolder(folder), mkdir(folder); end
+    dst = fullfile(folder, char(targets{t, 3}));
+    fprintf('setupNonGravForces: fetching %s from %s\n', targets{t, 1}, targets{t, 4});
+    ok = false;
+    for attempt = 1:2                     % CelesTrak answered 503 once and 200 on the retry
+        try
+            websave(dst, char(targets{t, 4}));
+            ok = true;
+            break
+        catch err
+            rec.action = "failed: " + string(err.message);
+        end
+    end
+    if ok
+        rec.action = "fetched";
+        rec.file = string(dst);
+    else
+        fprintf('setupNonGravForces: %s -> download it by hand from %s\n', rec.action, targets{t, 4});
+    end
+    items(end+1) = rec; %#ok<AGROW>
+end
+% The third source cannot be automated, so it is named rather than attempted.
+have = ~isempty(dir(fullfile(root, 'data', 'samples', '*1B*')));
+action = "present";
+if ~have
+    action = "not fetchable: " + l1bSource;
+end
+items(end+1) = struct('name', "samples", 'action', action, 'file', "", 'source', l1bSource);
+d = struct('items', items, 'mode', mode);
 end
 
 function m = localFetchMsis(root, url, commit, mode)
