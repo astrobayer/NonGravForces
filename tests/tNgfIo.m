@@ -1,5 +1,5 @@
 classdef tNgfIo < NgfTestCase
-%TNGFIO Tests of the io layer (LP-2): readACC1B, readSCA1B, readGNV1B, readTHR1B, readMAS1B, readMAG1B, massModel, spaceWeather.
+%TNGFIO Tests of the io layer (LP-2): readACC1B, readSCA1B, readGNV1B, readTHR1B, readMAS1B, readMAG1B, igrfCoefficients, massModel, spaceWeather.
 %
 %   Oracle: the real 2020-01-01 GRACE-C RL04 products in data/samples (first 600
 %   records of the 1 Hz products; THR1B and MAS1B complete), the IERS
@@ -25,6 +25,7 @@ classdef tNgfIo < NgfTestCase
                 'act', fullfile(S, 'ACT1B_2020-01-01_C_04.txt'), 'sca', fullfile(S, 'SCA1B_2020-01-01_C_04.txt'), ...
                 'gnv', fullfile(S, 'GNV1B_2020-01-01_C_04.txt'), 'thr', fullfile(S, 'THR1B_2020-01-01_C_04.txt'), ...
                 'mas', fullfile(S, 'MAS1B_2020-01-01_C_04.txt'), 'mag', fullfile(S, 'MAG1B_2020-01-01_C_04.txt'), ...
+                'igrf', fullfile(root, 'data', 'igrf', 'igrf14coeffs.txt'), ...
                 'sw', fullfile(W, 'SW-All_2019-09_2020-03.csv'), ...
                 'solfsmy', fullfile(W, 'SOLFSMY_2019-09_2020-03.TXT'), 'dtc', fullfile(W, 'DTCFILE_2019-09_2020-03.TXT'), ...
                 'eop', fullfile(root, 'data', 'eop', 'finals2000A_2019-09_2020-03.all'));
@@ -69,6 +70,29 @@ classdef tNgfIo < NgfTestCase
 
     % ===================================================================== contract
     methods (Test, TestTags = {'contract'})
+        function igrfCoefficientsContract(tc)
+            [c, aux] = NonGravForces.io.igrfCoefficients(tc.f.igrf);
+            tc.verifyEqual(c.nMax, 13);
+            tc.verifyEqual(c.svMax, 8);
+            tc.verifyEqual(numel(c.epochs), 26);
+            tc.verifyEqual(c.epochs(1), 1900);
+            tc.verifyEqual(c.epochs(end), 2025);
+            tc.verifySize(c.gTable, [14 14 26]);
+            tc.verifySize(c.svG, [14 14]);
+            tc.verifyEmpty(c.g, 'without an Epoch there is no interpolated field to return');
+            tc.verifyEqual(aux.generation, 14);
+            tc.verifyEqual(aux.numCoefficients, 195);
+            tc.verifyEqual(aux.validTo, 2030);
+            c2 = NonGravForces.io.igrfCoefficients(tc.f.igrf, 'Epoch', 2020.0);
+            tc.verifySize(c2.g, [14 14]);
+            tc.verifyEqual(c2.year, 2020);
+
+            I = @NonGravForces.io.igrfCoefficients;
+            tc.verifyErrorId(@() I(fullfile(tc.tmp, 'nothere.txt')), 'NonGravForces:igrfCoefficients:dataMissing');
+            tc.verifyErrorId(@() I(tc.f.igrf, 'Epoch', 1899), 'NonGravForces:igrfCoefficients:inputRange');
+            tc.verifyErrorId(@() I(tc.f.igrf, 'Epoch', 2031), 'NonGravForces:igrfCoefficients:inputRange');
+            tc.verifyErrorId(@() I(tc.f.mag), 'NonGravForces:igrfCoefficients:dataFormat');
+        end
         function readMAG1BContract(tc)
             [ep, fld, aux] = NonGravForces.io.readMAG1B(tc.f.mag);
             K = numel(ep.sec);
@@ -179,6 +203,28 @@ classdef tNgfIo < NgfTestCase
 
     % ===================================================================== reference
     methods (Test, TestTags = {'reference'})
+        function igrfCoefficientsReference(tc)
+            % THE ORACLE IS THE PUBLISHED FILE, read a second way. These four numbers are
+            % transcribed from igrf14coeffs.txt by eye; if a column or a degree/order index
+            % moved, they are the first thing that fails.
+            c = NonGravForces.io.igrfCoefficients(tc.f.igrf);
+            i2020 = find(c.epochs == 2020); i2025 = find(c.epochs == 2025);
+            tc.verifyBoundAndRecord("g_1^0 at 2020.0 against the published table", ...
+                abs(c.gTable(2, 1, i2020) - (-29403.41)), 0, "nT", "the axial dipole, read off the file");
+            tc.verifyBoundAndRecord("g_1^1 at 2020.0 against the published table", ...
+                abs(c.gTable(2, 2, i2020) - (-1451.37)), 0, "nT", "the equatorial dipole");
+            tc.verifyBoundAndRecord("h_1^1 at 2020.0 against the published table", ...
+                abs(c.hTable(2, 2, i2020) - 4653.35), 0, "nT", "h is a separate table and must not be confused with g");
+            tc.verifyBoundAndRecord("g_1^0 at 2025.0 against the published table", ...
+                abs(c.gTable(2, 1, i2025) - (-29350.0)), 0, "nT", "the most recent definitive epoch");
+            tc.verifyBoundAndRecord("secular variation of g_1^0", ...
+                abs(c.svG(2, 1) - 12.6), 0, "nT/yr", "positive: the axial dipole is weakening, since g_1^0 is negative");
+            % And the physics the numbers describe: the dipole dominates by an order of magnitude.
+            dipole = sqrt(c.gTable(2,1,i2025)^2 + c.gTable(2,2,i2025)^2 + c.hTable(2,2,i2025)^2);
+            quad = sqrt(sum(c.gTable(3,:,i2025).^2 + c.hTable(3,:,i2025).^2));
+            tc.verifyBoundAndRecord("quadrupole over dipole at 2025.0", quad / dipole, 0.3, "-", ...
+                "the Earth's field is dipole-dominated; a ratio near one would mean the degrees were transposed");
+        end
         function readMAG1BReference(tc)
             % THE ORACLE IS THE FILE, read independently: the first data line is parsed here by
             % hand and compared against what the reader produced, so a column shifted by one
@@ -299,6 +345,26 @@ classdef tNgfIo < NgfTestCase
 
     % ===================================================================== precision
     methods (Test, TestTags = {'precision'})
+        function igrfCoefficientsPrecision(tc)
+            % Interpolation is one linear blend, so the two ends must be EXACT and the midpoint
+            % must be the mean. Anything else means the weight or the bracketing index is wrong.
+            c20 = NonGravForces.io.igrfCoefficients(tc.f.igrf, 'Epoch', 2020.0);
+            c25 = NonGravForces.io.igrfCoefficients(tc.f.igrf, 'Epoch', 2025.0);
+            cMid = NonGravForces.io.igrfCoefficients(tc.f.igrf, 'Epoch', 2022.5);
+            tbl = NonGravForces.io.igrfCoefficients(tc.f.igrf);
+            i20 = find(tbl.epochs == 2020); i25 = find(tbl.epochs == 2025);
+            tc.verifyBoundAndRecord("interpolating to a published epoch returns that epoch", ...
+                max(abs(c20.g - tbl.gTable(:, :, i20)), [], 'all'), 0, "nT", ...
+                "a weight of zero must reproduce the node, not approximate it");
+            tc.verifyBoundAndRecord("the midpoint is the mean of the two nodes", ...
+                max(abs(cMid.g - 0.5 * (tbl.gTable(:, :, i20) + tbl.gTable(:, :, i25))), [], 'all'), ...
+                1e-11, "nT", "one linear blend at w = 0.5; the bound is the rounding of numbers of order 3e4");
+            % Past the last epoch the secular variation extrapolates, and it does so linearly.
+            c27 = NonGravForces.io.igrfCoefficients(tc.f.igrf, 'Epoch', 2027.0);
+            tc.verifyBoundAndRecord("extrapolation is the last epoch plus SV times dt", ...
+                max(abs(c27.g - (c25.g + 2 * tbl.svG)), [], 'all'), 1e-11, "nT", ...
+                "two years of secular variation, applied once");
+        end
         function readMAG1BPrecision(tc)
             % The net current is the sum of two branches, and the sum is only meaningful because
             % the branches never overlap. That is asserted here rather than trusted: it was
@@ -369,6 +435,21 @@ classdef tNgfIo < NgfTestCase
 
     % ===================================================================== vectorization
     methods (Test, TestTags = {'vectorization'})
+        function igrfCoefficientsVectorization(tc)
+            % The tables are read once and indexed; asking for many epochs must give the same
+            % numbers as asking for each, because there is no state between calls.
+            years = [1905.0, 1963.7, 2000.0, 2019.25, 2028.0];
+            tbl = NonGravForces.io.igrfCoefficients(tc.f.igrf);
+            worst = 0;
+            for y = years
+                c = NonGravForces.io.igrfCoefficients(tc.f.igrf, 'Epoch', y);
+                tc.verifyEqual(c.year, y);
+                tc.verifyEqual(c.epochs, tbl.epochs, 'the tables must not depend on the epoch asked for');
+                worst = max(worst, max(abs(c.gTable(:) - tbl.gTable(:))));
+            end
+            tc.verifyBoundAndRecord("the tables are identical whatever epoch is requested", worst, 0, "nT", ...
+                "interpolation reads the tables; it may not modify them");
+        end
         function readMAG1BVectorization(tc)
             % A TimeRange is a filter, not a different reader: the selected records must be the
             % same numbers the full read produced, at the same epochs.
@@ -442,6 +523,31 @@ classdef tNgfIo < NgfTestCase
 
     % ===================================================================== robustness
     methods (Test, TestTags = {'robustness'})
+        function igrfCoefficientsRobustness(tc)
+            % A truncated row must be refused with the mnemonic that names the cause.
+            bad = fullfile(tc.tmp, 'igrf_truncated.txt');
+            L = splitlines(string(fileread(tc.f.igrf)));
+            k = find(startsWith(strtrim(L), "g  1  0"), 1);
+            p = split(strtrim(L(k)));
+            L(k) = strjoin(p(1:end-3), " ");
+            writelines(L, bad);
+            tc.verifyErrorId(@() NonGravForces.io.igrfCoefficients(bad), 'NonGravForces:igrfCoefficients:dataFormat');
+            % An impossible degree/order pair is refused too, and not silently placed somewhere.
+            bad2 = fullfile(tc.tmp, 'igrf_badorder.txt');
+            L2 = splitlines(string(fileread(tc.f.igrf)));
+            p2 = split(strtrim(L2(k)));
+            p2(3) = "5";                                   % m = 5 with n = 1
+            L2(k) = strjoin(p2, " ");
+            writelines(L2, bad2);
+            tc.verifyErrorId(@() NonGravForces.io.igrfCoefficients(bad2), 'NonGravForces:igrfCoefficients:dataColumn');
+            % And the unaltered file must pass, or neither refusal proves anything (rule T6).
+            tc.verifyWarningFree(@() NonGravForces.io.igrfCoefficients(tc.f.igrf));
+            % The upper triangle and the zeroth row are zero and stay in the array.
+            c = NonGravForces.io.igrfCoefficients(tc.f.igrf, 'Epoch', 2020.0);
+            tc.verifyEqual(c.g(1, :), zeros(1, 14), 'degree zero has no coefficient');
+            tc.verifyEqual(c.h(:, 1), zeros(14, 1), 'h has no m = 0 term');
+            tc.verifyEqual(c.g(2, 3:end), zeros(1, 12), 'm may not exceed n');
+        end
         function readMAG1BRobustness(tc)
             % A corrupted copy must be refused with the mnemonic that names the cause, not with
             % whatever MATLAB happens to throw first.
@@ -559,6 +665,24 @@ classdef tNgfIo < NgfTestCase
 
     % ===================================================================== metamorphic
     methods (Test, TestTags = {'metamorphic'})
+        function igrfCoefficientsMetamorphic(tc)
+            tbl = NonGravForces.io.igrfCoefficients(tc.f.igrf);
+            % 1. Interpolation is monotone in the weight: halfway is between the ends, coefficient
+            %    by coefficient. A sign error in the weight would break this and nothing else.
+            i20 = find(tbl.epochs == 2020); i25 = find(tbl.epochs == 2025);
+            a = tbl.gTable(:, :, i20); b = tbl.gTable(:, :, i25);
+            mid = NonGravForces.io.igrfCoefficients(tc.f.igrf, 'Epoch', 2022.5).g;
+            between = (mid >= min(a, b) - 1e-9) & (mid <= max(a, b) + 1e-9);
+            tc.verifyTrue(all(between, 'all'), 'every interpolated coefficient must lie between its two nodes');
+            % 2. A quarter of the way is a quarter of the difference.
+            q = NonGravForces.io.igrfCoefficients(tc.f.igrf, 'Epoch', 2021.25).g;
+            tc.verifyBoundAndRecord("a quarter step moves a quarter of the difference", ...
+                max(abs((q - a) - 0.25 * (b - a)), [], 'all'), 1e-11, "nT", ...
+                "linearity in the weight, checked away from the midpoint where a factor of two would hide");
+            % 3. Secular variation exists only where the model publishes it: degree <= 8.
+            tc.verifyEqual(nnz(tbl.svG(10:end, :)), 0, 'SV is published to degree 8 and no further');
+            tc.verifyGreaterThan(nnz(tbl.svG(2:9, :)), 0, 'and it must be present below that');
+        end
         function readMAG1BMetamorphic(tc)
             [~, fld, aux] = NonGravForces.io.readMAG1B(tc.f.mag);
             % 1. The magnitude is the norm of the components, by definition and not by accident.
@@ -670,6 +794,15 @@ classdef tNgfIo < NgfTestCase
 
     % ===================================================================== speed
     methods (Test, TestTags = {'speed'})
+        function igrfCoefficientsSpeed(tc)
+            NonGravForces.io.igrfCoefficients(tc.f.igrf);
+            t = zeros(1, 3);
+            for k = 1:3
+                t0 = tic; NonGravForces.io.igrfCoefficients(tc.f.igrf, 'Epoch', 2020.0); t(k) = toc(t0);
+            end
+            tc.verifyBoundAndRecord("igrfCoefficients, 195 rows x 27 columns", 1e3 * median(t), 2000, "ms", ...
+                "a smoke ceiling on a 42 kB parse, not a claim about this host");
+        end
         function readMAG1BSpeed(tc)
             % Reading is dominated by gracefoReading's parse; what this checks is that nothing
             % quadratic sits in the marshalling above it.

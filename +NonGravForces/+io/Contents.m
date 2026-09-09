@@ -1,5 +1,5 @@
 % IO  NonGravForces.io - L1 layer.
-% Version 0.9.0  08-Sep-2026
+% Version 0.9.1  08-Sep-2026
 %
 %   readACC1B            - ACC1B/ACT1B/ACH1B reader over gracefoReading (3xK SRF accelerations + aux)
 %   readSCA1B            - SCA1B reader: ICRF->SRF quaternions conjugated once to BODY->GCRS
@@ -10,4 +10,4 @@
 %   massModel            - Spacecraft mass model: handbook constant or MAS1B-driven variable mass
 %   spaceWeather         - Space-weather provider with query(epoch): F10.7 F30 S/M/Y10.7 Ap Kp Dst
 %   importCERES          - CERES SYN1deg/EBAF netCDF import into radiance grids [stub]
-%   igrfCoefficients     - IGRF-14 coefficient loader [stub]
+%   igrfCoefficients     - IGRF-14 coefficient loader with the model's own interpolation and SV rule
