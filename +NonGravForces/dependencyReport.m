@@ -76,12 +76,7 @@ if options.Verbose
 end
 end
 
-function v = localContentsVersion(pkg)
-% Read "Version x.y" from the package Contents.m - measured, not declared (R3).
-f = which(pkg + ".Contents");
-if isempty(f), f = which("+" + pkg + "/Contents.m"); end
-if isempty(f), error("NonGravForces:dependencyReport:depMissing", "no Contents.m for %s", pkg); end
-tok = regexp(fileread(f), 'Version\s+([0-9][0-9.]*)', 'tokens', 'once');
-if isempty(tok), error("NonGravForces:dependencyReport:depMissing", "no Version line in %s", f); end
-v = string(tok{1});
-end
+% localContentsVersion lived here until 2026-09-09. It read a version out of a package's
+% Contents.m and lsqvce was its only caller, so dropping that dependency left it dead. Code
+% Analyzer caught it on the first run (DEFNU) and it is removed rather than kept "in case":
+% every other dependency publishes a version function, which is the better probe anyway.

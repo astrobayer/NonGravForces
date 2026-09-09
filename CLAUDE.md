@@ -393,6 +393,9 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   Any unit that screens an input it does not read will refuse the fast preset's own environment;
   `kernel.singleEpoch` did exactly that until 2026-09-08. Build a test's inputs from the real
   units, not from literals, or this class of defect stays invisible.
+- **Dropping a dependency leaves dead code behind it.** Removing the lsqvce row left its only
+  helper unreferenced and `codeIssues` (DEFNU) caught it before any test ran. Grep for the
+  helpers a removed row used, not only for the row.
 - **Never claim bitwise across a change in BATCH SIZE.** Vectorised products and norms associate
   by batch size, so K = 1 and K = 10 are not the same arithmetic even when they are the same
   formula. Met three times now: `pagemtimes` in `Model.evaluate`, the chunked RMS in
