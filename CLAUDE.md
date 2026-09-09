@@ -393,6 +393,10 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   Any unit that screens an input it does not read will refuse the fast preset's own environment;
   `kernel.singleEpoch` did exactly that until 2026-09-08. Build a test's inputs from the real
   units, not from literals, or this class of defect stays invisible.
+- **Separate the algebra from the statistics, and put the tight bound on the algebra.** A claim
+  about a covariance formula is an identity (`sigma_x * sqrt(K) / sigma0 = 1` for a constant
+  column) and should be asserted at 1e-12 on one arc, not as a ratio between two noise
+  realisations. Three runs were lost learning this.
 - **1/sqrt(K) is a law for a CONSTANT design column and for nothing else.** A bias sigma falls
   that way; a scale sigma is set by the spread of the modelled signal over the arc, and a longer
   arc need not carry more spread. Asserting the law on the wrong parameter measured 8.3 against

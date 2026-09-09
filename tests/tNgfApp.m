@@ -467,22 +467,28 @@ classdef tNgfApp < NgfTestCase
     end
     methods (Test, TestTags = {'precision'})
         function calibratePrecision(tc)
-            % THE 1/sqrt(K) LAW HOLDS FOR THE BIAS AND NOT FOR THE SCALE, and the first version of
-            % this test asserted it for the scale and measured 8.3 where it expected 2. The reason
-            % is worth keeping: a constant bias has a constant design column, so its formal sigma
-            % is exactly sigma0/sqrt(K); the scale's column is the modelled acceleration, whose
-            % spread over the arc is what determines it, and 240 epochs of a GRACE orbit do not
-            % carry four times the spread of 60. So the law is asserted where it is a law, and the
+            % THE 1/sqrt(K) LAW HOLDS FOR A CONSTANT DESIGN COLUMN AND FOR NOTHING ELSE. The
+            % scale's column is the modelled acceleration, and what determines its sigma is the
+            % SPREAD of that acceleration over the arc; 240 epochs of a GRACE orbit do not carry
+            % four times the spread of 60. So the law is asserted where it is a law and the
             % scale's ratio is RECORDED beside it rather than bounded by a wish.
             sig = 2e-9;
             [e1, a1, y1] = tc.calScene(60, "constant", sig);
             [e2, a2, y2] = tc.calScene(240, "constant", sig);
-            b1 = NonGravForces.app.calibrate(y1, a1, e1, 'Scale', "none");
-            b2 = NonGravForces.app.calibrate(y2, a2, e2, 'Scale', "none");
-            ratio = b1.sigma(:, 1) ./ b2.sigma(:, 1);
-            tc.verifyBoundAndRecord("formal bias sigma falls as sqrt(K): 240 vs 60 epochs", ...
-                max(abs(ratio - 2)) / 2, 0.15, "-", ...
-                "a constant column gives sigma0/sqrt(K) exactly; the only spread left is in sigma0 itself, about 5 per cent at 59 degrees of freedom");
+            % SEPARATE THE ALGEBRA FROM THE STATISTICS. The 1/sqrt(K) law is an exact identity of
+            % the covariance formula for a constant design column, so it is asserted EXACTLY and
+            % with no sampling spread to argue about: sigma_bias * sqrt(K) / sigma0 = 1. Two
+            % earlier versions of this test asserted a ratio between two arcs instead and measured
+            % 8.3 and then 0.49 against expectations of 2 -- the first because the scale's sigma is
+            % not governed by K at all, the second because 'Scale', "none" leaves the modelled
+            % acceleration in the residual, so sigma0 stopped measuring the noise and started
+            % measuring the signal. A ratio between two realisations was never the right vehicle.
+            bA = NonGravForces.app.calibrate(y1, zeros(3, 60), e1, 'Scale', "none");
+            bB = NonGravForces.app.calibrate(y2, zeros(3, 240), e2, 'Scale', "none");
+            ident = [bA.sigma(:, 1) * sqrt(60) ./ bA.sigma0; bB.sigma(:, 1) * sqrt(240) ./ bB.sigma0];
+            tc.verifyBoundAndRecord("formal bias sigma is exactly sigma0/sqrt(K) for a constant column", ...
+                max(abs(ident - 1)), 1e-12, "-", ...
+                "an identity of sigma0^2 (A'A)^-1 with A a column of ones, so it holds per arc and carries no sampling spread");
             c1 = NonGravForces.app.calibrate(y1, a1, e1);
             c2 = NonGravForces.app.calibrate(y2, a2, e2);
             tc.verifyBoundAndRecord("formal scale sigma, 60 epochs / 240 epochs (recorded, not a law)", ...
