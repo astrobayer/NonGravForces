@@ -1,5 +1,5 @@
 classdef tNgfIo < NgfTestCase
-%TNGFIO Tests of the io layer (LP-2): readACC1B, readSCA1B, readGNV1B, readTHR1B, readMAS1B, massModel, spaceWeather.
+%TNGFIO Tests of the io layer (LP-2): readACC1B, readSCA1B, readGNV1B, readTHR1B, readMAS1B, readMAG1B, massModel, spaceWeather.
 %
 %   Oracle: the real 2020-01-01 GRACE-C RL04 products in data/samples (first 600
 %   records of the 1 Hz products; THR1B and MAS1B complete), the IERS
@@ -24,7 +24,8 @@ classdef tNgfIo < NgfTestCase
             tc.f = struct( ...
                 'act', fullfile(S, 'ACT1B_2020-01-01_C_04.txt'), 'sca', fullfile(S, 'SCA1B_2020-01-01_C_04.txt'), ...
                 'gnv', fullfile(S, 'GNV1B_2020-01-01_C_04.txt'), 'thr', fullfile(S, 'THR1B_2020-01-01_C_04.txt'), ...
-                'mas', fullfile(S, 'MAS1B_2020-01-01_C_04.txt'), 'sw', fullfile(W, 'SW-All_2019-09_2020-03.csv'), ...
+                'mas', fullfile(S, 'MAS1B_2020-01-01_C_04.txt'), 'mag', fullfile(S, 'MAG1B_2020-01-01_C_04.txt'), ...
+                'sw', fullfile(W, 'SW-All_2019-09_2020-03.csv'), ...
                 'solfsmy', fullfile(W, 'SOLFSMY_2019-09_2020-03.TXT'), 'dtc', fullfile(W, 'DTCFILE_2019-09_2020-03.TXT'), ...
                 'eop', fullfile(root, 'data', 'eop', 'finals2000A_2019-09_2020-03.all'));
             for n = string(fieldnames(tc.f))'
@@ -68,6 +69,23 @@ classdef tNgfIo < NgfTestCase
 
     % ===================================================================== contract
     methods (Test, TestTags = {'contract'})
+        function readMAG1BContract(tc)
+            [ep, fld, aux] = NonGravForces.io.readMAG1B(tc.f.mag);
+            K = numel(ep.sec);
+            tc.verifyEqual(K, 600);
+            tc.verifyEqual(ep.scale, "GPS");
+            tc.verifySize(fld.B_srf_T, [3 K]);
+            tc.verifySize(fld.torquerBranch_A, [6 K]);
+            tc.verifySize(fld.torquerNet_A, [3 K]);
+            tc.verifySize(fld.magnitude_T, [1 K]);
+            tc.verifyEqual(aux.torquerBranchNames, ["torque1A","torque2A","torque3A","torque1B","torque2B","torque3B"]);
+            tc.verifySize(aux.calibration.magField, [3 K]);
+            tc.verifySize(aux.qualityBits, [8 K]);
+            tc.verifyEqual(aux.product, "MAG1B");
+            tc.verifyEqual(aux.satellite, "C");
+            tc.verifyErrorId(@() NonGravForces.io.readMAG1B(tc.f.mas), 'NonGravForces:readMAG1B:dataProduct');
+            tc.verifyErrorId(@() NonGravForces.io.readMAG1B(tc.f.mag, 'TimeRange', [58851 58852]), 'NonGravForces:readMAG1B:dataEmpty');
+        end
         function readACC1BContract(tc)
             [ep, a, aux] = NonGravForces.io.readACC1B(tc.f.act);
             tc.verifySize(a, [3 600]); tc.verifyEqual(string(ep.scale), "GPS"); tc.verifySize(ep.day, [600 1]);
@@ -161,6 +179,28 @@ classdef tNgfIo < NgfTestCase
 
     % ===================================================================== reference
     methods (Test, TestTags = {'reference'})
+        function readMAG1BReference(tc)
+            % THE ORACLE IS THE FILE, read independently: the first data line is parsed here by
+            % hand and compared against what the reader produced, so a column shifted by one
+            % cannot pass. The published header names MfvX/Y/Z_RAW as columns 5 to 7 in
+            % microtesla and the six torquer currents as columns 8 to 13 in milliampere.
+            txt = splitlines(string(fileread(tc.f.mag)));
+            first = find(startsWith(txt, "# End of YAML header"), 1) + 1;
+            v = double(split(strtrim(txt(first))));
+            [~, fld] = NonGravForces.io.readMAG1B(tc.f.mag);
+            tc.verifyBoundAndRecord("readMAG1B field vs the first data line, microtesla to tesla", ...
+                max(abs(fld.B_srf_T(:, 1) - v(5:7) * 1e-6)), 0, "T", ...
+                "one multiplication by 1e-6; anything but zero means a column moved");
+            tc.verifyBoundAndRecord("readMAG1B branch currents vs the first data line, mA to A", ...
+                max(abs(fld.torquerBranch_A(:, 1) - v(8:13) * 1e-3)), 0, "A", ...
+                "one multiplication by 1e-3, six columns in the published order");
+            % And the physics: the Earth's field at GRACE-FO altitude is tens of microtesla.
+            tc.verifyBoundAndRecord("measured field magnitude over the excerpt", ...
+                max(fld.magnitude_T) * 1e6, 100, "uT", ...
+                "the Earth's field at 490 km reaches about 50 microtesla; a bound of 100 catches a misread column without asserting the geomagnetic model");
+            tc.verifyGreaterThan(max(fld.magnitude_T) * 1e6, 10, ...
+                'a field magnitude below 10 microtesla over five minutes would mean the columns are not the field');
+        end
         function readACC1BReference(tc)
             % Oracle: the file text itself, parsed independently (regexp tokens of the first data record).
             [~, a, aux] = NonGravForces.io.readACC1B(tc.f.act);
@@ -259,6 +299,20 @@ classdef tNgfIo < NgfTestCase
 
     % ===================================================================== precision
     methods (Test, TestTags = {'precision'})
+        function readMAG1BPrecision(tc)
+            % The net current is the sum of two branches, and the sum is only meaningful because
+            % the branches never overlap. That is asserted here rather than trusted: it was
+            % measured over the full day and it must hold on whatever excerpt is present.
+            [~, fld] = NonGravForces.io.readMAG1B(tc.f.mag);
+            A = fld.torquerBranch_A(1:3, :); B = fld.torquerBranch_A(4:6, :);
+            tc.verifyEqual(nnz(A ~= 0 & B ~= 0), 0, ...
+                'an A and a B branch non-zero on the same axis would make the net sum a modelling choice, not an addition');
+            tc.verifyBoundAndRecord("torquer net equals A plus B exactly", ...
+                max(abs(fld.torquerNet_A - (A + B)), [], 'all'), 0, "A", ...
+                "one addition, quoted back");
+            tc.verifyTrue(all(A(:) >= 0), 'the A branches carry the positive direction and are never negative');
+            tc.verifyTrue(all(B(:) <= 0), 'the B branches carry the negative direction and are never positive');
+        end
         function readACC1BPrecision(tc)
             % Time-tag round trip is exact: epoch -> [day sec] equals gracefoReading's time bitwise (bound 0).
             [ep] = NonGravForces.io.readACC1B(tc.f.act);
@@ -315,6 +369,20 @@ classdef tNgfIo < NgfTestCase
 
     % ===================================================================== vectorization
     methods (Test, TestTags = {'vectorization'})
+        function readMAG1BVectorization(tc)
+            % A TimeRange is a filter, not a different reader: the selected records must be the
+            % same numbers the full read produced, at the same epochs.
+            [ep, fld] = NonGravForces.io.readMAG1B(tc.f.mag);
+            mjd = referenceSystem.epochTo(ep, "mjd");
+            cut = [mjd(1) - 1e-9, mjd(200) + 1e-9];
+            [ep2, fld2] = NonGravForces.io.readMAG1B(tc.f.mag, 'TimeRange', cut);
+            n = numel(ep2.sec);
+            tc.verifyLessThanOrEqual(n, numel(ep.sec));
+            tc.verifyGreaterThan(n, 0);
+            tc.verifyBoundAndRecord("a TimeRange selects records without changing them", ...
+                max(abs(fld2.B_srf_T - fld.B_srf_T(:, 1:n)), [], 'all'), 0, "T", ...
+                "a filter that alters a value is not a filter");
+        end
         function readACC1BVectorization(tc)
             % A TimeRange excerpt equals the slice of the full read, bitwise (leading and interior).
             [ep, a, aux] = NonGravForces.io.readACC1B(tc.f.act);
@@ -374,6 +442,27 @@ classdef tNgfIo < NgfTestCase
 
     % ===================================================================== robustness
     methods (Test, TestTags = {'robustness'})
+        function readMAG1BRobustness(tc)
+            % A corrupted copy must be refused with the mnemonic that names the cause, not with
+            % whatever MATLAB happens to throw first.
+            bad = fullfile(tc.tmp, 'MAG1B_2020-01-01_C_04.txt');
+            txt = string(fileread(tc.f.mag));
+            % A field of 900 microtesla: physically impossible at any altitude, and exactly what
+            % reading the wrong column would produce.
+            lines = splitlines(txt);
+            k = find(startsWith(lines, "# End of YAML header"), 1) + 1;
+            parts = split(strtrim(lines(k)));
+            parts(5) = "900.0";
+            lines(k) = strjoin(parts, " ");
+            writelines(lines, bad);
+            tc.verifyErrorId(@() NonGravForces.io.readMAG1B(bad), 'NonGravForces:readMAG1B:dataRange');
+            % The same file unaltered must pass, or the refusal above proves nothing (rule T6).
+            tc.verifyWarningFree(@() NonGravForces.io.readMAG1B(tc.f.mag));
+            % Quality bits are reported even when every one of them is clear, which is the case
+            % on this day: an empty report and an all-clear report are different statements.
+            [~, ~, aux] = NonGravForces.io.readMAG1B(tc.f.mag);
+            tc.verifySize(aux.qualityBits, [8 600]);
+        end
         function readACC1BRobustness(tc)
             % A quality mask naming a bit no record sets removes nothing; two files of different products refuse (foreign id).
             [~, a] = NonGravForces.io.readACC1B(tc.f.act);
@@ -470,6 +559,31 @@ classdef tNgfIo < NgfTestCase
 
     % ===================================================================== metamorphic
     methods (Test, TestTags = {'metamorphic'})
+        function readMAG1BMetamorphic(tc)
+            [~, fld, aux] = NonGravForces.io.readMAG1B(tc.f.mag);
+            % 1. The magnitude is the norm of the components, by definition and not by accident.
+            tc.verifyBoundAndRecord("magnitude equals the norm of the components", ...
+                max(abs(fld.magnitude_T - vecnorm(fld.B_srf_T))), 0, "T", "one vecnorm, quoted back");
+            % 2. Unit conversion is a scaling and nothing else: the ratio to the file's numbers is
+            %    exactly 1e-6 everywhere, so no offset or clipping crept in.
+            txt = splitlines(string(fileread(tc.f.mag)));
+            k = find(startsWith(txt, "# End of YAML header"), 1);
+            raw = zeros(3, 600);
+            for r = 1:600
+                v = double(split(strtrim(txt(k + r))));
+                raw(:, r) = v(5:7);
+            end
+            nz = raw ~= 0;
+            ratios = fld.B_srf_T(nz) ./ raw(nz);
+            tc.verifyBoundAndRecord("microtesla to tesla is a pure scaling", ...
+                max(abs(ratios - 1e-6)) / 1e-6, 1e-15, "-", ...
+                "every non-zero component divided by its file value gives the same factor");
+            % 3. The calibration columns are returned unapplied. On this day they are constant,
+            %    which is recorded rather than asserted as a law: a later file may vary them.
+            tc.verifyBoundAndRecord("calibration columns are constant over this excerpt", ...
+                max(max(aux.calibration.magField, [], 2) - min(aux.calibration.magField, [], 2)), 0, "-", ...
+                "measured [0, 65000, -65000] for all 172800 records of the full day; recorded because the values look like sentinels, not scale factors");
+        end
         function readACC1BMetamorphic(tc)
             % Split/merge: two adjoining TimeRanges concatenated equal the whole read, bitwise.
             [ep, a, aux] = NonGravForces.io.readACC1B(tc.f.act);
@@ -556,6 +670,17 @@ classdef tNgfIo < NgfTestCase
 
     % ===================================================================== speed
     methods (Test, TestTags = {'speed'})
+        function readMAG1BSpeed(tc)
+            % Reading is dominated by gracefoReading's parse; what this checks is that nothing
+            % quadratic sits in the marshalling above it.
+            NonGravForces.io.readMAG1B(tc.f.mag);
+            t = zeros(1, 3);
+            for k = 1:3
+                t0 = tic; NonGravForces.io.readMAG1B(tc.f.mag); t(k) = toc(t0);
+            end
+            tc.verifyBoundAndRecord("readMAG1B, 600 records", 1e3 * median(t), 5000, "ms", ...
+                "a smoke ceiling on a 600-record parse, not a claim about this host");
+        end
         function readACC1BSpeed(tc)
             % Reader over raw gracefoReading.readL1b: measured 0.98 (median of 5, warm). Bound 5 = 3x a
             % generous 1.5 expectation for the epoch struct, checks and provenance.

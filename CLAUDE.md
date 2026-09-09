@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.8.8.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.9.0.
 
 ---
 
@@ -191,7 +191,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   `tools/pyxcheck/sentman_check.py`, `pelt_check.py`); and the LP-5x cross-validation tooling:
   `tools/pyxcheck/ngfkernel/`, an independent standard-library Python mirror of the frozen
   kernel with its parity driver and `tests/tNgfMirror.m` (WP-33; WP-34 needs GROOPS, O-19).
-- **4 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
+- **3 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
 - LP-6 added the six `Model` evaluation methods (`accel`, `torque`, `series`, `partials`,
   `rhs`, `budget`), `env.wind` (co-rotation) and `kernel.partials` (analytic derivatives).
 - Repository `github.com/astrobayer/NonGravForces` (the account was renamed
