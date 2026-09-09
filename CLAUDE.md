@@ -384,6 +384,14 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   Any unit that screens an input it does not read will refuse the fast preset's own environment;
   `kernel.singleEpoch` did exactly that until 2026-09-08. Build a test's inputs from the real
   units, not from literals, or this class of defect stays invisible.
+- **A numerical bound written from an estimate is a red gate waiting to happen.** Three sessions
+  in a row have lost a run to one. Where cancellation governs, COMPUTE the bound in the test from
+  `eps` of the terms involved instead of writing a literal. Where the model is exactly linear, a
+  LARGER finite-difference step is strictly better, the opposite of the usual rule.
+- **`skew(omega) = R' Rdot` is the sensor's convention**, and
+  `referenceSystem.angularVelocityFromRotationRate(R, Rdot, 'Resolution', "reference")` returns its
+  NEGATIVE (ratio -1.0, measured). Reading the skew entries off `R' Rdot` without projecting the
+  symmetric part out leaves the differencing error in (6e-7 relative).
 - **Never assert a host-dependent absolute** (rule T5). A 500 us per-epoch bound written from a
   guess reddened the gate on a runner that measured 901.8 us, in the same session that quoted the
   rule. Assert the ratio; record the absolute with a ceiling an order of magnitude above it.

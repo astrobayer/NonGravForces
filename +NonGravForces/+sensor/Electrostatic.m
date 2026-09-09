@@ -28,11 +28,21 @@ classdef Electrostatic < NonGravForces.sensor.Sensor
 %
 %   which is what falls out of differentiating v_inertial = R v_body twice, and
 %   is therefore the only sign for which the equation above is the kinematics of
-%   the proof mass. referenceSystem.angularVelocityFromRotationRate carries a
-%   configurable sense and takes the rotation the other way round, so a caller
-%   using it must check which of its Resolution settings lands here;
-%   tests/tNgfSensor records the measured sign ratio rather than assuming one
-%   (HANDOVER O-32).
+%   the proof mass.
+%
+%   MEASURED 2026-09-08, so a caller does not have to derive it again:
+%
+%       omega = -referenceSystem.angularVelocityFromRotationRate( ...
+%                    referenceSystem.rotationFromQuaternion(q), Rdot, ...
+%                    'Resolution', "reference")
+%
+%   The MINUS SIGN IS NOT OPTIONAL. That unit's rotation runs navigation -> body
+%   where this one runs body -> inertial, and its sense is the frame (passive)
+%   one, so it returns exactly the negative of the omega defined above (ratio
+%   -1.0 measured, tests/tNgfSensor/ElectrostaticReference). Dropping it leaves
+%   the centrifugal term right -- it contains omega twice -- and the Euler term
+%   wrong by a factor of -1, which is why this is written down instead of left
+%   to be rediscovered.
 %
 %   THE GRAVITY GRADIENT TERM IS NOT COMPUTED HERE, and its absence is not an
 %   approximation this class makes quietly. T = d(g)/d(r) needs a gravity field,

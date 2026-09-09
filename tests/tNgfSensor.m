@@ -51,7 +51,11 @@ classdef tNgfSensor < NgfTestCase
             Rdot = zeros(3, 3, K);
             Rdot(:, :, 2:K-1) = (R(:, :, 3:K) - R(:, :, 1:K-2)) / (2 * dt);
             Rdot(:, :, 1) = Rdot(:, :, 2); Rdot(:, :, K) = Rdot(:, :, K-1);
-            Om = pagemtimes(pagetranspose(R), Rdot);
+            M = pagemtimes(pagetranspose(R), Rdot);
+            Om = (M - pagetranspose(M)) / 2;      % the symmetric part is the differencing error,
+            % not angular velocity, and reading the skew entries off M without projecting it out
+            % leaves it in: 6.0e-7 relative on this arc, measured 2026-09-08. referenceSystem
+            % projects, so a comparison against it must project too or it measures the projection.
             w = [squeeze(Om(3, 2, :)), squeeze(Om(1, 3, :)), squeeze(Om(2, 1, :))]';
             wd = zeros(3, K);
             wd(:, 2:K-1) = (w(:, 3:K) - w(:, 1:K-2)) / (2 * dt);
@@ -189,7 +193,12 @@ classdef tNgfSensor < NgfTestCase
             s = NonGravForces.sensor.Electrostatic(b0, S0, dr0);
             [J, names] = s.partials(dyn);
             theta = [b0; S0(:); dr0];
-            step = [1e-9 * ones(3, 1); 1e-6 * ones(9, 1); 1e-7 * ones(3, 1)];
+            % THE MODEL IS EXACTLY LINEAR in all fifteen parameters, so a central difference is
+            % exact for ANY step and the only error is cancellation -- which a LARGER step reduces,
+            % the opposite of the usual rule. Steps of 1e-9/1e-6/1e-7 measured 2.2e-8 on the runner
+            % (2026-09-08), pure cancellation against a 1e-6 bias; these steps put the difference
+            % three orders above it.
+            step = [1e-4 * ones(3, 1); 1e-2 * ones(9, 1); 1e-3 * ones(3, 1)];
             worst = 0;
             for p = 1:15
                 tp = theta; tp(p) = tp(p) + step(p);
@@ -202,8 +211,8 @@ classdef tNgfSensor < NgfTestCase
                 worst = max(worst, max(abs(ana - num)) / sc);
             end
             tc.verifyBoundAndRecord("Electrostatic partials vs central differences (15 parameters)", ...
-                worst, 1e-8, "-", ...
-                "the model is exactly linear in bias and scale and exactly linear in dr, so the only error is the cancellation of the difference itself");
+                worst, 1e-9, "-", ...
+                "exact linearity plus a step chosen to keep the difference well above eps of the reading: what is left is rounding, not truncation");
             tc.verifyEqual(numel(names), 15);
         end
     end
@@ -286,9 +295,14 @@ classdef tNgfSensor < NgfTestCase
                 1e-20, "m/s^2", "bias enters once, outside everything else; eps(1e-5) is 1.7e-21");
             % 2. Doubling the scale doubles the part that is not bias.
             s3 = NonGravForces.sensor.Electrostatic(b, 2 * S, dr);
+            % The bound is COMPUTED, not guessed. Subtracting a 3e-6 bias from a 1e-6 reading to
+            % recover a 1e-7 signal cancels, and the floor is eps of the larger term over the
+            % smaller one. Writing 1e-15 here from an estimate reddened the gate at 1.4e-15
+            % (2026-09-08); the floor below is 4e-15 and the factor of ten is the margin.
+            floorRel = 10 * eps(max(abs([y(:); b])) ) / max(abs(y - b), [], 'all');
             tc.verifyBoundAndRecord("doubling the scale doubles the non-bias part", ...
                 max(abs((s3.observe(dyn).value - b) - 2 * (y - b)), [], 'all') / max(abs(y - b), [], 'all'), ...
-                1e-15, "-", "the scale multiplies the sensed acceleration and only that");
+                floorRel, "-", "the scale multiplies the sensed acceleration and only that; the bound is the cancellation floor of removing a bias three times the signal");
             % 3. The coupling is linear in dr: two offsets added give the two readings added,
             %    minus the bias counted twice.
             d1 = [3e-4; 0; 0]; d2 = [0; -2e-4; 1e-4];
