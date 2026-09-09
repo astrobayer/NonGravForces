@@ -766,7 +766,7 @@ classdef tNgfSensor < NgfTestCase
             % shift by differencing two residuals of order 1e-7 cannot beat eps of the larger, and
             % 1e-24 written from an estimate reddened the gate at 4.5e-24 -- eps(1e-7) is 1.3e-23,
             % so the guess was below the floor it was measuring against.
-            biasFloor = 10 * eps(max(abs(y), [], 'all'));
+            biasFloor = 10 * eps(max(abs(y.value), [], 'all'));   % y is the observe struct, not the array
             tc.verifyBoundAndRecord("a bias is a rigid shift of the residual", ...
                 max(abs((yB.value - y.value) - [1e-9; -2e-9; 3e-9]), [], 'all'), ...
                 biasFloor, "m/s^2", "it is added outside the filter and outside the gain; the bound is ten times eps of the residual it is differenced out of");
