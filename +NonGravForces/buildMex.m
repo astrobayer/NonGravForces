@@ -17,12 +17,14 @@ function report = buildMex(options)
 %
 %                 git clone https://git.linta.de/~brodo/nrlmsise-00.git mex/nrlmsise00
 %
-%             Three places are searched, in this order: the 'MsisSource' option,
-%             the NGF_NRLMSISE00 environment variable, then mex/nrlmsise00. If
-%             none holds the source, this refuses with depMissing and repeats
-%             that command; it does not fetch anything itself, because a build
-%             step that reaches the network without being asked is a build step
-%             nobody can audit.
+%             setupNonGravForces does that clone for you the first time it runs,
+%             and it owns the URL and the pinned commit. Three places are
+%             searched here, in order: the 'MsisSource' option, the
+%             NGF_NRLMSISE00 environment variable, then mex/nrlmsise00. If none
+%             holds the source this refuses with depMissing and names setup;
+%             it does NOT fetch anything itself, because a build step that
+%             reaches the network without being asked is a build step nobody
+%             can audit -- an installer may, a build may not.
 %     kernel  the single-epoch kernel mex/ngfKernel.c and its gateway
 %             mex/ngfKernelGateway.c (LP-6b, WP-17b), built into
 %             +kernel/private/kernelGateway, where
@@ -133,7 +135,7 @@ for t = 1:numel(targets)
         % and a machine that has not fetched NRLMSISE-00 yet must still be able to ask.
         if tg.name == "msis"
             NonGravForces.fail(unit, "depMissing", ...
-                "the NRLMSISE-00 C source is not at %s (missing: %s) -> it is not redistributed with this toolbox (THIRD-PARTY-NOTICES.md); get it with\n    git clone https://git.linta.de/~brodo/nrlmsise-00.git mex/nrlmsise00\nor point NGF_NRLMSISE00 or 'MsisSource' at an existing copy", ...
+                "the NRLMSISE-00 C source is not at %s (missing: %s) -> it is not redistributed with this toolbox (THIRD-PARTY-NOTICES.md). Run setupNonGravForces, which fetches it at the pinned commit; or clone it by hand with\n    git clone https://git.linta.de/~brodo/nrlmsise-00.git mex/nrlmsise00\nor point NGF_NRLMSISE00 or 'MsisSource' at an existing copy", ...
                 msisDir, strjoin(missing, ", "));
         end
         NonGravForces.fail(unit, "dataMissing", "source file(s) missing: %s -> restore the mex/ folder from the repository", strjoin(missing, ", "));

@@ -1,4 +1,4 @@
-# NonGravForces 0.8.1
+# NonGravForces 0.8.2
 
 Non-gravitational forces, torques and partials for LEO satellites (GRACE-FO reference case). Third concept, designed from scratch after the audits of `SatelliteNonGravToolbox` v1 and `NonGravToolbox` v0.1.1.
 
@@ -14,8 +14,8 @@ Status: 49 of 53 catalogued units delivered and verified in MATLAB, 4 documented
 
 Licensed MIT (see `LICENSE`). The NRLMSISE-00 C source is **not** in this repository — it carries no redistribution grant, so it is fetched from its maintainer instead:
 
-```
-git clone https://git.linta.de/~brodo/nrlmsise-00.git mex/nrlmsise00
+```matlab
+setupNonGravForces      % puts the toolbox on the path AND clones NRLMSISE-00 at the pinned commit
 ```
 
-`NonGravForces.buildMex` tells you this if it is missing, and never fetches anything itself. Everything except the `msis00` density backend works without it. See `THIRD-PARTY-NOTICES.md`. The authority is `doc/functionlist.csv`; `HANDOVER.md` Part A carries the level-by-level record.
+Setup is the only place in the toolbox that touches the network, it does so only when the source is missing, and it prints a line when it does. `'FetchMsis', "never"` leaves the network alone; `NGF_NRLMSISE00` points at a copy you already have. `NonGravForces.buildMex` never fetches — it refuses and names setup. Everything except the `msis00` density backend works without any of it. See `THIRD-PARTY-NOTICES.md`. The authority is `doc/functionlist.csv`; `HANDOVER.md` Part A carries the level-by-level record.

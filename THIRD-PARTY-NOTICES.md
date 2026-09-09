@@ -14,15 +14,24 @@ absence. NRLMSISE-00 originates with a US government laboratory, whose work is
 often public domain — but *often* is not a legal finding, and this file will not
 make one.
 
-So the source is obtained from its maintainer:
+So the source is obtained from its maintainer, and **`setupNonGravForces` does
+that for you** the first time it runs:
+
+    setupNonGravForces          % clones into mex/nrlmsise00 at the pinned commit
+
+or by hand, if you prefer:
 
     git clone https://git.linta.de/~brodo/nrlmsise-00.git mex/nrlmsise00
 
-`NonGravForces.buildMex` looks there, at `NGF_NRLMSISE00`, or wherever
-`'MsisSource'` points, and refuses with that command in the message if it finds
-nothing. It never fetches anything itself: a build step that reaches the network
-without being asked is a build step nobody can audit. CI does the clone in a
-visible step, pinned to a commit.
+The installer is the right place for a network call and a build step is not:
+`NonGravForces.buildMex` looks in `'MsisSource'`, then `NGF_NRLMSISE00`, then
+`mex/nrlmsise00`, and **refuses** if it finds nothing rather than fetching. A
+build that reaches the network without being asked is a build nobody can audit.
+Setup prints one line whenever it clones, whatever `'Verbose'` says, because a
+network action has to be visible; `'FetchMsis', "never"` leaves the network
+alone entirely, and `NGF_NRLMSISE00` suppresses the fetch because you already
+have a copy. CI needs no step of its own — `ciGate` calls setup before it
+builds.
 
 **Model authors:** Mike Picone, Alan Hedin and Doug Drob (Naval Research
 Laboratory), building on MSISE90. **C release maintainer:** Dominik Brodowski.
