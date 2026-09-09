@@ -1,5 +1,5 @@
 % GEOM  NonGravForces.geom - L3 layer.
-% Version 0.8.0  08-Sep-2026
+% Version 0.8.2  08-Sep-2026
 %
 %   MacroModel           - Panel geometry frozen and validated once
 %   graceFO              - GRACE-FO macro model from JPL D-56935

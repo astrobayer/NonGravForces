@@ -7,10 +7,24 @@ function report = buildMex(options)
 %
 %   The two places C is sanctioned (HANDOVER C3), and no others:
 %
-%     msis    the vendored, unmodified NRLMSISE-00 source in mex/nrlmsise00
-%             plus the marshalling gateway mex/ngfMsisGateway.c, built into
-%             +env/private/msisGateway, where NonGravForces.env.density can
-%             call it and nothing else can.
+%     msis    the NRLMSISE-00 C source plus the marshalling gateway
+%             mex/ngfMsisGateway.c, built into +env/private/msisGateway, where
+%             NonGravForces.env.density can call it and nothing else can.
+%
+%             THE NRLMSISE-00 SOURCE IS NOT IN THIS REPOSITORY. Its package
+%             carries no redistribution grant (THIRD-PARTY-NOTICES.md), so it is
+%             obtained from its maintainer instead of vendored:
+%
+%                 git clone https://git.linta.de/~brodo/nrlmsise-00.git mex/nrlmsise00
+%
+%             setupNonGravForces does that clone for you the first time it runs,
+%             and it owns the URL and the pinned commit. Three places are
+%             searched here, in order: the 'MsisSource' option, the
+%             NGF_NRLMSISE00 environment variable, then mex/nrlmsise00. If none
+%             holds the source this refuses with depMissing and names setup;
+%             it does NOT fetch anything itself, because a build step that
+%             reaches the network without being asked is a build step nobody
+%             can audit -- an installer may, a build may not.
 %     kernel  the single-epoch kernel mex/ngfKernel.c and its gateway
 %             mex/ngfKernelGateway.c (LP-6b, WP-17b), built into
 %             +kernel/private/kernelGateway, where
@@ -38,6 +52,8 @@ function report = buildMex(options)
 %   Check    1x1   logical  -      true: report only (default false).
 %   Target   1x1   string   -      "all" (default), "msis" or "kernel". "all"
 %                                  returns one report per target, in that order.
+%   MsisSource 1x1 string   -      Directory holding the NRLMSISE-00 C source. Default: the
+%                                  NGF_NRLMSISE00 environment variable if set, else mex/nrlmsise00.
 %
 % OUTPUT ARGUMENTS
 %   Name     Size  Type    Units  Description
@@ -52,7 +68,17 @@ function report = buildMex(options)
 %                                 (string recorded at build time, "" if none),
 %                                 .compiler (string, "" when not built now),
 %                                 .built (logical: compiled in this call),
-%                                 .sources (1xN string).
+%                                 .sources (1xN string),
+%                                 .sourcesPresent (logical: every source file
+%                                 exists; false is a REPORT under 'Check' and an
+%                                 error otherwise),
+%                                 .sourceDir (string, where the source was found,
+%                                 "" when it was not).
+%                                 The digest covers whatever source was actually
+%                                 used, so a different NRLMSISE-00 release marks
+%                                 the binary stale and forces a rebuild -- which
+%                                 is the mechanism that makes tracking upstream
+%                                 safe rather than merely convenient.
 %
 % ERRORS
 %   NonGravForces:buildMex:depCompiler   no C compiler selected and no MinGW-w64
@@ -70,22 +96,24 @@ function report = buildMex(options)
 arguments
     options.Check (1,1) logical = false
     options.Target (1,1) string {mustBeMember(options.Target, ["all","msis","kernel"])} = "all"
+    options.MsisSource (1,1) string = ""
 end
 unit = "buildMex";
 pkgRoot = fileparts(mfilename('fullpath'));                 % +NonGravForces
 root = fileparts(pkgRoot);
 mexDir = fullfile(root, 'mex');
+msisDir = localMsisDir(mexDir, options.MsisSource);
 % One row per target: everything that differs between them lives here and
 % nothing below branches on the name (rule R1 applied to the build recipe).
 targets = struct( ...
     'name',    {"msis", "kernel"}, ...
     'output',  {'msisGateway', 'kernelGateway'}, ...
     'outDir',  {fullfile(pkgRoot, '+env', 'private'), fullfile(pkgRoot, '+kernel', 'private')}, ...
-    'include', {fullfile(mexDir, 'nrlmsise00'), mexDir}, ...
+    'include', {char(msisDir), mexDir}, ...
     'sources', {string({fullfile(mexDir, 'ngfMsisGateway.c'), ...
-                        fullfile(mexDir, 'nrlmsise00', 'nrlmsise-00.c'), ...
-                        fullfile(mexDir, 'nrlmsise00', 'nrlmsise-00_data.c'), ...
-                        fullfile(mexDir, 'nrlmsise00', 'nrlmsise-00.h')}), ...
+                        char(fullfile(msisDir, 'nrlmsise-00.c')), ...
+                        char(fullfile(msisDir, 'nrlmsise-00_data.c')), ...
+                        char(fullfile(msisDir, 'nrlmsise-00.h'))}), ...
                 string({fullfile(mexDir, 'ngfKernelGateway.c'), ...
                         fullfile(mexDir, 'ngfKernel.c'), ...
                         fullfile(mexDir, 'ngfKernel.h')})});
@@ -94,18 +122,32 @@ if options.Target ~= "all"
 end
 cc = [];
 report = repmat(struct('target', "", 'file', "", 'sources', {strings(1, 0)}, 'sourceDigest', "", ...
-                       'built', false, 'compiler', "", 'present', false, 'binaryDigest', "", ...
-                       'upToDate', false), 1, numel(targets));
+                       'built', false, 'compiler', "", 'sourcesPresent', false, 'sourceDir', "", ...
+                       'present', false, 'binaryDigest', "", 'upToDate', false), 1, numel(targets));
 for t = 1:numel(targets)
     tg = targets(t);
     missing = tg.sources(~isfile(tg.sources));
-    if ~isempty(missing)
+    rep.sourcesPresent = isempty(missing);
+    rep.sourceDir = "";
+    if tg.name == "msis", rep.sourceDir = msisDir; end
+    if ~rep.sourcesPresent && ~options.Check
+        % Under 'Check' a missing source is REPORTED: "report its state" is what Check is for,
+        % and a machine that has not fetched NRLMSISE-00 yet must still be able to ask.
+        if tg.name == "msis"
+            NonGravForces.fail(unit, "depMissing", ...
+                "the NRLMSISE-00 C source is not at %s (missing: %s) -> it is not redistributed with this toolbox (THIRD-PARTY-NOTICES.md). Run setupNonGravForces, which fetches it at the pinned commit; or clone it by hand with\n    git clone https://git.linta.de/~brodo/nrlmsise-00.git mex/nrlmsise00\nor point NGF_NRLMSISE00 or 'MsisSource' at an existing copy", ...
+                msisDir, strjoin(missing, ", "));
+        end
         NonGravForces.fail(unit, "dataMissing", "source file(s) missing: %s -> restore the mex/ folder from the repository", strjoin(missing, ", "));
     end
     rep.target = tg.name;
     rep.file = string(fullfile(tg.outDir, string(tg.output) + "." + mexext));
     rep.sources = tg.sources;
-    rep.sourceDigest = localDigest(tg.sources);
+    if rep.sourcesPresent
+        rep.sourceDigest = localDigest(tg.sources);
+    else
+        rep.sourceDigest = "";           % nothing to digest, and "" can match no recorded digest
+    end
     digestFile = fullfile(tg.outDir, [tg.output '.digest.txt']);
     rep.built = false;
     rep.compiler = "";
@@ -126,6 +168,22 @@ for t = 1:numel(targets)
     rep.built = true;
     report(t) = localState(rep, digestFile);
 end
+end
+
+function d = localMsisDir(mexDir, override)
+%LOCALMSISDIR Where the NRLMSISE-00 source is expected: option, environment, then the default.
+% Resolution order is fixed and reported, so a machine with two copies cannot be surprised by
+% which one was compiled: buildMex puts the answer in report.sourceDir.
+if strlength(override) > 0
+    d = override;
+    return
+end
+env = string(getenv('NGF_NRLMSISE00'));
+if strlength(env) > 0
+    d = env;
+    return
+end
+d = string(fullfile(mexDir, 'nrlmsise00'));
 end
 
 function cc = localCompiler(unit)
@@ -174,8 +232,9 @@ else
 end
 out = struct('target', rep.target, 'file', rep.file, 'sources', {rep.sources}, ...
              'sourceDigest', rep.sourceDigest, 'built', rep.built, 'compiler', rep.compiler, ...
+             'sourcesPresent', rep.sourcesPresent, 'sourceDir', rep.sourceDir, ...
              'present', present, 'binaryDigest', binaryDigest, ...
-             'upToDate', present && binaryDigest == rep.sourceDigest);
+             'upToDate', present && rep.sourcesPresent && binaryDigest == rep.sourceDigest);
 end
 
 function h = localDigest(files)

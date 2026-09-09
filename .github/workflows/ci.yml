@@ -1,5 +1,10 @@
 # NonGravForces CI - modelled on referenceSystem's ci.yml (same owner, same
 # runner, same MATLAB release). Two gates, cheapest first:
+#   setupNonGravForces fetches the NRLMSISE-00 C source at a pinned commit the
+#   first time it runs: that source is not in this repository (O-34) and the
+#   density backend cannot build without it. ciGate calls setup before buildMex,
+#   so CI needs no step of its own.
+#
 #   audit    auditPackage.py, stdlib only, seconds: catalogue <-> files, help
 #            template, fail taxonomy, banned constructs (HANDOVER E.2/E.3, R1),
 #            then the C-side checks that need no MATLAB: the MEX gateway is
@@ -98,6 +103,12 @@ jobs:
       # composite-action schema rejects the key on a step.
       - uses: astrobayer/ci-actions/matlab-probe@v1.0.0
         timeout-minutes: 2
+      # NRLMSISE-00 is not fetched here. It was, for one run, in a bash step --
+      # and this runner has no bash ("bash: command not found", 2026-09-09).
+      # The right answer was not a different shell: setupNonGravForces already
+      # runs first from ciGate, it is the installer a human runs anyway, and it
+      # owns the URL and the pinned commit as a single authority (R1). A YAML
+      # step would have been a second place to change them.
 
       - uses: matlab-actions/run-command@37b454c384483087929a3d652be474ba585a9659 # v2
         with:

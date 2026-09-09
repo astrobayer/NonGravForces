@@ -2,7 +2,9 @@ classdef tNgfEnv < NgfTestCase
 %TNGFENV Tests of the env layer (LP-3): density, eclipseFactor, earthRadiance, radiationSources, and buildMex.
 %
 %   Oracles (none built here): the NRLMSISE-00 DOCUMENTATION §7 table (17
-%   published cases, mex/nrlmsise00/DOCUMENTATION, parsed by this class);
+%   published cases, parsed by this class from whichever release is present in
+%   mex/nrlmsise00 -- the oracle travels with the source, so tracking upstream
+%   cannot silently invalidate it);
 %   tools/pyxcheck/eclipse_check.py (pure-Python disc-overlap integration);
 %   tools/pyxcheck/knocke_check.py (pure-Python 0.25 deg cap integration and an
 %   independent restatement of Knocke's Table 1); the real 2020-01-01 GRACE-C
@@ -21,7 +23,16 @@ classdef tNgfEnv < NgfTestCase
     methods (TestClassSetup)
         function loadOracles(tc)
             tc.root = fileparts(fileparts(mfilename('fullpath')));
-            L = splitlines(string(fileread(fullfile(tc.root, 'mex', 'nrlmsise00', 'DOCUMENTATION'))));
+            % The oracle travels WITH the source: section 7 of the package's own DOCUMENTATION
+            % is its published testing output, so whichever NRLMSISE-00 release is present is
+            % checked against its own table. Since 2026-09-09 that source is not in this
+            % repository (O-34) and the run needs it fetched first.
+            docPath = fullfile(tc.root, 'mex', 'nrlmsise00', 'DOCUMENTATION');
+            tc.assertTrue(isfile(docPath), ...
+                sprintf(['the NRLMSISE-00 source is not at %s. It is not redistributed with this ' ...
+                         'toolbox (THIRD-PARTY-NOTICES.md): run setupNonGravForces, which fetches ' ...
+                         'it at the pinned commit the first time it runs.'], docPath));
+            L = splitlines(string(fileread(docPath)));
             rows = L(~cellfun(@isempty, regexp(L, '^\d\.\d{6}E[+-]\d{2} ', 'once')));
             tc.assertEqual(numel(rows), 17, 'DOCUMENTATION §7 must hold the 17 published rows');
             tc.msisTable = cell2mat(cellfun(@(s) sscanf(s, '%f')', cellstr(rows), 'UniformOutput', false));

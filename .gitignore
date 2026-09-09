@@ -8,6 +8,10 @@ doc/html/custom_toolbox.json
 +NonGravForces/+kernel/private/kernelGateway.mex*
 +NonGravForces/+kernel/private/kernelGateway.digest.txt
 
+# NRLMSISE-00 C source, obtained from its maintainer rather than redistributed here.
+# See THIRD-PARTY-NOTICES.md; NonGravForces.buildMex tells you what to do if it is missing.
+mex/nrlmsise00/
+
 # Python bytecode caches of the audit and build scripts
 __pycache__/
 

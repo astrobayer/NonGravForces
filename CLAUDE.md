@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.8.0.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.8.2.
 
 ---
 
@@ -272,9 +272,13 @@ bilinear high-pass sections with actuator saturation and a masked start-up trans
 **LP-7 IS COMPLETE.** The four remaining stubs are blocked on data the project does not hold, so
 they are not level debt. **Next is LP-R (release).** Two owner rulings of 2026-09-09 shape it: the
 toolbox is **MIT** (`LICENSE`), and **O-29 is accepted** — 88 ms per epoch in the standard preset
-ships as a stated cost, not a blocker. **O-34 is the one thing that must be settled before the
-repository goes public**: the vendored NRLMSISE-00 source carries no redistribution grant, and
-`THIRD-PARTY-NOTICES.md` recommends removing it in favour of a user-supplied copy.
+ships as a stated cost, not a blocker. **O-34 is closed** (2026-09-09): NRLMSISE-00 is no longer in this repository. `setupNonGravForces` clones it at
+the pinned commit `bc9a2fe` when it is missing and owns the URL and the pin; `buildMex` resolves
+`'MsisSource'` → `NGF_NRLMSISE00` → `mex/nrlmsise00` and REFUSES rather than fetching. **An
+installer may reach the network, a build step may not.** The self-hosted Windows runner has no
+bash, which is how the CI-step version died and how the better design was found. The oracle travels with the source (DOCUMENTATION §7), so tracking
+upstream cannot silently invalidate a reference value — and that table turned out byte-identical
+to the old copy's, so the move disturbed nothing.
 
 **LP-5x cross-validation** (owner rulings of 2026-08-27):
 - WP-33: standard-library mirror of the **kernel layer only** under
