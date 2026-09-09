@@ -4,7 +4,7 @@ function info = setupNonGravForces(options)
 %   setupNonGravForces
 %   info = setupNonGravForces('Verbose', false)
 %
-%   Adds the toolbox root, tests/ and tools/ to the MATLAB path (no savepath),
+%   Adds the toolbox root, tests/, tools/ and demos/ to the MATLAB path (no savepath),
 %   registers the documentation for the Help browser, and reports which of the
 %   ecosystem dependencies are reachable. It never adds a dependency to the path
 %   itself: each dependency ships its own setup function and owns its own path.
@@ -70,7 +70,7 @@ end
 MSIS_URL = "https://git.linta.de/~brodo/nrlmsise-00.git";
 MSIS_COMMIT = "bc9a2feba4344e74201281e563332688a4d09cc3";
 root = fileparts(mfilename('fullpath'));
-addpath(root, fullfile(root,'tests'), fullfile(root,'tools'));
+addpath(root, fullfile(root,'tests'), fullfile(root,'tools'), fullfile(root,'demos'));
 % Help-browser registration: info.xml at the root is picked up by doc.
 try
     builddocsearchdb(fullfile(root,'doc','html'));

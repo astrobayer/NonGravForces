@@ -175,7 +175,7 @@ TOOLBOX_FUNCTIONS = {
     "geoshow": "Mapping", "wgs84Ellipsoid": "Mapping", "geodetic2ecef": "Mapping",
 }
 scan_roots = [os.path.join(ROOT, "+NonGravForces"), os.path.join(ROOT, "tests"),
-              os.path.join(ROOT, "tools")]
+              os.path.join(ROOT, "tools"), os.path.join(ROOT, "demos")]
 scan_files = [os.path.join(ROOT, f) for f in ("setupNonGravForces.m", "ciGate.m", "runNgfTests.m")
               if os.path.isfile(os.path.join(ROOT, f))]
 for r in scan_roots:
