@@ -93,7 +93,7 @@ classdef DragFree < NonGravForces.sensor.Sensor
 %   [~, ai] = M.accel(ep, r, v, q);
 %   s = NonGravForces.sensor.DragFree(1e-3, 2, 'Authority', 5e-7, 'SampleRate', 1);
 %   y = s.observe(struct('a', ai.drag + ai.radiation + ai.thermal));
-%   rmsResidual = sqrt(mean(y.value(:, y.mask(1, :)).^2, 2));   % rms() is Signal Processing Toolbox
+%   rmsResidual = sqrt(mean(y.value(:, y.mask(1, :)).^2, 2));   % written out: that function is Signal Processing Toolbox
 %
 % See also NonGravForces.sensor.Sensor, NonGravForces.sensor.Electrostatic, NonGravForces.Model, NonGravForces.app.forceBudget.
 %
