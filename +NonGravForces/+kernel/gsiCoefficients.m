@@ -70,17 +70,24 @@ function [Cp, Ctau, info] = gsiCoefficients(model, s, theta, alpha, Tw_K, Tinf_K
 %                                          respect to alpha and to the speed ratio s, in info (default false).
 %                                          They live here, beside the closed form they differentiate, so the
 %                                          two cannot drift apart (rule R1); kernel.partials assembles them.
+%   Provenance        1x1   logical -      Build info.provenance when info is requested (default true); a
+%                                          kernel that calls this per species passes false, because the record
+%                                          costs more than the coefficients (HANDOVER LP-C, finding F12).
 %
 % OUTPUT ARGUMENTS
 %   Name     Size     Type    Units  Description
 %   ----     ----     ----    -----  -----------
 %   Cp       expanded double  -      Normal coefficient (>= 0)
 %   Ctau     expanded double  -      Tangential coefficient (>= 0)
-%   info     1x1      struct  -      .model, .CD, .CL (same size as Cp), .vRatio (re-emission
-%                                    speed ratio; empty for constantCd), .provenance. With
-%                                    'Derivatives': .dCp_dalpha, .dCtau_dalpha (identically zero:
+%   info     1x1      struct  -      .model, .CD, .CL (same size as Cp), .CpIncident and
+%                                    .CpReemitted (Cp = CpIncident + CpReemitted: the incident normal
+%                                    momentum, including a specular fraction, and the diffusely
+%                                    re-emitted one, which is proportional to the incident NUMBER
+%                                    flux; geom.flowShadow scales the two differently), .vRatio
+%                                    (re-emission speed ratio; empty for constantCd), .provenance.
+%                                    With 'Derivatives': .dCp_dalpha, .dCtau_dalpha (identically zero:
 %                                    alpha enters only the re-emitted normal momentum),
-%                                    .dCp_ds, .dCtau_ds, all the size of Cp.
+%                                    .dCp_ds, .dCtau_ds, .dCpIncident_ds, .dCpReemitted_ds, all the size of Cp.
 %
 % ACCURACY
 %   Closed forms evaluated once per array (erfc and exp): rounding only, 1e-15
@@ -126,6 +133,7 @@ arguments
     options.Cd double = []
     options.SpecularFraction double = []
     options.Derivatives (1,1) logical = false
+    options.Provenance (1,1) logical = true
 end
 unit = "gsiCoefficients";
 if any(model == ["cll","schamberg"])
@@ -148,10 +156,13 @@ if model == "constantCd"
     Cp = options.Cd .* max(g, 0) .* g;
     Ctau = options.Cd .* max(g, 0) .* l;
     info.vRatio = [];
+    info.CpIncident = Cp;
+    info.CpReemitted = zeros(size(Cp));
     if options.Derivatives
         % constantCd has neither an accommodation coefficient nor a speed ratio.
         info.dCp_dalpha = zeros(size(Cp)); info.dCtau_dalpha = zeros(size(Cp));
         info.dCp_ds = zeros(size(Cp));     info.dCtau_ds = zeros(size(Cp));
+        info.dCpIncident_ds = zeros(size(Cp)); info.dCpReemitted_ds = zeros(size(Cp));
     end
 else
     for v = {s, alpha, Tw_K, Tinf_K}
@@ -178,12 +189,18 @@ else
         case "sentman"
             Cp = CpInc + CpRe;
             Ctau = CtauInc + zeros(size(Cp));
+            info.CpIncident = CpInc + zeros(size(Cp));
+            info.CpReemitted = CpRe + zeros(size(Cp));
         case "maxwell"
             sig = options.SpecularFraction;
             if isempty(sig) || ~isscalar(sig) || ~isfinite(sig) || sig < 0 || sig > 1
                 NonGravForces.fail(unit, "inputSpecular", "maxwell needs a scalar 'SpecularFraction' in [0, 1] -> pass 'SpecularFraction', 0.1");
             end
-            Cp = (1 - sig) * (CpInc + CpRe) + sig * 2 * CpInc;
+            % the diffuse part (1 - sig) carries incident and re-emitted momentum, the specular part doubles the
+            % incident normal momentum: incident (1 + sig) CpInc, re-emitted (1 - sig) CpRe
+            info.CpIncident = (1 + sig) * CpInc + zeros(size(CpInc + CpRe));
+            info.CpReemitted = (1 - sig) * CpRe + zeros(size(CpInc + CpRe));
+            Cp = info.CpIncident + info.CpReemitted;
             Ctau = (1 - sig) * CtauInc + zeros(size(Cp));
     end
     info.vRatio = vRatio + zeros(size(Cp));
@@ -207,8 +224,12 @@ else
                 info.dCp_ds = dCpInc_ds + dCpRe_ds;
                 info.dCtau_ds = dCtauInc_ds + zeros(size(Cp));
                 info.dCp_dalpha = dCpRe_dalpha + zeros(size(Cp));
+                info.dCpIncident_ds = dCpInc_ds + zeros(size(Cp));
+                info.dCpReemitted_ds = dCpRe_ds + zeros(size(Cp));
             case "maxwell"
-                info.dCp_ds = (1 - sig) * (dCpInc_ds + dCpRe_ds) + sig * 2 * dCpInc_ds;
+                info.dCpIncident_ds = (1 + sig) * dCpInc_ds + zeros(size(Cp));
+                info.dCpReemitted_ds = (1 - sig) * dCpRe_ds + zeros(size(Cp));
+                info.dCp_ds = info.dCpIncident_ds + info.dCpReemitted_ds;
                 info.dCtau_ds = (1 - sig) * dCtauInc_ds + zeros(size(Cp));
                 info.dCp_dalpha = (1 - sig) * dCpRe_dalpha + zeros(size(Cp));
         end
@@ -219,5 +240,7 @@ else
 end
 info.CD = Cp .* g + Ctau .* l;
 info.CL = Cp .* l - Ctau .* g;
-info.provenance = NonGravForces.provenance("kernel.gsiCoefficients", 'Options', struct('model', model, 'Cd', options.Cd, 'SpecularFraction', options.SpecularFraction));
+if nargout > 2 && options.Provenance
+    info.provenance = NonGravForces.provenance("kernel.gsiCoefficients", 'Options', struct('model', model, 'Cd', options.Cd, 'SpecularFraction', options.SpecularFraction));
+end
 end

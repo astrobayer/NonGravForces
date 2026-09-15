@@ -26,12 +26,13 @@ env,radiationSources,function,L2,WP-08,done,Source list {dir_body P band} from S
 geom,MacroModel,class,L3,WP-09,done,Panel geometry frozen and validated once
 geom,graceFO,function,L3,WP-09,done,GRACE-FO macro model from JPL D-56935
 geom,boxWing,function,L3,WP-09,done,Generic box-wing macro model factory
-geom,selfShadow,function,L3,WP-10,done,Per-panel exposed fraction: exact ray-cast or icosphere LUT
+geom,selfShadow,function,L3,WP-10,done,Per-panel unobstructed fraction toward a direction: exact ray cast or cube-map table
+geom,flowShadow,function,L3,WP-C1,done,Self-shadowing of a free-molecular gas stream: flux-weighted occlusion ratios per species
 geom,thermalState,function,L3,WP-28,done,Per-panel temperatures: steady state or transient (Wöske)
 geom,AttitudeProvider,class,L3,WP-11,done,BODY->GCRS quaternions at query epochs (SCA1B or nominal) via referenceSystem.interpolateQuaternions
 geom,checkAttitudeSense,function,L3,WP-11,done,Physics test of quaternion sense (nadir and line-of-sight)
 kernel,gsiCoefficients,function,L4,WP-13,done,Normal and tangential plate coefficients: sentman maxwell constantCd (cll/schamberg refuse)
-kernel,accommodation,function,L4,WP-26,done,Energy accommodation coefficient: fixed (sesam/langmuir refuse until O-16)
+kernel,accommodation,function,L4,WP-C7,done,Energy accommodation per epoch: fixed or Pilinski 2010 or the Walker/Mehta adsorbate mixture
 kernel,dragPanelForce,function,L4,WP-13,done,Per-panel gas-momentum force in body frame
 kernel,radiationPanelForce,function,L4,WP-12,done,Per-panel radiation force for a source list in body frame
 kernel,thermalRecoil,function,L4,WP-12,done,Per-panel thermal re-emission recoil force

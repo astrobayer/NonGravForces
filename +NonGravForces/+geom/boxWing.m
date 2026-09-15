@@ -2,7 +2,7 @@ function mm = boxWing(dims, optics, options)
 %BOXWING Generic box-wing macro model: a rectangular bus of six plates and optional solar-array plates.
 %
 %   mm = NonGravForces.geom.boxWing([Lx Ly Lz], optics)
-%   mm = NonGravForces.geom.boxWing([Lx Ly Lz], optics, 'Array', arr, 'Name', "MySat", 'Alpha', 0.9)
+%   mm = NonGravForces.geom.boxWing([Lx Ly Lz], optics, 'Array', arr, 'Name', "MySat", 'Mass_kg', 480)
 %
 %   Builds a NonGravForces.geom.MacroModel for a body-frame box centred at the
 %   origin with edge lengths Lx, Ly, Lz (the six plates carry outward normals
@@ -27,7 +27,7 @@ function mm = boxWing(dims, optics, options)
 %   Array    1xP   struct  -      per array plate: .area_m2, .normal (3x1 unit),
 %                                 .centroid_m (3x1), optional .name; default none
 %   Name     1x1   string  -      Model name (default "boxWing")
-%   Alpha    1x1   double  -      Accommodation default for all plates (0..1), 0.85
+%   Mass_kg  1x1   double  kg     Spacecraft mass; default NaN (unknown: a Model then needs 'Mass')
 %   HeatCapacity_J_m2K 1x2 double J/(m^2 K)  [bus array] heat capacity per area
 %                                 for thermalState transient; default [NaN NaN]
 %
@@ -61,7 +61,7 @@ arguments
     optics (1,1) struct
     options.Array struct = struct([])
     options.Name (1,1) string = "boxWing"
-    options.Alpha (1,1) double {mustBeBetween(options.Alpha, 0, 1)} = 0.85
+    options.Mass_kg (1,1) double = NaN
     options.HeatCapacity_J_m2K (1,2) double = [NaN NaN]
 end
 unit = "boxWing";
@@ -81,7 +81,7 @@ faces = { ...
     "+y", [0; 1;0], Lx*Lz, [0; Ly/2;0]; "-y", [0;-1;0], Lx*Lz, [0;-Ly/2;0]; ...
     "+z", [0;0; 1], Lx*Ly, [0;0; Lz/2]; "-z", [0;0;-1], Lx*Ly, [0;0;-Lz/2]};
 tmpl = struct('name',"",'kind',"plate",'area_m2',0,'normal',zeros(3,1),'centroid_m',zeros(3,1), ...
-    'absVis',0,'specVis',0,'diffVis',0,'emisIR',0,'specIR',0,'diffIR',0,'alpha',options.Alpha,'group',"", ...
+    'absVis',0,'specVis',0,'diffVis',0,'emisIR',0,'specIR',0,'diffIR',0,'group',"", ...
     'vertices_m',zeros(3,0),'heatCapacity_J_m2K',NaN);
 panels = repmat(tmpl, 1, 6 + P);
 half = dims(:) / 2;
@@ -109,7 +109,7 @@ for p = 1:P
     panels(k) = localOptics(panels(k), optics.array, unit, "array"); panels(k).group = "array";
     panels(k).heatCapacity_J_m2K = options.HeatCapacity_J_m2K(2);
 end
-mm = NonGravForces.geom.MacroModel(panels, 'Name', options.Name, 'Reference', "boxWing factory: caller dimensions and optics");
+mm = NonGravForces.geom.MacroModel(panels, 'Name', options.Name, 'Mass_kg', options.Mass_kg, 'Reference', "boxWing factory: caller dimensions and optics");
 end
 
 function p = localOptics(p, o, unit, which)

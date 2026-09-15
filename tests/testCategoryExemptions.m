@@ -47,8 +47,6 @@ ex.buildMex.metamorphic         = "no input relation exists";
 ex.buildMex.speed               = "a compile is not timed";
 ex.boxWing.vectorization        = "factory returns one object";
 ex.boxWing.speed                = "no numerical work";
-ex.accommodation.reference      = "fixed is a pass-through of the caller's value; the SESAM reference (Pilinski 2013 Fig. 3) lands with O-16";
-ex.accommodation.precision      = "no numerical claim until sesam exists (O-16)";
-ex.accommodation.speed          = "no numerical work";
+ex.accommodation.speed          = "two closed forms per epoch; there is no algorithm whose cost a ratio could guard";
 ex.assemble.reference           = "two sums and a cross product have no authority outside arithmetic; closed forms are asserted under precision";
 end

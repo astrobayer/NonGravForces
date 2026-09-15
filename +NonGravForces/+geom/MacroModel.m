@@ -13,11 +13,10 @@ classdef MacroModel
 %                            self-shadowing); NaN if unknown
 %     absVis, specVis, diffVis   visible band, must sum to 1
 %     emisIR, specIR, diffIR     infrared band, must sum to 1
-%     alpha       1x1 double energy accommodation coefficient default (0..1). CARRIED,
-%                 NOT CONSUMED: kernel.dragPanelForce takes a scalar 'Alpha' option and
-%                 reads no per-panel value, so a model with mixed surfaces cannot express
-%                 that today (HANDOVER O-23, to be wired or removed at LP-6).
 %     group       string     "bus" | "array" | "boom" (informational)
+%   (a per-panel accommodation coefficient `alpha` was required until 2026-09-15 and read
+%   by nothing; it is no longer required and, when present, ignored: HANDOVER O-23 closed
+%   by removal. The accommodation is the environment's: kernel.accommodation.)
 %   and OPTIONALLY (added 2026-09-07, LP-4)
 %     vertices_m  3xV double corners of the plate polygon, body frame, wound
 %                            counter-clockwise about the outward normal, V >= 3;
@@ -26,6 +25,13 @@ classdef MacroModel
 %     heatCapacity_J_m2K 1x1 double heat capacity per unit area of the wall
 %                            behind the surface; used ONLY by geom.thermalState
 %                            "transient". NaN if unknown.
+%     internalShare 1x1 double share of the internal dissipation radiated through
+%                            this plate; given on every plate or on none, >= 0,
+%                            summing to 1 (geom.thermalState 'InternalShare').
+%
+%   NAME-VALUE 'Mass_kg' (added 2026-09-15, LP-C F10): the spacecraft mass a Model
+%   divides by when it is given no 'Mass' of its own; NaN (the default) means
+%   unknown, and a Model built on such a macro model refuses to guess.
 %
 %   Validation at construction is the ONLY validation: kernels trust the
 %   packed arrays. Energy closure |a+s+d-1| <= 1e-6 in both bands, unit
@@ -50,17 +56,18 @@ classdef MacroModel
 %   C           3xN double centroids (NaN allowed)
 %   optVis      3xN double [abs; spec; diff] visible
 %   optIR       3xN double [emis; spec; diff] infrared
-%   alpha       1xN double accommodation defaults
 %   V           1xN cell   vertices (3xV each) or empty cells
 %   hasVertices logical    every panel carries vertices
 %   heatCapacity 1xN double J/(m^2 K), NaN where unknown
+%   internalShare 1xN double internal dissipation shares, NaN where not given
+%   mass_kg     1x1 double spacecraft mass, NaN if not given
 %   inertia     3x3 double kg m^2 (NaN if not given)
 %   centreOfMass    3x1 double m, body frame (origin = ACC proof mass for GRACE-FO)
 %   proofMassOffset 3x1 double m, CG -> proof mass (CoM-coupling term, LP-7)
 %   reference   string     source of the numbers
 %
 % ERRORS
-%   NonGravForces:MacroModel:inputPanels     missing field / wrong shape
+%   NonGravForces:MacroModel:inputPanels     missing field / wrong shape; internalShare or Mass_kg invalid
 %   NonGravForces:MacroModel:inputEnergy     a+s+d ~= 1 in a band
 %   NonGravForces:MacroModel:inputNormal     non-unit normal
 %   NonGravForces:MacroModel:inputVertices   vertices not 3xV, not planar, area
@@ -73,7 +80,7 @@ classdef MacroModel
 % See also NonGravForces.geom.graceFO, NonGravForces.geom.boxWing, NonGravForces.geom.selfShadow.
 %
 % KEYWORDS macro model panels geometry optical properties vertices
-% Created 2026-08-27 by Claude Fable 5 (Anthropic); vertices and heat capacity 2026-09-07 by Claude Fable 5.1.
+% Created 2026-08-27 by Claude Fable 5 (Anthropic); vertices and heat capacity 2026-09-07 by Claude Fable 5.1; mass and internal shares, alpha removed 2026-09-15 by Claude Opus 5.
     properties (SetAccess = private)
         name (1,1) string = ""
         n (1,1) double = 0
@@ -83,10 +90,11 @@ classdef MacroModel
         C double
         optVis double
         optIR double
-        alpha double
         V cell
         hasVertices (1,1) logical = false
         heatCapacity double
+        internalShare double
+        mass_kg (1,1) double = NaN
         inertia (3,3) double = nan(3)
         centreOfMass (3,1) double = zeros(3,1)
         proofMassOffset (3,1) double = zeros(3,1)
@@ -101,8 +109,9 @@ classdef MacroModel
                 nv.CentreOfMass (3,1) double = zeros(3,1)
                 nv.ProofMassOffset (3,1) double = zeros(3,1)
                 nv.Reference (1,1) string = ""
+                nv.Mass_kg (1,1) double = NaN
             end
-            req = ["name","kind","area_m2","normal","centroid_m","absVis","specVis","diffVis","emisIR","specIR","diffIR","alpha","group"];
+            req = ["name","kind","area_m2","normal","centroid_m","absVis","specVis","diffVis","emisIR","specIR","diffIR","group"];
             missing = setdiff(req, string(fieldnames(panels)));
             if ~isempty(missing)
                 NonGravForces.fail("MacroModel", "inputPanels", "panel struct lacks %s -> add the fields", strjoin(missing, ", "));
@@ -126,10 +135,6 @@ classdef MacroModel
             if any(abs(sum(oI,1) - 1) > 1e-6)
                 k = find(abs(sum(oI,1)-1) > 1e-6, 1);
                 NonGravForces.fail("MacroModel", "inputEnergy", "infrared e+s+d = %.4f on panel '%s' -> the transcription is wrong", sum(oI(:,k)), panels(k).name);
-            end
-            al = [panels.alpha];
-            if any(al < 0 | al > 1)
-                NonGravForces.fail("MacroModel", "inputPanels", "alpha must be in [0,1] -> check panel %d", find(al<0|al>1,1));
             end
             % optional vertices: planar, counter-clockwise, area within 5 % of the printed area
             V = cell(1, n);
@@ -172,8 +177,21 @@ classdef MacroModel
                     NonGravForces.fail("MacroModel", "inputPanels", "heatCapacity_J_m2K must be positive or NaN -> check panel %d", find(hc <= 0, 1));
                 end
             end
+            share = nan(1, n);
+            if isfield(panels, 'internalShare')
+                for k = 1:n
+                    if ~isempty(panels(k).internalShare), share(k) = panels(k).internalShare; end
+                end
+                if any(isfinite(share)) && ~(all(isfinite(share)) && all(share >= 0) && abs(sum(share) - 1) <= 1e-9)
+                    NonGravForces.fail("MacroModel", "inputPanels", "internalShare must be given on every panel or on none, non-negative, summing to 1 -> got a sum of %.6g", sum(share(isfinite(share))));
+                end
+            end
+            if ~(isnan(nv.Mass_kg) || (isfinite(nv.Mass_kg) && nv.Mass_kg > 0))
+                NonGravForces.fail("MacroModel", "inputPanels", "'Mass_kg' must be a positive finite mass or NaN (unknown) -> got %g", nv.Mass_kg);
+            end
             obj.name = nv.Name; obj.n = n; obj.panels = panels; obj.A = A; obj.N = N; obj.C = C;
-            obj.optVis = oV; obj.optIR = oI; obj.alpha = al; obj.V = V; obj.hasVertices = all(~cellfun(@isempty, V));
+            obj.optVis = oV; obj.optIR = oI; obj.V = V; obj.hasVertices = all(~cellfun(@isempty, V));
+            obj.internalShare = share; obj.mass_kg = nv.Mass_kg;
             obj.heatCapacity = hc;
             obj.inertia = nv.Inertia; obj.centreOfMass = nv.CentreOfMass; obj.proofMassOffset = nv.ProofMassOffset; obj.reference = nv.Reference;
         end

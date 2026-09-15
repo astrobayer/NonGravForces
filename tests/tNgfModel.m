@@ -194,9 +194,26 @@ classdef tNgfModel < NgfTestCase
             [e, rr, vv] = tc.arc(1);
             a = tc.M.accel(e, rr, vv);
             tc.verifySize(a, [3 1]); tc.verifyTrue(all(isfinite(a)));
+            % Options that contradict each other are refused at construction (LP-C F5), and each refusal is paired with
+            % the construction that must succeed (T6).
             o = tc.M.options.set("drag.gsi", "maxwell");
-            Mm = NonGravForces.Model(tc.macro, o, 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw);
-            tc.verifyErrorId(@() Mm.accel(e, rr, vv), 'NonGravForces:Model:unsupported');
+            mk = @(oo, varargin) NonGravForces.Model(tc.macro, oo, 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw, varargin{:});
+            tc.verifyErrorId(@() mk(o), 'NonGravForces:Model:inputOptions');
+            am = mk(o.set("drag.specularFraction", 0.1)).accel(e, rr, vv); tc.verifyTrue(all(isfinite(am)));
+            tc.verifyErrorId(@() mk(tc.M.options.set("drag.accommodation", "walker2014")), 'NonGravForces:Model:inputOptions');
+            tc.verifyErrorId(@() mk(tc.M.options.set("drag.accommodation", "walker2014").set("drag.alpha", []).set("drag.surfaceMass_amu", [])), 'NonGravForces:Model:inputOptions');
+            aw = mk(tc.M.options.set("drag.accommodation", "walker2014").set("drag.alpha", []).set("drag.surfaceMass_amu", 263.3223)).accel(e, rr, vv);
+            ap = mk(tc.M.options.set("drag.accommodation", "pilinski2010").set("drag.alpha", [])).accel(e, rr, vv);
+            tc.verifyTrue(all(isfinite([aw; ap])));
+            tc.verifyErrorId(@() mk(tc.M.options.set("drag.alpha", [])), 'NonGravForces:Model:inputOptions');
+            tc.verifyErrorId(@() mk(tc.M.options.set("thermal.internalPower_W", 100)), 'NonGravForces:Model:inputOptions');
+            % the mass is the macro model's, or the caller's, never GRACE-C's by default (LP-C F10)
+            o6 = struct('bus', struct('vis', [0.34 0.40 0.26], 'ir', [0.62 0.23 0.15]));
+            bw = NonGravForces.geom.boxWing([3 1.9 0.7], o6);
+            tc.verifyErrorId(@() NonGravForces.Model(bw, NonGravForces.Options("fast")), 'NonGravForces:Model:inputMass');
+            tc.verifyErrorId(@() NonGravForces.Model(bw, NonGravForces.Options("fast"), 'Mass', -3), 'NonGravForces:Model:inputMass');
+            tc.verifyEqual(NonGravForces.Model(bw, NonGravForces.Options("fast"), 'Mass', 150).mass.value_kg, 150);
+            tc.verifyEqual(NonGravForces.Model(NonGravForces.geom.graceFO("D"), NonGravForces.Options("fast")).mass.value_kg, NonGravForces.const().graceFO.massD);
             % The fast preset must evaluate with no space weather beyond its exponential profile.
             af = tc.Mfast.accel(e, rr, vv);
             tc.verifyTrue(all(isfinite(af))); tc.verifyGreaterThan(norm(af), 0);
@@ -243,11 +260,13 @@ classdef tNgfModel < NgfTestCase
     % ===================================================================== speed
     methods (Test, TestTags = {'speed'})
         function modelSpeed(tc)
-            % The fast preset exists to be fast: no self-shadowing, no Earth radiation, no
-            % thermal model. It must beat the standard preset by a wide margin on the same arc.
-            [e, rr, vv] = tc.arc(4);
+            % The fast preset exists to be fast: no self-shadowing, no Earth radiation, no thermal model. Until LP-C it was
+            % 45x the cheaper (2 against 89 ms per epoch); with the O(1) cube map, flow shadowing and provenance on demand
+            % the standard preset costs 1.2 ms per epoch on the host (2026-09-15, 100 epochs) and the fast one 0.3 ms, a ratio
+            % of 0.25. The fast preset must still be the cheaper one by a clear margin: budget 3x the measured ratio.
+            [e, rr, vv] = tc.arc(40);
             ratio = tc.speedRatio(@() tc.Mfast.accel(e, rr, vv), @() tc.M.accel(e, rr, vv));
-            tc.verifyBoundAndRecord("fast preset vs standard preset, same arc", ratio, 0.35, "-", "budget one third of the expected 20x speed-up; measured 0.02 (2 ms/epoch against 89 ms)");
+            tc.verifyBoundAndRecord("fast preset vs standard preset, same arc (40 epochs)", ratio, 0.75, "-", "measured 0.25 on 2026-09-15 (it was 0.02 while the standard preset cost 88 ms per epoch)");
         end
     end
 end

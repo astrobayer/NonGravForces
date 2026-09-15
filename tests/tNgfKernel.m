@@ -114,11 +114,22 @@ classdef tNgfKernel < NgfTestCase
         function accommodationContract(tc)
             sp = zeros(8, 4); T = 900 * ones(1, 4);
             [a, info] = NonGravForces.kernel.accommodation("fixed", sp, T, 'Alpha', 0.85);
-            tc.verifyEqual(a, 0.85 * ones(1, 4)); tc.verifyEqual(info.K, 4); tc.verifyEqual(info.model, "fixed");
-            tc.verifyEqual(NonGravForces.kernel.accommodation("fixed", sp, T, 'Alpha', [0.8 0.9 1 0]), [0.8 0.9 1 0]);
+            tc.verifyEqual(a.alpha, 0.85 * ones(1, 4)); tc.verifyEmpty(a.coverage); tc.verifyEmpty(a.alphaSubstrate);
+            tc.verifyEqual(info.K, 4); tc.verifyEqual(a.model, "fixed"); tc.verifyEqual(info.provenance.unit, "kernel.accommodation");
+            tc.verifyEqual(NonGravForces.kernel.accommodation("fixed", sp, T, 'Alpha', [0.8 0.9 1 0]).alpha, [0.8 0.9 1 0]);
+            [~, sp8, T8] = tc.gas(4);
+            [ap, ip] = NonGravForces.kernel.accommodation("pilinski2010", sp8, T8);
+            tc.verifySize(ap.alpha, [1 4]); tc.verifyEmpty(ap.coverage); tc.verifySize(ip.insideFit, [1 4]);
+            [aw, iw] = NonGravForces.kernel.accommodation("walker2014", sp8, T8, 'SurfaceMass_amu', 263.3223);
+            tc.verifyEqual(aw.alpha, ones(1, 4)); tc.verifySize(aw.coverage, [1 4]); tc.verifySize(aw.alphaSubstrate, [1 4]);
+            tc.verifySize(iw.pressureO_Pa, [1 4]); tc.verifySize(iw.meanMass_amu, [1 4]);
             f = @(varargin) NonGravForces.kernel.accommodation(varargin{:});
-            tc.verifyErrorId(@() f("sesam", sp, T), 'NonGravForces:accommodation:notImplemented');
-            tc.verifyErrorId(@() f("langmuir", sp, T), 'NonGravForces:accommodation:notImplemented');
+            tc.verifyError(@() f("sesam", sp, T), 'MATLAB:validators:mustBeMember');
+            tc.verifyErrorId(@() f("pilinski2010", sp8, T8, 'Alpha', 0.9), 'NonGravForces:accommodation:inputAlpha');
+            tc.verifyErrorId(@() f("walker2014", sp8, T8), 'NonGravForces:accommodation:inputSurfaceMass');
+            tc.verifyErrorId(@() f("walker2014", sp8, T8, 'SurfaceMass_amu', -1), 'NonGravForces:accommodation:inputSurfaceMass');
+            tc.verifyErrorId(@() f("pilinski2010", -sp8, T8), 'NonGravForces:accommodation:inputRange');
+            tc.verifyErrorId(@() f("walker2014", sp8, 0 * T8, 'SurfaceMass_amu', 65), 'NonGravForces:accommodation:inputRange');
             tc.verifyErrorId(@() f("fixed", sp, T), 'NonGravForces:accommodation:inputAlpha');
             tc.verifyErrorId(@() f("fixed", sp, T, 'Alpha', 1.1), 'NonGravForces:accommodation:inputAlpha');
             tc.verifyErrorId(@() f("fixed", sp, T, 'Alpha', [0.8 0.9]), 'NonGravForces:accommodation:inputAlpha');
@@ -338,6 +349,54 @@ classdef tNgfKernel < NgfTestCase
             Cp8 = NonGravForces.kernel.gsiCoefficients("sentman", 8, 0, 1, 300, 1000);
             tc.verifyBoundAndRecord("head-on s = 8 example value", abs(Cp8 - (2 + 1 / 64 + sqrt(pi) * sqrt(0.5 * 0.6 / 64))), 1e-15, "-", "closed form in the help text");
         end
+        function accommodationPrecision(tc)
+            % The published forms at the points where they are exact: K x = 1 gives 1/2, and a gas whose mean molecular mass
+            % equals the substrate's gives alpha_s = 3/4 (mu = 1). Bounds are rounding of one product and one quotient.
+            c = tc.c; T = [900 1100];
+            sp = zeros(8, 2); sp(2, :) = 1 ./ (4.98e-17 * T);                 % K n_O T = 1
+            ap = NonGravForces.kernel.accommodation("pilinski2010", sp, T);
+            tc.verifyBoundAndRecord("pilinski2010 at K n_O T = 1", max(abs(ap.alpha - 0.5)), 4 * eps, "-", "x/(1 + x) at x = 1 to rounding");
+            sp = zeros(8, 2); sp(4, :) = 1e20; sp(2, :) = 1 ./ (1.44e6 * c.kB * T);   % K_L P_O = 1 (n_O ~ 6e16); O2 at 1e20 dominates the mean mass
+            mO2 = c.speciesMass(4) / c.NA / c.amu;
+            aw = NonGravForces.kernel.accommodation("walker2014", sp, T, 'SurfaceMass_amu', mO2);
+            tc.verifyBoundAndRecord("walker2014 coverage at K_L P_O = 1", max(abs(aw.coverage - 0.5)), 4 * eps, "-", "Langmuir isotherm at unit argument");
+            % the O atoms pull the mean mass below O2's by n_O m_O / n: recompute mu exactly and compare the closed form
+            n6 = sp([6 1 7 3 2 4], :); m6 = c.speciesMass([6 1 7 3 2 4])' / c.NA;
+            mu = (sum(n6 .* m6, 1) ./ sum(n6, 1)) / (mO2 * c.amu);
+            tc.verifyBoundAndRecord("walker2014 substrate coefficient 3 mu/(1+mu)^2", max(abs(aw.alphaSubstrate - 3 * mu ./ (1 + mu).^2)), 4 * eps, "-", "the same arithmetic in a different association");
+            tc.verifyLessThan(max(abs(aw.alphaSubstrate - 0.75)), 1e-3, 'mu within 1e-3 of 1: alpha_s at its maximum 3/4');
+        end
+        function dragPanelForceFlowPrecision(tc)
+            % (1) a flow shadow of all ones is no shadow, bitwise; (2) ratios equal across the three parts and the species are
+            % the plain fraction, to rounding; (3) a two-state surface with coverage 1 is alpha = 1 bitwise and with
+            % coverage 0 is alpha = alpha_s bitwise (1 x + 0 y = x exactly).
+            [rho, sp, T] = tc.gas(3); v = [7600 7600 7500; 10 -30 0; -5 0 20]; N = tc.mm.n;
+            args = {'Model', "sentman", 'Tw_K', 300};
+            F0 = NonGravForces.kernel.dragPanelForce(tc.mm, rho, sp, T, v, args{:}, 'Alpha', 0.85);
+            S1 = struct('kind', "flow", 'beam', ones(N, 3), 'number', ones(N, 3, 8), 'normal', ones(N, 3, 8), 'tangential', ones(N, 3, 8));
+            tc.verifyEqual(NonGravForces.kernel.dragPanelForce(tc.mm, rho, sp, T, v, args{:}, 'Alpha', 0.85, 'Shadow', S1), F0, 'unit ratios are no shadow');
+            f = 0.3 + 0.6 * rand(N, 3);
+            Sf = struct('kind', "flow", 'beam', f, 'number', repmat(f, 1, 1, 8), 'normal', repmat(f, 1, 1, 8), 'tangential', repmat(f, 1, 1, 8));
+            Ff = NonGravForces.kernel.dragPanelForce(tc.mm, rho, sp, T, v, args{:}, 'Alpha', 0.85, 'Shadow', Sf);
+            Fn = NonGravForces.kernel.dragPanelForce(tc.mm, rho, sp, T, v, args{:}, 'Alpha', 0.85, 'Shadow', f);
+            tc.verifyBoundAndRecord("uniform flow ratios vs the plain fraction", max(abs(Ff - Fn), [], 'all') / max(abs(Fn), [], 'all'), 1e-15, "-", ...
+                "the fraction multiplies the coefficient sum per species instead of the dynamic pressure: one reassociation");
+            one = NonGravForces.kernel.dragPanelForce(tc.mm, rho, sp, T, v, args{:}, 'Alpha', 1);
+            acc1 = struct('model', "walker2014", 'alpha', ones(1, 3), 'coverage', ones(1, 3), 'alphaSubstrate', 0.2 * ones(1, 3));
+            tc.verifyEqual(NonGravForces.kernel.dragPanelForce(tc.mm, rho, sp, T, v, args{:}, 'Alpha', acc1), one, 'full coverage accommodates fully');
+            sub = NonGravForces.kernel.dragPanelForce(tc.mm, rho, sp, T, v, args{:}, 'Alpha', 0.2);
+            acc0 = acc1; acc0.coverage = zeros(1, 3);
+            tc.verifyEqual(NonGravForces.kernel.dragPanelForce(tc.mm, rho, sp, T, v, args{:}, 'Alpha', acc0), sub, 'a clean surface is the substrate');
+            d = @(varargin) NonGravForces.kernel.dragPanelForce(varargin{:});
+            tc.verifyErrorId(@() d(tc.mm, rho, sp, T, v, args{:}, 'Alpha', 0.85, 'Shadow', struct('kind', "flow")), 'NonGravForces:dragPanelForce:inputShape');
+            Sb = S1; Sb.number = ones(N, 3, 7);
+            tc.verifyErrorId(@() d(tc.mm, rho, sp, T, v, args{:}, 'Alpha', 0.85, 'Shadow', Sb), 'NonGravForces:dragPanelForce:inputShape');
+            Sr = S1; Sr.normal(1) = 1.5;
+            tc.verifyErrorId(@() d(tc.mm, rho, sp, T, v, args{:}, 'Alpha', 0.85, 'Shadow', Sr), 'NonGravForces:dragPanelForce:inputRange');
+            tc.verifyErrorId(@() d(tc.mm, rho, sp, T, v, args{:}, 'Alpha', struct('alpha', 1)), 'NonGravForces:dragPanelForce:inputShape');
+            accBad = acc1; accBad.coverage = 2 * ones(1, 3);
+            tc.verifyErrorId(@() d(tc.mm, rho, sp, T, v, args{:}, 'Alpha', accBad), 'NonGravForces:dragPanelForce:inputRange');
+        end
         function dragPanelForcePrecision(tc)
             % one plate, one species: the force equals (1/2) rho U^2 A [Cp (-n) + Ctau t] with the plate's own theta
             o = struct('bus', struct('vis', [0.34 0.40 0.26], 'ir', [0.62 0.23 0.15]));
@@ -435,7 +494,14 @@ classdef tNgfKernel < NgfTestCase
         function accommodationVectorization(tc)
             sp = rand(8, 5) * 1e13; T = 900 + 10 * (1:5); a = [0.8 0.85 0.9 0.95 1];
             al = NonGravForces.kernel.accommodation("fixed", sp, T, 'Alpha', a);
-            for k = 1:5, tc.verifyEqual(al(k), NonGravForces.kernel.accommodation("fixed", sp(:, k), T(k), 'Alpha', a(k))); end
+            ap = NonGravForces.kernel.accommodation("pilinski2010", sp, T);
+            aw = NonGravForces.kernel.accommodation("walker2014", sp, T, 'SurfaceMass_amu', 263.3223);
+            for k = 1:5
+                tc.verifyEqual(al.alpha(k), NonGravForces.kernel.accommodation("fixed", sp(:, k), T(k), 'Alpha', a(k)).alpha);
+                tc.verifyEqual(ap.alpha(k), NonGravForces.kernel.accommodation("pilinski2010", sp(:, k), T(k)).alpha);
+                w1 = NonGravForces.kernel.accommodation("walker2014", sp(:, k), T(k), 'SurfaceMass_amu', 263.3223);
+                tc.verifyEqual([aw.coverage(k) aw.alphaSubstrate(k)], [w1.coverage w1.alphaSubstrate]);
+            end
         end
         function dragPanelForceVectorization(tc)
             [rho, sp, T] = tc.gas(6); v = 7600 * [ones(1, 6); 0.01 * (1:6); -0.005 * (1:6)]; f = 0.5 + 0.5 * rand(tc.mm.n, 6);
@@ -506,8 +572,14 @@ classdef tNgfKernel < NgfTestCase
             [CpE, CtE] = NonGravForces.kernel.gsiCoefficients("sentman", zeros(1, 0), zeros(1, 0), 0.85, 300, 1000); tc.verifySize(CpE, [1 0]); tc.verifySize(CtE, [1 0]);
         end
         function accommodationRobustness(tc)
-            a = NonGravForces.kernel.accommodation("fixed", zeros(8, 0), zeros(1, 0), 'Alpha', 0.85); tc.verifySize(a, [1 0]);
-            a1 = NonGravForces.kernel.accommodation("fixed", zeros(8, 3), [1 1 1], 'Alpha', [0 1 0.5]); tc.verifyEqual(a1, [0 1 0.5], 'boundary values 0 and 1 are admissible');
+            a = NonGravForces.kernel.accommodation("fixed", zeros(8, 0), zeros(1, 0), 'Alpha', 0.85); tc.verifySize(a.alpha, [1 0]);
+            a1 = NonGravForces.kernel.accommodation("fixed", zeros(8, 3), [1 1 1], 'Alpha', [0 1 0.5]); tc.verifyEqual(a1.alpha, [0 1 0.5], 'boundary values 0 and 1 are admissible');
+            % a vacuum (every density 0): no adsorbed oxygen, alpha 0 for pilinski2010 and coverage 0 for walker2014, and no
+            % NaN from the mean mass of an empty gas
+            ap = NonGravForces.kernel.accommodation("pilinski2010", zeros(8, 2), [900 900]); tc.verifyEqual(ap.alpha, [0 0]);
+            aw = NonGravForces.kernel.accommodation("walker2014", zeros(8, 2), [900 900], 'SurfaceMass_amu', 65);
+            tc.verifyEqual(aw.coverage, [0 0]); tc.verifyTrue(all(isfinite(aw.alphaSubstrate)));
+            ae = NonGravForces.kernel.accommodation("walker2014", zeros(8, 0), zeros(1, 0), 'SurfaceMass_amu', 65); tc.verifySize(ae.coverage, [1 0]);
         end
         function dragPanelForceRobustness(tc)
             % a species column of zeros is skipped (no NaN from s = U/0), an exactly edge-on and an exactly head-on plate give finite forces
@@ -577,6 +649,17 @@ classdef tNgfKernel < NgfTestCase
         function accommodationMetamorphic(tc)
             sp = zeros(8, 4); T = 900 * ones(1, 4);
             tc.verifyEqual(NonGravForces.kernel.accommodation("fixed", sp, T, 'Alpha', 0.85), NonGravForces.kernel.accommodation("fixed", sp, T, 'Alpha', 0.85 * ones(1, 4)), 'scalar and expanded Alpha agree bitwise');
+            % Both environment models see the atomic oxygen only through n_O T: doubling n_O and halving T changes nothing,
+            % and the coverage rises monotonically with n_O. The substrate coefficient depends on the composition only.
+            [~, sp8, T8] = tc.gas(4);
+            sp2 = sp8; sp2(2, :) = 2 * sp8(2, :);
+            a1 = NonGravForces.kernel.accommodation("pilinski2010", sp8, T8); a2 = NonGravForces.kernel.accommodation("pilinski2010", sp2, T8 / 2);
+            tc.verifyBoundAndRecord("pilinski2010 depends on n_O T only", max(abs(a1.alpha - a2.alpha)), 4 * eps, "-", "a power of two moved between two factors of one product");
+            w1 = NonGravForces.kernel.accommodation("walker2014", sp8, T8, 'SurfaceMass_amu', 263.3223);
+            w2 = NonGravForces.kernel.accommodation("walker2014", sp2, T8, 'SurfaceMass_amu', 263.3223);
+            tc.verifyTrue(all(w2.coverage > w1.coverage), 'more atomic oxygen adsorbs more');
+            wT = NonGravForces.kernel.accommodation("walker2014", sp8, 2 * T8, 'SurfaceMass_amu', 263.3223);
+            tc.verifyEqual(wT.alphaSubstrate, w1.alphaSubstrate, 'the substrate coefficient does not see the temperature');
         end
         function dragPanelForceMetamorphic(tc)
             % density scaling by 2 doubles the force exactly; reversing v on the symmetric cube reverses the force; shadow 0 kills a plate

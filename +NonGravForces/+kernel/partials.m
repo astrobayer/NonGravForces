@@ -52,11 +52,11 @@ function [dF, info] = partials(what, wrt, macro, options)
 %   T_K               1xK     double  K       gas kinetic temperature (drag)
 %   Vrel_body         3xK     double  m/s     relative velocity, body frame (drag)
 %   Model             1x1     string  -       "sentman" | "maxwell" | "constantCd" (drag)
-%   Alpha             1x1|1xK double  -       accommodation coefficient (drag, kinetic models)
+%   Alpha             1x1|1xK double|struct -  accommodation coefficient or kernel.accommodation struct (drag, kinetic models)
 %   Tw_K              1x1|1xK double  K       wall temperature (drag, kinetic models)
 %   Cd                1x1     double  -       drag coefficient (drag, constantCd)
 %   SpecularFraction  1x1     double  -       specular fraction (drag, maxwell)
-%   Shadow            NxK     double  -       self-shadow fractions (drag), default all 1
+%   Shadow            NxK     double|struct -  geom.flowShadow struct or one fraction per plate and epoch (drag), held fixed; default none
 %   Sources           1x1     struct  -       source list (radiation), as env.radiationSources
 %   RadShadow         NxKxM   double  -       self-shadow fractions (radiation), default all 1
 %   Temperature_K     NxK     double  K       panel temperatures (thermal)
@@ -81,7 +81,7 @@ function [dF, info] = partials(what, wrt, macro, options)
 %
 % ERRORS
 %   NonGravForces:partials:inputMacro     macro is not a MacroModel
-%   NonGravForces:partials:unsupportedWrt the parameter is not defined for this force
+%   NonGravForces:partials:unsupportedWrt the parameter is not defined for this force (alpha of a two-state surface included)
 %   NonGravForces:partials:inputMissing   a name-value this combination needs was not given
 %   NonGravForces:partials:inputShape     an input has the wrong shape
 %   NonGravForces:gsiCoefficients:*       propagated from the coefficient model
@@ -108,11 +108,11 @@ arguments
     options.T_K double = []
     options.Vrel_body double = []
     options.Model string = string.empty
-    options.Alpha double = []
+    options.Alpha = []
     options.Tw_K double = []
     options.Cd double = []
     options.SpecularFraction double = []
-    options.Shadow double = []
+    options.Shadow = []
     options.Sources = []
     options.RadShadow double = []
     options.Temperature_K double = []
@@ -168,11 +168,8 @@ switch what
             NonGravForces.fail(unit, "inputShape", "Vrel_body must be 3xK and Rho 1xK -> got %s and %s", mat2str(size(vrel)), mat2str(size(options.Rho)));
         end
         shadow = options.Shadow;
-        if isempty(shadow), shadow = ones(N, K); end
-        if ~isequal(size(shadow), [N K])
-            NonGravForces.fail(unit, "inputShape", "Shadow must be NxK = %dx%d -> got %s", N, K, mat2str(size(shadow)));
-        end
-        % the force itself, for the derivatives that are proportional to it
+        % the force itself, for the derivatives that are proportional to it; dragPanelForce validates the
+        % shadow and accommodation forms, so they are checked once
         dragArgs = {'Model', model, 'Alpha', options.Alpha, 'Tw_K', options.Tw_K, 'Cd', options.Cd, ...
                     'SpecularFraction', options.SpecularFraction, 'Shadow', shadow};
         F = NonGravForces.kernel.dragPanelForce(macro, rho, options.Species, options.T_K, vrel, dragArgs{:});
@@ -192,6 +189,7 @@ end
 function [dF, info] = localCoefficientDerivative(unit, info, wrt, macro, F, options, model, vrel, K, N, shadow)
 %LOCALCOEFFICIENTDERIVATIVE d/dalpha and d/dspeed, which run through the gas-surface coefficients.
 if model == "constantCd"
+    % constantCd's force is linear in the dynamic pressure and in its beam fraction, which are inputs
     switch wrt
         case "alpha"
             dF = zeros(size(F));                          % constantCd has no accommodation coefficient
@@ -223,28 +221,53 @@ for k = 1:N
     tdir(:, k, :) = reshape(t, 3, 1, K);
 end
 theta = atan2(l, gamma);
-alpha = NonGravForces.kernel.accommodation("fixed", species, T_K, 'Alpha', options.Alpha);
+% the accommodation: a coefficient, or a two-state surface (dragPanelForce has validated both forms)
+if isstruct(options.Alpha)
+    alphaA = options.Alpha.alpha; coverage = options.Alpha.coverage; alphaS = options.Alpha.alphaSubstrate;
+else
+    acc = NonGravForces.kernel.accommodation("fixed", species, T_K, 'Alpha', options.Alpha);
+    alphaA = acc.alpha; coverage = []; alphaS = [];
+end
+if wrt == "alpha" && ~isempty(coverage)
+    NonGravForces.fail(unit, "unsupportedWrt", "alpha is not a parameter of a two-state surface (walker2014 computes its coverage and substrate coefficient) -> differentiate a fixed or pilinski2010 accommodation");
+end
+% the self-shadowing: flow ratios scale the parts, a plain fraction scales the whole force (the factors are
+% INPUTS here, held fixed, exactly as dragPanelForce takes them)
+flow = isstruct(shadow);
+beam = 1;
+if ~flow && ~isempty(shadow), beam = shadow; end
 Tw = options.Tw_K + zeros(1, K);
 mass = c.speciesMass / c.NA;
 sRatio = U ./ sqrt(2 * c.kB * T_K ./ mass(:));             % 8xK
-extra = {};
-if model == "maxwell", extra = {'SpecularFraction', options.SpecularFraction}; end
+extra = {'Derivatives', true, 'Provenance', false};
+if model == "maxwell", extra = [extra, {'SpecularFraction', options.SpecularFraction}]; end
 dCpm = zeros(N, K); dCtm = zeros(N, K);
 for j = 1:8
     rhoj = species(j, :) * mass(j);
     if ~any(rhoj > 0), continue; end
-    [~, ~, gi] = NonGravForces.kernel.gsiCoefficients(model, sRatio(j, :), theta, alpha, Tw, T_K, extra{:}, 'Derivatives', true);
+    if flow
+        fN = shadow.number(:, :, j); fP = shadow.normal(:, :, j); fT = shadow.tangential(:, :, j);
+    else
+        fN = 1; fP = 1; fT = 1;
+    end
+    [~, ~, gi] = NonGravForces.kernel.gsiCoefficients(model, sRatio(j, :), theta, alphaA, Tw, T_K, extra{:});
     switch wrt
         case "alpha"
-            dCpm = dCpm + rhoj .* gi.dCp_dalpha;
-            dCtm = dCtm + rhoj .* gi.dCtau_dalpha;
+            % alpha reaches only the re-emitted normal momentum, which scales with the number flux
+            dCpm = dCpm + rhoj .* (fN .* gi.dCp_dalpha);
+            dCtm = dCtm + rhoj .* (fT .* gi.dCtau_dalpha);
         case "speed"
+            dRe = gi.dCpReemitted_ds;
+            if ~isempty(coverage)
+                [~, ~, gs] = NonGravForces.kernel.gsiCoefficients(model, sRatio(j, :), theta, alphaS, Tw, T_K, extra{:});
+                dRe = coverage .* gi.dCpReemitted_ds + (1 - coverage) .* gs.dCpReemitted_ds;
+            end
             % s_j is proportional to U at fixed temperature, so ds_j/dU = s_j/U
-            dCpm = dCpm + rhoj .* gi.dCp_ds .* (sRatio(j, :) ./ U);
-            dCtm = dCtm + rhoj .* gi.dCtau_ds .* (sRatio(j, :) ./ U);
+            dCpm = dCpm + rhoj .* (fP .* gi.dCpIncident_ds + fN .* dRe) .* (sRatio(j, :) ./ U);
+            dCtm = dCtm + rhoj .* (fT .* gi.dCtau_ds) .* (sRatio(j, :) ./ U);
     end
 end
-scale = 0.5 * U.^2 .* A .* shadow;                         % NxK, the same factor dragPanelForce uses
+scale = 0.5 * U.^2 .* A .* beam;                           % NxK, the same factor dragPanelForce uses
 dF = zeros(3, N, K);
 for k = 1:N
     normalPart = Nrm(:, k) .* (-scale(k, :) .* dCpm(k, :));

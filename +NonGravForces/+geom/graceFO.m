@@ -45,12 +45,11 @@ function mm = graceFO(satellite, options)
 %                                    false: absVis 0.72 with diffVis 0.23 so
 %                                    that the budget closes (the printed 0.30
 %                                    would sum to 1.07 - a handbook defect).
-%   Alpha      1x1  double -     energy accommodation default, 0.85
-%                                (March et al. 2019, 400-500 km)
 %
 % OUTPUT ARGUMENTS
 %   mm         1x1  NonGravForces.geom.MacroModel with .inertia (Table 4),
-%                   .V (plate polygons), .heatCapacity
+%                   .V (plate polygons), .heatCapacity, .mass_kg (the handbook
+%                   mass of that satellite, NonGravForces.const.graceFO)
 %
 % ERRORS
 %   MATLAB:validators:mustBeMember   satellite is not "C" or "D" (arguments block)
@@ -80,7 +79,6 @@ function mm = graceFO(satellite, options)
 arguments
     satellite (1,1) string {mustBeMember(satellite, ["C","D"])}
     options.SolarArrayOperating (1,1) logical = true
-    options.Alpha (1,1) double {mustBeBetween(options.Alpha, 0, 1)} = 0.85
 end
 s50 = 0.766044; c50 = 0.642787;
 if options.SolarArrayOperating, aV = 0.65; dV = 0.30; else, aV = 0.72; dV = 0.23; end
@@ -120,7 +118,7 @@ polys{7} = [ -Lx/2, Lx/2, Lx/2, -Lx/2; -yNadir, -yNadir, yNadir, yNadir; Hz/2 * 
 polys{8} = [ -Lx/2, Lx/2, Lx/2, -Lx/2;  Wt/2,  Wt/2, -Wt/2, -Wt/2; -Hz/2 * ones(1, 4) ];       % zenith (-z)
 n = size(T, 1);
 panels = repmat(struct('name',"",'kind',"plate",'area_m2',0,'normal',zeros(3,1),'centroid_m',zeros(3,1), ...
-    'absVis',0,'specVis',0,'diffVis',0,'emisIR',0,'specIR',0,'diffIR',0,'alpha',options.Alpha,'group',"", ...
+    'absVis',0,'specVis',0,'diffVis',0,'emisIR',0,'specIR',0,'diffIR',0,'group',"", ...
     'vertices_m',zeros(3,0),'heatCapacity_J_m2K',NaN), 1, n);
 for k = 1:n
     panels(k).name = T{k,1}; panels(k).area_m2 = T{k,2}; panels(k).normal = T{k,3};
@@ -138,7 +136,8 @@ else                     % Table 4, FM2
     I = [109.635, -0.497,  0.359; -0.497, 579.759, 0.057; 0.359, 0.057, 648.795];
     cg_m = [-0.285;  1.346; 0.506] * 1e-3;   cg2acc_m = [-0.06; -0.01; -0.04] * 1e-3;
 end
-mm = NonGravForces.geom.MacroModel(panels, 'Name', "GRACE-" + satellite, 'Inertia', I, ...
+c = NonGravForces.const();
+mm = NonGravForces.geom.MacroModel(panels, 'Name', "GRACE-" + satellite, 'Inertia', I, 'Mass_kg', c.graceFO.("mass" + satellite), ...
     'CentreOfMass', cg_m, 'ProofMassOffset', cg2acc_m, ...
     'Reference', "Wen et al. 2019, JPL D-56935, Tables 4-5; polygons from Figs 2-3; heat capacities Wöske 2019 Table 6.1");
 end

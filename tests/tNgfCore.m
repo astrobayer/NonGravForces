@@ -55,6 +55,17 @@ classdef tNgfCore < NgfTestCase
             tc.verifyErrorId(@() NonGravForces.Options("fast", "drag.density", "nrlmsis"), 'NonGravForces:Options:inputValue');
             tc.verifyErrorId(@() NonGravForces.Options("fast", "drag.alpha", 1.5), 'NonGravForces:Options:inputValue');
             tc.verifyErrorId(@() NonGravForces.Options("fast", "drag.alpha"), 'NonGravForces:Options:inputField');
+            % LP-C F4/F5: every admissible value evaluates, so what cannot is refused here, by name
+            for bad = {{"drag.gsi", "cll"}, {"drag.gsi", "schamberg"}, {"drag.density", "dtm2020"}, {"drag.density", "jb2008"}, ...
+                       {"drag.accommodation", "sesam"}, {"thermal.model", "foldedIntoSrp"}, {"partials.method", "complexStep"}}
+                tc.verifyErrorId(@() NonGravForces.Options("standard", bad{1}{:}), 'NonGravForces:Options:inputValue');
+            end
+            tc.verifyErrorId(@() NonGravForces.Options("standard", "erp.anisotropy", "adm"), 'NonGravForces:Options:inputField');
+            tc.verifyErrorId(@() NonGravForces.Options("standard", "geom.lutResolution", 16.5), 'NonGravForces:Options:inputValue');
+            p2 = NonGravForces.Options("precise");
+            tc.verifyEqual([p2.drag.accommodation, p2.drag.density, p2.geom.selfShadow], ["walker2014", "msis21", "lut"]);
+            tc.verifyEqual(p2.drag.surfaceMass_amu, 263.3223); tc.verifyEmpty(p2.drag.alpha); tc.verifyEqual(p2.geom.lutResolution, 32);
+            tc.verifyEmpty(o.set("drag.specularFraction", 0.1).set("drag.specularFraction", []).drag.specularFraction, 'an optional value clears back to empty');
             o2 = o.set("srp.tsi", 1367);
             tc.verifyEqual(o2.srp.tsi, 1367);
             tc.verifyEqual(o.srp.tsi, 1361, 'value semantics: the original must not change');
@@ -117,7 +128,7 @@ classdef tNgfCore < NgfTestCase
         function optionsRobustness(tc)
             % Empty override list and repeated set() are well defined.
             o = NonGravForces.Options("standard");
-            o = o.set("drag.gsi", "cll"); o = o.set("drag.gsi", "sentman");
+            o = o.set("drag.gsi", "maxwell"); o = o.set("drag.gsi", "sentman");
             tc.verifyEqual(o.drag.gsi, "sentman");
             s = o.toStruct(); tc.verifyTrue(isstruct(s) && isfield(s, 'drag'));
         end
