@@ -9,5 +9,5 @@
 %   readMAG1B            - MAG1B reader: measured field (SI) and magnetorquer branch and net currents
 %   massModel            - Spacecraft mass model: handbook constant or MAS1B-driven variable mass
 %   spaceWeather         - Space-weather provider with query(epoch): F10.7 F30 S/M/Y10.7 Ap Kp Dst
-%   importCERES          - CERES SYN1deg/EBAF netCDF import into radiance grids [stub]
+%   importCERES          - CERES EBAF TOA monthly fluxes (obs4MIPs netCDF) as lat x lon x month grids
 %   igrfCoefficients     - IGRF-14 coefficient loader with the model's own interpolation and SV rule

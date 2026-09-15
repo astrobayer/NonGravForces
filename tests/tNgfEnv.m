@@ -19,6 +19,8 @@ classdef tNgfEnv < NgfTestCase
         msisInput    % struct of 1x17 inputs from nrlmsise-00_test.c
         msis21In     % 200x9 NRL inputs: iyd sec alt glat glong stl f107a f107 Ap
         msis21Ref    % 200x11 NRL outputs (cgs): He O N2 O2 Ar rho H N O* NO T
+        cer          % io.importCERES of the EBAF excerpt in data/ceres (2019-12, 2020-01)
+        igrf         % io.igrfCoefficients of data/igrf/igrf14coeffs.txt at 2020.0
         eclipse      % oracle table
         knocke       % oracle table
         au
@@ -60,6 +62,9 @@ classdef tNgfEnv < NgfTestCase
             tc.assertSize(tc.msis21Ref, [200 20], 'msis2.1_test_ref_dp.txt repeats the 9 inputs and prints 11 outputs');
             tc.assertEqual(tc.msis21Ref(:, 1:2), tc.msis21In(:, 1:2), 'the reference rows are the input rows, in order');
             tc.msis21Ref = tc.msis21Ref(:, 10:20);
+            tc.igrf = NonGravForces.io.igrfCoefficients(fullfile(tc.root, 'data', 'igrf', 'igrf14coeffs.txt'), 'Epoch', 2020.0);
+            tc.cer = NonGravForces.io.importCERES(string(fullfile(tc.root, 'data', 'ceres', ...
+                ["rsut" "rlut" "rsdt"] + "_mon_CERES-EBAF-4-2-1_NASA-GISS_gn_201912-202001.nc")));
         end
     end
     methods
@@ -86,6 +91,18 @@ classdef tNgfEnv < NgfTestCase
             lla = [deg2rad(X(:, 4))'; deg2rad(X(:, 5))'; X(:, 3)' * 1e3];
             d = struct('f107', X(:, 8)', 'f107a', X(:, 7)', 'ap', X(:, 9)');
             [rho, sp, T] = NonGravForces.env.density("msis21", ep, lla, [], 'Drivers', d, varargin{:});
+        end
+        function c = syntheticCeres(tc, fields)
+            %SYNTHETICCERES The excerpt's grid and months with caller-defined fields: fields(lat, lon, month) -> [rsut rlut rsdt].
+            c = tc.cer;
+            [LON, LAT] = meshgrid(c.lon_deg, c.lat_deg);
+            for m = 1:numel(c.mjd)
+                [a, b, d] = fields(LAT, LON, m);
+                c.rsut(:, :, m) = single(a); c.rlut(:, :, m) = single(b); c.rsdt(:, :, m) = single(d);
+            end
+        end
+        function R = eyes(~, K)
+            R = repmat(eye(3), 1, 1, K);
         end
         function [ep, r, q, eop, v] = sampleState(tc)
             eop = referenceSystem.readEop(fullfile(tc.root, 'data', 'eop', 'finals2000A_2019-09_2020-03.all'));
@@ -156,6 +173,24 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyError(@() NonGravForces.env.density("jb2008", ep, lla, [], 'Drivers', d), 'MATLAB:validators:mustBeMember');
             tc.verifyError(@() NonGravForces.env.density("dtm2020", ep, lla, [], 'Drivers', d), 'MATLAB:validators:mustBeMember');
         end
+        function magneticFieldContract(tc)
+            r = [[6861.2e3; 0; 0] [0; 5e6; 4.8e6]];
+            [B, info] = NonGravForces.env.magneticField(tc.igrf, r);
+            tc.verifySize(B, [3 2]); tc.verifyEqual(info.itrs_T, B); tc.verifySize(info.northEastDown_T, [3 2]);
+            tc.verifyEqual(info.intensity_T, vecnorm(B)); tc.verifyEqual(info.maxDegree, 13); tc.verifyEqual(info.year, 2020.0);
+            tc.verifyTrue(all(info.intensity_T > 2e-5 & info.intensity_T < 6e-5), 'tens of microtesla at LEO');
+            tc.verifyEqual(info.provenance.unit, "env.magneticField");
+            M = @(varargin) NonGravForces.env.magneticField(varargin{:});
+            tables = NonGravForces.io.igrfCoefficients(fullfile(tc.root, 'data', 'igrf', 'igrf14coeffs.txt'));
+            tc.verifyErrorId(@() M(tables, r), 'NonGravForces:magneticField:inputCoefficients');
+            tc.verifyErrorId(@() M(tc.igrf, r(1:2, :)), 'NonGravForces:magneticField:inputShape');
+            tc.verifyErrorId(@() M(tc.igrf, r, 'Rotation', eye(2)), 'NonGravForces:magneticField:inputShape');
+            tc.verifyErrorId(@() M(tc.igrf, r, 'MaxDegree', 14), 'NonGravForces:magneticField:inputRange');
+            tc.verifyErrorId(@() M(tc.igrf, r, 'MaxDegree', 0), 'NonGravForces:magneticField:inputRange');
+            tc.verifyErrorId(@() M(tc.igrf, [r zeros(3, 1)]), 'NonGravForces:magneticField:inputRange');
+            tc.verifyErrorId(@() M(tc.igrf, [NaN; 0; 7e6]), 'NonGravForces:magneticField:numericNaN');
+            tc.verifyErrorId(@() M(tc.igrf, r, 'Rotation', nan(3)), 'NonGravForces:magneticField:numericNaN');
+        end
         function eclipseFactorContract(tc)
             % at 490 km the penumbra spans 67.97..68.51 deg from the anti-Sun point (b -/+ a); 68.25 is inside it
             r = [-(6378137 + 490e3) * cosd([0 68.25 90]); 0 0 0; (6378137 + 490e3) * sind([0 68.25 90])]; s = [tc.au; 0; 0];
@@ -186,7 +221,20 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyErrorId(@() NonGravForces.env.earthRadiance("knocke", ep, [0 24], r), 'NonGravForces:earthRadiance:inputGrid');
             tc.verifyErrorId(@() NonGravForces.env.earthRadiance("knocke", ep, [12 24], r(:, 1)), 'NonGravForces:earthRadiance:inputShape');
             tc.verifyErrorId(@() NonGravForces.env.earthRadiance("knocke", ep, [12 24], [r(:, 1) [1e6; 0; 0]]), 'NonGravForces:earthRadiance:inputRange');
-            tc.verifyErrorId(@() NonGravForces.env.earthRadiance("ceres", ep, [12 24], r), 'NonGravForces:earthRadiance:notImplemented');
+            % ceres: the same cap tiles on the 20 km reference sphere, the measured fields in place of Knocke's
+            [tC, rC] = deal(NonGravForces.env.earthRadiance("ceres", ep, [12 24], r, 'Ceres', tc.cer, 'RotationItrsToGcrs', tc.eyes(2)), r);
+            tc.verifyEqual(tC.M, 288); tc.verifySize(tC.albedo, [288 2]); tc.verifySize(tC.exitanceLw_W_m2, [288 2]); tc.verifyEmpty(tC.emissivity);
+            tc.verifyEqual(tC.radius_m, referenceSystem.ellipsoidParameters("WGS84").a + 20e3);
+            tc.verifyEqual(tC.ceres.product, "CERES-EBAF-4-2-1"); tc.verifySize(tC.ceres.months, [2 2]); tc.verifySize(tC.ceres.timeWeight, [1 2]);
+            tc.verifyTrue(all(tC.exitanceLw_W_m2(:) > 100 & tC.exitanceLw_W_m2(:) < 400) && all(tC.albedo(:) >= 0));
+            tc.verifyEmpty(t.exitanceLw_W_m2); tc.verifyEmpty(p.exitanceLw_W_m2);
+            E = @(varargin) NonGravForces.env.earthRadiance(varargin{:});
+            tc.verifyErrorId(@() E("ceres", ep, [12 24], rC), 'NonGravForces:earthRadiance:inputCeres');
+            tc.verifyErrorId(@() E("ceres", ep, [12 24], rC, 'Ceres', tc.cer), 'NonGravForces:earthRadiance:inputCeres');
+            tc.verifyErrorId(@() E("ceres", ep, [12 24], rC, 'Ceres', tc.cer, 'RotationItrsToGcrs', tc.eyes(3)), 'NonGravForces:earthRadiance:inputCeres');
+            tc.verifyErrorId(@() E("ceres", ep, [12 24], rC, 'Ceres', rmfield(tc.cer, 'rsdt'), 'RotationItrsToGcrs', tc.eyes(2)), 'NonGravForces:earthRadiance:inputCeres');
+            tc.verifyErrorId(@() E("knocke", ep, [12 24], rC, 'Ceres', tc.cer), 'NonGravForces:earthRadiance:inputCeres');
+            tc.verifyErrorId(@() E("ceres", referenceSystem.mjdToEpoch([58870; 58849.5], "UTC"), [12 24], rC, 'Ceres', tc.cer, 'RotationItrsToGcrs', tc.eyes(2)), 'NonGravForces:earthRadiance:dataRange');
         end
         function radiationSourcesContract(tc)
             [ep, r, q] = tc.sampleState();
@@ -202,6 +250,13 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyErrorId(@() NonGravForces.env.radiationSources(ep5, r5, q5, NonGravForces.Options("standard", "sun.source", "rs.de440")), 'NonGravForces:radiationSources:depKernel');
             tc.verifyErrorId(@() NonGravForces.env.radiationSources(ep5, r5, q5, NonGravForces.Options("standard"), 'Sun', [tc.au; 0; 0]), 'NonGravForces:radiationSources:inputShape');
             tc.verifyError(@() NonGravForces.env.radiationSources(ep5, r5, q5, struct()), 'MATLAB:validation:UnableToConvert');
+            % ceres: 1 + 2 x tiles sources as for knocke; the CERES inputs are refused where nothing reads them
+            oC = NonGravForces.Options("standard", "erp.backend", "ceres");
+            sC = NonGravForces.env.radiationSources(ep5, r5, q5, oC, 'Ceres', tc.cer, 'RotationItrsToGcrs', tc.eyes(5));
+            tc.verifyEqual(sC.M, 1 + 2 * 288); tc.verifyTrue(all(sC.P(:) >= 0)); tc.verifyEqual(sC.meta.erpBackend, "ceres");
+            tc.verifyErrorId(@() NonGravForces.env.radiationSources(ep5, r5, q5, oC), 'NonGravForces:earthRadiance:inputCeres');
+            tc.verifyErrorId(@() NonGravForces.env.radiationSources(ep5, r5, q5, NonGravForces.Options("standard", "erp.backend", "none"), 'Ceres', tc.cer), 'NonGravForces:radiationSources:inputCeres');
+            tc.verifyErrorId(@() NonGravForces.env.radiationSources(ep5, r5, q5, NonGravForces.Options("standard"), 'Ceres', tc.cer, 'RotationItrsToGcrs', tc.eyes(5)), 'NonGravForces:earthRadiance:inputCeres');
         end
         function buildMexContract(tc)
             % 'Target' names one gateway and the report is scalar; the default "all" returns one
@@ -283,6 +338,77 @@ classdef tNgfEnv < NgfTestCase
             ratio = abs(mine21 - ref21) ./ allowed;
             ratio(missing) = 0;
             tc.verifyBoundAndRecord("msis21 vs NRL msis2.1_test_ref_dp (200 cases, 10 columns), in half last printed digits", max(ratio, [], 'all'), 1, "-", "the package's own statement: double precision reproduces its reference exactly; rounding of the print only");
+        end
+        function radiationSourcesCeresReference(tc)
+            % Oracle: tools/pyxcheck/ceres_check.py integrates the SAME continuous CERES field (geodetic bilinear in space,
+            % linear in time, albedo = SWup/SWdown on the instantaneous insolation, longwave as given, on the 20 km
+            % reference sphere) over the visible cap by Gauss-Legendre quadrature to < 2e-5, written from a specification
+            % by an agent that did not open this toolbox (T9). Eight cases: sub-solar, terminator, polar summer and night,
+            % over the pole, the longitude seam, a node time, the night side.
+            % THE CLAIM IS IDENTITY OF THE MODEL, and the tile sum converges to it at second order in the ring width. So
+            % the Richardson extrapolation of [24 48] and [48 96] must meet the oracle to its own quadrature error, and
+            % the ratio of the two tiling errors must be 4; a model that differed would leave a floor and break the ratio.
+            T = readtable(fullfile(tc.root, 'tools', 'pyxcheck', 'ceres_oracle.csv'), 'TextType', 'string');
+            err = zeros(height(T), 4, 2);                        % case x [albSum lwSum albVec lwVec] x grid
+            for g = 1:2
+                grid = [24 48] * g;
+                o = NonGravForces.Options("standard", "erp.backend", "ceres", "erp.grid", grid, "srp.eclipse", "cylindrical");
+                for i = 1:height(T)
+                    ep = referenceSystem.datetimeToEpoch(datetime(T.epoch_utc(i), 'InputFormat', 'yyyy-MM-dd''T''HH:mm:ss''Z'''), "UTC");
+                    r = [T.rx_m(i); T.ry_m(i); T.rz_m(i)];
+                    rs = [T.sx(i); T.sy(i); T.sz(i)] * tc.au * sqrt(o.srp.tsi / T.S_W_m2(i));   % so that tsi (au/|rs|)^2 = S of the case
+                    src = NonGravForces.env.radiationSources(ep, r, [1; 0; 0; 0], o, 'Sun', rs, 'Ceres', tc.cer, 'RotationItrsToGcrs', eye(3));
+                    Mt = (src.M - 1) / 2; ia = 2:1+Mt; il = 2+Mt:src.M;
+                    scale = T.E_alb_sum(i) + T.E_lw_sum(i);      % the total Earth irradiance: albedo alone can be exactly 0
+                    err(i, :, g) = [sum(src.P(ia)) * tc.cLight - T.E_alb_sum(i), sum(src.P(il)) * tc.cLight - T.E_lw_sum(i), ...
+                        norm(src.dir(:, ia) * src.P(ia) * tc.cLight - [T.E_alb_x(i); T.E_alb_y(i); T.E_alb_z(i)]), ...
+                        norm(src.dir(:, il) * src.P(il) * tc.cLight - [T.E_lw_x(i); T.E_lw_y(i); T.E_lw_z(i)])] / scale;
+                end
+            end
+            tc.verifyBoundAndRecord("ceres Earth sources vs the oracle, tiling error at [24 48] (precise preset)", max(abs(err(:, :, 1)), [], 'all'), 1e-2, "-", ...
+                "second-order tiling error of the cap; measured 3.5e-3 of the total Earth irradiance on 2026-09-15");
+            rich = (4 * err(:, 1:2, 2) - err(:, 1:2, 1)) / 3;    % the scalar sums, extrapolated to zero ring width
+            tc.verifyBoundAndRecord("ceres Earth sources, Richardson-extrapolated tile sum vs the oracle", max(abs(rich), [], 'all'), 1e-4, "-", ...
+                "the oracle's own quadrature error (1.7e-5) plus the next term of the tiling series; measured 5.6e-5 on 2026-09-15");
+            lw = abs(err(:, 2, :));
+            tc.verifyBoundAndRecord("ceres longwave tiling error ratio [24 48] / [48 96], departure from 4", max(abs(lw(:, 1) ./ lw(:, 2) - 4)), 0.5, "-", ...
+                "second-order convergence to the same integral: the ratios measured 3.80 to 4.20 on 2026-09-15");
+            tc.verifyTrue(any(T.w_t == 0) && any(T.w_t == 1), 'the oracle must exercise both month nodes exactly');
+        end
+        function magneticFieldReference(tc)
+            % Oracle 1: tools/pyxcheck/igrf_check.py, an independent standard-library synthesis written from the IGRF
+            % description by an agent that did not open this toolbox (T9), for 12 cases: both poles exactly, the dipole
+            % alone, the time rule inside a five-year step and in the secular-variation extrapolation, 1900, and a
+            % geostationary radius. Each case takes its coefficients from io.igrfCoefficients at the case's year.
+            T = readtable(fullfile(tc.root, 'tools', 'pyxcheck', 'igrf_oracle.csv'));
+            worst = 0;
+            for i = 1:height(T)
+                c = NonGravForces.io.igrfCoefficients(fullfile(tc.root, 'data', 'igrf', 'igrf14coeffs.txt'), 'Epoch', T.year(i));
+                u = [cosd(T.lat_deg(i)) * cosd(T.lon_deg(i)); cosd(T.lat_deg(i)) * sind(T.lon_deg(i)); sind(T.lat_deg(i))];
+                [B, info] = NonGravForces.env.magneticField(c, T.r_km(i) * 1e3 * u, 'MaxDegree', T.N(i));
+                want = [T.Bx_nT(i); T.By_nT(i); T.Bz_nT(i)] * 1e-9;
+                wantNED = [T.X_nT(i); T.Y_nT(i); T.Z_nT(i)] * 1e-9;
+                worst = max(worst, norm(B - want) / norm(want));
+                if abs(T.lat_deg(i)) < 90
+                    % AT A POLE north and east are not defined by the position: the oracle names them by the case's
+                    % longitude, a position on the axis carries none. The Cartesian vector is compared there instead.
+                    worst = max(worst, norm(info.northEastDown_T - wantNED) / norm(wantNED));
+                end
+            end
+            tc.verifyBoundAndRecord("magneticField vs the independent synthesis (12 cases, Cartesian; NED off the poles)", worst, 1e-13, "-", ...
+                "two routes to the same series of at most 104 terms; measured 8.7e-16 on 2026-09-15");
+            % Oracle 2: the GRACE-C magnetometer (MAG1B, raw) over the first five minutes of 2020-01-01 at the GNV1B
+            % positions. The model is the main field only and the instrument is uncalibrated, so the claim is the
+            % intensity to a few parts per thousand; measured 0.9961 to 0.9985 on 2026-09-15.
+            S = fullfile(tc.root, 'data', 'samples');
+            [epG, rI] = NonGravForces.io.readGNV1B(fullfile(S, 'GNV1B_2020-01-01_C_04.txt'), 'Frame', "ITRS");
+            [epM, fld] = NonGravForces.io.readMAG1B(fullfile(S, 'MAG1B_2020-01-01_C_04.txt'));
+            [tf, loc] = ismember(round(epM.sec(:)'), epG.sec(:)');
+            tc.assertGreaterThan(nnz(tf), 500, 'MAG1B and GNV1B excerpts must overlap');
+            [~, info] = NonGravForces.env.magneticField(tc.igrf, rI(:, loc(tf)));
+            q = fld.magnitude_T(tf) ./ info.intensity_T;
+            tc.verifyBoundAndRecord("GRACE-C MAG1B intensity / IGRF-14 intensity, largest departure from 1", max(abs(q - 1)), 0.012, "-", ...
+                "main field only against a raw magnetometer; measured 3.9e-3 on 2026-09-15, bound 3x");
         end
         function eclipseFactorReference(tc)
             % Oracle: pure-Python numerical disc-overlap integration (eclipse_check.py); cylindrical bitwise.
@@ -393,6 +519,18 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyEqual(rho(1), 3e-12);
             tc.verifyBoundAndRecord("exponential density one scale height", abs(rho(2) - 3e-12 / exp(1)) / 3e-12, 4 * eps, "rel", "exp and a multiply");
         end
+        function magneticFieldPrecision(tc)
+            % Degree 1 IS a dipole: B = mu0/(4 pi) [3 (m . rhat) rhat - m] / r^3 with the moment vector
+            % m = (4 pi a^3 / mu0) [g11; h11; g10], so B = (a/r)^3 [3 (d . rhat) rhat - d], d = [g11; h11; g10].
+            g = tc.igrf.g * 1e-9; h = tc.igrf.h * 1e-9;
+            d = [g(2, 2); h(2, 2); g(2, 1)];
+            r = [[6861.2e3; 0; 0] [1e6; -3e6; 6e6] [0; 0; -7e6] [42164e3; 1; 2]];
+            B = NonGravForces.env.magneticField(tc.igrf, r, 'MaxDegree', 1);
+            rh = r ./ vecnorm(r);
+            want = (6371.2e3 ./ vecnorm(r)).^3 .* (3 * (d' * rh) .* rh - d);
+            tc.verifyBoundAndRecord("magneticField degree 1 vs the closed-form dipole", max(vecnorm(B - want) ./ vecnorm(want)), 1e-14, "-", ...
+                "the same three coefficients through two formulas, one of them the exact pole");
+        end
         function eclipseFactorPrecision(tc)
             % Exact limits of the conical model: full light 1, umbra 0, annular 1 - b^2/a^2 (Sun larger than the body).
             s = [tc.au; 0; 0]; R = referenceSystem.ellipsoidParameters("WGS84").a; Rs = NonGravForces.const().Rsun;
@@ -408,6 +546,24 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyBoundAndRecord("SOLAARS-CF umbra limit", nuL(1), 1e-12, "-", "three saturated sigmoids");
             tc.verifyBoundAndRecord("SOLAARS-CF full-light limit", 1 - nuL(2), 1e-12, "-", "");
             tc.verifyEqual(nuL(3), 1, 'day side');
+        end
+        function earthRadianceCeresPrecision(tc)
+            % A field LINEAR in latitude is reproduced exactly by bilinear interpolation, and one linear in time by the
+            % time blend, so every tile must carry the closed form at the geodetic latitude it was read at -- which this
+            % test forms itself from the tile normal with tan(phi_d) = tan(phi_c)/(1 - f)^2 (poleward of +-89.5 deg the
+            % grid is held constant, and so is the closed form).
+            ell = referenceSystem.ellipsoidParameters("WGS84");
+            c = tc.syntheticCeres(@(LAT, LON, m) deal(100 + 0.5 * LAT + 10 * m, 200 + LAT .* 0 + 0 * LON, 400 + 0 * LAT));
+            ep = referenceSystem.mjdToEpoch([58840; 58850.5], "UTC");
+            r = [[6.87e6; 1e5; 2e6] [0; 1e3; 6.9e6]];
+            t = NonGravForces.env.earthRadiance("ceres", ep, [12 24], r, 'Ceres', c, 'RotationItrsToGcrs', tc.eyes(2));
+            n = t.n;
+            latD = atan2d(squeeze(n(3, :, :)), (1 - ell.f)^2 * squeeze(hypot(n(1, :, :), n(2, :, :))));
+            wt = ([58840 58850.5] - c.mjd(1)) / (c.mjd(2) - c.mjd(1));
+            want = (100 + 0.5 * min(max(latD, -89.5), 89.5) + 10 * (1 + wt)) / 400;
+            tc.verifyBoundAndRecord("ceres albedo of a latitude-linear field vs its closed form", max(abs(t.albedo - want), [], 'all'), 1e-13, "-", "bilinear and linear blends reproduce a linear field; rounding of single-precision nodes exactly representable");
+            tc.verifyBoundAndRecord("ceres longwave of a constant field", max(abs(t.exitanceLw_W_m2 - 200), [], 'all'), 1e-12, "W/m^2", "a blend of equal values");
+            tc.verifyBoundAndRecord("ceres tile latitude vs the geodetic formula", max(abs(rad2deg(t.lat_rad) - latD), [], 'all'), 1e-12, "deg", "the same formula");
         end
         function earthRadiancePrecision(tc)
             % Cap area: sum of the tiles equals 2 pi R^2 (1 - cos alpha_max) (measured 4e-16); tile normals unit.
@@ -455,6 +611,14 @@ classdef tNgfEnv < NgfTestCase
                 tc.verifyEqual(rho21(i), rho1); tc.verifyEqual(sp21(:, i), sp1); tc.verifyEqual(T21(:, i), T1);
             end
         end
+        function magneticFieldVectorization(tc)
+            r = [[6861.2e3; 0; 0] [1e6; -3e6; 6e6] [0; 0; -7e6] [3e6; 3e6; 5.5e6]];
+            M = referenceSystem.rotationFromQuaternion([cos([0.1 0.5 0.9 1.3]); sin([0.1 0.5 0.9 1.3]); zeros(2, 4)]);
+            B = NonGravForces.env.magneticField(tc.igrf, r, 'Rotation', M);
+            for k = 1:4
+                tc.verifyEqual(NonGravForces.env.magneticField(tc.igrf, r(:, k), 'Rotation', M(:, :, k)), B(:, k), sprintf('column %d batched vs alone', k));
+            end
+        end
         function eclipseFactorVectorization(tc)
             E = tc.eclipse; r = [E.rx E.ry E.rz]'; s = [E.sx E.sy E.sz]';
             nuAll = NonGravForces.env.eclipseFactor(r, s);
@@ -463,6 +627,16 @@ classdef tNgfEnv < NgfTestCase
             nuSAll = NonGravForces.env.eclipseFactor(r, s, 'Model', "solaarsCF", 'EclipticNormal', [0; 0; 1]);
             oneS = arrayfun(@(k) NonGravForces.env.eclipseFactor(r(:, k), s(:, k), 'Model', "solaarsCF", 'EclipticNormal', [0; 0; 1]), 1:size(r, 2));
             tc.verifyEqual(nuSAll, oneS);
+        end
+        function earthRadianceCeresVectorization(tc)
+            ep = referenceSystem.mjdToEpoch([58835.5; 58849.1; 58860.9], "UTC"); r = [[6.88e6; 0; 0] [0; 3e6; 6.2e6] [4e6; -4e6; 4e6]];
+            R = referenceSystem.rotationFromQuaternion([cos([0.1 0.7 2.1]); zeros(2, 3); sin([0.1 0.7 2.1])]);
+            t = NonGravForces.env.earthRadiance("ceres", ep, [12 24], r, 'Ceres', tc.cer, 'RotationItrsToGcrs', R);
+            for k = 1:3
+                epk = ep; epk.day = ep.day(k); epk.sec = ep.sec(k);
+                t1 = NonGravForces.env.earthRadiance("ceres", epk, [12 24], r(:, k), 'Ceres', tc.cer, 'RotationItrsToGcrs', R(:, :, k));
+                tc.verifyEqual(t.albedo(:, k), t1.albedo); tc.verifyEqual(t.exitanceLw_W_m2(:, k), t1.exitanceLw_W_m2); tc.verifyEqual(t.lat_rad(:, k), t1.lat_rad);
+            end
         end
         function earthRadianceVectorization(tc)
             ep = referenceSystem.mjdToEpoch([58849.5; 58900.25; 58950.1], "UTC"); r = [[6.88e6; 0; 0] [0; 0; 7e6] [4e6; 4e6; 4e6]];
@@ -533,6 +707,20 @@ classdef tNgfEnv < NgfTestCase
             q = NonGravForces.env.density("msis21", e490, l490, sw) ./ NonGravForces.env.density("msis00", e490, l490, sw);
             tc.verifyBoundAndRecord("msis21 / msis00 at 490 km on 2020-01-01, largest departure of the ratio from 1", max(abs(log(q))), log(2), "-", "two empirical models of the same thermosphere: a plausibility bound on the wiring (species order, units), not a model comparison");
         end
+        function magneticFieldRobustness(tc)
+            % The geographic poles are ordinary points: the field there is the limit from a microradian away.
+            rp = 6861.2e3;
+            for sgn = [1 -1]
+                Bpole = NonGravForces.env.magneticField(tc.igrf, [0; 0; sgn * rp]);
+                Bnear = NonGravForces.env.magneticField(tc.igrf, rp * [1e-6 * cos(0.7); 1e-6 * sin(0.7); sgn * sqrt(1 - 1e-12)]);
+                tc.verifyTrue(all(isfinite(Bpole)));
+                tc.verifyBoundAndRecord("magneticField at a pole vs 1 microradian off it (" + string(sgn) + ")", norm(Bpole - Bnear) / norm(Bpole), 1e-5, "-", ...
+                    "continuity: the horizontal gradient over 7 m of arc is below 1e-6 of the field");
+            end
+            % Far away the field falls as r^-3 and stays finite.
+            Bfar = NonGravForces.env.magneticField(tc.igrf, [1e9; 0; 0]);
+            tc.verifyTrue(all(isfinite(Bfar)) && norm(Bfar) < 1e-11);
+        end
         function eclipseFactorRobustness(tc)
             s = [tc.au; 0; 0]; r = [-(6378137 + 490e3) * cosd(68.25); 0; (6378137 + 490e3) * sind(68.25)];
             nu = NonGravForces.env.eclipseFactor(r, s); tc.verifyTrue(nu > 0 && nu < 1, 'penumbra point');
@@ -543,6 +731,23 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyErrorId(@() NonGravForces.env.eclipseFactor(r, [NaN; 0; 0]), 'NonGravForces:eclipseFactor:numericNaN');
             tc.verifyErrorId(@() NonGravForces.env.eclipseFactor(r, s, 'Moon', [1; 2]), 'NonGravForces:eclipseFactor:inputShape');
             tc.verifyEqual(NonGravForces.env.eclipseFactor(zeros(3, 0), s), zeros(1, 0), 'empty in, empty out');
+        end
+        function earthRadianceCeresRobustness(tc)
+            ep = referenceSystem.mjdToEpoch([58849.5; 58849.5], "UTC");
+            a = referenceSystem.ellipsoidParameters("WGS84").a;
+            % over the pole, and over the Arctic in polar night where the product's SWdown is 0: finite, albedo 0 there
+            r = [[0; 0; a + 490e3] [(a + 490e3) * cosd(80); 0; (a + 490e3) * sind(80)]];
+            t = NonGravForces.env.earthRadiance("ceres", ep, [12 24], r, 'Ceres', tc.cer, 'RotationItrsToGcrs', tc.eyes(2));
+            tc.verifyTrue(all(isfinite([t.albedo(:); t.exitanceLw_W_m2(:)])));
+            dark = rad2deg(t.lat_rad) > 88;
+            tc.verifyEqual(t.albedo(dark), zeros(nnz(dark), 1), 'no insolation in the month means albedo 0, not 0/0');
+            % below the 20 km reference level the cap is refused, although it is above the ellipsoid
+            tc.verifyErrorId(@() NonGravForces.env.earthRadiance("ceres", referenceSystem.mjdToEpoch(58849.5, "UTC"), [12 24], [a + 1e4; 0; 0], 'Ceres', tc.cer, 'RotationItrsToGcrs', eye(3)), 'NonGravForces:earthRadiance:inputRange');
+            % the last node is inside the held months, one second past it is not
+            eLast = referenceSystem.mjdToEpoch(tc.cer.mjd(end), "UTC");
+            tc.verifyWarningFree(@() NonGravForces.env.earthRadiance("ceres", eLast, [2 4], [7e6; 0; 0], 'Ceres', tc.cer, 'RotationItrsToGcrs', eye(3)));
+            ePast = referenceSystem.mjdToEpoch(tc.cer.mjd(end) + 1 / 86400, "UTC");
+            tc.verifyErrorId(@() NonGravForces.env.earthRadiance("ceres", ePast, [2 4], [7e6; 0; 0], 'Ceres', tc.cer, 'RotationItrsToGcrs', eye(3)), 'NonGravForces:earthRadiance:dataRange');
         end
         function earthRadianceRobustness(tc)
             % Over the pole the tangent basis needs its fallback; a single tile; just above the surface.
@@ -625,6 +830,17 @@ classdef tNgfEnv < NgfTestCase
             rho = NonGravForces.env.density("exponential", ep, [0 0; 0 0; 400e3 340e3], [], 'Exponential', p);
             tc.verifyBoundAndRecord("exponential scale-height ratio", abs(rho(2) / rho(1) - exp(1)) / exp(1), 1e-14, "rel", "");
         end
+        function magneticFieldMetamorphic(tc)
+            % A dipole is even in position and falls as r^-3; the rotation option is the rotation of the Earth-fixed field.
+            r = [[6.8e6; 1e6; 2e6] [-3e6; 2e6; 5.5e6]];
+            B1 = NonGravForces.env.magneticField(tc.igrf, r, 'MaxDegree', 1);
+            tc.verifyBoundAndRecord("dipole field is even in position", max(vecnorm(NonGravForces.env.magneticField(tc.igrf, -r, 'MaxDegree', 1) - B1) ./ vecnorm(B1)), 1e-15, "-", "cos and sin of phi + pi and of pi - theta");
+            tc.verifyBoundAndRecord("dipole field falls as r^-3", max(vecnorm(NonGravForces.env.magneticField(tc.igrf, 2 * r, 'MaxDegree', 1) - B1 / 8) ./ vecnorm(B1)), 1e-15, "-", "an exact power of two");
+            M = referenceSystem.rotationFromQuaternion([cos([0.4 1.1]); zeros(1, 2); sin([0.4 1.1]); zeros(1, 2)]);
+            [Bm, info] = NonGravForces.env.magneticField(tc.igrf, r, 'Rotation', M);
+            tc.verifyEqual(Bm, reshape(pagemtimes(M, reshape(info.itrs_T, 3, 1, 2)), 3, 2), 'the rotation is applied to the Earth-fixed field and to nothing else');
+            tc.verifyBoundAndRecord("rotation preserves the intensity", max(abs(vecnorm(Bm) - info.intensity_T) ./ info.intensity_T), 1e-15, "-", "an orthogonal matrix");
+        end
         function eclipseFactorMetamorphic(tc)
             % Mirror symmetry across the Sun line (bitwise), rotation of the whole geometry (1e-15),
             % monotone through the penumbra along the oracle sweep.
@@ -655,6 +871,25 @@ classdef tNgfEnv < NgfTestCase
             nuCn = NonGravForces.env.eclipseFactor(rSw, sAu);
             [~, iS] = min(abs(nuS - 0.5)); [~, iC] = min(abs(nuCn - 0.5));
             tc.verifyBoundAndRecord("SOLAARS-CF vs conical half-shadow radius shift", abs(rE(iS) - rE(iC)), 5e4, "m", "refraction and oblateness; measured see last_run");
+        end
+        function earthRadianceCeresMetamorphic(tc)
+            % Turning the Earth by exactly one cell and shifting the fields by one column back leaves every tile value:
+            % the ITRS longitudes all move by 1 deg and read the same numbers (rounding of atan2 and of the weights).
+            ep = referenceSystem.mjdToEpoch([58845.3; 58858.7], "UTC"); r = [[6.87e6; 1e6; 5e5] [-2e6; 3e6; 5.8e6]];
+            R = referenceSystem.rotationFromQuaternion([cos([0.3 1.2]); zeros(2, 2); sin([0.3 1.2])]);
+            t1 = NonGravForces.env.earthRadiance("ceres", ep, [12 24], r, 'Ceres', tc.cer, 'RotationItrsToGcrs', R);
+            c2 = tc.cer;
+            for name = ["rsut" "rlut" "rsdt"], c2.(name) = circshift(tc.cer.(name), 1, 2); end
+            Rz = [cosd(1) -sind(1) 0; sind(1) cosd(1) 0; 0 0 1];
+            t2 = NonGravForces.env.earthRadiance("ceres", ep, [12 24], r, 'Ceres', c2, 'RotationItrsToGcrs', pagemtimes(R, Rz'));
+            tc.verifyBoundAndRecord("ceres: Earth turned by one cell, fields shifted by one column", ...
+                max(abs([t2.albedo(:) - t1.albedo(:); (t2.exitanceLw_W_m2(:) - t1.exitanceLw_W_m2(:)) / 300])), 1e-9, "-", ...
+                "a longitude moved by 1 deg through atan2 and back into a weight: 1e-13 in the weight, times a field gradient of at most a few W/m^2 per cell");
+            % The three fields are read independently: doubling SWup and SWdown together leaves the albedo, and the longwave.
+            c3 = tc.cer; c3.rsut = 2 * c3.rsut; c3.rsdt = 2 * c3.rsdt;
+            t3 = NonGravForces.env.earthRadiance("ceres", ep, [12 24], r, 'Ceres', c3, 'RotationItrsToGcrs', R);
+            tc.verifyBoundAndRecord("ceres albedo is invariant to a common scale of SWup and SWdown", max(abs(t3.albedo(:) - t1.albedo(:))), 1e-14, "-", "an exact power of two in numerator and denominator");
+            tc.verifyEqual(t3.exitanceLw_W_m2, t1.exitanceLw_W_m2, 'the longwave does not read the shortwave fields');
         end
         function earthRadianceMetamorphic(tc)
             % One period later the seasonal term repeats (1e-14); mirrored latitudes: the odd term cancels in the sum.
@@ -714,11 +949,27 @@ classdef tNgfEnv < NgfTestCase
             q21 = tc.speedRatio(@() NonGravForces.env.density("msis21", epSmall, llaBig(:, 1:8640), sw), @() NonGravForces.env.density("msis00", epSmall, llaBig(:, 1:8640), sw));
             tc.verifyBoundAndRecord("msis21 / msis00 time ratio, 8640 epochs", q21, 15, "-", "measured 4.8 on 2026-09-15; budget 3x");
         end
+        function magneticFieldSpeed(tc)
+            % Degree 13 over degree 1 for 86400 positions: 104 terms against 3 plus the shared Legendre setup.
+            % Measured see last_run; budget 3x the 2026-09-15 figure.
+            psi = linspace(0, 2 * pi, 86400); r = 6861.2e3 * [cos(psi) .* cos(0.3 * psi); sin(psi) .* cos(0.3 * psi); sin(0.3 * psi)];
+            q = tc.speedRatio(@() NonGravForces.env.magneticField(tc.igrf, r), @() NonGravForces.env.magneticField(tc.igrf, r, 'MaxDegree', 1));
+            tc.verifyBoundAndRecord("magneticField degree 13 / degree 1 time ratio, 86400 positions", q, 150, "-", "measured 50.8 on 2026-09-15; budget 3x");
+        end
         function eclipseFactorSpeed(tc)
             % Conical over cylindrical for 86400 epochs: two asin, an acos and the lens area; measured see last_run. Bound 8.
             psi = linspace(0, pi, 86400); r = (6378137 + 490e3) * [-cos(psi); zeros(1, 86400); sin(psi)]; s = [tc.au; 0; 0];
             q = tc.speedRatio(@() NonGravForces.env.eclipseFactor(r, s), @() NonGravForces.env.eclipseFactor(r, s, 'Model', "cylindrical"));
             tc.verifyBoundAndRecord("eclipse conical / cylindrical time ratio", q, 8, "-", "");
+        end
+        function earthRadianceCeresSpeed(tc)
+            % The CERES tiles over Knocke's on the same grid and 600 epochs: the rotation, the geodetic latitude and 8 x 3
+            % gathers per tile. Measured see last_run; budget 3x the 2026-09-15 figure.
+            [ep, r] = tc.sampleState();
+            R = tc.eyes(numel(ep.sec));
+            q = tc.speedRatio(@() NonGravForces.env.earthRadiance("ceres", ep, [12 24], r, 'Ceres', tc.cer, 'RotationItrsToGcrs', R), ...
+                @() NonGravForces.env.earthRadiance("knocke", ep, [12 24], r));
+            tc.verifyBoundAndRecord("earthRadiance ceres / knocke time ratio [12 24], 600 epochs", q, 15, "-", "measured 5.0 on 2026-09-15; budget 3x");
         end
         function earthRadianceSpeed(tc)
             % Tile count scales the cost: [24 48] over [12 24] for 600 epochs, four times the tiles, bound 8.

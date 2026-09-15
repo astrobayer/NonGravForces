@@ -33,3 +33,4 @@ tools/benchmark_last.txt
 data/eop/finals2000A.all
 data/spaceweather/SW-All.csv
 data/l1b/
+data/ceres/*_200003-202509.nc

@@ -27,6 +27,9 @@ function info = setupNonGravForces(options)
 %                           archive of GFZ's ISDC, into data/l1b -- NOT data/samples, whose
 %                           committed ten-minute excerpts carry the same file names and are
 %                           the tests' oracles
+%       CERES EBAF 4.2.1    rsut, rlut and rsdt monthly means 2000-03..2025-09 (obs4MIPs,
+%                           65 MB) from ESGF, each kept only if its SHA-256 is the one ESGF
+%                           publishes, into data/ceres beside the committed two-month excerpt
 %
 %   PRESENCE IS DECIDED BY THE EXACT FILE, AND A DOWNLOAD BY ITS CONTENT. Until
 %   2026-09-15 a glob decided presence, so the committed seven-month excerpts
@@ -101,6 +104,13 @@ IGRF_URL = "https://www.ngdc.noaa.gov/IAGA/vmod/coeffs/igrf14coeffs.txt";
 L1B_BASE = "https://isdc-data.gfz.de/grace-fo/Level-1B/JPL/INSTRUMENT/RL04";
 L1B_DAY = "2020-01-01";
 L1B_MEMBERS = ["GNV1B_2020-01-01_C_04.txt", "SCA1B_2020-01-01_C_04.txt", "MAG1B_2020-01-01_C_04.txt"];
+% CERES EBAF 4.2.1 on ESGF (obs4MIPs, dataset version v20260220), anonymous; the SHA-256 are ESGF's own
+% (esgf-1-5-bridge search, 2026-09-15), and each download was checked against them the same day.
+CERES_BASE = "https://esgf-node.ornl.gov/thredds/fileServer/user_pub_work/obs4MIPs/NASA-LaRC/CERES-EBAF-4-2-1/mon";
+CERES_FILES = ["rsut" "rlut" "rsdt"] + "_mon_CERES-EBAF-4-2-1_NASA-GISS_gn_200003-202509.nc";
+CERES_SHA256 = ["6869b2207d86ec6581a6518f63b65f41fc209dda4ea5e64afbf6f3b6d47ea592", ...
+                "1e611d51416d512a945ee4a61983f5c88a991f08a6aee6d6d7662ea76bd9ab5a", ...
+                "3e4cd4ad8f1c283369cd2dd385ac3f655c4e10c9ed2a6b954b829097a61125e8"];
 root = fileparts(mfilename('fullpath'));
 addpath(root, fullfile(root,'tests'), fullfile(root,'tools'), fullfile(root,'demos'));
 % Help-browser registration: info.xml at the root is picked up by doc.
@@ -118,6 +128,7 @@ msis21 = localFetchArchive("nrlmsis21", fullfile(root, 'mex', 'nrlmsis21'), "msi
     "Use is governed by the Open Source Academic Research License Agreement contained in the file nrlmsis2.1_license.txt (research, academic and non-profit use only).");
 info.sources = [struct('name', "nrlmsise00", 'action', info.msis.action, 'dir', info.msis.dir, 'source', MSIS_URL, 'message', info.msis.message), msis21];
 info.data = localFetchData(root, EOP_URL, SW_URL, IGRF_URL, L1B_BASE, L1B_DAY, L1B_MEMBERS, options.FetchData);
+info.data.items = [info.data.items, localFetchCeres(root, CERES_BASE, CERES_FILES, CERES_SHA256, options.FetchData)];
 info.mex = NonGravForces.buildMex('Check', true);      % 1xT: one element per target
 if options.Verbose
     for m = 1:numel(info.mex)
@@ -218,6 +229,47 @@ else
 end
 items(end+1) = rec;
 d = struct('items', items, 'mode', mode);
+end
+
+function items = localFetchCeres(root, base, files, sha256, mode)
+%LOCALFETCHCERES The CERES EBAF files, each kept only if its SHA-256 is ESGF's.
+items = struct('name', {}, 'action', {}, 'file', {}, 'source', {});
+folder = fullfile(root, 'data', 'ceres');
+for k = 1:numel(files)
+    variable = extractBefore(files(k), "_");
+    url = base + "/" + variable + "/gn/v20260220/" + files(k);
+    dst = fullfile(folder, files(k));
+    rec = struct('name', "ceres " + variable, 'action', "present", 'file', string(dst), 'source', url);
+    present = isfile(dst);
+    if mode == "never" || (present && mode ~= "force")
+        if ~present, rec.action = "missing (FetchData never)"; rec.file = ""; end
+        items(end+1) = rec; %#ok<AGROW>
+        continue
+    end
+    if ~isfolder(folder), mkdir(folder); end
+    tmp = [tempname '.nc'];
+    cleanup = onCleanup(@() localQuietDelete(tmp));
+    fprintf('setupNonGravForces: fetching CERES EBAF %s from %s\n', variable, url);
+    try
+        websave(tmp, char(url));
+        got = localSha256(tmp);
+        if got == sha256(k)
+            movefile(tmp, dst, 'f');
+            rec.action = "fetched";
+        else
+            rec.action = "failed: SHA-256 " + got + " is not ESGF's " + sha256(k) + " -> the reply was discarded";
+            rec.file = "";
+        end
+    catch err
+        rec.action = "failed: " + string(err.message);
+        rec.file = "";
+    end
+    if rec.action ~= "fetched"
+        fprintf('setupNonGravForces: %s -> download it by hand from %s\n', rec.action, url);
+    end
+    items(end+1) = rec; %#ok<AGROW>
+    clear cleanup
+end
 end
 
 function localTarMembers(tarFile, names, outDir)

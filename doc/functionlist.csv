@@ -15,13 +15,13 @@ io,readMAS1B,function,L1,WP-18,done,MAS1B tank-mass reader (NOT spacecraft mass)
 io,readMAG1B,function,L1,WP-18,done,MAG1B reader: measured field (SI) and magnetorquer branch and net currents
 io,massModel,function,L1,WP-18,done,Spacecraft mass model: handbook constant or MAS1B-driven variable mass
 io,spaceWeather,function,L1,WP-04,done,Space-weather provider with query(epoch): F10.7 F30 S/M/Y10.7 Ap Kp Dst
-io,importCERES,function,L1,WP-08,stub,CERES SYN1deg/EBAF netCDF import into radiance grids
+io,importCERES,function,L1,WP-C8,done,CERES EBAF TOA monthly fluxes (obs4MIPs netCDF) as lat x lon x month grids
 io,igrfCoefficients,function,L1,WP-23,done,IGRF-14 coefficient loader with the model's own interpolation and SV rule
 env,density,function,L2,WP-05,done,Thermosphere density and composition (exponential msis00 msis21)
 env,wind,function,L2,WP-25,done,Relative-velocity builder: co-rotation from referenceSystem plus an optional wind field
 env,eclipseFactor,function,L2,WP-07,done,Shadow function nu from 0 to 1: cylindrical conical solaarsCF plus lunar
-env,earthRadiance,function,L2,WP-08,done,Earth albedo and IR radiance grids (pointSource knocke ceres) with ADM anisotropy
-env,magneticField,function,L2,WP-23,stub,IGRF-14 geomagnetic field in ITRS and body frame
+env,earthRadiance,function,L2,WP-08,done,Earth albedo and longwave emission on cap tiles (pointSource knocke ceres)
+env,magneticField,function,L2,WP-C10,done,IGRF main geomagnetic field at Earth-fixed positions (tesla; any frame)
 env,radiationSources,function,L2,WP-08,done,Source list {dir_body P band} from Sun and Earth radiance for one epoch batch
 geom,MacroModel,class,L3,WP-09,done,Panel geometry frozen and validated once
 geom,graceFO,function,L3,WP-09,done,GRACE-FO macro model from JPL D-56935

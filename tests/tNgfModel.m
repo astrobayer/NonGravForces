@@ -214,6 +214,12 @@ classdef tNgfModel < NgfTestCase
             tc.verifyErrorId(@() NonGravForces.Model(bw, NonGravForces.Options("fast"), 'Mass', -3), 'NonGravForces:Model:inputMass');
             tc.verifyEqual(NonGravForces.Model(bw, NonGravForces.Options("fast"), 'Mass', 150).mass.value_kg, 150);
             tc.verifyEqual(NonGravForces.Model(NonGravForces.geom.graceFO("D"), NonGravForces.Options("fast")).mass.value_kg, NonGravForces.const().graceFO.massD);
+            % erp.backend ceres (LP-C WP-C8) evaluates through the Model with the committed EBAF excerpt, and without it refuses
+            cerFiles = string(fullfile(tc.root, 'data', 'ceres', ["rsut" "rlut" "rsdt"] + "_mon_CERES-EBAF-4-2-1_NASA-GISS_gn_201912-202001.nc"));
+            oC = tc.M.options.set("erp.backend", "ceres");
+            tc.verifyErrorId(@() mk(oC).accel(e, rr, vv), 'NonGravForces:Model:dependCeres');
+            [aC, iC] = mk(oC, 'Ceres', NonGravForces.io.importCERES(cerFiles)).accel(e, rr, vv);
+            tc.verifyTrue(all(isfinite(aC))); tc.verifyEqual(iC.backends.erp, "ceres");
             % The fast preset must evaluate with no space weather beyond its exponential profile.
             af = tc.Mfast.accel(e, rr, vv);
             tc.verifyTrue(all(isfinite(af))); tc.verifyGreaterThan(norm(af), 0);

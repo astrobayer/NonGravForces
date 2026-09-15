@@ -106,9 +106,11 @@ Space Science* 8, e2020EA001321.
 
 ## Data files under data/
 
-`data/eop/`, `data/spaceweather/` and `data/samples/` hold small excerpts of IERS,
-CelesTrak and NASA/JPL GRACE-FO Level-1B products, kept so the tests and demos
-have a real arc to run on. They are redistributed under the terms their
+`data/eop/`, `data/spaceweather/`, `data/samples/` and `data/ceres/` hold small
+excerpts of IERS, CelesTrak, NASA/JPL GRACE-FO Level-1B and NASA LaRC CERES EBAF
+products, kept so the tests and demos have a real arc to run on. The CERES
+excerpt is licensed by NASA LaRC under CC BY 4.0; its attribution and how it was
+cut are in `data/ceres/README.md`. They are redistributed under the terms their
 providers publish; they are not covered by the MIT licence above and are not
 this toolbox's to relicense.
 
@@ -122,6 +124,7 @@ supplying them is the user's responsibility.
 | Earth orientation | yes | `https://datacenter.iers.org/data/9/finals2000A.all` |
 | space weather | yes, with one retry | `https://celestrak.org/SpaceData/SW-All.csv` |
 | IGRF-14 coefficients | yes | `https://www.ngdc.noaa.gov/IAGA/vmod/coeffs/igrf14coeffs.txt` |
+| CERES EBAF 4.2.1 (rsut, rlut, rsdt) | yes, 65 MB, SHA-256 checked | `https://esgf-node.ornl.gov/thredds/fileServer/user_pub_work/obs4MIPs/NASA-LaRC/CERES-EBAF-4-2-1/mon/` |
 | GRACE-FO Level-1B | yes, 147 MB, members only | `https://isdc-data.gfz.de/grace-fo/Level-1B/JPL/INSTRUMENT/RL04/` |
 
 Every endpoint was fetched before it was written down. IERS answered 200 with the
