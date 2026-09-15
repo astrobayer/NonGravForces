@@ -64,12 +64,19 @@ Let $s=|\vv v_r|/\sqrt{2\mathcal RT_\infty/M}$ be the speed ratio with $M$ the m
 P=\frac{e^{-\gamma^2s^2}}{s},\quad Q=1+\frac1{2s^2},\quad G=\frac1{2s^2},\quad Z=1+\operatorname{erf}(\gamma s),\quad
 \frac{v_{re}}{v_{in}}=\sqrt{\tfrac12\Big[1+\alpha_E\Big(\frac{4\mathcal RT_w}{M|\vv v_r|^2}-1\Big)\Big]}.
 \end{equation}
-Then, after Sentman (1961) in the form of Doornbos (2011, Ch.~3),
+\textbf{Which pair is which.} Sentman's published coefficients, and Doornbos (2011, eqs 3.55--3.56), are \emph{drag} and \emph{lift} --- along and across $\vv v_r$:
 \begin{align}
-C_p&=\frac{P}{\sqrt\pi}+\gamma QZ+\frac{\gamma}{2}\frac{v_{re}}{v_{in}}\big(\gamma\sqrt\pi Z+P\big),\\
-C_\tau&=\ell GZ+\frac{\ell}{2}\frac{v_{re}}{v_{in}}\big(\gamma\sqrt\pi Z+P\big).
+C_D&=\frac{P}{\sqrt\pi}+\gamma QZ+\frac{\gamma}{2}\frac{v_{re}}{v_{in}}\big(\gamma\sqrt\pi Z+P\big),\label{eq:sentmanCD}\\
+C_L&=\ell GZ+\frac{\ell}{2}\frac{v_{re}}{v_{in}}\big(\gamma\sqrt\pi Z+P\big).\label{eq:sentmanCL}
 \end{align}
-The re-emission ratio $v_{re}/v_{in}$ carries the wall temperature $T_w$ and the accommodation coefficient $\alpha_E$; complete accommodation ($\alpha_E=1$) gives diffuse re-emission at $T_w$. Limits used as tests: $s\to\infty$, $\gamma=1$ gives $C_p\to2+\ldots$ (flat plate); $\gamma\to0$ gives the shear-only limit; $\gamma<0$ (leeward) gives exponentially small terms. \textbf{Defect D1 of v1}: the exponential group of $C_p$ and the whole shear term were divided by $s$ instead of $s^2$, an error of $s\approx8$ in the shear on inclined panels; the toolbox pins this as a regression test with the correct value from an independent kinetic-theory integration (\texttt{tools/pyxcheck/sentman\_check.py}).
+The toolbox does not use that pair. Its kernel is written in the plate's own frame, \emph{normal} and \emph{tangential} (eq.~\eqref{eq:drag}), which is what a per-panel force and a torque both need, and it obtains those from the same momentum integrals:
+\begin{align}
+C_p&=\underbrace{\frac{\gamma P}{\sqrt\pi}+\Big(\gamma^2+\frac1{2s^2}\Big)Z}_{\text{incident}}+\underbrace{\frac12\frac{v_{re}}{v_{in}}\big(\gamma\sqrt\pi Z+P\big)}_{\text{re-emitted}},\label{eq:sentmanCp}\\
+C_\tau&=\ell\Big(\frac{P}{\sqrt\pi}+\gamma Z\Big).\label{eq:sentmanCtau}
+\end{align}
+The two pairs are one rotation apart, $C_D=C_p\gamma+C_\tau\ell$ and $C_L=C_p\ell-C_\tau\gamma$, and the toolbox asserts both projections against eqs.~\eqref{eq:sentmanCD}--\eqref{eq:sentmanCL}. \textbf{This document labelled eqs.~\eqref{eq:sentmanCD}--\eqref{eq:sentmanCL} $C_p$ and $C_\tau$ until 0.10.0}, which is the same confusion that produced defect D1 below; nothing in the code ever read it, and it is corrected here. Note in particular that the \emph{tangential} coefficient carries no $1/s^2$ term: the lone $Z/(2s^2)$ belongs to the lift. The limit that settles it is edge-on ($\gamma\to0$): $C_p\to1/(2s^2)$ and $C_\tau\to\ell/(s\sqrt\pi)$, and the hyperthermal ram limit is $C_p\to2\gamma^2$, $C_\tau\to2\gamma\ell$, $C_D\to2\gamma$.
+
+Diffuse re-emission is isotropic about the normal, so it contributes to $C_p$ and \emph{not} to $C_\tau$ --- which is why $C_\tau$ carries no $v_{re}/v_{in}$ while $C_L$ does. The re-emission ratio carries the wall temperature $T_w$ and the accommodation coefficient $\alpha_E$; complete accommodation ($\alpha_E=1$) gives diffuse re-emission at $T_w$. \textbf{The gas force is therefore not antiparallel to $\vv v_r$}: $C_L\ne0$ off the ram direction, \SI{0.34}{\degree} on GRACE-FO (measured). Only \texttt{constantCd} is antiparallel, by construction. \textbf{Defect D1 of v1}: the exponential group and the whole shear term were divided by $s$ instead of $s^2$, an error of $s\approx8$ in the shear on inclined panels; the toolbox pins this as a regression test with the correct value from an independent kinetic-theory integration (\texttt{tools/pyxcheck/sentman\_check.py}).
 
 \subsection{Other gas--surface interaction models}
 \emph{Maxwell}: a fraction $\sigma$ diffuse, $1-\sigma$ specular. \emph{Cercignani--Lampis--Lord (CLL)}: separate normal and tangential accommodation $(\alpha_n,\sigma_t)$ with quasi-specular lobes; used by Walker et al.\ (2014) and Mehta et al.\ (2014). \emph{Schamberg}: quasi-specular lobe of adjustable width. All are \texttt{drag.gsi} options; none is in a preset except Sentman, because the density error (\S\ref{sec:density}) exceeds their differences except below \SI{300}{\kilo\metre}.

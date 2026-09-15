@@ -33,10 +33,10 @@ function [Cp, Ctau, info] = gsiCoefficients(model, s, theta, alpha, Tw_K, Tinf_K
 %                 temperature is T_i - alpha (T_i - Tw) with the energy-equivalent
 %                 incident temperature T_i = m U^2/(4 k)). Cp gamma + Ctau l is
 %                 Doornbos' (2011, eqs 3.55-3.56) C_D and Cp l - Ctau gamma his
-%                 C_L. NOTE the reference document of this toolbox (theory, §2.3)
-%                 labels that drag/lift pair Cp/Ctau; the hyperthermal limit
-%                 (2 gamma^2 normal, 2 gamma l tangential, 2 gamma drag) shows
-%                 which is which. Species enter through s: one call per species
+%                 C_L. The theory document (§2.3) labelled that drag/lift pair
+%                 Cp/Ctau until 0.10.0 and now derives both pairs; the
+%                 hyperthermal limit (2 gamma^2 normal, 2 gamma l tangential,
+%                 2 gamma drag) shows which is which. Species enter through s: one call per species
 %                 and a density-weighted sum (dragPanelForce does this).
 %     maxwell     A fraction SpecularFraction of the molecules reflects
 %                 specularly (incident normal momentum doubled, no shear, no

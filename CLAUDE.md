@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.9.1.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-16 (LP-C delivered) by Claude Opus 5. Toolbox version 0.10.0.
 
 ---
 
@@ -33,13 +33,13 @@ No gravity field, no equations of motion, no integrator, no least-squares code.
 Nine layers; a layer calls only lower layers plus the four dependencies.
 
 ```
-L8 app      calibrate (lsqvce bridge), forceBudget, densityInversion
+L8 app      calibrate, forceBudget, densityInversion, DynamicsSource (gjToolbox entry, native C)
 L7 qc       residuals, hampel, detectImpulses, detectJumps, eventTable, screen
 L6 sensor   Sensor (abstract), Electrostatic, AtomInterferometer, DragFree
-L5 Model    accel | torque | series | partials | rhs | budget   <- single point of access
+L5 Model    accel | torque | series | partials | budget   <- single point of access
 L4 kernel   gsiCoefficients, accommodation, dragPanelForce, radiationPanelForce,
             thermalRecoil, assemble, bodyTorques, partials, singleEpoch (C/MEX)
-L3 geom     MacroModel, graceFO, boxWing, selfShadow, thermalState,
+L3 geom     MacroModel, graceFO, boxWing, selfShadow, flowShadow, thermalState,
             AttitudeProvider, checkAttitudeSense
 L2 env      density, wind, eclipseFactor, earthRadiance, magneticField, radiationSources
 L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
@@ -47,8 +47,11 @@ L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
 L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options, buildMex
 ```
 
-53 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
-both directions against the files on disk, and this sentence's number against it).
+55 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
+both directions against the files on disk, and this sentence's number against it
+— which it genuinely did not until 2026-09-16, when the sentence said 53 and the
+catalogue held 55; `auditPackage.py` check 5 now compares both this number and
+this file's version stamp).
 
 ### Dependencies — called by qualified name, never copied, wrapped or aliased
 
@@ -56,8 +59,7 @@ both directions against the files on disk, and this sentence's number against it
 |---|---|
 | `referenceSystem` ≥ 2.1 (2.1.216) | time scales, EOP, ITRS↔GCRS with derivatives, geodesy, quaternions, attitude interpolation, Sun/Moon states |
 | `gracefoReading` ≥ 1.0.1 (1.0.1) | L1B ASCII reading, quality flags, GROOPS instrument export/import. The PATCH minimum is deliberate and is the one exception to VERSIONING.md's MAJOR.MINOR rule (HANDOVER O-12, O-25) |
-| `gjToolbox` (odeSuite) | Gauss-Jackson integration. **At level L0: no integrator and no dynamics interface yet, and `Model.rhs()`'s 4-argument handle does not match the 3-argument one its validator documents — HANDOVER B.3, O-4** |
-| `lsqvce` ≥ 5.3 (5.3) | batch least squares, VCE, ARMA whitening; `app.calibrate` delegates the adjustment through `fit`/`layout`/`Options` (O-24) |
+| `gjToolbox` (odeSuite) ≥ 0.1 (0.1.0) | Gauss-Jackson integration. **Optional for the toolbox, required by `ciGate`**: `app.DynamicsSource` subclasses `gjToolbox.DynamicsSource` (so it cannot even load without it) and the `buildMex` target `rhs` compiles against `csrc/gj_native.h` (ABI 1). `Model.rhs` is gone — O-4 closed by removal, 2026-09-16 |
 
 ### Key design decisions
 
@@ -78,7 +80,11 @@ both directions against the files on disk, and this sentence's number against it
   compiled path (`kernel.singleEpoch`) for a right-hand side. Neither replaces the
   other, neither is justified by speed, and `Model` gains no `'Backend'` option —
   that would make one a mode of the other. The price is that they must agree, and
-  `tNgfMex/singleEpochEndToEndPrecision` is where that is checked.
+  `tNgfMex/singleEpochEndToEndPrecision` is where that is checked. **LP-C adds a
+  third, at L8 and not in `Model`**: `app.DynamicsSource`'s native entry
+  (`mex/ngfRhs.c`) evaluates the WHOLE chain in C over tables built once per run,
+  for an integrator's inner loop. Same rule — MATLAB is normative, parity is
+  asserted in four configurations in `tNgfIntegration`, and `Model` is untouched.
 - **MATLAB is normative.** The C/MEX port (LP-6b, hand-written, no MATLAB Coder,
   `mex/ngfKernel.c` + `kernel.singleEpoch`) and the standard-library kernel mirror
   (WP-33) are verified *against* MATLAB, never the reverse. The C is written in the
@@ -129,6 +135,7 @@ both directions against the files on disk, and this sentence's number against it
 ```matlab
 run('...\referenceSystem\setupReferenceSystem.m')
 run('...\gracefoReading\setupGraceFOReading.m')     % must run, or reader tests error
+run('...\odeSuite\gjToolboxSetup.m')                % must run, or tNgfIntegration errors
 cd('...\NonGravForces'); setupNonGravForces          % adds root, tests/, tools/; registers doc
 runNgfTests                                          % 'ExcludeSlow',false adds the speed tag
 doc NonGravForces
@@ -401,9 +408,10 @@ Every one of these was an actual defect found in a predecessor or a dependency.
 - **The co-rotation term is `v - Rdot*(R'*r)`**, from `env.wind`, never a hand-written omega x r.
 - **Sentman's published C_D/C_L are drag and lift, not normal and tangential**; the kernel
   derives Cp (normal) and Ctau (tangential) from the momentum integrals and asserts both
-  projections. The theory document §2.3 mislabels them (to be corrected at LP-R). Three
-  independent derivations reached the same conclusion in LP-5x. The limit that settles it:
-  edge-on, Cp = 1/(2s^2) and Ctau = l/(s*sqrt(pi)).
+  projections. Three independent derivations reached the same conclusion in LP-5x. The limit
+  that settles it: edge-on, Cp = 1/(2s^2) and Ctau = l/(s*sqrt(pi)). The theory document §2.3
+  mislabelled them until 0.10.0; `doc/src/*.tex` is corrected and **the committed PDF is not
+  rebuilt** — no LaTeX on the host (O-37).
 - **The speed ratio is per SPECIES, not from a mean molar mass**: the mean-mass form is
   harmless on a ram face, -24 % at 100 deg incidence and collapses at 135 deg (measured 2026-09-07).
 - **1 + erf(x) cancels for x << 0**: use erfc(-x). **1 + a(x - 1) loses 1e-8 at a = 1**: write

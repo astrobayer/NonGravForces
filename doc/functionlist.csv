@@ -1,5 +1,5 @@
 package,name,kind,level,wp,status,h1
-NonGravForces,Model,class,L5,WP-14,done,Single point of access: accel | torque | series | partials | rhs | budget
+NonGravForces,Model,class,L5,WP-14,done,Single point of access: accel | torque | series | partials | budget
 NonGravForces,Options,class,L0,WP-00,done,Validated option set with fidelity presets
 NonGravForces,const,function,L0,WP-00,done,Constants owned by the toolbox
 NonGravForces,toolboxVersion,function,L0,WP-00,done,Semantic version (single authority)
@@ -51,5 +51,6 @@ qc,detectJumps,function,L7,WP-31,done,Piecewise-constant/linear change-point det
 qc,eventTable,function,L7,WP-31,done,Canonical event table constructor and schema
 qc,screen,function,L7,WP-31,done,Orchestrator: residuals -> outliers -> impulses -> jumps -> mask
 app,calibrate,function,L8,WP-19,done,Accelerometer calibration: bias basis + 3x3 scale + jumps by separable weighted least squares
+app,DynamicsSource,class,L8,WP-C9,done,The acceleration as gjToolbox's integrator interface (native C entry)
 app,forceBudget,function,L8,WP-30,done,Per-effect per-axis acceleration budget over an arc; chunked and across models
 app,densityInversion,function,L8,WP-32,done,Thermosphere density from calibrated accelerations; the inversion is a division
