@@ -198,8 +198,9 @@ else
             end
             % the diffuse part (1 - sig) carries incident and re-emitted momentum, the specular part doubles the
             % incident normal momentum: incident (1 + sig) CpInc, re-emitted (1 - sig) CpRe
-            info.CpIncident = (1 + sig) * CpInc + zeros(size(CpInc + CpRe));
-            info.CpReemitted = (1 - sig) * CpRe + zeros(size(CpInc + CpRe));
+            grid = zeros(size(CpInc)) + zeros(size(CpRe));      % the broadcast shape of the two parts
+            info.CpIncident = (1 + sig) * CpInc + grid;
+            info.CpReemitted = (1 - sig) * CpRe + grid;
             Cp = info.CpIncident + info.CpReemitted;
             Ctau = (1 - sig) * CtauInc + zeros(size(Cp));
     end
