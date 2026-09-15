@@ -25,7 +25,8 @@
  *     finds nothing -- which ends the MATLAB process. So this gateway checks that the
  *     three files exist, makes dataDir the PROCESS current directory for the one call
  *     that loads them (no length limit, no environment variable), and restores the
- *     previous directory before it returns, whatever happened.
+ *     previous directory before it returns, whatever happened (mex/ngfHwm14Load.c,
+ *     shared with the native right-hand side).
  *   * The model loads its tables once, on the first call, and keeps them for the
  *     life of the process. A different dataDir afterwards is therefore refused, not
  *     silently ignored.
@@ -36,52 +37,27 @@
  *
  * Created 2026-09-15 by Claude Opus 5 (Anthropic).
  */
-#ifndef _WIN32
-#define _POSIX_C_SOURCE 200112L   /* chdir and getcwd under -std=c99 on glibc */
-#endif
 #include "mex.h"
 
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
-#ifdef _WIN32
-#include <direct.h>
-#define NGF_CHDIR _chdir
-#define NGF_GETCWD _getcwd
-#else
-#include <unistd.h>
-#define NGF_CHDIR chdir
-#define NGF_GETCWD getcwd
-#endif
 
 extern void ngf_hwm14_calc(int iyd, double sec, double alt, double glat, double glon, double ap2, double *w);
+extern int ngfHwm14Load(const char *dir, char *missing, int missingSize);   /* mex/ngfHwm14Load.c */
 
 #define GW_ID "NonGravForces:hwm14Gateway:"
 #define NARG 7
 
 static char loadedDir[1024] = "";
 
-static int fileExists(const char *dir, const char *name)
-{
-    char full[1100];
-    FILE *f;
-    snprintf(full, sizeof full, "%s/%s", dir, name);
-    f = fopen(full, "rb");
-    if (f == NULL) {
-        return 0;
-    }
-    fclose(f);
-    return 1;
-}
-
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
-    static const char *files[3] = {"hwm123114.bin", "dwm07b104i.dat", "gd2qd.dat"};
-    char dir[1024], here[1024];
+    char dir[1024];
     const double *iyd, *sec, *alt, *glat, *glon, *ap2;
     double *out, w[2];
     mwSize K, k, nAll;
-    int i, failedBack;
+    int i;
 
     if (nrhs != NARG) {
         mexErrMsgIdAndTxt(GW_ID "inputArity", "hwm14Gateway takes exactly %d arguments, got %d -> call it through NonGravForces.env.wind", NARG, nrhs);
@@ -122,23 +98,17 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         }
     }
     if (loadedDir[0] == '\0') {
-        for (i = 0; i < 3; i++) {
-            if (!fileExists(dir, files[i])) {
-                mexErrMsgIdAndTxt(GW_ID "dataMissing", "%s is not in %s -> run NonGravForces.buildMex, which copies the HWM14 data beside the gateway", files[i], dir);
-            }
+        char missing[64] = "";
+        int loaded = ngfHwm14Load(dir, missing, (int)sizeof missing);
+        if (loaded == 1) {
+            mexErrMsgIdAndTxt(GW_ID "dataMissing", "%s is not in %s -> run NonGravForces.buildMex, which copies the HWM14 data beside the gateway", missing, dir);
         }
-        if (NGF_GETCWD(here, sizeof here) == NULL) {
-            mexErrMsgIdAndTxt(GW_ID "inputPath", "the current directory could not be read -> it is needed to restore it after loading HWM14");
+        if (loaded == 2) {
+            mexErrMsgIdAndTxt(GW_ID "inputPath", "cannot enter %s, or read the current directory -> check the folder of the HWM14 data files", dir);
         }
-        if (NGF_CHDIR(dir) != 0) {
-            mexErrMsgIdAndTxt(GW_ID "inputPath", "cannot enter %s -> check the folder of the HWM14 data files", dir);
-        }
-        /* One quiet and one disturbed evaluation load all three tables (HWM, DWM, QD coordinates). */
-        ngf_hwm14_calc(95150, 43200.0, 250.0, 0.0, 0.0, 4.0, w);
-        failedBack = (NGF_CHDIR(here) != 0);
         strncpy(loadedDir, dir, sizeof loadedDir - 1);
-        if (failedBack) {
-            mexErrMsgIdAndTxt(GW_ID "inputPath", "HWM14 was loaded but the directory %s could not be restored -> cd back by hand", here);
+        if (loaded == 3) {
+            mexErrMsgIdAndTxt(GW_ID "inputPath", "HWM14 was loaded but the previous directory could not be restored -> cd back by hand");
         }
     } else if (strcmp(loadedDir, dir) != 0) {
         mexErrMsgIdAndTxt(GW_ID "inputPath", "HWM14 was loaded from %s and keeps its tables for the life of the process -> clear the gateway (clear mex) before loading it from %s", loadedDir, dir);

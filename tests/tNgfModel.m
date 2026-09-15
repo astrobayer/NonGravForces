@@ -81,7 +81,6 @@ classdef tNgfModel < NgfTestCase
             [tau, ti] = tc.M.torque(e, rr, vv);
             tc.verifySize(tau, [3 3]); tc.verifySize(ti.bodyTorque, [3 3]);
             tc.verifyEqual(ti.bodyTorque, zeros(3, 3), 'no body torque is enabled in the standard preset');
-            tc.verifyClass(tc.M.rhs(), 'function_handle');
             B = tc.M.budget(e, rr, vv);
             tc.verifyEqual(B.effect', ["drag" "radiation" "thermal" "total"]);
             T = tc.M.series(e, rr, vv, 'Quantities', ["accel" "torque"]);
@@ -154,9 +153,10 @@ classdef tNgfModel < NgfTestCase
             % Rotating to GCRS preserves every magnitude.
             ag = tc.M.accel(e, rr, vv, [], 'Frame', "gcrs");
             tc.verifyBoundAndRecord("gcrs vs body magnitude", max(abs(vecnorm(ag) - vecnorm(a))), 1e-23, "m/s^2", "an orthogonal rotation of a 3e-8 vector; measured 7e-24");
-            % rhs returns the GCRS acceleration, not a different quantity.
-            f = tc.M.rhs();
-            tc.verifyBoundAndRecord("rhs handle vs accel in gcrs", max(abs(f(e, rr, vv, []) - ag), [], 'all'), 0, "m/s^2", "the handle calls the same method: bitwise");
+            % Model.rhs is GONE (LP-C WP-C9, O-4): the integrator's entry point is app.DynamicsSource, whose
+            % accel() is asserted against this method in tests/tNgfIntegration.m. A handle that matched no
+            % signature the integrator takes was worse than no handle at all.
+            tc.verifyFalse(ismember("rhs", string(methods(tc.M))), 'Model.rhs must not come back without the interface it was supposed to serve');
         end
     end
 

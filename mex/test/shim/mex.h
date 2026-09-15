@@ -1,7 +1,7 @@
 /* mex.h -- SHIM, NOT MATLAB'S HEADER.
  *
  * Declares just enough of the MEX API for a compiler to check
- * the MEX gateways (mex/ngfKernelGateway.c, mex/ngfMsis21Gateway.c) on a machine that has no MATLAB. Nothing here is
+ * the MEX gateways in mex/ on a machine that has no MATLAB. Nothing here is
  * implemented and nothing links: the check is `cc -c`, and it catches the
  * typos, the wrong argument counts and the undeclared identifiers that would
  * otherwise wait for the owner's host. A Tier B session cannot run MEX, but it
@@ -22,7 +22,8 @@ typedef size_t mwIndex;
 typedef struct mxArray_tag mxArray;
 
 typedef enum { mxREAL = 0, mxCOMPLEX = 1 } mxComplexity;
-typedef enum { mxDOUBLE_CLASS = 6 } mxClassID;
+typedef enum { mxDOUBLE_CLASS = 6, mxUINT64_CLASS = 15 } mxClassID;
+typedef unsigned long long uint64_T;
 
 #if defined(__GNUC__)
 #define NGF_SHIM_NORETURN __attribute__((noreturn))
@@ -50,5 +51,11 @@ mxArray       *mxCreateNumericArray(mwSize nd, const mwSize *dims, mxClassID id,
 mxArray       *mxCreateStructMatrix(mwSize m, mwSize n, int nfields, const char **names);
 void           mxDestroyArray(mxArray *a);
 void          *mxCalloc(mwSize n, mwSize size);
+int            mxIsUint64(const mxArray *a);
+void          *mxGetData(const mxArray *a);
+mxArray       *mxCreateDoubleScalar(double v);
+mxArray       *mxCreateNumericMatrix(mwSize m, mwSize n, mxClassID id, mxComplexity c);
+void           mexLock(void);
+void           mexUnlock(void);
 
 #endif /* NGF_MEX_SHIM_H */

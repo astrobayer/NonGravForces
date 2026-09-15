@@ -14,6 +14,8 @@ doc/html/custom_toolbox.json
 +NonGravForces/+env/private/hwm123114.bin
 +NonGravForces/+env/private/dwm07b104i.dat
 +NonGravForces/+env/private/gd2qd.dat
++NonGravForces/+app/private/rhsGateway.mex*
++NonGravForces/+app/private/rhsGateway.digest.txt
 +NonGravForces/+kernel/private/kernelGateway.mex*
 +NonGravForces/+kernel/private/kernelGateway.digest.txt
 

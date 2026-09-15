@@ -144,6 +144,15 @@ int ngfGsiCoefficients(ngfGsiModel model, double s, double theta, double alpha,
                        double *cp, double *ctau);
 
 /*
+ * The same coefficients with the normal one split into its incident and
+ * re-emitted parts (LP-C WP-C1: geom.flowShadow scales them separately), exactly
+ * as gsiCoefficients returns info.CpIncident and info.CpReemitted. Cp is their sum.
+ */
+int ngfGsiParts(ngfGsiModel model, double s, double theta, double alpha,
+                double tw, double tinf, double cd, double specular,
+                double *cpInc, double *cpRe, double *ctau);
+
+/*
  * Per-panel gas force for one epoch. Port of +kernel/dragPanelForce.m.
  *
  *   macro     panel model

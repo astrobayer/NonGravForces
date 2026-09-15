@@ -5,7 +5,7 @@ function report = buildMex(options)
 %   report = NonGravForces.buildMex('Check', true)            % report only, nothing compiled
 %   report = NonGravForces.buildMex('Target', "kernel")       % one target, scalar report
 %
-%   The four places compiled code is sanctioned (HANDOVER C3, LP-C WP-C6 and WP-C11), and no others:
+%   The five places compiled code is sanctioned (HANDOVER C3, LP-C WP-C6, WP-C9 and WP-C11), and no others:
 %
 %     msis    the NRLMSISE-00 C source plus the marshalling gateway
 %             mex/ngfMsisGateway.c, built into +env/private/msisGateway, where
@@ -44,6 +44,15 @@ function report = buildMex(options)
 %             setupNonGravForces fetches the files by SHA-256 into mex/hwm14;
 %             'Hwm14Source' and NGF_HWM14 point elsewhere. Same compiler and static
 %             runtime as msis21; the model itself is single precision.
+%     rhs     the WHOLE non-gravitational chain for one state in C (mex/ngfRhs.c),
+%             built into +app/private/rhsGateway, where NonGravForces.app.DynamicsSource
+%             can reach it and nothing else can. It links the kernel, NRLMSISE-00,
+%             NRLMSIS 2.1 and HWM14, and it compiles against gjToolbox's frozen
+%             contract csrc/gj_native.h, which is NOT copied here: 'GjToolboxSource',
+%             NGF_GJTOOLBOX or the folder of an installed gjToolbox is read (rule R1).
+%             Without gjToolbox this target is REPORTED as unbuildable and the other
+%             targets still build, because integrating is optional and computing forces
+%             is not; asking for it by name refuses with depMissing instead.
 %     kernel  the single-epoch kernel mex/ngfKernel.c and its gateway
 %             mex/ngfKernelGateway.c (LP-6b, WP-17b), built into
 %             +kernel/private/kernelGateway, where
@@ -70,7 +79,7 @@ function report = buildMex(options)
 %   Name     Size  Type     Units  Description
 %   ----     ----  ----     -----  -----------
 %   Check    1x1   logical  -      true: report only (default false).
-%   Target   1x1   string   -      "all" (default), "msis", "msis21", "hwm14" or "kernel". "all"
+%   Target   1x1   string   -      "all" (default), "msis", "msis21", "hwm14", "rhs" or "kernel". "all"
 %                                  returns one report per target, in that order.
 %   MsisSource 1x1 string   -      Directory holding the NRLMSISE-00 C source. Default: the
 %                                  NGF_NRLMSISE00 environment variable if set, else mex/nrlmsise00.
@@ -78,12 +87,15 @@ function report = buildMex(options)
 %                                  NGF_NRLMSIS21 environment variable if set, else mex/nrlmsis21.
 %   Hwm14Source 1x1 string  -      Directory holding the HWM14 files. Default: the NGF_HWM14
 %                                  environment variable if set, else mex/hwm14.
+%   GjToolboxSource 1x1 string -   Directory holding gj_native.h (odeSuite's csrc). Default: the
+%                                  NGF_GJTOOLBOX environment variable, else the csrc folder of the
+%                                  gjToolbox on the path.
 %
 % OUTPUT ARGUMENTS
 %   Name     Size  Type    Units  Description
 %   ----     ----  ----    -----  -----------
 %   report   1xT   struct  -      One element per target (T = 1 for a named
-%                                 Target, 4 for "all"), each with
+%                                 Target, 5 for "all"), each with
 %                                 .target (string), .file (string),
 %                                 .present (logical),
 %                                 .upToDate (logical: present and digest
@@ -122,10 +134,11 @@ function report = buildMex(options)
 % Created 2026-09-07 by Claude Fable 5.1 (Anthropic); second target 2026-09-08, msis21 2026-09-15 by Claude Opus 5 (Anthropic).
 arguments
     options.Check (1,1) logical = false
-    options.Target (1,1) string {mustBeMember(options.Target, ["all","msis","msis21","hwm14","kernel"])} = "all"
+    options.Target (1,1) string {mustBeMember(options.Target, ["all","msis","msis21","hwm14","rhs","kernel"])} = "all"
     options.MsisSource (1,1) string = ""
     options.Msis21Source (1,1) string = ""
     options.Hwm14Source (1,1) string = ""
+    options.GjToolboxSource (1,1) string = ""
 end
 unit = "buildMex";
 pkgRoot = fileparts(mfilename('fullpath'));                 % +NonGravForces
@@ -134,6 +147,8 @@ mexDir = fullfile(root, 'mex');
 msisDir = localSourceDir(options.MsisSource, 'NGF_NRLMSISE00', fullfile(mexDir, 'nrlmsise00'));
 msis21Dir = localSourceDir(options.Msis21Source, 'NGF_NRLMSIS21', fullfile(mexDir, 'nrlmsis21'));
 hwm14Dir = localSourceDir(options.Hwm14Source, 'NGF_HWM14', fullfile(mexDir, 'hwm14'));
+gjDir = localGjDir(options.GjToolboxSource);
+hwm14Fortran = [string(fullfile(hwm14Dir, 'hwm14.f90')), string(fullfile(mexDir, 'ngfHwm14Shim.F90'))];
 % NRL's compile order: each file uses the modules of the files before it (readme.txt).
 msis21Fortran = fullfile(msis21Dir, ["msis_constants" "msis_utils" "msis_init" "msis_gfn" "msis_tfn" "msis_dfn" "msis_calc"] + ".F90");
 % One row per target: everything that differs between them lives here and
@@ -141,21 +156,26 @@ msis21Fortran = fullfile(msis21Dir, ["msis_constants" "msis_utils" "msis_init" "
 % fortran: compiled first, in order, and linked into the gateway; data: copied beside the binary.
 % Both take part in the digest, the parameter file included: other coefficients are another model.
 targets = struct( ...
-    'name',    {"msis", "msis21", "hwm14", "kernel"}, ...
-    'output',  {'msisGateway', 'msis21Gateway', 'hwm14Gateway', 'kernelGateway'}, ...
-    'outDir',  {fullfile(pkgRoot, '+env', 'private'), fullfile(pkgRoot, '+env', 'private'), fullfile(pkgRoot, '+env', 'private'), fullfile(pkgRoot, '+kernel', 'private')}, ...
-    'include', {char(msisDir), mexDir, mexDir, mexDir}, ...
-    'sourceDir', {msisDir, msis21Dir, hwm14Dir, ""}, ...
-    'fortran', {strings(1, 0), [msis21Fortran, string(fullfile(mexDir, 'ngfMsis21Shim.F90'))], ...
-                [string(fullfile(hwm14Dir, 'hwm14.f90')), string(fullfile(mexDir, 'ngfHwm14Shim.F90'))], strings(1, 0)}, ...
+    'name',    {"msis", "msis21", "hwm14", "rhs", "kernel"}, ...
+    'output',  {'msisGateway', 'msis21Gateway', 'hwm14Gateway', 'rhsGateway', 'kernelGateway'}, ...
+    'outDir',  {fullfile(pkgRoot, '+env', 'private'), fullfile(pkgRoot, '+env', 'private'), fullfile(pkgRoot, '+env', 'private'), ...
+                fullfile(pkgRoot, '+app', 'private'), fullfile(pkgRoot, '+kernel', 'private')}, ...
+    'include', {string(msisDir), string(mexDir), string(mexDir), [string(mexDir), string(msisDir), gjDir], string(mexDir)}, ...
+    'sourceDir', {msisDir, msis21Dir, hwm14Dir, gjDir, ""}, ...
+    'fortran', {strings(1, 0), [msis21Fortran, string(fullfile(mexDir, 'ngfMsis21Shim.F90'))], hwm14Fortran, ...
+                [msis21Fortran, string(fullfile(mexDir, 'ngfMsis21Shim.F90')), hwm14Fortran], strings(1, 0)}, ...
     'data',    {strings(1, 0), fullfile(msis21Dir, ["msis21.parm" "nrlmsis2.1_license..txt"]), ...
-                fullfile(hwm14Dir, ["hwm123114.bin" "dwm07b104i.dat" "gd2qd.dat"]), strings(1, 0)}, ...
+                fullfile(hwm14Dir, ["hwm123114.bin" "dwm07b104i.dat" "gd2qd.dat"]), strings(1, 0), strings(1, 0)}, ...
     'sources', {string({fullfile(mexDir, 'ngfMsisGateway.c'), ...
                         char(fullfile(msisDir, 'nrlmsise-00.c')), ...
                         char(fullfile(msisDir, 'nrlmsise-00_data.c')), ...
                         char(fullfile(msisDir, 'nrlmsise-00.h'))}), ...
                 string(fullfile(mexDir, 'ngfMsis21Gateway.c')), ...
-                string(fullfile(mexDir, 'ngfHwm14Gateway.c')), ...
+                string({fullfile(mexDir, 'ngfHwm14Gateway.c'), fullfile(mexDir, 'ngfHwm14Load.c')}), ...
+                string({fullfile(mexDir, 'ngfRhsGateway.c'), fullfile(mexDir, 'ngfRhs.c'), fullfile(mexDir, 'ngfKernel.c'), ...
+                        fullfile(mexDir, 'ngfHwm14Load.c'), char(fullfile(msisDir, 'nrlmsise-00.c')), ...
+                        char(fullfile(msisDir, 'nrlmsise-00_data.c')), fullfile(mexDir, 'ngfRhs.h'), ...
+                        fullfile(mexDir, 'ngfKernel.h'), char(fullfile(gjDir, 'gj_native.h'))}), ...
                 string({fullfile(mexDir, 'ngfKernelGateway.c'), ...
                         fullfile(mexDir, 'ngfKernel.c'), ...
                         fullfile(mexDir, 'ngfKernel.h')})});
@@ -168,6 +188,20 @@ report = repmat(struct('target', "", 'file', "", 'sources', {strings(1, 0)}, 'so
                        'present', false, 'binaryDigest', "", 'upToDate', false), 1, numel(targets));
 for t = 1:numel(targets)
     tg = targets(t);
+    if tg.name == "rhs" && strlength(gjDir) == 0
+        % Integrating is optional and computing forces is not: without gjToolbox's contract header
+        % this target is REPORTED, and "all" builds the rest (asking for it by name refuses below).
+        if options.Target == "rhs"
+            NonGravForces.fail(unit, "depMissing", ...
+                "the rhs target compiles against gjToolbox's csrc/gj_native.h and gjToolbox is not on the path -> run gjToolboxSetup, or point 'GjToolboxSource' or NGF_GJTOOLBOX at odeSuite's csrc folder");
+        end
+        rep.target = tg.name;
+        rep.file = string(fullfile(tg.outDir, string(tg.output) + "." + mexext));
+        rep.sources = strings(1, 0); rep.sourceDigest = ""; rep.sourcesPresent = false;
+        rep.sourceDir = ""; rep.built = false; rep.compiler = "";
+        report(t) = localState(rep, fullfile(tg.outDir, [tg.output '.digest.txt']));
+        continue
+    end
     allFiles = [tg.sources, tg.fortran, tg.data];
     missing = allFiles(~isfile(allFiles));
     rep.sourcesPresent = isempty(missing);
@@ -210,8 +244,8 @@ for t = 1:numel(targets)
         cleanObj = onCleanup(@() rmdir(objDir, 's'));
         extra = localFortran(unit, cc, tg.fortran, objDir);
     end
-    args = [{'-silent', '-O', '-DNDEBUG', ['-I' char(tg.include)], '-outdir', char(tg.outDir), ...
-             '-output', tg.output}, csrc, extra];
+    inc = cellfun(@(d) ['-I' char(d)], cellstr(tg.include), 'UniformOutput', false);
+    args = [{'-silent', '-O', '-DNDEBUG'}, inc, {'-outdir', char(tg.outDir), '-output', tg.output}, csrc, extra];
     mex(args{:});
     for f = tg.data
         copyfile(f, tg.outDir, 'f');                         % 'f': NRL ships the parameter file read-only
@@ -237,6 +271,25 @@ if strlength(env) > 0
     return
 end
 d = string(default);
+end
+
+function d = localGjDir(override)
+%LOCALGJDIR odeSuite's csrc folder, which owns gj_native.h: option, environment, then the
+% gjToolbox on the path (its toolbox/+gjToolbox is a sibling of csrc). "" when there is none.
+d = "";
+if strlength(override) > 0
+    d = override;
+elseif strlength(string(getenv('NGF_GJTOOLBOX'))) > 0
+    d = string(getenv('NGF_GJTOOLBOX'));
+else
+    w = string(which('gjToolbox.DynamicsSource'));
+    if strlength(w) > 0
+        d = string(fullfile(fileparts(fileparts(fileparts(w))), '..', 'csrc'));
+    end
+end
+if strlength(d) > 0 && ~isfile(fullfile(d, 'gj_native.h'))
+    d = "";
+end
 end
 
 function h = localSourceHint(name)

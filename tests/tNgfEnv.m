@@ -292,16 +292,26 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyTrue(endsWith(rep.file, "msisGateway." + mexext));
             tc.verifyEqual(rep.target, "msis");
             all2 = NonGravForces.buildMex('Check', true);
-            tc.verifyEqual([all2.target], ["msis" "msis21" "hwm14" "kernel"]);
+            tc.verifyEqual([all2.target], ["msis" "msis21" "hwm14" "rhs" "kernel"]);
             rh = all2(3);
-            tc.verifyTrue(rh.upToDate); tc.verifyEqual(numel(rh.sources), 6); tc.verifyTrue(endsWith(rh.file, "hwm14Gateway." + mexext));
+            % 7 = the gateway, the shared chdir-guarded loader ngfHwm14Load.c (which the rhs target
+            % links too), NRL's hwm14.f90, this toolbox's shim, and the three data files.
+            tc.verifyTrue(rh.upToDate); tc.verifyEqual(numel(rh.sources), 7); tc.verifyTrue(endsWith(rh.file, "hwm14Gateway." + mexext));
             tc.verifyTrue(all(isfile(fullfile(fileparts(rh.file), ["hwm123114.bin" "dwm07b104i.dat" "gd2qd.dat"]))), 'the three data files are copied beside the gateway');
             % msis21: the gateway, NRL's seven Fortran files, the shim, the parameter file and the licence, all digested
             r21 = all2(2);
             tc.verifyTrue(r21.upToDate); tc.verifyEqual(numel(r21.sources), 11); tc.verifyTrue(endsWith(r21.file, "msis21Gateway." + mexext));
             tc.verifyEqual(nnz(endsWith(r21.sources, ".F90")), 8); tc.verifyTrue(any(endsWith(r21.sources, "msis21.parm")));
             tc.verifyTrue(all(isfile(fullfile(fileparts(r21.file), ["msis21.parm" "nrlmsis2.1_license..txt"]))), 'the parameter file and NRL''s licence are copied beside the gateway');
-            tc.verifyEqual(all2(4).sourceDir, "", 'the kernel has no third-party source');
+            % rhs (LP-C WP-C9): the one target that links everything -- its own C, the kernel's,
+            % NRLMSISE-00's, and the NRLMSIS 2.1 and HWM14 Fortran -- and the one that compiles
+            % against a source it does not own, gjToolbox's csrc/gj_native.h.
+            rr = all2(4);
+            tc.verifyTrue(rr.upToDate); tc.verifyTrue(endsWith(rr.file, "rhsGateway." + mexext));
+            tc.verifyEqual(numel(rr.sources), 19);                    % 9 C/H + 8 msis21 F90 + 2 hwm14 F90
+            tc.verifyTrue(any(endsWith(rr.sources, "gj_native.h")), 'the frozen ABI header takes part in the digest, so a new ABI rebuilds this target');
+            tc.verifyTrue(endsWith(rr.sourceDir, "csrc"), 'the rhs target''s third-party source is odeSuite''s csrc');
+            tc.verifyEqual(all2(5).sourceDir, "", 'the kernel has no third-party source');
             tc.verifyError(@() NonGravForces.buildMex('Check', true, 'Target', "nosuch"), 'MATLAB:validators:mustBeMember');
         end
     end

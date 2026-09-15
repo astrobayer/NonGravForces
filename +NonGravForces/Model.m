@@ -375,13 +375,6 @@ classdef Model
             info.K = K;
             info.provenance = NonGravForces.provenance("Model.partials", 'Options', struct('method', method, 'wrt', strjoin(nv.WithRespectTo, ",")));
         end
-
-        function f = rhs(obj)
-            %RHS Function handle of the non-gravitational acceleration in GCRS. SUPERSEDED by app.DynamicsSource.
-            %   f(epoch, r, v, q) -> 3xK m/s^2 in GCRS. Kept until app.DynamicsSource lands in the same level
-            %   (HANDOVER LP-C WP-C9), where gjToolbox's frozen interface is served instead.
-            f = @(epoch, r, v, q) obj.accel(epoch, r, v, q, 'Frame', "gcrs");
-        end
     end
 
     methods (Access = private)
