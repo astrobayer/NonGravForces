@@ -4,9 +4,10 @@
 # Run from the repository root:  bash mex/test/runCChecks.sh
 #
 # TWO CHECKS, AND WHY EACH EXISTS
-#   1. The MEX gateway is compiled against mex/test/shim/mex.h. It does not link
-#      and it is never run; the point is that a typo, a wrong argument count or
-#      an undeclared identifier in ngfKernelGateway.c is found here rather than
+#   1. The MEX gateways are compiled against mex/test/shim/mex.h. They do not link
+#      and are never run; the point is that a typo, a wrong argument count or
+#      an undeclared identifier in ngfKernelGateway.c or ngfMsis21Gateway.c is
+#      found here rather than
 #      on the owner's host, which is the only machine in this project that has a
 #      MEX compiler.
 #   2. The kernel is built and run against the frozen Python mirror fixtures in

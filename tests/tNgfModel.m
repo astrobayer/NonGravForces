@@ -239,6 +239,13 @@ classdef tNgfModel < NgfTestCase
             [~, i3] = M3.accel(e, rr, vv);
             tc.verifyBoundAndRecord("radiation doubles with crScale", max(abs(i3.radiation - 2 * info.radiation), [], 'all') / max(abs(info.radiation), [], 'all'), 1e-15, "-", "as above");
             tc.verifyEqual(i3.drag, info.drag, 'the drag must not notice the radiation scale');
+            % Changing the density backend (msis00 -> msis21, LP-C WP-C6) changes the drag and nothing else.
+            M21 = NonGravForces.Model(tc.macro, o.set("drag.density", "msis21"), 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw);
+            [a21, i21] = M21.accel(e, rr, vv);
+            tc.verifyEqual(i21.backends.density, "msis21"); tc.verifyTrue(all(isfinite(a21), 'all'));
+            tc.verifyEqual(i21.radiation, info.radiation, 'the radiation must not notice the density backend');
+            tc.verifyEqual(i21.thermal, info.thermal, 'nor the thermal recoil');
+            tc.verifyBoundAndRecord("drag msis21 / msis00 through the Model, largest departure from 1", max(abs(log(vecnorm(i21.drag) ./ vecnorm(info.drag)))), log(2), "-", "two climatologies of one thermosphere (the density ratio measured 0.88-0.99 at 490 km that day): a plausibility bound on the wiring");
             % The analytic parameter partials against Richardson-extrapolated central differences.
             [J, names] = tc.M.partials(e, rr, vv, 'WithRespectTo', ["cdScale", "crScale", "alpha"]);
             tc.verifyEqual(names, ["cdScale" "crScale" "alpha"]);

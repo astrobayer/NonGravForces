@@ -1,7 +1,7 @@
 # Third-party notices
 
 NonGravForces is MIT licensed (see `LICENSE`). That covers the code written for
-this toolbox. It does not cover the third-party source vendored below, and this
+this toolbox. It does not cover the third-party source fetched below, and this
 file records what that source is and what is known about the terms it carries.
 
 ## NRLMSISE-00 — fetched, not redistributed (settled 2026-09-09)
@@ -65,6 +65,45 @@ The build digest covers whatever source is actually compiled, so a different
 release marks the binary stale and forces a rebuild. That is the mechanism that
 makes tracking upstream safe rather than merely convenient.
 
+## NRLMSIS 2.1 — fetched, not redistributed (settled 2026-09-15)
+
+> This software incorporates the MSIS® empirical atmospheric model software
+> designed and provided by NRL. Use is governed by the Open Source Academic
+> Research License Agreement contained in the file nrlmsis2.1_license.txt.
+
+That statement is required by section 4c of the agreement from any package that
+incorporates the software, and it is repeated here, in `mex/ngfMsis21Shim.F90`,
+and by `setupNonGravForces` whenever it fetches the package. (In NRL's release
+tarball the file is named `nrlmsis2.1_license..txt`, with two dots.)
+
+**What the agreement allows, in its own words:** use, reproduction and
+modification "solely for research, academic, and non-profit purposes"; "Any
+commercial use is prohibited." The MIT licence of this toolbox does not and
+cannot widen that: **the `msis21` density backend is available to you only on
+NRL's terms.** Every other backend (`exponential`, `msis00`) is unaffected.
+
+What this repository does about it:
+
+- **Nothing of NRL's is committed.** `setupNonGravForces` downloads NRL's
+  release tarball (`nrlmsis2.1.tar.gz` of 2022-04-04 from
+  `map.nrl.navy.mil`), refuses it unless its SHA-256 is
+  `41e47b29f795d36a5cc252b2858aa2a384c4a7323ace3d48d3ea2f2b37a1a6a8`, and
+  unpacks it into `mex/nrlmsis21` (ignored by git). `'FetchMsis', "never"`
+  leaves the network alone; `NGF_NRLMSIS21` or `buildMex('Msis21Source', ...)`
+  point at a copy you already hold.
+- **No NRL file is modified.** The seven model files are compiled as shipped
+  (gfortran, `-O2 -cpp -DDBLE`) and called through two `bind(C)` wrappers of
+  this toolbox's own (`mex/ngfMsis21Shim.F90`) and a C gateway
+  (`mex/ngfMsis21Gateway.c`).
+- **The agreement travels with the binary.** `NonGravForces.buildMex` copies
+  `nrlmsis2.1_license..txt` beside `msis21Gateway.<mexext>` together with the
+  parameter file, and the build digest covers both (4c: "Each copy of the
+  Software ... shall include a file containing this Agreement").
+
+**Model authors:** John Emmert, Douglas Drob and McArthur Jones Jr. (Naval
+Research Laboratory). Reference: Emmert et al. (2021), NRLMSIS 2.0, *Earth and
+Space Science* 8, e2020EA001321.
+
 ## Data files under data/
 
 `data/eop/`, `data/spaceweather/` and `data/samples/` hold small excerpts of IERS,
@@ -82,12 +121,14 @@ supplying them is the user's responsibility.
 |---|---|---|
 | Earth orientation | yes | `https://datacenter.iers.org/data/9/finals2000A.all` |
 | space weather | yes, with one retry | `https://celestrak.org/SpaceData/SW-All.csv` |
+| IGRF-14 coefficients | yes | `https://www.ngdc.noaa.gov/IAGA/vmod/coeffs/igrf14coeffs.txt` |
 | GRACE-FO Level-1B | yes, 147 MB, members only | `https://isdc-data.gfz.de/grace-fo/Level-1B/JPL/INSTRUMENT/RL04/` |
 
 Every endpoint was fetched before it was written down. IERS answered 200 with the
 fixed-format file; CelesTrak answered 503 once and 200 on the retry, which is why
 that fetch retries; the GFZ archive for 2020-01-01 holds all 65 products under
-exactly the filenames this toolbox's fixtures use, so setup keeps only the two it
-needs and discards the rest.
+exactly the filenames this toolbox's fixtures use, so setup keeps only the three it
+needs (GNV1B, SCA1B, MAG1B) and discards the rest. Since 2026-09-15 every fetched
+file must also pass a check of its first lines before it replaces anything.
 
 `'FetchData', "never"` leaves the network alone entirely.

@@ -4,7 +4,9 @@ classdef tNgfEnv < NgfTestCase
 %   Oracles (none built here): the NRLMSISE-00 DOCUMENTATION §7 table (17
 %   published cases, parsed by this class from whichever release is present in
 %   mex/nrlmsise00 -- the oracle travels with the source, so tracking upstream
-%   cannot silently invalidate it);
+%   cannot silently invalidate it); NRL's msis2.1_test_in.txt and
+%   msis2.1_test_ref_dp.txt (200 cases, read from the NRLMSIS 2.1 package the
+%   msis21 MEX was built from, for the same reason);
 %   tools/pyxcheck/eclipse_check.py (pure-Python disc-overlap integration);
 %   tools/pyxcheck/knocke_check.py (pure-Python 0.25 deg cap integration and an
 %   independent restatement of Knocke's Table 1); the real 2020-01-01 GRACE-C
@@ -15,6 +17,8 @@ classdef tNgfEnv < NgfTestCase
         root
         msisTable    % 17x11 published values (cgs): HE O N2 O2 AR RHO H N ANOM TINF TG
         msisInput    % struct of 1x17 inputs from nrlmsise-00_test.c
+        msis21In     % 200x9 NRL inputs: iyd sec alt glat glong stl f107a f107 Ap
+        msis21Ref    % 200x11 NRL outputs (cgs): He O N2 O2 Ar rho H N O* NO T
         eclipse      % oracle table
         knocke       % oracle table
         au
@@ -47,6 +51,15 @@ classdef tNgfEnv < NgfTestCase
             tc.au = NonGravForces.const().au;
             tc.cLight = referenceSystem.iersConstants().speedOfLight;
             tc.assertTrue(NonGravForces.buildMex('Check', true, 'Target', "msis").present, 'the MSIS MEX must be built before this class runs (ciGate builds it)');
+            % NRLMSIS 2.1: the oracle is read from the package the MEX was built from (buildMex reports where).
+            r21 = NonGravForces.buildMex('Check', true, 'Target', "msis21");
+            tc.assertTrue(r21.upToDate, 'the NRLMSIS 2.1 MEX must be built and current before this class runs (setupNonGravForces fetches the package, ciGate builds it)');
+            tc.msis21In = readmatrix(fullfile(r21.sourceDir, 'msis2.1_test_in.txt'), 'FileType', 'text', 'NumHeaderLines', 1);
+            tc.msis21Ref = readmatrix(fullfile(r21.sourceDir, 'msis2.1_test_ref_dp.txt'), 'FileType', 'text', 'NumHeaderLines', 1);
+            tc.assertSize(tc.msis21In, [200 9], 'msis2.1_test_in.txt holds 200 cases of 9 inputs');
+            tc.assertSize(tc.msis21Ref, [200 20], 'msis2.1_test_ref_dp.txt repeats the 9 inputs and prints 11 outputs');
+            tc.assertEqual(tc.msis21Ref(:, 1:2), tc.msis21In(:, 1:2), 'the reference rows are the input rows, in order');
+            tc.msis21Ref = tc.msis21Ref(:, 10:20);
         end
     end
     methods
@@ -62,6 +75,17 @@ classdef tNgfEnv < NgfTestCase
             end
             d = struct('f107', in.f107(idx), 'f107a', in.f107a(idx), 'ap', ap);
             [rho, sp, T] = NonGravForces.env.density("msis00", ep, lla, [], 'Drivers', d, 'AnomalousOxygen', anomalous, 'LocalSolarTime_h', in.lst(idx));
+        end
+        function [rho, sp, T] = msis21Cases(tc, idx, varargin)
+            % NRL's test cases idx through env.density. The test program reads its inputs as real(4)
+            % and widens them, so the same single-precision values are handed over here; the year is
+            % irrelevant to the model (only the day of year enters) and 2001 has no day 366.
+            X = double(single(tc.msis21In(idx, :)));
+            doy = mod(X(:, 1), 1000);
+            ep = referenceSystem.daySecondToEpoch([51910 + doy - 1, X(:, 2)], "UTC");
+            lla = [deg2rad(X(:, 4))'; deg2rad(X(:, 5))'; X(:, 3)' * 1e3];
+            d = struct('f107', X(:, 8)', 'f107a', X(:, 7)', 'ap', X(:, 9)');
+            [rho, sp, T] = NonGravForces.env.density("msis21", ep, lla, [], 'Drivers', d, varargin{:});
         end
         function [ep, r, q, eop, v] = sampleState(tc)
             eop = referenceSystem.readEop(fullfile(tc.root, 'data', 'eop', 'finals2000A_2019-09_2020-03.all'));
@@ -123,8 +147,14 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyErrorId(@() NonGravForces.env.density("msis00", ep, lla(1:2, :), [], 'Drivers', d), 'NonGravForces:density:inputShape');
             tc.verifyErrorId(@() NonGravForces.env.density("msis00", ep, lla, []), 'NonGravForces:density:inputDrivers');
             tc.verifyErrorId(@() NonGravForces.env.density("exponential", ep, lla, []), 'NonGravForces:density:inputExponential');
-            tc.verifyErrorId(@() NonGravForces.env.density("msis21", ep, lla, [], 'Drivers', d), 'NonGravForces:density:notImplemented');
-            tc.verifyErrorId(@() NonGravForces.env.density("jb2008", ep, lla, [], 'Drivers', d), 'NonGravForces:density:notImplemented');
+            [rho21, sp21, T21, info21] = NonGravForces.env.density("msis21", ep, lla, [], 'Drivers', d);
+            tc.verifySize(rho21, [1 2]); tc.verifySize(sp21, [8 2]); tc.verifySize(T21, [2 2]); tc.verifyTrue(all(rho21 > 0) && all(sp21(:) > 0));
+            tc.verifyEqual(info21.backend, "msis21"); tc.verifyEqual(info21.drivers.source, "caller"); tc.verifyTrue(info21.anomalousOxygen);
+            tc.verifyEqual(info21.msisInput.alt_km, [490 500]); tc.verifyFalse(isfield(info21.msisInput, 'lst_h'), 'msis21 forms local time itself');
+            tc.verifyErrorId(@() NonGravForces.env.density("msis21", ep, lla, [], 'Drivers', d, 'LocalSolarTime_h', [16 16]), 'NonGravForces:density:inputOption');
+            tc.verifyErrorId(@() NonGravForces.env.density("msis21", ep, lla, []), 'NonGravForces:density:inputDrivers');
+            tc.verifyError(@() NonGravForces.env.density("jb2008", ep, lla, [], 'Drivers', d), 'MATLAB:validators:mustBeMember');
+            tc.verifyError(@() NonGravForces.env.density("dtm2020", ep, lla, [], 'Drivers', d), 'MATLAB:validators:mustBeMember');
         end
         function eclipseFactorContract(tc)
             % at 490 km the penumbra spans 67.97..68.51 deg from the anti-Sun point (b -/+ a); 68.25 is inside it
@@ -183,7 +213,13 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyTrue(endsWith(rep.file, "msisGateway." + mexext));
             tc.verifyEqual(rep.target, "msis");
             all2 = NonGravForces.buildMex('Check', true);
-            tc.verifyEqual([all2.target], ["msis" "kernel"]);
+            tc.verifyEqual([all2.target], ["msis" "msis21" "kernel"]);
+            % msis21: the gateway, NRL's seven Fortran files, the shim, the parameter file and the licence, all digested
+            r21 = all2(2);
+            tc.verifyTrue(r21.upToDate); tc.verifyEqual(numel(r21.sources), 11); tc.verifyTrue(endsWith(r21.file, "msis21Gateway." + mexext));
+            tc.verifyEqual(nnz(endsWith(r21.sources, ".F90")), 8); tc.verifyTrue(any(endsWith(r21.sources, "msis21.parm")));
+            tc.verifyTrue(all(isfile(fullfile(fileparts(r21.file), ["msis21.parm" "nrlmsis2.1_license..txt"]))), 'the parameter file and NRL''s licence are copied beside the gateway');
+            tc.verifyEqual(all2(3).sourceDir, "", 'the kernel has no third-party source');
             tc.verifyError(@() NonGravForces.buildMex('Check', true, 'Target', "nosuch"), 'MATLAB:validators:mustBeMember');
         end
     end
@@ -229,6 +265,24 @@ classdef tNgfEnv < NgfTestCase
             end
             tc.verifyEmpty(mismatches, strjoin(mismatches, newline));
             tc.verifyBoundAndRecord("msis00 vs DOCUMENTATION table (17 cases)", worst, 5e-7, "rel", "printed 7 digits; measured 4.8e-7");
+            % NRLMSIS 2.1: NRL's 200 cases. The reference prints sngl() of the double-precision model
+            % with E13.4 (densities, cgs) and F8.2 (T), and the package states that -DDBLE reproduces it
+            % exactly on any compiler. The claim is therefore "within half a unit of the last printed
+            % digit", widened only by the single-precision cast that happened before the printing.
+            % NO (column 10) is not returned by this toolbox; missing species (9.999e-38) must be 0.
+            [rho21, sp21, T21] = tc.msis21Cases(1:200);
+            mine21 = [sp21(1:5, :) * 1e-6; rho21 * 1e-3; sp21(6:8, :) * 1e-6; T21(2, :)]';   % 200x10: He O N2 O2 Ar rho H N O* T
+            ref21 = tc.msis21Ref(:, [1:9 11]);
+            missing = ref21 < 1e-36;                                           % printed 0.9999E-37
+            tc.verifyEqual(mine21(missing), zeros(nnz(missing), 1), 'a species NRLMSIS does not model there is returned as 0');
+            tc.verifyGreaterThan(nnz(missing), 100, 'the oracle must exercise the missing-species rule (measured 103 rows print it)');
+            e = floor(log10(abs(ref21))) + 1;                                  % 0.dddd E e
+            halfUnit = 0.5 * 10 .^ (e - 4);
+            halfUnit(:, 10) = 0.005;                                           % F8.2
+            allowed = halfUnit + double(eps('single')) * abs(ref21);
+            ratio = abs(mine21 - ref21) ./ allowed;
+            ratio(missing) = 0;
+            tc.verifyBoundAndRecord("msis21 vs NRL msis2.1_test_ref_dp (200 cases, 10 columns), in half last printed digits", max(ratio, [], 'all'), 1, "-", "the package's own statement: double precision reproduces its reference exactly; rounding of the print only");
         end
         function eclipseFactorReference(tc)
             % Oracle: pure-Python numerical disc-overlap integration (eclipse_check.py); cylindrical bitwise.
@@ -323,6 +377,14 @@ classdef tNgfEnv < NgfTestCase
             rel = abs(sum(sp .* (c.speciesMass(:) / c.NA), 1) ./ rho - 1);
             tc.verifyBoundAndRecord("msis00 total vs the species sum over const.speciesMass", max(rel), 1e-3, "-", "the backend's molecular masses differ from CODATA/IUPAC values; measured 5.7e-4 on 2026-09-07 and quoted by kernel.dragPanelForce");
             tc.verifyGreaterThan(max(rel), 1e-5, 'if this ever drops the ACCURACY block of dragPanelForce is stale in the other direction');
+            % NRLMSIS 2.1 forms its total as a dot product with ITS masses (msis_constants.F90, CIPM 2007 molar masses
+            % over 1e3 N_A, NO weighted 0). With those masses the species must re-form the total to rounding.
+            [rho21, sp21] = NonGravForces.env.density("msis21", ep, lla, sw);
+            NA = 6.02214076e23;
+            m21 = [4.0 31.9988/2 28.0134 31.9988 39.948 1.0 28.0134/2 31.9988/2]' / (1e3 * NA);     % He O N2 O2 Ar H N O*
+            tc.verifyBoundAndRecord("msis21 total vs the species sum over the model's own masses", max(abs(sum(sp21 .* m21, 1) ./ rho21 - 1)), 8 * eps, "-", "eight products summed in another order");
+            rel21 = abs(sum(sp21 .* (c.speciesMass(:) / c.NA), 1) ./ rho21 - 1);
+            tc.verifyBoundAndRecord("msis21 total vs the species sum over const.speciesMass", max(rel21), 1e-3, "-", "the model's molar masses against this toolbox's; the kernel re-forms the density from the latter");
         end
         function densityPrecision(tc)
             % Exponential model: rho(h0) = rho0 exactly; rho(h0 + H) = rho0/e to 4 eps (one exp, one multiply).
@@ -384,6 +446,13 @@ classdef tNgfEnv < NgfTestCase
             for i = 1:15
                 [rho1, sp1, T1] = tc.msisCases(i, true);
                 tc.verifyEqual(rhoAll(i), rho1); tc.verifyEqual(spAll(:, i), sp1); tc.verifyEqual(TAll(:, i), T1);
+            end
+            % msis21: the 200 NRL cases at once equal every tenth case alone (the gateway loops per epoch;
+            % MSISCALC's cache of the previous input may only ever skip work, never change a value).
+            [rho21, sp21, T21] = tc.msis21Cases(1:200);
+            for i = 1:10:200
+                [rho1, sp1, T1] = tc.msis21Cases(i);
+                tc.verifyEqual(rho21(i), rho1); tc.verifyEqual(sp21(:, i), sp1); tc.verifyEqual(T21(:, i), T1);
             end
         end
         function eclipseFactorVectorization(tc)
@@ -448,6 +517,21 @@ classdef tNgfEnv < NgfTestCase
             [rho, ~, ~, info] = NonGravForces.env.density("msis00", referenceSystem.mjdToEpoch([58849.5; 58849.5], "UTC"), [0 1; 0 1; 0 1000e3], sw);
             tc.verifyTrue(rho(1) > 1 && rho(1) < 1.5, 'sea-level density about 1.2 kg/m^3'); tc.verifyTrue(rho(2) > 0 && rho(2) < 1e-13);
             tc.verifyEqual(info.drivers.source, "spaceWeather"); tc.verifySize(info.drivers.ap, [7 2]);
+            % msis21 on the same real drivers: ground level has no atomic O, H or N (returned 0, not 9.999e-38);
+            % 1000 km evaluates. The gateway re-initialises when the ap mode or the mass flag changes, and must
+            % come back to the same state: a daily-Ap call after a history call and a gtd7-like call is bitwise the first.
+            [rho21, sp21] = NonGravForces.env.density("msis21", referenceSystem.mjdToEpoch([58849.5; 58849.5], "UTC"), [0 1; 0 1; 0 1000e3], sw);
+            tc.verifyTrue(rho21(1) > 1 && rho21(1) < 1.5, 'sea-level density about 1.2 kg/m^3'); tc.verifyTrue(rho21(2) > 0 && rho21(2) < 1e-13);
+            tc.verifyEqual(sp21([2 6 7], 1), [0; 0; 0], 'no O, H, N at ground level: 0, not the model''s missing marker');
+            tc.verifyErrorId(@() NonGravForces.env.density("msis21", ep, [0; NaN; 490e3], [], 'Drivers', d), 'NonGravForces:density:numericNaN');
+            first = NonGravForces.env.density("msis21", ep, [0.3; 1.1; 490e3], [], 'Drivers', d);
+            NonGravForces.env.density("msis21", ep, [0.3; 1.1; 490e3], [], 'Drivers', struct('f107', 70, 'f107a', 71, 'ap', 3 * ones(7, 1)));
+            NonGravForces.env.density("msis21", ep, [0.3; 1.1; 490e3], [], 'Drivers', d, 'AnomalousOxygen', false);
+            tc.verifyEqual(NonGravForces.env.density("msis21", ep, [0.3; 1.1; 490e3], [], 'Drivers', d), first, 're-initialisation returns the gateway to the same state');
+            % the two climatologies on the real day at GRACE-FO height: tens of percent apart, never a factor
+            e490 = referenceSystem.mjdToEpoch((58849:0.125:58849.875)', "UTC"); l490 = [linspace(-1.4, 1.4, 8); linspace(-3, 3, 8); 490e3 * ones(1, 8)];
+            q = NonGravForces.env.density("msis21", e490, l490, sw) ./ NonGravForces.env.density("msis00", e490, l490, sw);
+            tc.verifyBoundAndRecord("msis21 / msis00 at 490 km on 2020-01-01, largest departure of the ratio from 1", max(abs(log(q))), log(2), "-", "two empirical models of the same thermosphere: a plausibility bound on the wiring (species order, units), not a model comparison");
         end
         function eclipseFactorRobustness(tc)
             s = [tc.au; 0; 0]; r = [-(6378137 + 490e3) * cosd(68.25); 0; (6378137 + 490e3) * sind(68.25)];
@@ -530,6 +614,12 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyEqual(spD, sp7, 'the number densities do not depend on the flag');
             % SI: 16 * 1.66e-24 g per particle = 16 * 1.66e-24 * 1e-3 kg, times the number density in m^-3
             tc.verifyBoundAndRecord("gtd7d - gtd7 vs 16 amu x anomalous O", max(abs((rhoD - rho7) - 16 * 1.66e-24 * 1e-3 * spD(8, :)) ./ rhoD), 1e-12, "rel", "two rounding operations, per case");
+            % msis21: the model's own mass flag drops exactly the anomalous-oxygen term of its dot product,
+            % whose weight is 31.9988/2 g/mol over 1e3 N_A (msis_constants.F90); number densities untouched.
+            idx = find(tc.msis21In(:, 3) > 100)';
+            [r21, s21] = tc.msis21Cases(idx); [r21n, s21n] = tc.msis21Cases(idx, 'AnomalousOxygen', false);
+            tc.verifyEqual(s21n, s21, 'msis21 number densities do not depend on the mass flag');
+            tc.verifyBoundAndRecord("msis21 rho - rho(no anomalous O) vs n(O*) m_O", max(abs((r21 - r21n) - s21(8, :) * (31.9988 / 2) / (1e3 * 6.02214076e23)) ./ r21), 1e-14, "rel", "a nine-term and an eight-term dot product; a few eps of the total");
             % exponential: one scale height down multiplies by e, whatever h0
             ep = referenceSystem.mjdToEpoch([58849.5; 58849.5], "UTC"); p = struct('rho0_kg_m3', 3e-12, 'h0_m', 450e3, 'H_m', 60e3);
             rho = NonGravForces.env.density("exponential", ep, [0 0; 0 0; 400e3 340e3], [], 'Exponential', p);
@@ -620,6 +710,9 @@ classdef tNgfEnv < NgfTestCase
             epSmall = referenceSystem.daySecondToEpoch([repmat(58849, 8640, 1) (0:8639)'], "UTC");
             q = tc.speedRatio(@() NonGravForces.env.density("msis00", epBig, llaBig, sw), @() NonGravForces.env.density("msis00", epSmall, llaBig(:, 1:8640), sw));
             tc.verifyBoundAndRecord("msis00 86400 / 8640 epochs time ratio", q / 10, 2, "-", "linear scaling; measured see last_run");
+            % NRLMSIS 2.1 against NRLMSISE-00 on the same 8640 epochs: measured 4.8 (19 us per epoch) on 2026-09-15; budget 3x.
+            q21 = tc.speedRatio(@() NonGravForces.env.density("msis21", epSmall, llaBig(:, 1:8640), sw), @() NonGravForces.env.density("msis00", epSmall, llaBig(:, 1:8640), sw));
+            tc.verifyBoundAndRecord("msis21 / msis00 time ratio, 8640 epochs", q21, 15, "-", "measured 4.8 on 2026-09-15; budget 3x");
         end
         function eclipseFactorSpeed(tc)
             % Conical over cylindrical for 86400 epochs: two asin, an acos and the lens area; measured see last_run. Bound 8.

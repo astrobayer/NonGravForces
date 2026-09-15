@@ -1,7 +1,7 @@
 /* mex.h -- SHIM, NOT MATLAB'S HEADER.
  *
  * Declares just enough of the MEX API for a compiler to check
- * mex/ngfKernelGateway.c on a machine that has no MATLAB. Nothing here is
+ * the MEX gateways (mex/ngfKernelGateway.c, mex/ngfMsis21Gateway.c) on a machine that has no MATLAB. Nothing here is
  * implemented and nothing links: the check is `cc -c`, and it catches the
  * typos, the wrong argument counts and the undeclared identifiers that would
  * otherwise wait for the owner's host. A Tier B session cannot run MEX, but it
@@ -36,6 +36,8 @@ const mxArray *mxGetField(const mxArray *a, mwIndex i, const char *name);
 void           mxSetField(mxArray *a, mwIndex i, const char *name, mxArray *v);
 int            mxIsDouble(const mxArray *a);
 int            mxIsComplex(const mxArray *a);
+int            mxIsChar(const mxArray *a);
+int            mxGetString(const mxArray *a, char *buf, mwSize buflen);
 int            mxIsEmpty(const mxArray *a);
 int            mxIsStruct(const mxArray *a);
 mwSize         mxGetM(const mxArray *a);

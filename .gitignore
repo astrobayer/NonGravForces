@@ -5,12 +5,20 @@ doc/html/custom_toolbox.json
 # Compiled MEX gateways, one extension per platform; built by NonGravForces.buildMex, never committed
 +NonGravForces/+env/private/msisGateway.mex*
 +NonGravForces/+env/private/msisGateway.digest.txt
++NonGravForces/+env/private/msis21Gateway.mex*
++NonGravForces/+env/private/msis21Gateway.digest.txt
++NonGravForces/+env/private/msis21.parm
++NonGravForces/+env/private/nrlmsis2.1_license..txt
 +NonGravForces/+kernel/private/kernelGateway.mex*
 +NonGravForces/+kernel/private/kernelGateway.digest.txt
 
 # NRLMSISE-00 C source, obtained from its maintainer rather than redistributed here.
 # See THIRD-PARTY-NOTICES.md; NonGravForces.buildMex tells you what to do if it is missing.
 mex/nrlmsise00/
+
+# NRLMSIS 2.1 Fortran package of NRL (Open Source Academic Research License: not redistributed).
+# setupNonGravForces fetches the release tarball and checks its SHA-256.
+mex/nrlmsis21/
 
 # Python bytecode caches of the audit and build scripts
 __pycache__/
