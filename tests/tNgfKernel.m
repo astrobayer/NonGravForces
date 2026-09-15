@@ -268,6 +268,25 @@ classdef tNgfKernel < NgfTestCase
             wrong = sin(deg2rad(60)) * (1 ./ o.s(i) + g(i) .* Z(i));    % P/sqrt(pi) replaced by 1/s: the v1 grouping
             tc.verifyGreaterThan(abs(wrong - o.Ctau(i)) / o.Ctau(i), 0.05, 'the D1 regression must be distinguishable from the correct value');
         end
+        function accommodationReference(tc)
+            % Oracle: tools/pyxcheck/accommodation_check.py, a standard-library evaluation of Pilinski (2011) eq. 7.1 with
+            % K_L = 4.98e-17 m^3/K (p. 129-130) and of Paul et al. (2022) eqs. 10-13, written from the source texts by an agent
+            % that did not open this toolbox (T9), over 12 thermosphere cases from 1e12 to 1e17 m^-3 of atomic oxygen and both
+            % substrate masses in circulation. Ar and anomalous O are in the inputs and must not enter the mean mass.
+            % Bound: the same closed forms in two languages, rounding only; the oracle's mass conversion through N_A u
+            % (0.99999999965e-3 kg/mol) is the same as this toolbox's, so 1e-13 relative covers every column.
+            T = readtable(fullfile(tc.root, 'tools', 'pyxcheck', 'accommodation_oracle.csv'));
+            sp = [T.He T.O T.N2 T.O2 T.Ar T.H T.N T.Oanom]';
+            worst = 0;
+            for i = 1:height(T)
+                ap = NonGravForces.kernel.accommodation("pilinski2010", sp(:, i), T.T_K(i));
+                [aw, iw] = NonGravForces.kernel.accommodation("walker2014", sp(:, i), T.T_K(i), 'SurfaceMass_amu', T.surfaceMass_amu(i));
+                got = [ap.alpha, aw.coverage, aw.alphaSubstrate, iw.pressureO_Pa, iw.meanMass_amu];
+                ref = [T.alpha_pilinski2010(i), T.coverage_walker2014(i), T.alphaSubstrate_walker2014(i), T.PO_Pa(i), T.meanMass_amu(i)];
+                worst = max(worst, max(abs(got - ref) ./ abs(ref)));
+            end
+            tc.verifyBoundAndRecord("accommodation vs the independent formula oracle (12 cases, 5 columns)", worst, 1e-13, "-", "closed forms evaluated twice; rounding only");
+        end
         function dragPanelForceReference(tc)
             % Woeske (2019) eq. 5.20 with the projected area as reference: the constantCd plate sum reproduces it
             v = [7600; 30; -20]; rho = 1e-12;

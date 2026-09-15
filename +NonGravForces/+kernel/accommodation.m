@@ -21,17 +21,21 @@ function [acc, info] = accommodation(model, species, T_K, options)
 %                   substrate of alpha 0 to satellites between 150 and 500 km, where
 %                   the fitted alpha spans 0.85-1.00). Outside that range it is an
 %                   extrapolation and info says so.
-%     walker2014    The adsorbate model of Walker, Mehta & Koller (2014, JSR 51(5)):
-%                   a fraction theta of the surface carries adsorbed atomic oxygen
-%                   and accommodates fully, the rest is clean substrate,
+%     walker2014    The adsorbate model as Paul, Sheridan, Licata & Mehta (2022, eqs
+%                   10-13) state it: a fraction theta of the surface carries adsorbed
+%                   atomic oxygen and accommodates fully, the rest is clean substrate,
 %                     theta   = K_L P_O / (1 + K_L P_O),  P_O = n_O k T  [Pa],  K_L = 1.44e6 Pa^-1
 %                     alpha_a = 1
 %                     alpha_s = 3 mu / (1 + mu)^2,  mu = (sum_j x_j m_j) / m_s
-%                   with x_j the mole fractions of H, He, N, N2, O and O2 and m_s the
-%                   mass of a surface lattice particle; the drag of the two states is
-%                   mixed with weight theta (Paul, Sheridan, Licata & Mehta 2022,
-%                   eqs 10-13; K_L = 1.44e6 there, its unit Pa^-1 from P_O formed in SI
-%                   in the WVU RSM Suite that implements it). m_s has no universally
+%                   with x_j the mole fractions of H, He, N, N2, O and O2 (normalised
+%                   over those six) and m_s the mass of a surface lattice particle; the
+%                   drag of the two states is mixed with weight theta. ATTRIBUTION, as
+%                   that paper gives it: the coverage law and K_L to Walker, Mehta &
+%                   Koller (2014, JSR 51(5)), the substrate coefficient to Mehta et al.
+%                   (2022); the name of this option follows the first. K_L's unit is not
+%                   printed; Pa^-1 follows from P_O formed in SI in the WVU RSM Suite
+%                   that implements it (read as Torr^-1, theta would be 0.13 instead of
+%                   0.95 at n_O = 1e15 m^-3, 1000 K). m_s has no universally
 %                   agreed value: 263.3223 amu (Mehta et al. 2022, as cited by Paul
 %                   2022), 65 amu (Pilinski 2011, Table 11.1); the owner chose the first
 %                   for the precise preset (HANDOVER Part I, 2026-09-15), and it is
