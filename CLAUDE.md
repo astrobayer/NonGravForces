@@ -165,9 +165,16 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-09-07, after LP-5x and the debt sweep)
+## 5. Current status (2026-09-16, after LP-C)
 
-- **276/276 GREEN on the CI runner** (2026-09-08, LP-7 WP-30, R2026a Update 5, 219.6 s; predicted
+- **365/365 GREEN on Tier A** (2026-09-16, LP-C complete, R2026a Update 5, `matlab -batch ciGate`
+  over an isolated dependency root; predicted 365, 0 failed, 0 incomplete, 0 category shortfalls),
+  Code Analyzer clean on `+NonGravForces`, `auditPackage.py` clean (55 units, 55 catalogue rows,
+  version 0.10.0), `mex/test/runCChecks.sh` clean (14 bounds). Earlier rounds of LP-C: 334
+  (C1–C4, C7), 352 (C8, C10), 358 (C11). **`Model.rhs` is gone** and the integrator's entry point
+  is `app.DynamicsSource`, whose native C evaluator agrees with `Model.accel` to 2.5e-14 relative
+  at a table node in four configurations.
+- Before LP-C: **276/276 GREEN on the CI runner** (2026-09-08, LP-7 WP-30, R2026a Update 5, 219.6 s; predicted
   276). Before that LP-6b at 270/270, and: **262/262 tests GREEN** (2026-09-08, R2026a Update 4, Tier A host run; predicted 263,
   261 on the branch and 262 after merging main — reconciled in HANDOVER Part I),
   Code Analyzer 0 findings, gate TRUE;
@@ -198,9 +205,13 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   `tools/pyxcheck/sentman_check.py`, `pelt_check.py`); and the LP-5x cross-validation tooling:
   `tools/pyxcheck/ngfkernel/`, an independent standard-library Python mirror of the frozen
   kernel with its parity driver and `tests/tNgfMirror.m` (WP-33; WP-34 needs GROOPS, O-19).
-- **2 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
-- LP-6 added the six `Model` evaluation methods (`accel`, `torque`, `series`, `partials`,
-  `rhs`, `budget`), `env.wind` (co-rotation) and `kernel.partials` (analytic derivatives).
+- **No stubs left.** `io.importCERES` (WP-C8) and `env.magneticField` (WP-C10) were the last two;
+  every catalogued unit is `done` except the `sensor.Sensor` interface row. The catalogue's
+  `status` column is the authority (`doc/functionlist.csv`), not this sentence.
+- LP-6 added five of the `Model` evaluation methods (`accel`, `torque`, `series`, `partials`,
+  `budget`), `env.wind` (co-rotation) and `kernel.partials` (analytic derivatives). A sixth,
+  `rhs`, existed from LP-6 to LP-C and is **removed**: the integrator's entry point is
+  `app.DynamicsSource` (O-4, issue #35).
 - Repository `github.com/astrobayer/NonGravForces` (the account was renamed
   from `matweigelt` on 2026-09-06; `referenceSystem` and `gracefoReading` moved
   with it), local clone at
@@ -308,6 +319,27 @@ bash, which is how the CI-step version died and how the better design was found.
 upstream cannot silently invalidate a reference value — and that table turned out byte-identical
 to the old copy's, so the move disturbed nothing.
 
+**Done 2026-09-16: LP-C (completion), all twelve work packages, 365/365 on Tier A.** It answered a
+whole-repository review's fifteen findings (F1–F15, HANDOVER Part G) and finished the `precise`
+preset. What a later session most needs to know:
+- **Self-shadowing was stated wrongly, not merely coarsely** (F1, F2). The table's "f = 0 on unlit
+  plates" was a radiation-beam rule applied to a thermal gas; it deleted Sentman's edge-on shear on
+  ~15 m² of plates and zeroed the Earth heating of every panel facing away from the Sun. New unit
+  `geom.flowShadow` weights the occlusion by the incident drifting-Maxwellian flux. Measured on 120
+  real epochs: drag moves 1.68e-9 m/s² RMS, thermal 1.77e-9, and the nadir panel stops reading 0 K.
+- **`precise` now evaluates**: NRLMSIS 2.1, HWM14, CERES EBAF 4.2.1, `walker2014` accommodation,
+  IGRF-14. All third-party model source and data are FETCHED by `setupNonGravForces` at pinned
+  SHA-256s and redistributed by nobody.
+- **The integrator's entry exists** (WP-C9): `app.DynamicsSource` and `mex/ngfRhs.c`. `Model.rhs`
+  is gone; `odeSuite` is a gate dependency. See §2's P11 and the dependency table.
+- **Two instruments were found claiming checks they did not make**: the category audit credited a
+  test to any unit whose name appeared in the suite name (F8; four collisions, so a unit could lose
+  all its own tests and stay "complete"), and `CLAUDE.md`'s unit count was compared by nothing.
+  Both now hold. **An instrument's silence is evidence only about what it inspects.**
+- Open after it: O-38 (the theory PDF is behind its `.tex`; no LaTeX on this host), O-3 (CERES
+  SYN1deg), O-16/O-17 (SESAM, CLL/Schamberg — no source in hand), O-19 (GROOPS), O-26 (tagging).
+  **Next is LP-R (release).**
+
 **LP-5x cross-validation** (owner rulings of 2026-08-27):
 - WP-33: standard-library mirror of the **kernel layer only** under
   `tools/pyxcheck/ngfkernel/`, written from the equations (not transcribed from
@@ -317,13 +349,17 @@ to the old copy's, so the move disturbed nothing.
   under `tests/fixtures/groops/` and committed; neither CI nor the host needs a
   GROOPS installation.
 
-**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-31 with an owner
+**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-38 with an owner
 and a re-entry condition each. This file deliberately does NOT list them: the copy that
 used to live here had drifted to O-15 of 21 and showed two closed items as open, and no
 check compared the two (R1). Read Part H.
 
-Housekeeping: the repository has no LICENSE file, and the vendored NRLMSISE-00 sources
-carry no redistribution grant (O-22, the owner's to settle before the repository is public).
+Housekeeping: **both halves of this paragraph are stale and kept as a warning.** The repository has
+carried `LICENSE` (MIT) since 2026-09-09, and NRLMSISE-00 is no longer vendored at all (O-34
+closed the same day) — `setupNonGravForces` clones it at a pinned commit. Every third-party model
+this toolbox uses is now fetched, never redistributed, and each is recorded in
+`THIRD-PARTY-NOTICES.md`. Corrected 2026-09-16 (LP-C WP-C12); it had been wrong for a week because
+nothing compares this file with the repository.
 
 **Version rule (decided 2026-09-06):** the numeric fields of `toolboxVersion`
 are the authority and `semantic` is composed from them; minor = levels
