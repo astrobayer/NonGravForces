@@ -38,9 +38,11 @@ for k = 1:numel(deps)
     run(f);
 end
 cd(here);
-info = setupNonGravForces('Verbose', true);
+% The model sources are fetched when missing (buildMex cannot build without them); the data are NOT:
+% every test reads the committed excerpts, and a 147 MB archive per CI run would test the network.
+info = setupNonGravForces('Verbose', true, 'FetchData', "never");
 mexReport = NonGravForces.buildMex();          % O-14: a runner without a compiler turns the gate red here, by design
-for m = 1:numel(mexReport)                     % one element per target since 0.6.1 (msis, kernel)
+for m = 1:numel(mexReport)                     % one element per target (msis, msis21, kernel)
     fprintf("ciGate: MEX %s (%s) built with %s\n", mexReport(m).file, mexReport(m).target, mexReport(m).compiler);
 end
 req = info.dependencies([info.dependencies.required]);

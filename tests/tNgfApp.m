@@ -430,6 +430,14 @@ classdef tNgfApp < NgfTestCase
             % ...unless the offending sample is masked out, which is the point of the mask.
             m = true(3, 40); m(1, 3) = false;
             tc.verifyWarningFree(@() C(bad, aM, e, 'Mask', m));
+            % Scale "full" reads all three model axes in every axis's row (LP-C F14): a model NaN masked on
+            % its own axis only is still read by the other two, and is refused; masked on every axis it is not.
+            badM = aM; badM(2, 7) = NaN; m2 = true(3, 40); m2(2, 7) = false;
+            tc.verifyWarningFree(@() C(y, badM, e, 'Mask', m2, 'Scale', "diag"));
+            tc.verifyErrorId(@() C(y, badM, e, 'Mask', m2, 'Scale', "full"), 'NonGravForces:calibrate:numericNaN');
+            m3 = true(3, 40); m3(:, 7) = false;
+            calF = C(y, badM, e, 'Mask', m3, 'Scale', "full");
+            tc.verifyTrue(all(isfinite(calF.scale), 'all'), 'masked on every axis, the full scale solves');
             % Fewer usable samples than unknowns is refused, not solved.
             tc.verifyErrorId(@() C(y(:, 1:2), aM(:, 1:2), ...
                 referenceSystem.daySecondToEpoch([tc.ep.day(1:2) tc.ep.sec(1:2)], tc.ep.scale), ...

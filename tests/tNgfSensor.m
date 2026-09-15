@@ -405,7 +405,12 @@ classdef tNgfSensor < NgfTestCase
             tc.verifyErrorId(@() s.observe(bad), 'NonGravForces:AtomInterferometer:numericNaN');
             sr = tNgfSensor.ai('Rotation', true);
             tc.verifyErrorId(@() sr.observe(dyn), 'NonGravForces:AtomInterferometer:inputDyn');
-            tc.verifyErrorId(@() sr.observe(struct('a', dyn.a, 'omega', ones(3, 5), 'velocity', ones(3, K))), ...
+            tc.verifyErrorId(@() sr.observe(struct('a', dyn.a, 'omega', ones(3, 5), 'atomVelocity', ones(3, K))), ...
+                'NonGravForces:AtomInterferometer:inputDyn');
+            % the retired field is refused, not ignored, with and without rotation (LP-C F6)
+            tc.verifyErrorId(@() sr.observe(struct('a', dyn.a, 'omega', ones(3, K), 'velocity', ones(3, K))), ...
+                'NonGravForces:AtomInterferometer:inputDyn');
+            tc.verifyErrorId(@() s.observe(struct('a', dyn.a, 'velocity', ones(3, K))), ...
                 'NonGravForces:AtomInterferometer:inputDyn');
             tc.verifyErrorId(@() s.noiseModel(0), 'NonGravForces:AtomInterferometer:inputShape');
         end
@@ -422,28 +427,28 @@ classdef tNgfSensor < NgfTestCase
             tc.verifyBoundAndRecord("constant acceleration gives exactly k_eff a T^2", ...
                 max(abs(y.value(y.mask) - want)) / want, 1e-15, "-", ...
                 "the kernel is normalised to unit sum, so a constant passes through untouched");
-            % The Coriolis phase against an independent evaluation of -2 k_eff T^2 <n, omega x v>,
-            % with omega and v constant so the weighting is again exact.
+            % The Coriolis phase against an independent evaluation of -2 k_eff T^2 <n, omega x v_at>,
+            % with omega and v_at constant so the weighting is again exact.
             sr = tNgfSensor.ai('Rotation', true);
-            w0 = [0; 0; 1.1e-3]; v0 = [0; 7600; 0];
-            dyn = struct('a', zeros(3, K), 'omega', repmat(w0, 1, K), 'velocity', repmat(v0, 1, K));
+            w0 = [0; 0; 1.1e-3]; v0 = [0; 1e-3; 0];                % 1 mm/s atom velocity relative to the instrument
+            dyn = struct('a', zeros(3, K), 'omega', repmat(w0, 1, K), 'atomVelocity', repmat(v0, 1, K));
             yr = sr.observe(dyn);
             wantCor = -2 * 1.610e7 * 0.5^2 * dot([1; 0; 0], cross(w0, v0));
             tc.verifyBoundAndRecord("the Coriolis phase matches -2 k_eff T^2 <n, omega x v>", ...
                 max(abs(yr.value(yr.mask) - wantCor)) / abs(wantCor), 1e-15, "-", ...
                 "an independent evaluation of the same closed form on constant inputs");
-            % THE NUMBER IS 6.73e7 RADIANS, and the first version of this test said "thousands"
-            % from an estimate that was four orders out. Worth getting right, because the correct
-            % figure is the whole argument: 2 |omega x v| = 16.7 m/s^2 is an apparent acceleration
-            % larger than gravity, 1.07e7 fringes across the readout. An orbiting interferometer
-            % that does not counter-rotate its Raman mirror does not measure a small bias on top
-            % of the drag -- it has no fringe left to read.
-            tc.verifyBoundAndRecord("Coriolis phase for a GRACE-like rate and speed", ...
-                abs(wantCor), 1e9, "rad", ...
-                sprintf("6.73e7 rad = 1.07e7 fringes = an apparent 16.7 m/s^2, against a drag of 1e-7; the bound is a smoke ceiling, the number is the point"));
+            % THE SIZE OF THE TERM, with the right velocity. Until 2026-09-15 this test fed the ORBITAL
+            % velocity (7.6 km/s) and recorded 6.73e7 rad, an apparent 16.7 m/s^2; atoms and satellite
+            % share that velocity and it cancels (LP-C F6). The atoms' own velocity relative to the
+            % instrument is millimetres per second: 2 |omega x v_at| = 2.2e-6 m/s^2 at 1 mm/s and
+            % 1.1 mrad/s, 8.9 rad, still seven times a 3e-7 drag. The bound is a ceiling a factor ten
+            % above the closed form; the recorded number is the point.
+            tc.verifyBoundAndRecord("Coriolis phase for a GRACE-like rate and 1 mm/s atom velocity", ...
+                abs(wantCor), 100, "rad", ...
+                "2 k_eff T^2 |omega x v_at| = 8.86 rad = 1.41 fringes; ceiling 100");
             tc.verifyBoundAndRecord("Coriolis phase as an equivalent acceleration", ...
-                abs(wantCor) / (1.610e7 * 0.5^2), 1e3, "m/s^2", ...
-                "16.7 m/s^2: the rotation term is not a correction to the measurement, it is larger than everything the instrument is there to see");
+                abs(wantCor) / (1.610e7 * 0.5^2) / 3e-7, 100, "-", ...
+                "in units of a 3e-7 m/s^2 drag: 7.3, so the rotation term is not a correction to the measurement but a term larger than it");
         end
     end
     methods (Test, TestTags = {'precision'})
@@ -524,7 +529,7 @@ classdef tNgfSensor < NgfTestCase
             sr = tNgfSensor.ai('Rotation', true);
             ax = [0; 0; 1];
             yPar = sr.observe(struct('a', zeros(3, K), 'omega', repmat(2e-3 * ax, 1, K), ...
-                'velocity', repmat(7600 * ax, 1, K)));
+                'atomVelocity', repmat(1e-2 * ax, 1, K)));
             tc.verifyBoundAndRecord("velocity along the rotation axis gives no Coriolis phase", ...
                 max(abs(yPar.value)), 0, "rad", "omega x v vanishes identically when the two are parallel");
             % Above the cycle Nyquist the noise model reports Inf rather than a number.
@@ -559,9 +564,9 @@ classdef tNgfSensor < NgfTestCase
                 "the projection <n, a> is the only place the direction enters");
             % 4. The Coriolis phase is odd in omega: reversing the rotation reverses it.
             sr = tNgfSensor.ai('Rotation', true);
-            w0 = repmat([0; 0; 1.1e-3], 1, K); v0 = repmat([0; 7600; 0], 1, K);
-            yP = sr.observe(struct('a', zeros(3, K), 'omega', w0, 'velocity', v0));
-            yM = sr.observe(struct('a', zeros(3, K), 'omega', -w0, 'velocity', v0));
+            w0 = repmat([0; 0; 1.1e-3], 1, K); v0 = repmat([0; 1e-3; 0], 1, K);
+            yP = sr.observe(struct('a', zeros(3, K), 'omega', w0, 'atomVelocity', v0));
+            yM = sr.observe(struct('a', zeros(3, K), 'omega', -w0, 'atomVelocity', v0));
             tc.verifyBoundAndRecord("the Coriolis phase is odd in omega", ...
                 max(abs(yP.value + yM.value)) / max(abs(yP.value)), 1e-15, "-", ...
                 "omega x v contains omega once");

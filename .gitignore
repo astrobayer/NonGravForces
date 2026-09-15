@@ -27,3 +27,9 @@ __pycache__/
 # not redistributable). Kept locally, never committed; the toolbox cites them by DOI.
 doc/references/
 tools/benchmark_last.txt
+
+# Full products fetched by setupNonGravForces('FetchData', ...): never committed. The committed
+# excerpts under data/ carry dated names (eop, space weather) or live in data/samples (Level-1B).
+data/eop/finals2000A.all
+data/spaceweather/SW-All.csv
+data/l1b/

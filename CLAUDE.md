@@ -263,8 +263,10 @@ O-33 are void.
 `sensor.AtomInterferometer` (WP-29) is delivered: the triangular sensitivity kernel (a phase is an
 average, not a sample), one reading per cycle with nothing interpolated across the dead time, and
 the 2 pi ambiguity kept explicit — full phase, wrapped phase, and the fringe integer between them.
-The Coriolis phase at orbital rates is **6.7e7 rad**, an apparent 16.7 m/s^2: not a correction to
-the measurement but larger than everything the instrument exists to see.
+The Coriolis phase is driven by the ATOM velocity relative to the instrument (`dyn.atomVelocity`,
+mm/s), not the orbital velocity, which atoms and satellite share: at 1.1 mrad/s and 1 mm/s it is
+8.9 rad, an apparent 2.2e-6 m/s^2, seven times the drag. The 16.7 m/s^2 recorded here until
+2026-09-15 came from feeding the orbital velocity in (LP-C F6).
 
 `sensor.DragFree` (WP-29) closes the level: the residual a loop FAILS to remove, as a cascade of
 bilinear high-pass sections with actuator saturation and a masked start-up transient.
