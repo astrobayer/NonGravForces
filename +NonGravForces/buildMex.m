@@ -5,7 +5,7 @@ function report = buildMex(options)
 %   report = NonGravForces.buildMex('Check', true)            % report only, nothing compiled
 %   report = NonGravForces.buildMex('Target', "kernel")       % one target, scalar report
 %
-%   The three places compiled code is sanctioned (HANDOVER C3, LP-C WP-C6), and no others:
+%   The four places compiled code is sanctioned (HANDOVER C3, LP-C WP-C6 and WP-C11), and no others:
 %
 %     msis    the NRLMSISE-00 C source plus the marshalling gateway
 %             mex/ngfMsisGateway.c, built into +env/private/msisGateway, where
@@ -38,6 +38,12 @@ function report = buildMex(options)
 %             (-cpp -DDBLE, which the package names as the setting that reproduces its
 %             reference output exactly), and libgfortran is linked STATICALLY so the
 %             binary needs no DLL from the compiler at run time.
+%     hwm14   the UNMODIFIED HWM14 Fortran of NRL (Drob et al. 2015), a bind(C) shim
+%             (mex/ngfHwm14Shim.F90) and the gateway mex/ngfHwm14Gateway.c, built into
+%             +env/private/hwm14Gateway with the model's three data files beside it.
+%             setupNonGravForces fetches the files by SHA-256 into mex/hwm14;
+%             'Hwm14Source' and NGF_HWM14 point elsewhere. Same compiler and static
+%             runtime as msis21; the model itself is single precision.
 %     kernel  the single-epoch kernel mex/ngfKernel.c and its gateway
 %             mex/ngfKernelGateway.c (LP-6b, WP-17b), built into
 %             +kernel/private/kernelGateway, where
@@ -64,18 +70,20 @@ function report = buildMex(options)
 %   Name     Size  Type     Units  Description
 %   ----     ----  ----     -----  -----------
 %   Check    1x1   logical  -      true: report only (default false).
-%   Target   1x1   string   -      "all" (default), "msis", "msis21" or "kernel". "all"
+%   Target   1x1   string   -      "all" (default), "msis", "msis21", "hwm14" or "kernel". "all"
 %                                  returns one report per target, in that order.
 %   MsisSource 1x1 string   -      Directory holding the NRLMSISE-00 C source. Default: the
 %                                  NGF_NRLMSISE00 environment variable if set, else mex/nrlmsise00.
 %   Msis21Source 1x1 string -      Directory holding the NRLMSIS 2.1 package. Default: the
 %                                  NGF_NRLMSIS21 environment variable if set, else mex/nrlmsis21.
+%   Hwm14Source 1x1 string  -      Directory holding the HWM14 files. Default: the NGF_HWM14
+%                                  environment variable if set, else mex/hwm14.
 %
 % OUTPUT ARGUMENTS
 %   Name     Size  Type    Units  Description
 %   ----     ----  ----    -----  -----------
 %   report   1xT   struct  -      One element per target (T = 1 for a named
-%                                 Target, 3 for "all"), each with
+%                                 Target, 4 for "all"), each with
 %                                 .target (string), .file (string),
 %                                 .present (logical),
 %                                 .upToDate (logical: present and digest
@@ -100,7 +108,7 @@ function report = buildMex(options)
 %   NonGravForces:buildMex:depCompiler   no C compiler selected and no MinGW-w64
 %                                        support package found; or no gfortran beside
 %                                        the selected compiler (msis21)
-%   NonGravForces:buildMex:depMissing    the NRLMSISE-00 or NRLMSIS 2.1 source is absent
+%   NonGravForces:buildMex:depMissing    the NRLMSISE-00, NRLMSIS 2.1 or HWM14 source is absent
 %   NonGravForces:buildMex:dataMissing   a source file of mex/ is missing
 %   NonGravForces:buildMex:numericBuild  gfortran refused a file (its output is in the message)
 %   MATLAB:mex:*                         compiler errors propagate unwrapped
@@ -114,9 +122,10 @@ function report = buildMex(options)
 % Created 2026-09-07 by Claude Fable 5.1 (Anthropic); second target 2026-09-08, msis21 2026-09-15 by Claude Opus 5 (Anthropic).
 arguments
     options.Check (1,1) logical = false
-    options.Target (1,1) string {mustBeMember(options.Target, ["all","msis","msis21","kernel"])} = "all"
+    options.Target (1,1) string {mustBeMember(options.Target, ["all","msis","msis21","hwm14","kernel"])} = "all"
     options.MsisSource (1,1) string = ""
     options.Msis21Source (1,1) string = ""
+    options.Hwm14Source (1,1) string = ""
 end
 unit = "buildMex";
 pkgRoot = fileparts(mfilename('fullpath'));                 % +NonGravForces
@@ -124,6 +133,7 @@ root = fileparts(pkgRoot);
 mexDir = fullfile(root, 'mex');
 msisDir = localSourceDir(options.MsisSource, 'NGF_NRLMSISE00', fullfile(mexDir, 'nrlmsise00'));
 msis21Dir = localSourceDir(options.Msis21Source, 'NGF_NRLMSIS21', fullfile(mexDir, 'nrlmsis21'));
+hwm14Dir = localSourceDir(options.Hwm14Source, 'NGF_HWM14', fullfile(mexDir, 'hwm14'));
 % NRL's compile order: each file uses the modules of the files before it (readme.txt).
 msis21Fortran = fullfile(msis21Dir, ["msis_constants" "msis_utils" "msis_init" "msis_gfn" "msis_tfn" "msis_dfn" "msis_calc"] + ".F90");
 % One row per target: everything that differs between them lives here and
@@ -131,18 +141,21 @@ msis21Fortran = fullfile(msis21Dir, ["msis_constants" "msis_utils" "msis_init" "
 % fortran: compiled first, in order, and linked into the gateway; data: copied beside the binary.
 % Both take part in the digest, the parameter file included: other coefficients are another model.
 targets = struct( ...
-    'name',    {"msis", "msis21", "kernel"}, ...
-    'output',  {'msisGateway', 'msis21Gateway', 'kernelGateway'}, ...
-    'outDir',  {fullfile(pkgRoot, '+env', 'private'), fullfile(pkgRoot, '+env', 'private'), fullfile(pkgRoot, '+kernel', 'private')}, ...
-    'include', {char(msisDir), mexDir, mexDir}, ...
-    'sourceDir', {msisDir, msis21Dir, ""}, ...
-    'fortran', {strings(1, 0), [msis21Fortran, string(fullfile(mexDir, 'ngfMsis21Shim.F90'))], strings(1, 0)}, ...
-    'data',    {strings(1, 0), fullfile(msis21Dir, ["msis21.parm" "nrlmsis2.1_license..txt"]), strings(1, 0)}, ...
+    'name',    {"msis", "msis21", "hwm14", "kernel"}, ...
+    'output',  {'msisGateway', 'msis21Gateway', 'hwm14Gateway', 'kernelGateway'}, ...
+    'outDir',  {fullfile(pkgRoot, '+env', 'private'), fullfile(pkgRoot, '+env', 'private'), fullfile(pkgRoot, '+env', 'private'), fullfile(pkgRoot, '+kernel', 'private')}, ...
+    'include', {char(msisDir), mexDir, mexDir, mexDir}, ...
+    'sourceDir', {msisDir, msis21Dir, hwm14Dir, ""}, ...
+    'fortran', {strings(1, 0), [msis21Fortran, string(fullfile(mexDir, 'ngfMsis21Shim.F90'))], ...
+                [string(fullfile(hwm14Dir, 'hwm14.f90')), string(fullfile(mexDir, 'ngfHwm14Shim.F90'))], strings(1, 0)}, ...
+    'data',    {strings(1, 0), fullfile(msis21Dir, ["msis21.parm" "nrlmsis2.1_license..txt"]), ...
+                fullfile(hwm14Dir, ["hwm123114.bin" "dwm07b104i.dat" "gd2qd.dat"]), strings(1, 0)}, ...
     'sources', {string({fullfile(mexDir, 'ngfMsisGateway.c'), ...
                         char(fullfile(msisDir, 'nrlmsise-00.c')), ...
                         char(fullfile(msisDir, 'nrlmsise-00_data.c')), ...
                         char(fullfile(msisDir, 'nrlmsise-00.h'))}), ...
                 string(fullfile(mexDir, 'ngfMsis21Gateway.c')), ...
+                string(fullfile(mexDir, 'ngfHwm14Gateway.c')), ...
                 string({fullfile(mexDir, 'ngfKernelGateway.c'), ...
                         fullfile(mexDir, 'ngfKernel.c'), ...
                         fullfile(mexDir, 'ngfKernel.h')})});
@@ -230,6 +243,8 @@ function h = localSourceHint(name)
 %LOCALSOURCEHINT The option and environment variable that relocate a target's third-party source.
 if name == "msis21"
     h = "NGF_NRLMSIS21 or 'Msis21Source'";
+elseif name == "hwm14"
+    h = "NGF_HWM14 or 'Hwm14Source'";
 else
     h = "NGF_NRLMSISE00 or 'MsisSource'";
 end

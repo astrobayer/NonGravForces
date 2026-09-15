@@ -92,7 +92,7 @@ classdef Model
 %   NonGravForces:Model:inputState      epoch, r, v or q disagree in size, or are not finite
 %   NonGravForces:Model:inputAttitude   no q was given and the Model has no attitude provider
 %   NonGravForces:Model:dependEop       evaluated without 'Eop'
-%   NonGravForces:Model:dependWeather   evaluated without 'SpaceWeather' or 'Exponential' for the density backend
+%   NonGravForces:Model:dependWeather   evaluated without 'SpaceWeather' or 'Exponential' for the density backend, or without 'SpaceWeather' for drag.wind hwm14
 %   NonGravForces:Model:dependCeres     evaluated with erp.backend ceres and no 'Ceres'
 %   NonGravForces:Model:unsupported     a method option this Model cannot honour (partials of alpha for a
 %                                       computed accommodation, transient thermal under parfor, unknown quantities)
@@ -395,7 +395,14 @@ classdef Model
                 NonGravForces.fail("Model", "dependEop", "evaluating needs 'Eop' at construction -> the geodetic height and the co-rotation both come from the ITRS rotation, and neither may be guessed");
             end
             % 1. relative velocity, GCRS then body
-            [vrel, windInfo] = NonGravForces.env.wind(o.drag.wind, epoch, r, v, 'Eop', obj.eop);
+            windArgs = {};
+            if o.drag.wind == "hwm14"
+                if isempty(obj.spaceWeather)
+                    NonGravForces.fail("Model", "dependWeather", "drag.wind hwm14 needs 'SpaceWeather' at construction for the 3-hour ap -> pass io.spaceWeather(file)");
+                end
+                windArgs = {'SpaceWeather', obj.spaceWeather};
+            end
+            [vrel, windInfo] = NonGravForces.env.wind(o.drag.wind, epoch, r, v, 'Eop', obj.eop, windArgs{:});
             R = referenceSystem.rotationFromQuaternion(q);                 % body -> GCRS
             vrelBody = reshape(pagemtimes(pagetranspose(R), reshape(vrel, 3, 1, K)), 3, K);
             % 2. geodetic height from the ITRS position

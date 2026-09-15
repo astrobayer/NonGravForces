@@ -104,6 +104,25 @@ What this repository does about it:
 Research Laboratory). Reference: Emmert et al. (2021), NRLMSIS 2.0, *Earth and
 Space Science* 8, e2020EA001321.
 
+## HWM14 — fetched, not redistributed (settled 2026-09-15)
+
+The Horizontal Wind Model 14 (Drob et al. 2015, Earth and Space Science 2, 301;
+DWM07: Emmert et al. 2008, JGR 113, doi:10.1029/2008JA013541) by the Naval Research Laboratory is
+not in this repository. Its package (`README.txt`, `hwm14.f90`) carries no licence
+or redistribution statement, which this file reads the same way as NRLMSISE-00's:
+no grant, and none implied by its absence.
+
+`setupNonGravForces` fetches seven files into `mex/hwm14` (ignored by git), each
+kept only if its SHA-256 is the pinned one: `hwm14.f90`, `hwm123114.bin`,
+`checkhwm14.f90`, `Check/gfortran.txt` (saved as `gfortran.txt`) and `README.txt`
+from NRL's supplement (`map.nrl.navy.mil/map/pub/nrl/HWM/HWM14/HWM14_ess224-sup-0002-supinfo/`);
+and `dwm07b104i.dat` and `gd2qd.dat`, which NRL's server answers with HTTP 403,
+from the `rilma/pyHWM14` repository (MIT-licensed wrapper) at commit
+`115fd958f4d196d6eb89bf6d997b5930355ada98`. Those two are vouched for by NRL's
+own check driver, built from exactly these seven files, reproducing NRL's
+`Check/gfortran.txt` line for line (2026-09-15). No file is modified; the model is
+called through `mex/ngfHwm14Shim.F90` and `mex/ngfHwm14Gateway.c`.
+
 ## Data files under data/
 
 `data/eop/`, `data/spaceweather/`, `data/samples/` and `data/ceres/` hold small

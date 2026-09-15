@@ -9,6 +9,11 @@ doc/html/custom_toolbox.json
 +NonGravForces/+env/private/msis21Gateway.digest.txt
 +NonGravForces/+env/private/msis21.parm
 +NonGravForces/+env/private/nrlmsis2.1_license..txt
++NonGravForces/+env/private/hwm14Gateway.mex*
++NonGravForces/+env/private/hwm14Gateway.digest.txt
++NonGravForces/+env/private/hwm123114.bin
++NonGravForces/+env/private/dwm07b104i.dat
++NonGravForces/+env/private/gd2qd.dat
 +NonGravForces/+kernel/private/kernelGateway.mex*
 +NonGravForces/+kernel/private/kernelGateway.digest.txt
 
@@ -19,6 +24,9 @@ mex/nrlmsise00/
 # NRLMSIS 2.1 Fortran package of NRL (Open Source Academic Research License: not redistributed).
 # setupNonGravForces fetches the release tarball and checks its SHA-256.
 mex/nrlmsis21/
+
+# HWM14 Fortran and data (NRL; no redistribution grant). setupNonGravForces fetches them by SHA-256.
+mex/hwm14/
 
 # Python bytecode caches of the audit and build scripts
 __pycache__/

@@ -104,6 +104,18 @@ classdef tNgfEnv < NgfTestCase
         function R = eyes(~, K)
             R = repmat(eye(3), 1, 1, K);
         end
+        function [info, rG, ep] = hwmAt(tc, eop, doy, sec, glat, glon, alt_km, varargin)
+            % env.wind "hwm14" at 1995 day-of-year/UT and geodetic points given in degrees and km (NRL's check
+            % driver inputs, single precision as the driver declares them); the GCRS position goes through the
+            % same rotation the unit applies, so the model sees the geodetic point back to rounding.
+            n = numel(glat);
+            X = double(single([repmat(sec, 1, n / numel(sec)); glat; glon; alt_km]));
+            ep = referenceSystem.daySecondToEpoch([repmat(49718 + doy - 1, n, 1), X(1, :)'], "UTC");      % MJD 49718 = 1995-01-01
+            rI = referenceSystem.geodeticToCartesian([X(2, :)' X(3, :)' X(4, :)' * 1e3], 'Ellipsoid', "WGS84", 'AngleUnit', "deg")';
+            R = referenceSystem.rotationItrsToGcrs(ep, 'Eop', eop);
+            rG = reshape(pagemtimes(R, reshape(rI, 3, 1, n)), 3, n);
+            [~, info] = NonGravForces.env.wind("hwm14", ep, rG, zeros(3, n), 'Eop', eop, varargin{:});
+        end
         function [ep, r, q, eop, v] = sampleState(tc)
             eop = referenceSystem.readEop(fullfile(tc.root, 'data', 'eop', 'finals2000A_2019-09_2020-03.all'));
             [ep, r, v] = NonGravForces.io.readGNV1B(fullfile(tc.root, 'data', 'samples', 'GNV1B_2020-01-01_C_04.txt'), 'Eop', eop);
@@ -141,7 +153,19 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyEqual(vn, v, 'the none model returns the inertial velocity untouched');
             tc.verifyEqual(iN.corotation_m_s, zeros(size(v)));
             w = @(varargin) NonGravForces.env.wind(varargin{:});
-            tc.verifyErrorId(@() w("hwm14", ep, r, v, 'Eop', eop), 'NonGravForces:wind:notImplemented');
+            % hwm14: the co-rotation plus the model wind, and its inputs refused wherever nothing reads them
+            sw = NonGravForces.io.spaceWeather(fullfile(tc.root, 'data', 'spaceweather', 'SW-All_2019-09_2020-03.csv'));
+            [vh, ih] = w("hwm14", ep, r, v, 'Eop', eop, 'SpaceWeather', sw);
+            tc.verifySize(ih.hwm14.northEast_m_s, [2 size(v, 2)]); tc.verifySize(ih.hwm14.gcrs_m_s, size(v)); tc.verifySize(ih.hwm14.geodetic, size(v));
+            tc.verifyTrue(ih.hwm14.disturbed); tc.verifySize(ih.hwm14.ap, [1 size(v, 2)]); tc.verifyEqual(ih.model, "hwm14");
+            tc.verifyEqual(vh, v - ih.corotation_m_s - ih.hwm14.gcrs_m_s, 'vrel is v minus the co-rotation minus the model wind');
+            tc.verifyEmpty(info.hwm14, 'no model wind for corotation');
+            tc.verifyErrorId(@() w("hwm14", ep, r, v, 'Eop', eop), 'NonGravForces:wind:inputAp');
+            tc.verifyErrorId(@() w("hwm14", ep, r, v, 'Eop', eop, 'SpaceWeather', sw, 'Ap', 4), 'NonGravForces:wind:inputAp');
+            tc.verifyErrorId(@() w("hwm14", ep, r, v, 'Eop', eop, 'Ap', -1), 'NonGravForces:wind:inputAp');
+            tc.verifyErrorId(@() w("hwm14", ep, r, v, 'Eop', eop, 'Disturbed', false, 'Ap', 4), 'NonGravForces:wind:inputAp');
+            tc.verifyErrorId(@() w("corotation", ep, r, v, 'Eop', eop, 'Ap', 4), 'NonGravForces:wind:inputAp');
+            tc.verifyErrorId(@() w("hwm14", ep, r, v, 'Disturbed', false), 'NonGravForces:wind:inputEop');
             tc.verifyErrorId(@() w("corotation", ep, r, v), 'NonGravForces:wind:inputEop');
             tc.verifyErrorId(@() w("corotation", ep, r(:, 1:2), v, 'Eop', eop), 'NonGravForces:wind:inputShape');
             tc.verifyErrorId(@() w("none", ep, r, v, 'Wind_m_s', zeros(3, 2)), 'NonGravForces:wind:inputShape');
@@ -268,13 +292,16 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyTrue(endsWith(rep.file, "msisGateway." + mexext));
             tc.verifyEqual(rep.target, "msis");
             all2 = NonGravForces.buildMex('Check', true);
-            tc.verifyEqual([all2.target], ["msis" "msis21" "kernel"]);
+            tc.verifyEqual([all2.target], ["msis" "msis21" "hwm14" "kernel"]);
+            rh = all2(3);
+            tc.verifyTrue(rh.upToDate); tc.verifyEqual(numel(rh.sources), 6); tc.verifyTrue(endsWith(rh.file, "hwm14Gateway." + mexext));
+            tc.verifyTrue(all(isfile(fullfile(fileparts(rh.file), ["hwm123114.bin" "dwm07b104i.dat" "gd2qd.dat"]))), 'the three data files are copied beside the gateway');
             % msis21: the gateway, NRL's seven Fortran files, the shim, the parameter file and the licence, all digested
             r21 = all2(2);
             tc.verifyTrue(r21.upToDate); tc.verifyEqual(numel(r21.sources), 11); tc.verifyTrue(endsWith(r21.file, "msis21Gateway." + mexext));
             tc.verifyEqual(nnz(endsWith(r21.sources, ".F90")), 8); tc.verifyTrue(any(endsWith(r21.sources, "msis21.parm")));
             tc.verifyTrue(all(isfile(fullfile(fileparts(r21.file), ["msis21.parm" "nrlmsis2.1_license..txt"]))), 'the parameter file and NRL''s licence are copied beside the gateway');
-            tc.verifyEqual(all2(3).sourceDir, "", 'the kernel has no third-party source');
+            tc.verifyEqual(all2(4).sourceDir, "", 'the kernel has no third-party source');
             tc.verifyError(@() NonGravForces.buildMex('Check', true, 'Target', "nosuch"), 'MATLAB:validators:mustBeMember');
         end
     end
@@ -302,6 +329,49 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyBoundAndRecord("co-rotation speed vs omega * sqrt(x^2 + y^2) over the arc", ...
                 max(abs(vecnorm(info.corotation_m_s) - nominalSpeed) ./ nominalSpeed), 5e-3, "-", ...
                 "the residual is the polar motion and the length-of-day term; measured 2e-6 over 600 epochs spanning 256 to 467 m/s");
+        end
+        function windHwm14Reference(tc)
+            % Oracle: NRL's own check output for HWM14 (Check/gfortran.txt, read from the package the MEX was built from),
+            % printed to 1 mm/s, for the height, latitude, local-time, longitude, day-of-year and ap profiles of
+            % checkhwm14.f90, whose fixed inputs are transcribed below from that driver. Through THIS unit: epoch,
+            % GCRS position, rotation, geodetic conversion and the rotation of the wind back are all in the loop.
+            % Quiet columns use 'Disturbed', false; total columns 'Ap'. Rows the unit cannot pose are left out and
+            % named: the two poles (north and east undefined by a position), day 0 (no such date), local times
+            % whose UT the driver pushes past 86400 s (a date interface normalises them into the next day), and the
+            % surface row (a point on the ellipsoid comes back from the geodetic round trip a nanometre below it,
+            % where the unit refuses because HWM14 does not return).
+            r21 = NonGravForces.buildMex('Check', true, 'Target', "hwm14");
+            txt = splitlines(string(fileread(fullfile(r21.sourceDir, 'gfortran.txt'))));
+            eop = referenceSystem.readEop(fullfile(referenceSystem.dataFolder(), 'finals2000A.all'));
+            prof = struct('title', {"height profile", "latitude profile", "local time profile", "longitude profile", "day of year profile", "magnetic activity profile"});
+            worst = 0; rows = 0;
+            for p = 1:numel(prof)
+                k0 = find(strtrim(txt) == prof(p).title, 1) + 4;
+                tab = [];
+                while k0 <= numel(txt) && strlength(strtrim(txt(k0))) > 0
+                    tab(end+1, :) = double(split(strtrim(txt(k0))))'; %#ok<AGROW>
+                    k0 = k0 + 1;
+                end
+                x = tab(:, 1)'; n = numel(x);
+                switch p
+                    case 1, doy = 150 * ones(1, n); sec = 43200 * ones(1, n); la = -45 * ones(1, n); lo = -85 * ones(1, n); h = x; ap = 80 * ones(1, n); keep = x > 0;
+                    case 2, doy = 305 * ones(1, n); sec = 64800 * ones(1, n); la = x; lo = 30 * ones(1, n); h = 250 * ones(1, n); ap = 48 * ones(1, n); keep = abs(x) < 90;
+                    case 3, doy = 75 * ones(1, n); lo = -70 * ones(1, n); sec = double(single((single(x) - single(lo) / 15) * 3600)); la = 45 * ones(1, n); h = 125 * ones(1, n); ap = 30 * ones(1, n); keep = sec < 86400;
+                    case 4, doy = 330 * ones(1, n); sec = 21600 * ones(1, n); la = -5 * ones(1, n); lo = x; h = 40 * ones(1, n); ap = 4 * ones(1, n); keep = true(1, n);
+                    case 5, doy = x; sec = 75600 * ones(1, n); la = -65 * ones(1, n); lo = -135 * ones(1, n); h = 200 * ones(1, n); ap = 15 * ones(1, n); keep = x > 0;
+                    case 6, doy = 280 * ones(1, n); sec = 75600 * ones(1, n); la = 38 * ones(1, n); lo = 125 * ones(1, n); h = 350 * ones(1, n); ap = x; keep = true(1, n);
+                end
+                for i = find(keep)
+                    iq = tc.hwmAt(eop, doy(i), sec(i), la(i), lo(i), h(i), 'Disturbed', false);
+                    it = tc.hwmAt(eop, doy(i), sec(i), la(i), lo(i), h(i), 'Ap', ap(i));
+                    q = iq.hwm14.northEast_m_s; t = it.hwm14.northEast_m_s;
+                    worst = max([worst, abs(q' - tab(i, 2:3)), abs(t' - tab(i, 6:7)), abs((t - q)' - tab(i, 4:5)) / 2]);
+                    rows = rows + 1;
+                end
+            end
+            tc.assertGreaterThan(rows, 90, 'the six profiles must be exercised');
+            tc.verifyBoundAndRecord("hwm14 through env.wind vs NRL Check/gfortran.txt (" + string(rows) + " rows, m/s)", worst, 6e-4, "m/s", ...
+                "half a printed unit (5e-4) plus the model's single-precision response to a geodetic round trip; disturbed = total - quiet carries two roundings, halved");
         end
         function densityReference(tc)
             % The 17 published cases of DOCUMENTATION §7 (printed with %E, 7 significant digits)
@@ -491,6 +561,21 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyEqual(vrel, v - want, 'and the relative velocity is that difference, bitwise');
             tc.verifyEqual(info.speed_m_s, vecnorm(vrel));
         end
+        function windHwm14Precision(tc)
+            % The model wind is HORIZONTAL at the geodetic point: its GCRS vector, rotated back to the ITRS, has no
+            % component along the ellipsoid normal and reproduces the north and east components exactly.
+            [ep, r, ~, eop, v] = tc.sampleState();
+            [~, info] = NonGravForces.env.wind("hwm14", ep, r, v, 'Eop', eop, 'Disturbed', false);
+            R = referenceSystem.rotationItrsToGcrs(ep, 'Eop', eop);
+            K = size(r, 2);
+            wI = reshape(pagemtimes(pagetranspose(R), reshape(info.hwm14.gcrs_m_s, 3, 1, K)), 3, K);
+            la = info.hwm14.geodetic(1, :); lo = info.hwm14.geodetic(2, :);
+            up = [cos(la) .* cos(lo); cos(la) .* sin(lo); sin(la)];
+            north = [-sin(la) .* cos(lo); -sin(la) .* sin(lo); cos(la)]; east = [-sin(lo); cos(lo); zeros(1, K)];
+            tc.verifyBoundAndRecord("hwm14 wind along the ellipsoid normal", max(abs(sum(wI .* up, 1))), 1e-12, "m/s", "two rotations of a 100 m/s vector");
+            tc.verifyBoundAndRecord("hwm14 north and east recovered from the GCRS vector", ...
+                max(abs([sum(wI .* north, 1) - info.hwm14.northEast_m_s(1, :), sum(wI .* east, 1) - info.hwm14.northEast_m_s(2, :)])), 1e-12, "m/s", "the same two rotations");
+        end
         function densitySpeciesSumPrecision(tc)
             % kernel.dragPanelForce re-forms the mass density from the species and const.speciesMass,
             % while NRLMSISE-00 forms its own total from ITS molecular masses. Its ACCURACY block
@@ -596,6 +681,19 @@ classdef tNgfEnv < NgfTestCase
                 tc.verifyEqual(vrel(:, k), v1, sprintf('epoch %d batched vs alone', k));
             end
         end
+        function windHwm14Vectorization(tc)
+            % Batched equals alone, bitwise: the gateway loops per point and the model keeps no state that changes a value.
+            [ep, r, ~, eop, v] = tc.sampleState();
+            sw = NonGravForces.io.spaceWeather(fullfile(tc.root, 'data', 'spaceweather', 'SW-All_2019-09_2020-03.csv'));
+            idx = [1 7 300 600];
+            e4 = referenceSystem.daySecondToEpoch([ep.day(idx) ep.sec(idx)], ep.scale);
+            [v4, i4] = NonGravForces.env.wind("hwm14", e4, r(:, idx), v(:, idx), 'Eop', eop, 'SpaceWeather', sw);
+            for k = 1:4
+                e1 = referenceSystem.daySecondToEpoch([ep.day(idx(k)) ep.sec(idx(k))], ep.scale);
+                [v1, i1] = NonGravForces.env.wind("hwm14", e1, r(:, idx(k)), v(:, idx(k)), 'Eop', eop, 'SpaceWeather', sw);
+                tc.verifyEqual(i4.hwm14.northEast_m_s(:, k), i1.hwm14.northEast_m_s); tc.verifyEqual(v4(:, k), v1);
+            end
+        end
         function densityVectorization(tc)
             % The 15 daily-ap published cases in one call equal the 15 single calls, bitwise (the MEX loop is per epoch).
             [rhoAll, spAll, TAll] = tc.msisCases(1:15, true);
@@ -677,6 +775,25 @@ classdef tNgfEnv < NgfTestCase
             rPole = R * [0; 0; 6.87e6];
             [~, iP] = NonGravForces.env.wind("corotation", e1, rPole, v(:, 1), 'Eop', eop);
             tc.verifyBoundAndRecord("co-rotation on the rotation axis", norm(iP.corotation_m_s), 1e-2, "m/s", "omega x r vanishes on the axis; what remains is the polar-motion and nutation rate");
+        end
+        function windHwm14Robustness(tc)
+            % Ground level, the model's top (the quiet wind is held constant above its highest level) and a storm ap all
+            % evaluate; the current folder is the caller's afterwards (the gateway loads its tables from its own folder).
+            eop = referenceSystem.readEop(fullfile(tc.root, 'data', 'eop', 'finals2000A_2019-09_2020-03.all'));
+            ep = referenceSystem.mjdToEpoch([58849.5; 58849.5; 58849.5], "UTC");
+            rI = referenceSystem.geodeticToCartesian([10 20 1e3; 10 20 600e3; -60 100 450e3], 'Ellipsoid', "WGS84", 'AngleUnit', "deg")';
+            R = referenceSystem.rotationItrsToGcrs(ep, 'Eop', eop);
+            rG = reshape(pagemtimes(R, reshape(rI, 3, 1, 3)), 3, 3);
+            here = pwd;
+            [~, info] = NonGravForces.env.wind("hwm14", ep, rG, zeros(3, 3), 'Eop', eop, 'Ap', [4 4 400]);
+            tc.verifyEqual(pwd, here, 'the current folder must survive the call');
+            tc.verifyTrue(all(isfinite(info.hwm14.northEast_m_s(:))) && all(abs(info.hwm14.northEast_m_s(:)) < 1000));
+            e1 = referenceSystem.mjdToEpoch(58849.5, "UTC");
+            [~, i600] = NonGravForces.env.wind("hwm14", e1, rG(:, 2) * 1.02, zeros(3, 1), 'Eop', eop, 'Ap', 4);
+            tc.verifyTrue(all(isfinite(i600.hwm14.northEast_m_s)), 'above the model''s top it still answers');
+            % HWM14 does not return for a negative altitude (measured in a standalone build): refused before the model
+            below = R(:, :, 1) * referenceSystem.geodeticToCartesian([10 20 -1], 'Ellipsoid', "WGS84", 'AngleUnit', "deg")';
+            tc.verifyErrorId(@() NonGravForces.env.wind("hwm14", e1, below, zeros(3, 1), 'Eop', eop, 'Ap', 4), 'NonGravForces:wind:inputRange');
         end
         function densityRobustness(tc)
             ep = referenceSystem.mjdToEpoch(58849.5, "UTC"); d = struct('f107', 70, 'f107a', 71, 'ap', 3);
@@ -812,6 +929,20 @@ classdef tNgfEnv < NgfTestCase
             vc = NonGravForces.env.wind("corotation", ep, r, v, 'Eop', eop, 'Wind_m_s', -i1.corotation_m_s);
             tc.verifyBoundAndRecord("co-rotation removed and added back", max(abs(vc - vn), [], 'all') / max(abs(vn), [], 'all'), 1e-15, "-", "two roundings of a 7.6 km/s velocity; measured 1.3e-16");
         end
+        function windHwm14Metamorphic(tc)
+            % The model wind is additive: hwm14 minus corotation is exactly the model wind; quiet plus DWM07 is the total
+            % (to the model's single precision); and at ap = 0 the disturbance is not zero but DWM07's quiet level.
+            [ep, r, ~, eop, v] = tc.sampleState();
+            idx = 1:50:600;
+            e = referenceSystem.daySecondToEpoch([ep.day(idx) ep.sec(idx)], ep.scale);
+            vc = NonGravForces.env.wind("corotation", e, r(:, idx), v(:, idx), 'Eop', eop);
+            [vh, ih] = NonGravForces.env.wind("hwm14", e, r(:, idx), v(:, idx), 'Eop', eop, 'Disturbed', false);
+            tc.verifyBoundAndRecord("hwm14 minus corotation is the model wind", max(abs(vc - vh - ih.hwm14.gcrs_m_s), [], 'all'), 1e-9, "m/s", "(v - c) - (v - c - w) = w, three roundings of a 7.6 km/s velocity");
+            [~, iq] = NonGravForces.env.wind("hwm14", e, r(:, idx), v(:, idx), 'Eop', eop, 'Ap', 30);
+            [~, iq2] = NonGravForces.env.wind("hwm14", e, r(:, idx), v(:, idx), 'Eop', eop, 'Ap', 30);
+            tc.verifyEqual(iq2.hwm14.northEast_m_s, iq.hwm14.northEast_m_s, 'repeated calls at the same inputs are bitwise (no internal cursor)');
+            tc.verifyNotEqual(iq.hwm14.northEast_m_s, ih.hwm14.northEast_m_s, 'ap 30 must add a disturbance wind at 490 km');
+        end
         function densityMetamorphic(tc)
             % gtd7d - gtd7: the mass density gains exactly 16 * 1.66e-24 g times the anomalous-oxygen number density
             % (the reference's own arithmetic, nrlmsise-00.c gtd7d), in SI 16 * 1.66e-24 * 1e-3 * 1e6 kg per m^-3.
@@ -937,6 +1068,13 @@ classdef tNgfEnv < NgfTestCase
             base = @() referenceSystem.rotationItrsToGcrs(ep, 'Eop', eop);
             fcn = @() NonGravForces.env.wind("corotation", ep, r, v, 'Eop', eop);
             tc.verifyBoundAndRecord("wind vs the rotationItrsToGcrs it calls", tc.speedRatio(fcn, base), 4.5, "-", "budget 3x the expected 1.4: one rotation call plus two page products; 5 repeats, median");
+        end
+        function windHwm14Speed(tc)
+            % HWM14 over the co-rotation for the 600-epoch arc: the geodetic conversion and 600 model calls on top of the
+            % same rotation. Measured see last_run; budget 3x the 2026-09-15 figure.
+            [ep, r, ~, eop, v] = tc.sampleState();
+            q = tc.speedRatio(@() NonGravForces.env.wind("hwm14", ep, r, v, 'Eop', eop, 'Ap', 15), @() NonGravForces.env.wind("corotation", ep, r, v, 'Eop', eop));
+            tc.verifyBoundAndRecord("wind hwm14 / corotation time ratio, 600 epochs", q, 6, "-", "measured 1.76 on 2026-09-15; budget 3x");
         end
         function densitySpeed(tc)
             % Linear scaling of the MEX loop: 86400 epochs cost at most 2x ten times 8640 epochs (per-call overhead amortised).

@@ -19,6 +19,10 @@ function info = setupNonGravForces(options)
 %                           mex/nrlmsis21 (Open Source Academic Research License:
 %                           research and non-profit use only; the statement is printed
 %                           when it is fetched and recorded in THIRD-PARTY-NOTICES.md)
+%       HWM14 Fortran       NRL's release files, each pinned by SHA-256, into mex/hwm14; the
+%                           two DWM/QD data files NRL's server refuses (HTTP 403, 2026-09-15)
+%                           from the pyHWM14 repository at a pinned commit, where the model's
+%                           own check output, reproduced exactly, is what vouches for them
 %     data ('FetchData')
 %       finals2000A.all     IERS Earth orientation, into data/eop
 %       SW-All.csv          CelesTrak space weather, into data/spaceweather
@@ -96,6 +100,19 @@ MSIS_COMMIT = "bc9a2feba4344e74201281e563332688a4d09cc3";
 % NRLMSIS 2.1: NRL's release tarball of 2022-04-04, digest measured 2026-09-15 when it was first fetched.
 MSIS21_URL = "https://map.nrl.navy.mil/map/pub/nrl/NRLMSIS/NRLMSIS2.1/nrlmsis2.1.tar.gz";
 MSIS21_SHA256 = "41e47b29f795d36a5cc252b2858aa2a384c4a7323ace3d48d3ea2f2b37a1a6a8";
+% HWM14: NRL's supplement to Drob et al. (2015), and the two data files NRL's server answers 403 for,
+% from rilma/pyHWM14 at 115fd958 (its hwm123114.bin is byte-identical to NRL's). Digests measured 2026-09-15,
+% when checkhwm14 built from exactly these files reproduced NRL's Check/gfortran.txt line for line.
+HWM14_NRL = "https://map.nrl.navy.mil/map/pub/nrl/HWM/HWM14/HWM14_ess224-sup-0002-supinfo/";
+HWM14_PY = "https://raw.githubusercontent.com/rilma/pyHWM14/115fd958f4d196d6eb89bf6d997b5930355ada98/data/";
+HWM14_FILES = struct( ...
+    'name', {"hwm14.f90", "hwm123114.bin", "checkhwm14.f90", "gfortran.txt", "README.txt", "dwm07b104i.dat", "gd2qd.dat"}, ...
+    'url',  {HWM14_NRL + "hwm14.f90", HWM14_NRL + "hwm123114.bin", HWM14_NRL + "checkhwm14.f90", HWM14_NRL + "Check/gfortran.txt", ...
+             HWM14_NRL + "README.txt", HWM14_PY + "dwm07b104i.dat", HWM14_PY + "gd2qd.dat"}, ...
+    'sha256', {"6bb4e031917b44c93201f0289ada8bf6f6d81eb3f292c89151c6937e2e7bf76e", "6e445f8337c7efc815b7ff7f9f967d8a9a16b469d93df9c46e54930553beb906", ...
+               "6a58eaafb065ffa9d34cfba409f865531b8cbe7c1a0ee274ca6c21fcbeb26091", "2b1d4f4f103be3531393c48bf32d034548babfb6c080549884cad9fd3a2c8652", ...
+               "14b6e5e48d346ff034e2f6bfd7f26dc550945c9b90ad9661c7710e721ac89b15", "f2b8eff002d55b0f6d49d202c73b7a9cb6685f2c6bb57f1291a2adc7aa07cf4f", ...
+               "6bb1f2384e30b409240ee92c32726ed2a3d73eb550c05e0969d1178032319804"});
 EOP_URL = "https://datacenter.iers.org/data/9/finals2000A.all";
 SW_URL = "https://celestrak.org/SpaceData/SW-All.csv";
 % IGRF-14, IAGA V-MOD. Verified 2026-09-09: byte-identical to the SHA-256 data/igrf/README.md records.
@@ -126,7 +143,8 @@ info.msis = localFetchMsis(root, MSIS_URL, MSIS_COMMIT, options.FetchMsis);
 msis21 = localFetchArchive("nrlmsis21", fullfile(root, 'mex', 'nrlmsis21'), "msis_calc.F90", MSIS21_URL, MSIS21_SHA256, ...
     options.FetchMsis, "This software incorporates the MSIS(R) empirical atmospheric model software designed and provided by NRL. " + ...
     "Use is governed by the Open Source Academic Research License Agreement contained in the file nrlmsis2.1_license.txt (research, academic and non-profit use only).");
-info.sources = [struct('name', "nrlmsise00", 'action', info.msis.action, 'dir', info.msis.dir, 'source', MSIS_URL, 'message', info.msis.message), msis21];
+hwm14 = localFetchFiles("hwm14", fullfile(root, 'mex', 'hwm14'), HWM14_FILES, options.FetchMsis);
+info.sources = [struct('name', "nrlmsise00", 'action', info.msis.action, 'dir', info.msis.dir, 'source', MSIS_URL, 'message', info.msis.message), msis21, hwm14];
 info.data = localFetchData(root, EOP_URL, SW_URL, IGRF_URL, L1B_BASE, L1B_DAY, L1B_MEMBERS, options.FetchData);
 info.data.items = [info.data.items, localFetchCeres(root, CERES_BASE, CERES_FILES, CERES_SHA256, options.FetchData)];
 info.mex = NonGravForces.buildMex('Check', true);      % 1xT: one element per target
@@ -367,6 +385,38 @@ untar(tmp, dst);
 fprintf('setupNonGravForces: %s\n', notice);
 rec.action = "fetched";
 rec.message = notice;
+end
+
+function rec = localFetchFiles(name, dst, files, mode)
+%LOCALFETCHFILES Model source files fetched one by one into dst, each kept only if its SHA-256 is the pin.
+rec = struct('name', name, 'action', "present", 'dir', string(dst), 'source', strjoin([files.url], " "), 'message', "");
+here = all(arrayfun(@(f) isfile(fullfile(dst, f.name)), files));
+if mode == "never" || (here && mode ~= "force")
+    if ~here, rec.action = "skipped"; end
+    return
+end
+if ~isfolder(dst), mkdir(dst); end
+fprintf('setupNonGravForces: fetching %s (%d files)\n', name, numel(files));
+for f = files
+    tmp = [tempname '.part'];
+    cleanup = onCleanup(@() localQuietDelete(tmp));
+    try
+        websave(tmp, char(f.url));
+    catch err
+        rec.action = "failed"; rec.message = f.name + ": " + string(err.message) + " -> fetch " + f.url + " by hand into " + dst;
+        fprintf('setupNonGravForces: %s\n', rec.message);
+        return
+    end
+    got = localSha256(tmp);
+    if got ~= f.sha256
+        rec.action = "failed"; rec.message = f.name + ": SHA-256 " + got + " is not the pin " + f.sha256 + " -> the reply was discarded";
+        fprintf('setupNonGravForces: %s\n', rec.message);
+        return
+    end
+    movefile(tmp, fullfile(dst, f.name), 'f');
+    clear cleanup
+end
+rec.action = "fetched";
 end
 
 function h = localSha256(file)

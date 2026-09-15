@@ -6,7 +6,7 @@
 # TWO CHECKS, AND WHY EACH EXISTS
 #   1. The MEX gateways are compiled against mex/test/shim/mex.h. They do not link
 #      and are never run; the point is that a typo, a wrong argument count or
-#      an undeclared identifier in ngfKernelGateway.c or ngfMsis21Gateway.c is
+#      an undeclared identifier in any of the three gateways is
 #      found here rather than
 #      on the owner's host, which is the only machine in this project that has a
 #      MEX compiler.
@@ -28,10 +28,13 @@ trap 'rm -rf "$TMP"' EXIT
 
 echo "runCChecks: compiler $($CC --version | head -1)"
 
-echo "runCChecks: [1/2] compiling the MEX gateway against the shim (no link)"
-$CC -std=c99 -Wall -Wextra -Werror \
-    -I "$ROOT/mex/test/shim" -I "$ROOT/mex" \
-    -c "$ROOT/mex/ngfKernelGateway.c" -o "$TMP/ngfKernelGateway.o"
+echo "runCChecks: [1/2] compiling the MEX gateways against the shim (no link)"
+for gw in ngfKernelGateway ngfMsis21Gateway ngfHwm14Gateway; do
+    $CC -std=c99 -Wall -Wextra -Werror \
+        -I "$ROOT/mex/test/shim" -I "$ROOT/mex" \
+        -c "$ROOT/mex/$gw.c" -o "$TMP/$gw.o"
+    echo "runCChecks:       $gw.c compiles"
+done
 
 echo "runCChecks: [2/2] building and running the parity harness"
 $CC -std=c99 -O2 -Wall -Wextra -Werror \
