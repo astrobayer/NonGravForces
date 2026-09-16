@@ -39,6 +39,32 @@ classdef tNgfGeometry < NgfTestCase
             pl(2).name = "upper"; pl(2).centroid_m = [shift; 0; 0.5]; pl(2).vertices_m = [shift-0.5 shift+0.5 shift+0.5 shift-0.5; -0.5 -0.5 0.5 0.5; 0.5 0.5 0.5 0.5];
             two = NonGravForces.geom.MacroModel(pl, 'Name', "twoPlates");
         end
+        function mm = tpmcWall(~)
+            % The geometry of tools/pyxcheck/tpmc_check.py: a 1e-4 m target plate at the origin facing +z, and a two-sided
+            % wall in the plane x = 0.5 spanning y in [-2, 2], z in [0, 0.5].
+            h = 0.5e-4;
+            pl = repmat(struct('name',"",'kind',"plate",'area_m2',1,'normal',[0;0;1],'centroid_m',[0;0;0],'absVis',0.3,'specVis',0.3,'diffVis',0.4, ...
+                'emisIR',0.8,'specIR',0.1,'diffIR',0.1,'group',"bus",'vertices_m',zeros(3,0),'heatCapacity_J_m2K',1000), 1, 2);
+            pl(1).name = "target"; pl(1).area_m2 = (2*h)^2; pl(1).vertices_m = [-h h h -h; -h -h h h; 0 0 0 0];
+            pl(2).name = "wall"; pl(2).area_m2 = 2; pl(2).normal = [-1; 0; 0]; pl(2).centroid_m = [0.5; 0; 0.25];
+            pl(2).vertices_m = [0.5 0.5 0.5 0.5; -2 -2 2 2; 0 0.5 0.5 0];
+            mm = NonGravForces.geom.MacroModel(pl, 'Name', "tpmcWall");
+        end
+        function mm = farPlates(~)
+            % Two unit plates 100 m apart in one plane: neither obstructs the other in any front-hemisphere direction.
+            pl = repmat(struct('name',"",'kind',"plate",'area_m2',1,'normal',[0;0;1],'centroid_m',[0;0;0],'absVis',0.3,'specVis',0.3,'diffVis',0.4, ...
+                'emisIR',0.8,'specIR',0.1,'diffIR',0.1,'group',"bus",'vertices_m',zeros(3,0),'heatCapacity_J_m2K',1000), 1, 2);
+            pl(1).vertices_m = [-0.5 0.5 0.5 -0.5; -0.5 -0.5 0.5 0.5; 0 0 0 0];
+            pl(2).centroid_m = [100; 0; 0]; pl(2).vertices_m = pl(1).vertices_m + [100; 0; 0];
+            mm = NonGravForces.geom.MacroModel(pl, 'Name', "farPlates");
+        end
+        function T = temperatureFor(tc, s, U)
+            % the gas temperature at which atomic oxygen (species 2) has speed ratio s at relative speed U
+            m = tc.c().speciesMass(2) / tc.c().NA; T = U^2 * m / (2 * tc.c().kB * s^2);
+        end
+        function k = c(~)
+            k = NonGravForces.const();
+        end
         function src = constantSource(~, dirBody, P)
             src = struct('dir', reshape(dirBody / norm(dirBody), 3, 1, 1), 'P', P, 'band', "vis");
         end
@@ -54,6 +80,30 @@ classdef tNgfGeometry < NgfTestCase
 
     % ===================================================================== contract
     methods (Test, TestTags = {'contract'})
+        function flowShadowContract(tc)
+            lut = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut", 'LutResolution', 4, 'Samples', 10);
+            vb = 7600 * [-1 -0.99; 0.02 0.1; 0.01 -0.05]; vb = 7600 * vb ./ vecnorm(vb); T = [950 1000];
+            [S, info] = NonGravForces.geom.flowShadow(tc.mm, vb, T, 'Method', "lut", 'Lut', lut);
+            tc.verifyEqual(S.kind, "flow"); tc.verifySize(S.beam, [8 2]); tc.verifySize(S.number, [8 2 8]);
+            tc.verifySize(S.normal, [8 2 8]); tc.verifySize(S.tangential, [8 2 8]); tc.verifySize(S.speedRatio, [8 2]);
+            tc.verifyTrue(all([S.beam(:); S.number(:); S.normal(:)] >= 0 & [S.beam(:); S.number(:); S.normal(:)] <= 1));
+            tc.verifyEqual(info.method, "lut"); tc.verifyEqual(info.quadrature, [12 16]); tc.verifyEqual(info.directionsPerEpoch, 8 * 6 * 12 * 16);
+            tc.verifyEqual(info.provenance.unit, "geom.flowShadow");
+            Sb = NonGravForces.geom.flowShadow(tc.mm, vb, [], 'Method', "lut", 'Lut', lut);
+            tc.verifyEqual(Sb.beam, S.beam); tc.verifyEmpty(Sb.number); tc.verifyEmpty(Sb.speedRatio);
+            [~, infoI] = NonGravForces.geom.flowShadow(tc.mm, vb, T, 'Method', "lut", 'Lut', lut, 'Integrals', true);
+            tc.verifySize(infoI.integrals.CpInc, [8 2 8]);
+            o = struct('bus', struct('vis', [0.34 0.40 0.26], 'ir', [0.62 0.23 0.15]), 'array', struct('vis', [0.65 0.05 0.30], 'ir', [0.81 0.03 0.16]));
+            bwA = NonGravForces.geom.boxWing([3 1.9 0.7], o, 'Array', struct('area_m2', 2, 'normal', [0; 0; -1], 'centroid_m', [0; 0; -1]));
+            g = @(varargin) NonGravForces.geom.flowShadow(varargin{:});
+            tc.verifyErrorId(@() g(bwA, vb, T), 'NonGravForces:flowShadow:inputMacro');
+            tc.verifyErrorId(@() g(tc.mm, vb(1:2, :), T, 'Method', "lut", 'Lut', lut), 'NonGravForces:flowShadow:inputShape');
+            tc.verifyErrorId(@() g(tc.mm, vb, [950 1000 1050], 'Method', "lut", 'Lut', lut), 'NonGravForces:flowShadow:inputShape');
+            tc.verifyErrorId(@() g(tc.mm, vb, T, 'Method', "lut", 'Lut', lut, 'Quadrature', [0 16]), 'NonGravForces:flowShadow:inputShape');
+            tc.verifyErrorId(@() g(tc.mm, [0 1; 0 0; 0 0], T, 'Method', "lut", 'Lut', lut), 'NonGravForces:flowShadow:inputRange');
+            tc.verifyErrorId(@() g(tc.mm, vb, [950 -1], 'Method', "lut", 'Lut', lut), 'NonGravForces:flowShadow:inputRange');
+            tc.verifyErrorId(@() g(tc.mm, vb, T, 'Method', "lut"), 'NonGravForces:flowShadow:inputLut');
+        end
         function boxWingContract(tc)
             o = struct('bus', struct('vis', [0.34 0.40 0.26], 'ir', [0.62 0.23 0.15]), 'array', struct('vis', [0.65 0.05 0.30], 'ir', [0.81 0.03 0.16]));
             bw = NonGravForces.geom.boxWing([3 1.9 0.7], o);
@@ -73,17 +123,23 @@ classdef tNgfGeometry < NgfTestCase
             [d, ~] = tc.oracleDirections();
             [f, info] = NonGravForces.geom.selfShadow(tc.mm, d);
             tc.verifySize(f, [8 size(d, 2)]); tc.verifyTrue(all(f(:) >= 0 & f(:) <= 1)); tc.verifyEqual(info.method, "raycast"); tc.verifyEqual(info.samples, 40);
-            lit = (tc.mm.N' * d) > 0; tc.verifyTrue(all(f(~lit) == 0), 'unlit plates carry 0'); tc.verifyTrue(all(f(lit) > 0), 'lit plates are at least partly exposed');
-            [fl, infoL] = NonGravForces.geom.selfShadow(tc.mm, d, 'Method', "lut", 'LutResolution', 42);
-            tc.verifySize(fl, [8 size(d, 2)]); tc.verifyEqual(infoL.lut.resolution, 42); tc.verifySize(infoL.lut.f, [8 42]); tc.verifySize(infoL.lut.verts, [3 42]); tc.verifySize(infoL.lut.faces, [3 80]);
-            tab = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut", 'LutResolution', 42); tc.verifyEqual(tab.f, infoL.lut.f);
+            % OCCLUSION ONLY (LP-C, F1): a plate facing away keeps a geometric value, it is not forced to 0
+            lit = (tc.mm.N' * d) > 0; tc.verifyTrue(all(f(lit) > 0), 'lit plates are at least partly exposed');
+            tc.verifyTrue(any(f(~lit) > 0), 'back-facing plates carry their mirror value, not a forced 0');
+            [fl, infoL] = NonGravForces.geom.selfShadow(tc.mm, d, 'Method', "lut", 'LutResolution', 4);
+            tc.verifySize(fl, [8 size(d, 2)]); tc.verifyEqual(infoL.lut.resolution, 4); tc.verifySize(infoL.lut.f, [8 6*25]); tc.verifySize(infoL.lut.nodes, [3 6*25]);
+            tab = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut", 'LutResolution', 4); tc.verifyEqual(tab.f, infoL.lut.f);
+            [~, infoNoLut] = NonGravForces.geom.selfShadow(tc.mm, d); tc.verifyEmpty(infoNoLut.lut); tc.verifyEqual(infoNoLut.provenance.unit, "geom.selfShadow");
             o = struct('bus', struct('vis', [0.34 0.40 0.26], 'ir', [0.62 0.23 0.15]), 'array', struct('vis', [0.65 0.05 0.30], 'ir', [0.81 0.03 0.16]));
             bwA = NonGravForces.geom.boxWing([3 1.9 0.7], o, 'Array', struct('area_m2', 2, 'normal', [0; 0; -1], 'centroid_m', [0; 0; -1]));
             tc.verifyErrorId(@() NonGravForces.geom.selfShadow(bwA, d), 'NonGravForces:selfShadow:inputMacro');
             tc.verifyErrorId(@() NonGravForces.geom.selfShadow(tc.mm, [1; 1; 0]), 'NonGravForces:selfShadow:inputShape');
             tc.verifyErrorId(@() NonGravForces.geom.selfShadow(tc.mm, []), 'NonGravForces:selfShadow:inputShape');
-            tc.verifyErrorId(@() NonGravForces.geom.selfShadow(tc.mm, d, 'Method', "lut", 'LutResolution', 100), 'NonGravForces:selfShadow:inputResolution');
-            tc.verifyErrorId(@() NonGravForces.geom.selfShadow(tc.mm, d, 'Method', "lut", 'LutResolution', 162, 'Lut', infoL.lut), 'NonGravForces:selfShadow:inputLut');
+            for bad = {2.5, 0, 300, [4 4]}
+                tc.verifyErrorId(@() NonGravForces.geom.selfShadow(tc.mm, d, 'Method', "lut", 'LutResolution', bad{1}), 'NonGravForces:selfShadow:inputResolution');
+            end
+            tc.verifyErrorId(@() NonGravForces.geom.selfShadow(tc.mm, d, 'Method', "lut", 'LutResolution', 5, 'Lut', infoL.lut), 'NonGravForces:selfShadow:inputLut');
+            tc.verifyErrorId(@() NonGravForces.geom.selfShadow(tc.twoPlates(0.5), [0; 0; 1], 'Method', "lut", 'Lut', infoL.lut), 'NonGravForces:selfShadow:inputLut');
         end
         function thermalStateContract(tc)
             [ep, r, ~, q] = tc.sampleState(); ep5 = referenceSystem.daySecondToEpoch([ep.day(1:5) ep.sec(1:5)], "GPS");
@@ -136,6 +192,36 @@ classdef tNgfGeometry < NgfTestCase
 
     % ===================================================================== reference
     methods (Test, TestTags = {'reference'})
+        function flowShadowReference(tc)
+            % Oracle: tools/pyxcheck/tpmc_check.py, a standard-library test-particle Monte Carlo of the incident number,
+            % normal-momentum and tangential-momentum fluxes on a tiny plate screened by a wall, written from a physics
+            % statement by an agent that did not open this toolbox (T9). The model is the flow ratios times Sentman's
+            % incident closed forms. Measured 2026-09-15 at quadrature [96 128] with an exact ray cast: worst |z| = 2.58
+            % over the components the Monte Carlo resolves (standard error below 10 % of the value). The occlusion is a
+            % step in direction, which the quadrature resolves to its node spacing: at [24 32] the same cases missed by up
+            % to 20 standard errors and converged as the nodes were refined, so the fine quadrature is what isolates the
+            % physics from the discretisation. Bound |z| <= 4. Where the Monte Carlo saw too few unoccluded molecules to
+            % measure a value, the model must lie below the oracle's detection bound instead.
+            tp = readtable(fullfile(tc.root, 'tools', 'pyxcheck', 'tpmc_oracle.csv'));
+            mm = tc.tpmcWall(); U = 7500; worst = 0;
+            for i = 1:height(tp)
+                vh = [tp.vhat_x(i); tp.vhat_y(i); tp.vhat_z(i)];
+                S = NonGravForces.geom.flowShadow(mm, U * vh, tc.temperatureFor(tp.s(i), U), 'Samples', 2, 'Quadrature', [96 128]);
+                g = vh(3); l = sqrt(max(0, 1 - g^2)); s = S.speedRatio(2); P = exp(-(g*s)^2)/s; Z = erfc(-g*s);
+                model = [S.number(1, 1, 2) * (P/(2*sqrt(pi)) + g*Z/2), S.normal(1, 1, 2) * (g*P/sqrt(pi) + (g^2 + 1/(2*s^2))*Z), ...
+                         S.tangential(1, 1, 2) * l * (P/sqrt(pi) + g*Z)];
+                ref = [tp.CN_occ(i) tp.CP_occ(i) tp.CT_occ(i)]; se = [tp.CN_occ_se(i) tp.CP_occ_se(i) tp.CT_occ_se(i)];
+                resolvable = se > 0 & se < 0.1 * abs(ref);
+                if tp.elevation_deg(i) == 90, resolvable(3) = false; end        % no tangential stream: the oracle's t is a fallback
+                if any(resolvable)
+                    worst = max(worst, max(abs(model(resolvable) - ref(resolvable)) ./ se(resolvable)));
+                end
+                unresolved = ~resolvable & [true true tp.elevation_deg(i) ~= 90];
+                floorBound = ref + 3 * max(se, tp.CN_free(i) / tp.N(i));
+                tc.verifyTrue(all(model(unresolved) <= floorBound(unresolved)), sprintf('case %d: below the oracle''s detection bound', i));
+            end
+            tc.verifyBoundAndRecord("flowShadow vs test-particle Monte Carlo, worst |z| (resolved components)", worst, 4, "-", "measured 2.58 on 2026-09-15; 18 cases, s = 2, 5, 8, elevation -10 to 90 deg");
+        end
         function boxWingReference(tc)
             % The bus of a 1 m cube is the unit cube: six unit areas, face centres at +-1/2, closed silhouette.
             o = struct('bus', struct('vis', [0.34 0.40 0.26], 'ir', [0.62 0.23 0.15]));
@@ -146,12 +232,15 @@ classdef tNgfGeometry < NgfTestCase
         function selfShadowReference(tc)
             % Oracle: the pure-Python ray cast (160 x 160 per plate). Measured 2026-09-07: 40 samples 1.25e-2, 100 samples 3.8e-3;
             % the sampling error bound is ~2/m at a shadow edge: 5e-2 and 2e-2. Bounds 3e-2 and 1e-2.
+            % The oracle writes 0 for a plate facing away (the pre-LP-C convention); occlusion is compared where the
+            % plate faces the direction, which is the only place any consumer weights it.
             [d, fo] = tc.oracleDirections();
+            lit = (tc.mm.N' * d) > 0;
             f40 = NonGravForces.geom.selfShadow(tc.mm, d, 'Samples', 40); f100 = NonGravForces.geom.selfShadow(tc.mm, d, 'Samples', 100);
-            tc.verifyBoundAndRecord("selfShadow raycast 40 vs Python 160", max(abs(f40(:) - fo(:))), 3e-2, "-", "measured 1.25e-2");
-            tc.verifyBoundAndRecord("selfShadow raycast 100 vs Python 160", max(abs(f100(:) - fo(:))), 1e-2, "-", "measured 3.8e-3");
+            tc.verifyBoundAndRecord("selfShadow raycast 40 vs Python 160 (lit plates)", max(abs(f40(lit) - fo(lit))), 3e-2, "-", "measured 1.25e-2");
+            tc.verifyBoundAndRecord("selfShadow raycast 100 vs Python 160 (lit plates)", max(abs(f100(lit) - fo(lit))), 1e-2, "-", "measured 3.75e-3");
             % which plate is shadowed and by how much is the physics: only the nadir plate, at low elevation, by the overhangs
-            shadowed = any(f100 < 0.999 & f100 > 0, 2);
+            shadowed = any(f100 < 0.999 & lit, 2);
             tc.verifyEqual(find(shadowed)', 7, 'only the Nadir plate is partly shadowed on GRACE-FO');
             tc.verifyLessThan(f100(7, 3), 0.75, 'at 85 deg from nadir the overhang shadows about 30 % of the nadir plate');
         end
@@ -194,6 +283,49 @@ classdef tNgfGeometry < NgfTestCase
 
     % ===================================================================== precision
     methods (Test, TestTags = {'precision'})
+        function thermalStateOcclusionPrecision(tc)
+            % F2 (LP-C): the absorbed flux with per-source occlusion is the flux radiationPanelForce forms from the same
+            % sources and the same occlusion, source by source; and a panel facing away from the Sun keeps its Earth heating.
+            [ep, r, ~, q] = tc.sampleState(); ep5 = referenceSystem.daySecondToEpoch([ep.day(1:5) ep.sec(1:5)], "GPS");
+            src = NonGravForces.env.radiationSources(ep5, r(:, 1:5), q(:, 1:5), NonGravForces.Options("standard"));
+            [~, K] = size(src.P); M = size(src.dir, 2);
+            lut = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut", 'LutResolution', 8, 'Samples', 20);
+            X = reshape(NonGravForces.geom.selfShadow(tc.mm, reshape(src.dir, 3, []), 'Method', "lut", 'Lut', lut), tc.mm.n, M, K);
+            X = permute(X, [1 3 2]);                                                     % N x K x M
+            [~, it] = NonGravForces.geom.thermalState(tc.mm, src, 'Exposed', X);
+            [~, ir] = NonGravForces.kernel.radiationPanelForce(tc.mm, src, 'Shadow', X);
+            tc.verifyBoundAndRecord("thermalState absorbed flux vs radiationPanelForce's, per-source occlusion", ...
+                max(abs(it.absorbed_W_m2 - ir.absorbed_W_m2), [], 'all') / max(ir.absorbed_W_m2, [], 'all'), 1e-13, "-", ...
+                "the same product a P c gamma o summed over 577 sources in two association orders");
+            % the nadir radiator (plate 7) sees the Earth on every epoch: with the Sun's occlusion alone applied to every
+            % source (the pre-LP-C composition) its Earth flux would follow the Sun's side; per source it never vanishes
+            tc.verifyTrue(all(it.absorbed_W_m2(7, :) > 50), 'the nadir plate absorbs Earth radiation at every epoch');
+            sunOnly = repmat(X(:, :, 1), 1, 1, M);
+            [~, itOld] = NonGravForces.geom.thermalState(tc.mm, src, 'Exposed', sunOnly);
+            tc.verifyBoundAndRecord("nadir absorbed flux: per-source minus Sun-only occlusion (F2 regression)", ...
+                -min(it.absorbed_W_m2(7, :) - itOld.absorbed_W_m2(7, :)), 0, "W/m^2", "per-source occlusion never absorbs less than the Sun column forced onto the Earth tiles");
+        end
+        function flowShadowPrecision(tc)
+            % Without occlusion the directional integrals ARE Sentman's incident coefficients (number flux, normal and
+            % tangential momentum): an identity of kinetic theory, so the comparison measures the quadrature alone.
+            % Measured 2026-09-15 at the default [12 16]: worst 1.6e-6 in coefficient units over s = 1..15 and incidence
+            % 0..180 deg (a ram plate's coefficient is ~2). Bound 5e-6. On two plates that cannot see each other every
+            % ratio is exactly 1.
+            mm = tc.farPlates(); U = 7500; worst = 0;
+            lut = NonGravForces.geom.selfShadow(mm, [], 'Method', "lut", 'LutResolution', 2, 'Samples', 4);
+            for s = [1 2 5 8 15]
+                for thdeg = [0 30 60 85 90 95 120 150 180]
+                    th = deg2rad(thdeg); vb = U * [sin(th); 0; cos(th)];
+                    [S, info] = NonGravForces.geom.flowShadow(mm, vb, tc.temperatureFor(s, U), 'Method', "lut", 'Lut', lut, 'Integrals', true);
+                    g = cos(th); l = sin(th); so = S.speedRatio(2); P = exp(-(g*so)^2)/so; Z = erfc(-g*so);
+                    ref = [P/(2*sqrt(pi)) + g*Z/2, g*P/sqrt(pi) + (g^2 + 1/(2*so^2))*Z, l*(P/sqrt(pi) + g*Z)];
+                    got = [info.integrals.CN(1, 1, 2), info.integrals.CpInc(1, 1, 2), info.integrals.CtauInc(1, 1, 2)];
+                    worst = max(worst, max(abs(got - ref)));
+                    tc.verifyTrue(all(S.number(:) == 1 & S.normal(:) == 1 & S.tangential(:) == 1), 'nothing obstructs: every ratio exactly 1');
+                end
+            end
+            tc.verifyBoundAndRecord("flowShadow integrals vs Sentman incident closed forms", worst, 5e-6, "-", "measured 1.6e-6 on 2026-09-15 at [12 16]; [8 16] gives 3e-4");
+        end
         function boxWingPrecision(tc)
             % Polygon corners reproduce the face areas exactly (products of two edge lengths, bitwise).
             o = struct('bus', struct('vis', [0.34 0.40 0.26], 'ir', [0.62 0.23 0.15]));
@@ -257,13 +389,25 @@ classdef tNgfGeometry < NgfTestCase
 
     % ===================================================================== vectorization
     methods (Test, TestTags = {'vectorization'})
+        function flowShadowVectorization(tc)
+            % five epochs at once equal five single epochs, bitwise: every sum runs along a dimension whose length does
+            % not depend on the number of epochs
+            lut = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut", 'LutResolution', 4, 'Samples', 10);
+            rng(11); vb = [-7600 + 50 * randn(1, 5); 300 * randn(1, 5); 200 * randn(1, 5)]; T = 900 + 100 * rand(1, 5);
+            S = NonGravForces.geom.flowShadow(tc.mm, vb, T, 'Method', "lut", 'Lut', lut);
+            for k = 1:5
+                S1 = NonGravForces.geom.flowShadow(tc.mm, vb(:, k), T(k), 'Method', "lut", 'Lut', lut);
+                tc.verifyEqual(S.number(:, k, :), S1.number); tc.verifyEqual(S.normal(:, k, :), S1.normal);
+                tc.verifyEqual(S.tangential(:, k, :), S1.tangential); tc.verifyEqual(S.beam(:, k), S1.beam);
+            end
+        end
         function selfShadowVectorization(tc)
             [d, ~] = tc.oracleDirections();
             fAll = NonGravForces.geom.selfShadow(tc.mm, d, 'Samples', 30);
             for k = 1:size(d, 2)
                 tc.verifyEqual(fAll(:, k), NonGravForces.geom.selfShadow(tc.mm, d(:, k), 'Samples', 30));
             end
-            lut = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut", 'LutResolution', 42, 'Samples', 20);
+            lut = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut", 'LutResolution', 4, 'Samples', 20);
             flAll = NonGravForces.geom.selfShadow(tc.mm, d, 'Method', "lut", 'Lut', lut);
             for k = 1:size(d, 2)
                 tc.verifyEqual(flAll(:, k), NonGravForces.geom.selfShadow(tc.mm, d(:, k), 'Method', "lut", 'Lut', lut));
@@ -304,6 +448,21 @@ classdef tNgfGeometry < NgfTestCase
 
     % ===================================================================== robustness
     methods (Test, TestTags = {'robustness'})
+        function flowShadowRobustness(tc)
+            % the stream exactly along a plate normal (no tangential direction), exactly edge-on, exactly leeward, a very cold
+            % and a very hot gas, and no epochs at all: finite ratios in [0, 1], and exactly 1 on GRACE-FO plates nothing screens
+            lut = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut", 'LutResolution', 4, 'Samples', 10);
+            vb = 7600 * [1 0 0 -1 0; 0 0 1 0 0; 0 1 0 0 -1]; T = [900 900 50 1e5 900];
+            S = NonGravForces.geom.flowShadow(tc.mm, vb, T, 'Method', "lut", 'Lut', lut);
+            v = [S.number(:); S.normal(:)];
+            tc.verifyTrue(all(isfinite(v) & v >= 0 & v <= 1), 'number and normal ratios have non-negative weights: [0, 1]');
+            tc.verifyTrue(all(isfinite(S.tangential(:))), 'the tangential ratio is signed and finite (above 1 when counter-flow is screened)');
+            clear1 = find(all(lut.f == 1, 2))';
+            tc.verifyNotEmpty(clear1);
+            tc.verifyTrue(all(S.number(clear1, :, :) == 1, 'all') && all(S.tangential(clear1, :, :) == 1, 'all'), 'a plate whose table row is 1 everywhere is exactly 1');
+            S0 = NonGravForces.geom.flowShadow(tc.mm, zeros(3, 0), zeros(1, 0), 'Method', "lut", 'Lut', lut);
+            tc.verifySize(S0.number, [8 0 8]); tc.verifySize(S0.beam, [8 0]);
+        end
         function boxWingRobustness(tc)
             % A flat box (thin plate), a tiny box, an array without a name, and a polygon check on a hand-built model.
             o = struct('bus', struct('vis', [0.34 0.40 0.26], 'ir', [0.62 0.23 0.15]), 'array', struct('vis', [0.65 0.05 0.30], 'ir', [0.81 0.03 0.16]));
@@ -323,13 +482,17 @@ classdef tNgfGeometry < NgfTestCase
             tc.verifyErrorId(@() NonGravForces.geom.MacroModel(p), 'NonGravForces:MacroModel:inputPanels');
         end
         function selfShadowRobustness(tc)
-            % Grazing incidence, exactly edge-on beams, a direction with the whole body lit only on one plate, and the
-            % two-plate model with no overlap and with full overlap.
-            f = NonGravForces.geom.selfShadow(tc.mm, [0; 1; 0]); tc.verifyTrue(all(f(:) >= 0 & f(:) <= 1)); tc.verifyEqual(f(1), 0); tc.verifyEqual(f(7), 0, 'edge-on: the nadir plate is unlit');
-            fx = NonGravForces.geom.selfShadow(tc.mm, [1; 0; 0]); tc.verifyEqual(fx, [1; 0; 0; 0; 0; 0; 0; 0], 'from +x only the Front plate is lit and fully exposed');
+            % Exactly edge-on beams, a beam along the body axis, and the two-plate model with no overlap and with full overlap.
+            % Along +x nothing obstructs any plate: the Front plate faces it, the Rear plate's mirror direction is -x, and
+            % the six edge-on plates take their front-side limit (1e-6 rad out of plane), which clears the Front plate's edge.
+            fx = NonGravForces.geom.selfShadow(tc.mm, [1; 0; 0]); tc.verifyEqual(fx, ones(8, 1), 'along the body axis nothing is occluded');
+            % Along +y the nadir plate's front-side limit runs just below its own plane into the starboard overhang, and
+            % the port inner flank looks straight across under the body at the starboard one: both fully occluded.
+            f = NonGravForces.geom.selfShadow(tc.mm, [0; 1; 0]); tc.verifyTrue(all(f(:) >= 0 & f(:) <= 1));
+            tc.verifyEqual(f([7 6]), [0; 0], 'grazing +y: the overhang occludes the nadir plate and the far inner flank');
             noOverlap = tc.twoPlates(3); f0 = NonGravForces.geom.selfShadow(noOverlap, [0; 0; 1]); tc.verifyEqual(f0, [1; 1]);
             full = tc.twoPlates(0); f1 = NonGravForces.geom.selfShadow(full, [0; 0; 1]); tc.verifyEqual(f1, [0; 1], 'fully covered lower plate');
-            fb = NonGravForces.geom.selfShadow(full, [0; 0; -1]); tc.verifyEqual(fb, [0; 0], 'from below both normals face away');
+            fb = NonGravForces.geom.selfShadow(full, [0; 0; -1]); tc.verifyEqual(fb, f1, 'from below both plates take their mirror direction +z');
             tc.verifyErrorId(@() NonGravForces.geom.selfShadow(tc.mm, [0; 0; NaN]), 'NonGravForces:selfShadow:inputShape');
         end
         function thermalStateRobustness(tc)
@@ -379,6 +542,25 @@ classdef tNgfGeometry < NgfTestCase
 
     % ===================================================================== metamorphic
     methods (Test, TestTags = {'metamorphic'})
+        function flowShadowMetamorphic(tc)
+            % (1) the beam field IS selfShadow along v_rel, bitwise; (2) mirroring the stream in y swaps starboard and port;
+            % (3) as the gas cools (s -> inf) every ratio converges on the beam value: the error falls as s rises.
+            lut = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut", 'LutResolution', 8, 'Samples', 20);
+            vb = [-7000; 2500; 1200]; U = norm(vb);
+            S = NonGravForces.geom.flowShadow(tc.mm, vb, 900, 'Method', "lut", 'Lut', lut);
+            tc.verifyEqual(S.beam, NonGravForces.geom.selfShadow(tc.mm, vb / U, 'Method', "lut", 'Lut', lut));
+            Sm = NonGravForces.geom.flowShadow(tc.mm, vb .* [1; -1; 1], 900, 'Method', "lut", 'Lut', lut);
+            swap = [1 2 5 6 3 4 7 8];
+            tc.verifyBoundAndRecord("flowShadow y-mirror swaps starboard and port", max(abs(Sm.normal(swap, :, :) - S.normal), [], 'all'), 1e-12, "-", ...
+                "the cube map is symmetric in y to the ray cast's sampling, which is symmetric; the flow frame is not, so rounding enters");
+            err = zeros(1, 2); sList = [20 400];
+            for i = 1:2
+                Si = NonGravForces.geom.flowShadow(tc.mm, vb, tc.temperatureFor(sList(i), U), 'Method', "lut", 'Lut', lut);
+                err(i) = max(abs(Si.normal(:, 1, 2) - Si.beam(:, 1)));
+            end
+            tc.verifyLessThan(err(2), err(1), 'the ratios approach the parallel beam as the thermal spread closes');
+            tc.verifyBoundAndRecord("flowShadow normal ratio vs beam at s = 400", err(2), 2e-2, "-", "spread 1/s = 2.5e-3 rad across a cube cell of 0.2 rad with a value jump <= 1");
+        end
         function boxWingMetamorphic(tc)
             % Scaling every dimension by s scales every area by s^2 and every centroid by s; permuting the dimensions
             % permutes the faces.
@@ -391,24 +573,31 @@ classdef tNgfGeometry < NgfTestCase
         end
         function selfShadowMetamorphic(tc)
             % (1) sampling convergence: the 40- and 100-sample casts differ by less than the sampling bound 2/40;
-            % (2) LUT at its own vertices reproduces the ray cast bitwise; (3) LUT error decreases with resolution;
-            % (4) mirror symmetry of GRACE-FO in y: f(dy -> -dy) swaps starboard and port plates bitwise.
+            % (2) the table read at its own nodes returns the stored values (bilinear weights (1,0,0,0)); (3) the table
+            % error decreases with resolution; (4) mirror symmetry of GRACE-FO in y swaps starboard and port;
+            % (5) a back-facing direction returns exactly the value of its mirror direction in the plate's plane.
             [d, ~] = tc.oracleDirections();
             f40 = NonGravForces.geom.selfShadow(tc.mm, d, 'Samples', 40); f100 = NonGravForces.geom.selfShadow(tc.mm, d, 'Samples', 100);
             tc.verifyBoundAndRecord("selfShadow 40 vs 100 samples", max(abs(f40(:) - f100(:))), 2 / 40, "-", "one edge row of the coarser grid");
-            lut = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut", 'LutResolution', 162, 'Samples', 30);
-            fv = NonGravForces.geom.selfShadow(tc.mm, lut.verts(:, 1:40), 'Method', "lut", 'Lut', lut);
-            tc.verifyTrue(all(isfinite(fv(:))), 'the interpolation must return a number for every vertex direction');
-            tc.verifyBoundAndRecord("LUT at its vertices vs the table", max(abs(fv - lut.f(:, 1:40)), [], 'all'), 1e-14, "-", "barycentric weights (1,0,0); this read 0 while 8 of the 40 columns were NaN until 2026-09-08, because max omits NaN");
+            lut = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut", 'LutResolution', 8, 'Samples', 30);
+            fv = NonGravForces.geom.selfShadow(tc.mm, lut.nodes, 'Method', "lut", 'Lut', lut);
+            tc.verifyTrue(all(isfinite(fv(:))), 'the interpolation must return a number for every node direction');
+            tc.verifyBoundAndRecord("cube map at its nodes vs the table", max(abs(fv - lut.f), [], 'all'), 1e-12, "-", ...
+                "a node is read back through two arctangents; one ulp in the face angle moves the weight by 1e-16, times a jump of at most 1 between neighbours");
             rng(7); dr = randn(3, 40); dr = dr ./ vecnorm(dr); fr = NonGravForces.geom.selfShadow(tc.mm, dr, 'Samples', 30);
-            err = zeros(1, 3); res = [42 162 642];
+            err = zeros(1, 3); res = [4 8 16];
             for i = 1:3, fl = NonGravForces.geom.selfShadow(tc.mm, dr, 'Method', "lut", 'LutResolution', res(i), 'Samples', 30); err(i) = mean(abs(fl(:) - fr(:))); end
-            tc.verifyTrue(all(diff(err) < 0), 'the mean LUT error decreases with resolution');
-            tc.verifyBoundAndRecord("LUT 642 mean error vs ray cast (40 random directions)", err(3), 5e-2, "-", "measured see last_run; a shadow edge sharper than 6 deg is not resolved");
-            tc.verifyBoundAndRecord("LUT 642 / LUT 42 mean error ratio", err(3) / err(1), 1, "-", "must improve");
+            tc.verifyTrue(all(diff(err) < 0), 'the mean table error decreases with resolution');
+            tc.verifyBoundAndRecord("cube map 16 mean error vs ray cast (40 random directions)", err(3), 1e-2, "-", ...
+                "measured 3.1e-3 on 2026-09-15 (the 642-vertex icosphere it replaces measured 2.6e-2: the zeroed back faces smeared the horizon)");
+            tc.verifyBoundAndRecord("cube map 16 / cube map 4 mean error ratio", err(3) / err(1), 0.5, "-", "first-order convergence in the cell size gives 0.25; measured 0.11");
             dm = d .* [1; -1; 1]; fm = NonGravForces.geom.selfShadow(tc.mm, dm, 'Samples', 40);
             swap = [1 2 5 6 3 4 7 8];
             tc.verifyEqual(fm(swap, :), f40, 'AbsTol', 1e-12, 'mirror in y swaps starboard and port');
+            k = 7; nk = tc.mm.N(:, k); back = dr(:, (nk' * dr) < -1e-3); mir = back - 2 * nk .* (nk' * back);
+            fb = NonGravForces.geom.selfShadow(tc.mm, back, 'Samples', 30); fmir = NonGravForces.geom.selfShadow(tc.mm, mir, 'Samples', 30);
+            tc.verifyBoundAndRecord("back-facing direction vs its mirror (nadir plate)", max(abs(fb(k, :) - fmir(k, :))), 0, "-", ...
+                "the same rays are cast: the mirror of the mirror is the direction itself to rounding, and the occlusion test is discrete");
         end
         function thermalStateMetamorphic(tc)
             % Energy balance in steady state (emitted = absorbed + internal) exactly; doubling every pressure raises every
@@ -462,6 +651,17 @@ classdef tNgfGeometry < NgfTestCase
 
     % ===================================================================== speed
     methods (Test, TestTags = {'speed'})
+        function flowShadowSpeed(tc)
+            % flowShadow for 32 epochs against the radiation look-up the same Model epoch needs (577 source directions x 32):
+            % the gas quadrature must stay within an order of magnitude of the radiation occlusion it sits beside.
+            % Measured 2026-09-15: see last_run; budget 3x the measured ratio.
+            lut = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut");
+            rng(5); vb = [-7600 + 50 * randn(1, 32); 300 * randn(1, 32); 200 * randn(1, 32)]; T = 900 + 100 * rand(1, 32);
+            d = randn(3, 577 * 32); d = d ./ vecnorm(d);
+            q = tc.speedRatio(@() NonGravForces.geom.flowShadow(tc.mm, vb, T, 'Method', "lut", 'Lut', lut), ...
+                              @() NonGravForces.geom.selfShadow(tc.mm, d, 'Method', "lut", 'Lut', lut));
+            tc.verifyBoundAndRecord("flowShadow (32 epochs) / radiation occlusion look-up (577 x 32)", q, 16, "-", "measured 5.3 on 2026-09-15; budget 3x");
+        end
         function checkAttitudeSenseSpeed(tc)
             % Its whole cost is two rotations of the same quaternion series plus two atan2 angles,
             % so it must stay within a small multiple of one rotationFromQuaternion over the same K.
@@ -472,12 +672,13 @@ classdef tNgfGeometry < NgfTestCase
             tc.verifyBoundAndRecord("checkAttitudeSense vs one rotationFromQuaternion over 600 epochs", ratio, 12, "-", "budget 3x the expected 4: two rotations, one quaternion conjugation and two atan2 angles; 5 repeats, median");
         end
         function selfShadowSpeed(tc)
-            % A LUT query over the 600-epoch sample against the ray cast of the same directions: the table must pay off.
-            % Measured 2026-09-07 (50 directions): ray cast 0.06 s, LUT 642 query 0.02 s; bound: LUT query <= ray cast.
+            % A table query against the ray cast of the same directions. The cube map is O(1) per direction (two
+            % arctangents and four reads); measured 2026-09-15: 3.6 us per direction against 1.5 ms per direction for the
+            % 40-sample cast, ratio 2.4e-3. Budget 3x: 1e-2. (The icosphere it replaced scanned every face per direction.)
             rng(3); d = randn(3, 600); d = d ./ vecnorm(d);
-            lut = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut", 'LutResolution', 642, 'Samples', 40);
+            lut = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut", 'LutResolution', 16, 'Samples', 40);
             q = tc.speedRatio(@() NonGravForces.geom.selfShadow(tc.mm, d, 'Method', "lut", 'Lut', lut), @() NonGravForces.geom.selfShadow(tc.mm, d, 'Samples', 40));
-            tc.verifyBoundAndRecord("selfShadow LUT query / ray cast time ratio (600 directions)", q, 1, "-", "the table exists to be cheaper");
+            tc.verifyBoundAndRecord("selfShadow cube-map query / ray cast time ratio (600 directions)", q, 1e-2, "-", "O(1) look-up; measured 2.4e-3");
         end
         function thermalStateSpeed(tc)
             % Transient over the steady state for the 600-epoch sample: the RK4 loop with dt <= tau/10 substeps.

@@ -81,7 +81,6 @@ classdef tNgfModel < NgfTestCase
             [tau, ti] = tc.M.torque(e, rr, vv);
             tc.verifySize(tau, [3 3]); tc.verifySize(ti.bodyTorque, [3 3]);
             tc.verifyEqual(ti.bodyTorque, zeros(3, 3), 'no body torque is enabled in the standard preset');
-            tc.verifyClass(tc.M.rhs(), 'function_handle');
             B = tc.M.budget(e, rr, vv);
             tc.verifyEqual(B.effect', ["drag" "radiation" "thermal" "total"]);
             T = tc.M.series(e, rr, vv, 'Quantities', ["accel" "torque"]);
@@ -154,9 +153,10 @@ classdef tNgfModel < NgfTestCase
             % Rotating to GCRS preserves every magnitude.
             ag = tc.M.accel(e, rr, vv, [], 'Frame', "gcrs");
             tc.verifyBoundAndRecord("gcrs vs body magnitude", max(abs(vecnorm(ag) - vecnorm(a))), 1e-23, "m/s^2", "an orthogonal rotation of a 3e-8 vector; measured 7e-24");
-            % rhs returns the GCRS acceleration, not a different quantity.
-            f = tc.M.rhs();
-            tc.verifyBoundAndRecord("rhs handle vs accel in gcrs", max(abs(f(e, rr, vv, []) - ag), [], 'all'), 0, "m/s^2", "the handle calls the same method: bitwise");
+            % Model.rhs is GONE (LP-C WP-C9, O-4): the integrator's entry point is app.DynamicsSource, whose
+            % accel() is asserted against this method in tests/tNgfIntegration.m. A handle that matched no
+            % signature the integrator takes was worse than no handle at all.
+            tc.verifyFalse(ismember("rhs", string(methods(tc.M))), 'Model.rhs must not come back without the interface it was supposed to serve');
         end
     end
 
@@ -194,9 +194,32 @@ classdef tNgfModel < NgfTestCase
             [e, rr, vv] = tc.arc(1);
             a = tc.M.accel(e, rr, vv);
             tc.verifySize(a, [3 1]); tc.verifyTrue(all(isfinite(a)));
+            % Options that contradict each other are refused at construction (LP-C F5), and each refusal is paired with
+            % the construction that must succeed (T6).
             o = tc.M.options.set("drag.gsi", "maxwell");
-            Mm = NonGravForces.Model(tc.macro, o, 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw);
-            tc.verifyErrorId(@() Mm.accel(e, rr, vv), 'NonGravForces:Model:unsupported');
+            mk = @(oo, varargin) NonGravForces.Model(tc.macro, oo, 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw, varargin{:});
+            tc.verifyErrorId(@() mk(o), 'NonGravForces:Model:inputOptions');
+            am = mk(o.set("drag.specularFraction", 0.1)).accel(e, rr, vv); tc.verifyTrue(all(isfinite(am)));
+            tc.verifyErrorId(@() mk(tc.M.options.set("drag.accommodation", "walker2014")), 'NonGravForces:Model:inputOptions');
+            tc.verifyErrorId(@() mk(tc.M.options.set("drag.accommodation", "walker2014").set("drag.alpha", []).set("drag.surfaceMass_amu", [])), 'NonGravForces:Model:inputOptions');
+            aw = mk(tc.M.options.set("drag.accommodation", "walker2014").set("drag.alpha", []).set("drag.surfaceMass_amu", 263.3223)).accel(e, rr, vv);
+            ap = mk(tc.M.options.set("drag.accommodation", "pilinski2010").set("drag.alpha", [])).accel(e, rr, vv);
+            tc.verifyTrue(all(isfinite([aw; ap])));
+            tc.verifyErrorId(@() mk(tc.M.options.set("drag.alpha", [])), 'NonGravForces:Model:inputOptions');
+            tc.verifyErrorId(@() mk(tc.M.options.set("thermal.internalPower_W", 100)), 'NonGravForces:Model:inputOptions');
+            % the mass is the macro model's, or the caller's, never GRACE-C's by default (LP-C F10)
+            o6 = struct('bus', struct('vis', [0.34 0.40 0.26], 'ir', [0.62 0.23 0.15]));
+            bw = NonGravForces.geom.boxWing([3 1.9 0.7], o6);
+            tc.verifyErrorId(@() NonGravForces.Model(bw, NonGravForces.Options("fast")), 'NonGravForces:Model:inputMass');
+            tc.verifyErrorId(@() NonGravForces.Model(bw, NonGravForces.Options("fast"), 'Mass', -3), 'NonGravForces:Model:inputMass');
+            tc.verifyEqual(NonGravForces.Model(bw, NonGravForces.Options("fast"), 'Mass', 150).mass.value_kg, 150);
+            tc.verifyEqual(NonGravForces.Model(NonGravForces.geom.graceFO("D"), NonGravForces.Options("fast")).mass.value_kg, NonGravForces.const().graceFO.massD);
+            % erp.backend ceres (LP-C WP-C8) evaluates through the Model with the committed EBAF excerpt, and without it refuses
+            cerFiles = string(fullfile(tc.root, 'data', 'ceres', ["rsut" "rlut" "rsdt"] + "_mon_CERES-EBAF-4-2-1_NASA-GISS_gn_201912-202001.nc"));
+            oC = tc.M.options.set("erp.backend", "ceres");
+            tc.verifyErrorId(@() mk(oC).accel(e, rr, vv), 'NonGravForces:Model:dependCeres');
+            [aC, iC] = mk(oC, 'Ceres', NonGravForces.io.importCERES(cerFiles)).accel(e, rr, vv);
+            tc.verifyTrue(all(isfinite(aC))); tc.verifyEqual(iC.backends.erp, "ceres");
             % The fast preset must evaluate with no space weather beyond its exponential profile.
             af = tc.Mfast.accel(e, rr, vv);
             tc.verifyTrue(all(isfinite(af))); tc.verifyGreaterThan(norm(af), 0);
@@ -222,6 +245,13 @@ classdef tNgfModel < NgfTestCase
             [~, i3] = M3.accel(e, rr, vv);
             tc.verifyBoundAndRecord("radiation doubles with crScale", max(abs(i3.radiation - 2 * info.radiation), [], 'all') / max(abs(info.radiation), [], 'all'), 1e-15, "-", "as above");
             tc.verifyEqual(i3.drag, info.drag, 'the drag must not notice the radiation scale');
+            % Changing the density backend (msis00 -> msis21, LP-C WP-C6) changes the drag and nothing else.
+            M21 = NonGravForces.Model(tc.macro, o.set("drag.density", "msis21"), 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw);
+            [a21, i21] = M21.accel(e, rr, vv);
+            tc.verifyEqual(i21.backends.density, "msis21"); tc.verifyTrue(all(isfinite(a21), 'all'));
+            tc.verifyEqual(i21.radiation, info.radiation, 'the radiation must not notice the density backend');
+            tc.verifyEqual(i21.thermal, info.thermal, 'nor the thermal recoil');
+            tc.verifyBoundAndRecord("drag msis21 / msis00 through the Model, largest departure from 1", max(abs(log(vecnorm(i21.drag) ./ vecnorm(info.drag)))), log(2), "-", "two climatologies of one thermosphere (the density ratio measured 0.88-0.99 at 490 km that day): a plausibility bound on the wiring");
             % The analytic parameter partials against Richardson-extrapolated central differences.
             [J, names] = tc.M.partials(e, rr, vv, 'WithRespectTo', ["cdScale", "crScale", "alpha"]);
             tc.verifyEqual(names, ["cdScale" "crScale" "alpha"]);
@@ -243,11 +273,13 @@ classdef tNgfModel < NgfTestCase
     % ===================================================================== speed
     methods (Test, TestTags = {'speed'})
         function modelSpeed(tc)
-            % The fast preset exists to be fast: no self-shadowing, no Earth radiation, no
-            % thermal model. It must beat the standard preset by a wide margin on the same arc.
-            [e, rr, vv] = tc.arc(4);
+            % The fast preset exists to be fast: no self-shadowing, no Earth radiation, no thermal model. Until LP-C it was
+            % 45x the cheaper (2 against 89 ms per epoch); with the O(1) cube map, flow shadowing and provenance on demand
+            % the standard preset costs 1.2 ms per epoch on the host (2026-09-15, 100 epochs) and the fast one 0.3 ms, a ratio
+            % of 0.25. The fast preset must still be the cheaper one by a clear margin: budget 3x the measured ratio.
+            [e, rr, vv] = tc.arc(40);
             ratio = tc.speedRatio(@() tc.Mfast.accel(e, rr, vv), @() tc.M.accel(e, rr, vv));
-            tc.verifyBoundAndRecord("fast preset vs standard preset, same arc", ratio, 0.35, "-", "budget one third of the expected 20x speed-up; measured 0.02 (2 ms/epoch against 89 ms)");
+            tc.verifyBoundAndRecord("fast preset vs standard preset, same arc (40 epochs)", ratio, 0.75, "-", "measured 0.25 on 2026-09-15 (it was 0.02 while the standard preset cost 88 ms per epoch)");
         end
     end
 end

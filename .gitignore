@@ -5,12 +5,30 @@ doc/html/custom_toolbox.json
 # Compiled MEX gateways, one extension per platform; built by NonGravForces.buildMex, never committed
 +NonGravForces/+env/private/msisGateway.mex*
 +NonGravForces/+env/private/msisGateway.digest.txt
++NonGravForces/+env/private/msis21Gateway.mex*
++NonGravForces/+env/private/msis21Gateway.digest.txt
++NonGravForces/+env/private/msis21.parm
++NonGravForces/+env/private/nrlmsis2.1_license..txt
++NonGravForces/+env/private/hwm14Gateway.mex*
++NonGravForces/+env/private/hwm14Gateway.digest.txt
++NonGravForces/+env/private/hwm123114.bin
++NonGravForces/+env/private/dwm07b104i.dat
++NonGravForces/+env/private/gd2qd.dat
++NonGravForces/+app/private/rhsGateway.mex*
++NonGravForces/+app/private/rhsGateway.digest.txt
 +NonGravForces/+kernel/private/kernelGateway.mex*
 +NonGravForces/+kernel/private/kernelGateway.digest.txt
 
 # NRLMSISE-00 C source, obtained from its maintainer rather than redistributed here.
 # See THIRD-PARTY-NOTICES.md; NonGravForces.buildMex tells you what to do if it is missing.
 mex/nrlmsise00/
+
+# NRLMSIS 2.1 Fortran package of NRL (Open Source Academic Research License: not redistributed).
+# setupNonGravForces fetches the release tarball and checks its SHA-256.
+mex/nrlmsis21/
+
+# HWM14 Fortran and data (NRL; no redistribution grant). setupNonGravForces fetches them by SHA-256.
+mex/hwm14/
 
 # Python bytecode caches of the audit and build scripts
 __pycache__/
@@ -19,3 +37,10 @@ __pycache__/
 # not redistributable). Kept locally, never committed; the toolbox cites them by DOI.
 doc/references/
 tools/benchmark_last.txt
+
+# Full products fetched by setupNonGravForces('FetchData', ...): never committed. The committed
+# excerpts under data/ carry dated names (eop, space weather) or live in data/samples (Level-1B).
+data/eop/finals2000A.all
+data/spaceweather/SW-All.csv
+data/l1b/
+data/ceres/*_200003-202509.nc

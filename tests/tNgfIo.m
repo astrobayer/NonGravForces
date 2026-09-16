@@ -1,5 +1,5 @@
 classdef tNgfIo < NgfTestCase
-%TNGFIO Tests of the io layer (LP-2): readACC1B, readSCA1B, readGNV1B, readTHR1B, readMAS1B, readMAG1B, igrfCoefficients, massModel, spaceWeather.
+%TNGFIO Tests of the io layer (LP-2): readACC1B, readSCA1B, readGNV1B, readTHR1B, readMAS1B, readMAG1B, igrfCoefficients, importCERES, massModel, spaceWeather.
 %
 %   Oracle: the real 2020-01-01 GRACE-C RL04 products in data/samples (first 600
 %   records of the 1 Hz products; THR1B and MAS1B complete), the IERS
@@ -7,6 +7,9 @@ classdef tNgfIo < NgfTestCase
 %   data/spaceweather (HANDOVER Part I, 2026-09-06). Independent oracles are
 %   the raw file text (parsed here with regexp, not with gracefoReading), the
 %   IAU 1982 GMST polynomial, the IERS leap-second count and JPL D-56935.
+%   importCERES: the CERES EBAF 4.2.1 excerpt in data/ceres (December 2019 and
+%   January 2020, values unchanged) against tools/pyxcheck/ceres_check.py, a
+%   standard-library netCDF-3 reader written from the format specification.
 %   Every bound carries the number it was measured at on 2026-09-06.
 %
 %   No test skips when a fixture is missing: it fails (a skip is `incomplete`
@@ -26,6 +29,10 @@ classdef tNgfIo < NgfTestCase
                 'gnv', fullfile(S, 'GNV1B_2020-01-01_C_04.txt'), 'thr', fullfile(S, 'THR1B_2020-01-01_C_04.txt'), ...
                 'mas', fullfile(S, 'MAS1B_2020-01-01_C_04.txt'), 'mag', fullfile(S, 'MAG1B_2020-01-01_C_04.txt'), ...
                 'igrf', fullfile(root, 'data', 'igrf', 'igrf14coeffs.txt'), ...
+                'rsut', fullfile(root, 'data', 'ceres', 'rsut_mon_CERES-EBAF-4-2-1_NASA-GISS_gn_201912-202001.nc'), ...
+                'rlut', fullfile(root, 'data', 'ceres', 'rlut_mon_CERES-EBAF-4-2-1_NASA-GISS_gn_201912-202001.nc'), ...
+                'rsdt', fullfile(root, 'data', 'ceres', 'rsdt_mon_CERES-EBAF-4-2-1_NASA-GISS_gn_201912-202001.nc'), ...
+                'ceresCells', fullfile(root, 'tools', 'pyxcheck', 'ceres_cells.csv'), ...
                 'sw', fullfile(W, 'SW-All_2019-09_2020-03.csv'), ...
                 'solfsmy', fullfile(W, 'SOLFSMY_2019-09_2020-03.TXT'), 'dtc', fullfile(W, 'DTCFILE_2019-09_2020-03.TXT'), ...
                 'eop', fullfile(root, 'data', 'eop', 'finals2000A_2019-09_2020-03.all'));
@@ -57,6 +64,10 @@ classdef tNgfIo < NgfTestCase
             %RANGE decimal-MJD TimeRange for seconds s0..s1 of 2020-01-01 (GPS day 58849).
             tr = [58849 + s0 / 86400, 58849 + s1 / 86400];
         end
+        function f = ceres(tc)
+            %CERES The three EBAF excerpt files, in the order rsut rlut rsdt.
+            f = string({tc.f.rsut, tc.f.rlut, tc.f.rsdt});
+        end
         function q = speedRatio(~, fcn, base)
             %SPEEDRATIO median over 5 repeats of (fcn time / base time), after one warm-up of each.
             fcn(); base();
@@ -70,6 +81,26 @@ classdef tNgfIo < NgfTestCase
 
     % ===================================================================== contract
     methods (Test, TestTags = {'contract'})
+        function importCERESContract(tc)
+            [cer, aux] = NonGravForces.io.importCERES(tc.ceres());
+            tc.verifyEqual(cer.product, "CERES-EBAF-4-2-1"); tc.verifyEqual(cer.version, "4.2.1");
+            tc.verifySize(cer.rsut, [180 360 2]); tc.verifySize(cer.rlut, [180 360 2]); tc.verifySize(cer.rsdt, [180 360 2]);
+            tc.verifyClass(cer.rsut, 'single'); tc.verifySize(cer.time, [1 2]); tc.verifySize(cer.mjd, [1 2]);
+            tc.verifyEqual(cer.lat_deg([1 end]), [-89.5 89.5]); tc.verifyEqual(cer.lon_deg([1 end]), [0.5 359.5]);
+            tc.verifyEqual(cer.latitude, "geodetic"); tc.verifyEqual(cer.referenceHeight_m, 20e3);
+            tc.verifyTrue(startsWith(cer.doi, "10.5067/")); tc.verifyTrue(contains(cer.license, "Creative Commons"));
+            tc.verifyEqual(aux.files, tc.ceres()); tc.verifyEqual(aux.timeIndex, [1 2]); tc.verifyEqual(aux.provenance.unit, "io.importCERES");
+            C = @NonGravForces.io.importCERES; f = tc.ceres();
+            tc.verifyErrorId(@() C(f(1:2)), 'NonGravForces:importCERES:inputFiles');
+            tc.verifyErrorId(@() C(f([1 1 3])), 'NonGravForces:importCERES:inputFiles');
+            tc.verifyErrorId(@() C([f(1:2) string(fullfile(tc.tmp, 'nothere.nc'))]), 'NonGravForces:importCERES:dataMissing');
+            other = fullfile(tc.tmp, 'other_rsdt.nc'); copyfile(tc.f.rsdt, other, 'f'); fileattrib(other, '+w');
+            ncwriteatt(other, '/', 'source_id', 'NOT-CERES');
+            tc.verifyErrorId(@() C([f(1:2) string(other)]), 'NonGravForces:importCERES:dataFormat');
+            tc.verifyErrorId(@() C(f, 'Period', [datetime(2020, 1, 5) datetime(2020, 1, 1)]), 'NonGravForces:importCERES:inputPeriod');
+            tc.verifyErrorId(@() C(f, 'Period', [datetime(2019, 12, 1) datetime(2020, 1, 1)]), 'NonGravForces:importCERES:inputPeriod');
+            tc.verifyErrorId(@() C(f, 'Period', [datetime(2020, 1, 1) datetime(2020, 2, 1)]), 'NonGravForces:importCERES:inputPeriod');
+        end
         function igrfCoefficientsContract(tc)
             [c, aux] = NonGravForces.io.igrfCoefficients(tc.f.igrf);
             tc.verifyEqual(c.nMax, 13);
@@ -203,6 +234,33 @@ classdef tNgfIo < NgfTestCase
 
     % ===================================================================== reference
     methods (Test, TestTags = {'reference'})
+        function importCERESReference(tc)
+            % Oracle: tools/pyxcheck/ceres_check.py reads the same netCDF-3 files with its own parser (T9). Cell values
+            % at eight cells per field and month, chosen at the corners, the equator, both hemispheres and the longitude
+            % seam, pin the axis order and orientation: they must agree BITWISE (one float, printed with 17 digits).
+            % The area-weighted global means are the whole grid in one number each.
+            cer = NonGravForces.io.importCERES(tc.ceres());
+            opts = setvartype(detectImportOptions(tc.f.ceresCells), {'variable', 'lat_deg', 'lon_deg'}, 'string');
+            T = readtable(tc.f.ceresCells, opts);                % "global" rows keep their label
+            cells = T(T.lat_deg ~= "global", :);
+            tc.assertEqual(height(cells), 48, 'the oracle holds 8 cells per field and month');
+            worst = 0;
+            for k = 1:height(cells)
+                i = find(cer.lat_deg == double(cells.lat_deg(k))); j = find(cer.lon_deg == double(cells.lon_deg(k)));
+                got = double(cer.(cells.variable(k))(i, j, cells.month(k)));
+                worst = max(worst, abs(got - cells.value(k)));
+            end
+            tc.verifyBoundAndRecord("importCERES cells vs the independent netCDF-3 reader (48 values)", worst, 0, "W/m^2", "the same float read twice: bitwise");
+            tc.verifyEqual(cer.mjd, juliandate(datetime(2000, 3, 1) + days(unique(cells.time_days)')) - 2400000.5, 'the month nodes are the files'' own times');
+            glob = T(T.lat_deg == "global", :);
+            w = sind(cer.lat_deg' + 0.5) - sind(cer.lat_deg' - 0.5);
+            worstG = 0;
+            for k = 1:height(glob)
+                x = double(cer.(glob.variable(k))(:, :, glob.month(k)));
+                worstG = max(worstG, abs(sum(x .* w, 'all') / (360 * sum(w)) / glob.value(k) - 1));
+            end
+            tc.verifyBoundAndRecord("importCERES global means vs the oracle (6 means)", worstG, 1e-13, "-", "64800 products summed in another order; rounding only");
+        end
         function igrfCoefficientsReference(tc)
             % THE ORACLE IS THE PUBLISHED FILE, read a second way. These four numbers are
             % transcribed from igrf14coeffs.txt by eye; if a column or a degree/order index
@@ -345,6 +403,16 @@ classdef tNgfIo < NgfTestCase
 
     % ===================================================================== precision
     methods (Test, TestTags = {'precision'})
+        function importCERESPrecision(tc)
+            % The month nodes are exact: the file says 7228.25 and 7259 days after 2000-03-01 00:00 UTC, which are
+            % 2019-12-15 06:00 and 2020-01-15 00:00, MJD 58832.25 and 58863 (the CF time units parsed, not assumed).
+            cer = NonGravForces.io.importCERES(tc.ceres());
+            tc.verifyEqual(cer.time, [datetime(2019, 12, 15, 6, 0, 0) datetime(2020, 1, 15)]);
+            tc.verifyEqual(cer.mjd, [58832.25 58863]);
+            % the permutation to lat x lon x time is exact against a direct read of the lon x lat x time variable
+            raw = ncread(tc.f.rlut, 'rlut');
+            tc.verifyEqual(cer.rlut, permute(raw, [2 1 3]), 'lat x lon x time, values untouched');
+        end
         function igrfCoefficientsPrecision(tc)
             % Interpolation is one linear blend, so the two ends must be EXACT and the midpoint
             % must be the mean. Anything else means the weight or the bracketing index is wrong.
@@ -435,6 +503,17 @@ classdef tNgfIo < NgfTestCase
 
     % ===================================================================== vectorization
     methods (Test, TestTags = {'vectorization'})
+        function importCERESVectorization(tc)
+            % A period that sits exactly on one node loads that month alone; each such single-month import is the
+            % corresponding page of the whole import, bitwise.
+            f = tc.ceres();
+            cer = NonGravForces.io.importCERES(f);
+            for m = 1:2
+                one = NonGravForces.io.importCERES(f, 'Period', [cer.time(m) cer.time(m)]);
+                tc.verifyEqual(numel(one.time), 1);
+                tc.verifyEqual(one.rsut, cer.rsut(:, :, m)); tc.verifyEqual(one.rlut, cer.rlut(:, :, m)); tc.verifyEqual(one.rsdt, cer.rsdt(:, :, m));
+            end
+        end
         function igrfCoefficientsVectorization(tc)
             % The tables are read once and indexed; asking for many epochs must give the same
             % numbers as asking for each, because there is no state between calls.
@@ -523,6 +602,28 @@ classdef tNgfIo < NgfTestCase
 
     % ===================================================================== robustness
     methods (Test, TestTags = {'robustness'})
+        function importCERESRobustness(tc)
+            f = tc.ceres();
+            cer = NonGravForces.io.importCERES(f);
+            tc.verifyEqual(NonGravForces.io.importCERES(f([3 1 2])), cer, 'the files are recognised by variable_id, not by position');
+            % a fill value in the loaded months is refused and named, not propagated as 1e20 W/m^2
+            holed = fullfile(tc.tmp, 'holed_rsut.nc'); copyfile(tc.f.rsut, holed, 'f'); fileattrib(holed, '+w');
+            ncwrite(holed, 'rsut', single(1e20), [10 20 2]);
+            tc.verifyErrorId(@() NonGravForces.io.importCERES([string(holed) f(2:3)]), 'NonGravForces:importCERES:dataMissing');
+            % a units attribute that is not W m-2 is refused
+            milli = fullfile(tc.tmp, 'milli_rlut.nc'); copyfile(tc.f.rlut, milli, 'f'); fileattrib(milli, '+w');
+            ncwriteatt(milli, 'rlut', 'units', 'mW m-2');
+            tc.verifyErrorId(@() NonGravForces.io.importCERES([f(1) string(milli) f(3)]), 'NonGravForces:importCERES:dataFormat');
+            % time units with a time of day are parsed, not truncated to midnight (MATLAB's regexp dropped those tokens)
+            % ... and a file whose time axis disagrees with the other two is refused
+            shifted = string(fullfile(tc.tmp, ["a_rsut.nc" "b_rlut.nc" "c_rsdt.nc"]));
+            for k = 1:3, copyfile(f(k), shifted(k), 'f'); fileattrib(shifted(k), '+w'); end
+            ncwriteatt(shifted(3), 'time', 'units', 'days since 2000-03-01 12:30:00');
+            tc.verifyErrorId(@() NonGravForces.io.importCERES([f(1:2) shifted(3)]), 'NonGravForces:importCERES:dataFormat');
+            for k = 1:2, ncwriteatt(shifted(k), 'time', 'units', 'days since 2000-03-01 12:30:00'); end
+            c2 = NonGravForces.io.importCERES(shifted);
+            tc.verifyEqual(c2.time - cer.time, repmat(hours(12) + minutes(30), 1, 2), 'the time of day of the origin is honoured');
+        end
         function igrfCoefficientsRobustness(tc)
             % A truncated row must be refused with the mnemonic that names the cause.
             bad = fullfile(tc.tmp, 'igrf_truncated.txt');
@@ -665,6 +766,16 @@ classdef tNgfIo < NgfTestCase
 
     % ===================================================================== metamorphic
     methods (Test, TestTags = {'metamorphic'})
+        function importCERESMetamorphic(tc)
+            % Any period strictly inside the two nodes needs both and returns the whole import unchanged; the
+            % three fields are independent, so the rsut of one import is the rsut of any other.
+            f = tc.ceres();
+            cer = NonGravForces.io.importCERES(f);
+            mid = NonGravForces.io.importCERES(f, 'Period', [datetime(2020, 1, 1) datetime(2020, 1, 2, 12, 0, 0)]);
+            tc.verifyEqual(mid, cer);
+            zoned = NonGravForces.io.importCERES(f, 'Period', datetime([2020 2020], [1 1], [1 2], 'TimeZone', 'Europe/Berlin'));
+            tc.verifyEqual(zoned.time, cer.time, 'a zoned period is compared in UTC');
+        end
         function igrfCoefficientsMetamorphic(tc)
             tbl = NonGravForces.io.igrfCoefficients(tc.f.igrf);
             % 1. Interpolation is monotone in the weight: halfway is between the ends, coefficient
@@ -794,6 +905,14 @@ classdef tNgfIo < NgfTestCase
 
     % ===================================================================== speed
     methods (Test, TestTags = {'speed'})
+        function importCERESSpeed(tc)
+            % Everything importCERES adds to three ncread calls (attribute checks, axis comparisons, the permutation and
+            % the fill screen) against those bare reads: measured see last_run; budget 3x the 2026-09-15 figure.
+            f = tc.ceres();
+            base = @() cellfun(@(p, v) ncread(p, v), cellstr(f), {'rsut', 'rlut', 'rsdt'}, 'UniformOutput', false);
+            q = tc.speedRatio(@() NonGravForces.io.importCERES(f), base);
+            tc.verifyBoundAndRecord("importCERES vs three bare ncread calls", q, 25, "-", "checks and one permutation on 1.2e5 floats per field; measured 8.3 on 2026-09-15, budget 3x");
+        end
         function igrfCoefficientsSpeed(tc)
             NonGravForces.io.igrfCoefficients(tc.f.igrf);
             t = zeros(1, 3);

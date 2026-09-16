@@ -104,6 +104,21 @@ else:
         for v in set(re.findall(r"NonGravForces (\d+\.\d+\.\d+)", txt)):
             if v != version:
                 note(f"{os.path.relpath(h, ROOT)}: mentions version {v}, toolbox is {version}")
+    # CLAUDE.md is an orientation file, not an authority, and it carries two numbers that are
+    # authored elsewhere: the version and the unit count. It claimed since 2026-09-06 that "CI
+    # checks ... this sentence's number against it" and CI did NOT - the sentence said 53 while
+    # the catalogue held 55 (LP-C). Claiming a check is not having one (R1).
+    claude = open(os.path.join(ROOT, "CLAUDE.md"), encoding="utf-8").read()
+    cv = re.search(r"Toolbox version (\d+\.\d+\.\d+)", claude)
+    if not cv:
+        note("CLAUDE.md: no 'Toolbox version x.y.z' in the header")
+    elif cv.group(1) != version:
+        note(f"CLAUDE.md: Toolbox version {cv.group(1)} != toolboxVersion {version}")
+    cn = re.search(r"^(\d+) public units, catalogued in `doc/functionlist.csv`", claude, re.M)
+    if not cn:
+        note("CLAUDE.md: no '<n> public units, catalogued in `doc/functionlist.csv`' sentence")
+    elif int(cn.group(1)) != len(rows):
+        note(f"CLAUDE.md: claims {cn.group(1)} public units, the catalogue holds {len(rows)}")
 
 # 6. Every doc/html page is what the generator renders. Until 2026-09-09 only FunctionList.html
 #    was covered and the rest carried a hand-edited footer checked for its version string alone:

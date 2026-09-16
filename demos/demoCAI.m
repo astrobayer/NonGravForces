@@ -1,10 +1,11 @@
 %DEMOCAI A single-axis cold-atom accelerometer on a GRACE-like orbit, and why it needs the attitude.
 %
 %   The headline number of this demo is not the drag phase. It is the Coriolis
-%   phase: at an orbital rate across an orbital speed the rotation term is
-%   6.7e7 radians, an apparent 16.7 m/s^2. An interferometer that does not
-%   counter-rotate its Raman mirror does not read a small bias on top of the
-%   signal, it has no fringe left to read.
+%   phase: at an orbital attitude rate, one millimetre per second of atom
+%   velocity RELATIVE TO THE INSTRUMENT is 8.9 radians, an apparent 2.2e-6 m/s^2 --
+%   seven times the drag the instrument is there to measure. (The orbital velocity
+%   does not enter: atoms and satellite share it. Until 2026-09-15 this demo fed
+%   it in and printed 16.7 m/s^2, HANDOVER LP-C finding F6.)
 %
 %   Run:  demoCAI
 %
@@ -31,15 +32,16 @@ fprintf('drag phase           %.4f rad  = %.4e m/s^2 equivalent\n', ...
 fprintf('wrapped phase        %.4f rad  (what the instrument returns)\n', y.info.wrapped(find(y.mask, 1)));
 fprintf('fringe integer       %d  (what the readout cannot tell you)\n', y.info.fringe(find(y.mask, 1)));
 
-% Now switch the rotation on, at a GRACE-like attitude rate and orbital speed.
+% Now switch the rotation on, at a GRACE-like attitude rate, with the atom cloud drifting at
+% 1 mm/s across the beam relative to the instrument (a release residual, stated here as an assumption).
 sr = NonGravForces.sensor.AtomInterferometer(kEff, T, cycle, [1; 0; 0], 'SampleRate', fs, 'Rotation', true);
 omega = repmat([0; 0; 1.1e-3], 1, K);
-vel = repmat([0; 7600; 0], 1, K);
-yr = sr.observe(struct('a', aDrag, 'omega', omega, 'velocity', vel));
+atomVel = repmat([0; 1e-3; 0], 1, K);
+yr = sr.observe(struct('a', aDrag, 'omega', omega, 'atomVelocity', atomVel));
 coriolis = mean(yr.value(yr.mask)) - mean(y.value(y.mask));
 
 fprintf('\nCoriolis phase       %.4e rad = %.3e fringes\n', coriolis, coriolis / (2 * pi));
-fprintf('as an acceleration   %.2f m/s^2, against a drag of %.1e\n', ...
+fprintf('as an acceleration   %.2e m/s^2, against a drag of %.1e\n', ...
     abs(coriolis) / (kEff * T^2), 3e-7);
-fprintf(['\nThat is larger than gravity and eight orders above the signal. The rotation input is\n' ...
-         'not a refinement to this instrument; without compensation there is nothing to measure.\n']);
+fprintf(['\nOne millimetre per second of atom velocity outweighs the signal several times over. The\n' ...
+         'rotation input is not a refinement to this instrument; it has to be measured or compensated.\n']);

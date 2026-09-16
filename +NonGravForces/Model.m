@@ -2,38 +2,41 @@ classdef Model
 %MODEL Single point of access: non-gravitational forces, torques and partials.
 %
 %   M = NonGravForces.Model(macro, options, 'Eop', eop, 'SpaceWeather', sw)
-%   M = NonGravForces.Model(macro, options, 'Attitude', att, 'Mass', massModel, 'Eop', eop, 'SpaceWeather', sw)
+%   M = NonGravForces.Model(macro, options, 'Attitude', att, 'Mass', 601.2, 'Eop', eop, 'SpaceWeather', sw)
 %
-%   [a, info]      = M.accel(epoch, r_gcrs, v_gcrs, q_body2gcrs)   % 3xK m/s^2, body frame
-%   [tau, info]    = M.torque(epoch, r, v, q)                      % 3xK N m, body frame
-%   T              = M.series(epoch, r, v, q)                      % timetable over chunks
+%   [a, info]        = M.accel(epoch, r_gcrs, v_gcrs, q_body2gcrs)   % 3xK m/s^2, body frame
+%   [tau, info]      = M.torque(epoch, r, v, q)                      % 3xK N m, body frame
+%   [a, tau, info]   = M.evaluate(epoch, r, v, q)                    % both from ONE environment pass
+%   T                = M.series(epoch, r, v, q)                      % timetable over chunks
 %   [J, names, info] = M.partials(epoch, r, v, q, 'WithRespectTo', ["r","v","cdScale"])
-%   f              = M.rhs()                                       % handle for an integrator
-%   B              = M.budget(epoch, r, v, q)                      % per-effect table
+%   B                = M.budget(epoch, r, v, q)                      % per-effect table
 %
-%   The Model owns the packed macro model, the attitude provider, the mass model,
-%   the Earth-orientation and space-weather sources, the resolved Options and the
-%   self-shadow look-up table. It computes forces and torques and nothing else:
-%   time, frames and attitude kinematics are referenceSystem, reading is
-%   gracefoReading, integration is gjToolbox. Calibration is app.calibrate, whose
-%   solver is this toolbox's own: the problem is a small separable linear least
-%   squares and an external estimator was ruled overkill for it (2026-09-09).
+%   The Model owns the packed macro model, the attitude provider, the mass, the
+%   Earth-orientation, space-weather, ephemeris and CERES sources, the resolved
+%   Options and the self-shadow table. It computes forces and torques and nothing
+%   else: time, frames and attitude kinematics are referenceSystem, reading is
+%   gracefoReading, integration is gjToolbox (through app.DynamicsSource).
 %
 %   ONE KERNEL (principle P2). accel and torque are two reductions of the same
 %   per-panel force array F_k: F = sum_k F_k and tau = sum_k (c_k - r_cm) x F_k,
-%   computed once per epoch by one private evaluation. budget is the same array
-%   kept per effect instead of summed, and it adds back to accel bitwise.
+%   computed once per epoch. budget is the same array kept per effect instead of
+%   summed, and it adds back to accel bitwise. evaluate returns both reductions
+%   from one pass; series uses it when both are asked for.
 %
 %   WHAT IT COMPOSES, in order, per epoch:
 %     1. the relative velocity            env.wind (co-rotation from referenceSystem)
 %     2. the geodetic height              referenceSystem.cartesianToGeodetic on the ITRS position
 %     3. density and composition          env.density with the space-weather drivers
 %     4. the radiation source list        env.radiationSources (Sun, Earth tiles, eclipse)
-%     5. self-shadowing                   geom.selfShadow for the gas stream and every source
-%     6. panel temperatures               geom.thermalState
-%     7. per-panel forces                 kernel.dragPanelForce, radiationPanelForce, thermalRecoil
-%     8. reductions                       kernel.assemble, and kernel.bodyTorques for the torque
-%   Every step is the unit that owns that fact; the Model adds no physics.
+%     5. occlusion                        geom.selfShadow per radiation source; geom.flowShadow for the gas
+%     6. panel temperatures               geom.thermalState with the per-source occlusion
+%     7. accommodation                    kernel.accommodation (fixed, pilinski2010, walker2014)
+%     8. per-panel forces                 kernel.dragPanelForce, radiationPanelForce, thermalRecoil
+%     9. reductions                       kernel.assemble, and kernel.bodyTorques for the torque
+%   Every step is the unit that owns that fact; the Model adds no physics. Until
+%   2026-09-15 steps 5 and 6 fed a radiation-beam fraction to the gas (deleting the
+%   edge-on shear) and the Sun's fraction to every source's heating (deleting the
+%   Earth heating of panels facing away from the Sun): HANDOVER LP-C, F1 and F2.
 %
 %   FRAME. Results are BODY frame by default (principle P4: the body frame is
 %   what an accelerometer reads and what the sensor layer maps from). Pass
@@ -43,59 +46,61 @@ classdef Model
 %   Name     Size  Type                            Units  Description
 %   ----     ----  ----                            -----  -----------
 %   macro    1x1   NonGravForces.geom.MacroModel   -      Packed panel geometry
-%   options  1x1   NonGravForces.Options           -      Resolved options
+%   options  1x1   NonGravForces.Options           -      Resolved options (default "standard")
 %
 % CONSTRUCTOR NAME-VALUE ARGUMENTS
-%   Name          Size  Type    Units  Description
-%   ----          ----  ----    -----  -----------
-%   Attitude      1x1   geom.AttitudeProvider  -  BODY->GCRS quaternions, used when a
-%                                          method is called without q. Default [].
-%   Mass          1x1   struct  kg     io.massModel result. Default: the handbook
-%                                      constant for GRACE-C.
-%   Eop           1x1   struct  -      referenceSystem.readEop result or a file path.
-%                                      REQUIRED to evaluate: the geodetic height needs
-%                                      the ITRS rotation and the co-rotation needs its
-%                                      rate. No default, because a wrong Earth
-%                                      orientation is invisible in the answer (R5).
-%   SpaceWeather  1x1   struct  -      io.spaceWeather result. Required by every
-%                                      density backend but "exponential".
-%   Ephemeris     1x1   struct  -      referenceSystem.readEphemeris result, required
-%                                      when sun.source is "rs.de440" (O-7).
-%   Exponential   1x1   struct  -      .rho0_kg_m3 .h0_m .H_m, required when
-%                                      drag.density is "exponential".
+%   Name          Size  Type            Units  Description
+%   ----          ----  ----            -----  -----------
+%   Attitude      1x1   AttitudeProvider -     BODY->GCRS quaternions, used when a method is
+%                                              called without q. Default [].
+%   Mass          1x1   double|struct   kg     A constant mass, or an io.massModel result.
+%                                              Default: the macro model's mass_kg (geom.graceFO
+%                                              carries the handbook value); a macro model without
+%                                              one is REFUSED, never given GRACE-C's (LP-C F10).
+%   Eop           1x1   struct          -      referenceSystem.readEop result or a file path.
+%                                              REQUIRED to evaluate: the geodetic height needs
+%                                              the ITRS rotation and the co-rotation its rate.
+%   SpaceWeather  1x1   struct          -      io.spaceWeather result. Required by msis00 and msis21.
+%   Ephemeris     1x1   struct          -      referenceSystem.readEphemeris result, required
+%                                              when sun.source is "rs.de440".
+%   Exponential   1x1   struct          -      .rho0_kg_m3 .h0_m .H_m, required when
+%                                              drag.density is "exponential".
+%   Ceres         1x1   struct          -      io.importCERES result, required when erp.backend is "ceres".
 %
-% OUTPUT (accel / torque)
+% OUTPUT (accel / torque / evaluate)
 %   a, tau   3xK   double         acceleration [m/s^2] or torque [N m]
 %   info     1x1   struct         .frame, .drag .radiation .thermal (3xK each, the
 %                                 same frame), .bodyTorque (torque only), .rho (1xK),
 %                                 .nu (1xK shadow factor), .mass_kg (1xK), .vrel_body,
-%                                 .sources (M), .temperature_K (NxK), .shadowDrag,
-%                                 .backends (struct of the units actually used),
-%                                 .provenance
+%                                 .sources (M), .temperature_K (NxK), .flowShadow,
+%                                 .accommodation, .lla, .backends, .provenance
 %
 % ACCURACY
 %   The Model adds no approximation: every number comes from the unit that owns
 %   it, and each of those states its own error. What the Model does own is the
 %   ORDER, which is fixed above, and the resolved options, which travel in
-%   info.provenance (rule R2). Measured end to end on the real 2020-01-01
-%   GRACE-C day, standard preset, 523 km: drag 8.5e-9, radiation 2.6e-8 and
-%   thermal 6.1e-9 m/s^2, the last against 6.4 nm/s^2 cross-track RMS published
-%   for GRACE (Siemes et al. 2023). The dominant error is the thermospheric
-%   density, 10-30 % (HANDOVER Part E), not anything here.
+%   info.provenance (rule R2). The dominant error is the thermospheric density,
+%   10-30 % (HANDOVER Part C.4), not anything here. Cost per epoch is recorded by
+%   tools/benchmark.m.
 %
 % ERRORS
 %   NonGravForces:Model:inputMacro      macro is not a MacroModel
-%   NonGravForces:Model:inputOptions    options is not an Options object
+%   NonGravForces:Model:inputOptions    options is not an Options object, or its choices contradict each other
+%                                       (alpha beside a non-fixed accommodation, maxwell without a specular
+%                                       fraction, walker2014 without a surface mass, internal power without shares)
+%   NonGravForces:Model:inputMass       no 'Mass' and no mass on the macro model, or 'Mass' not a positive mass / massModel
 %   NonGravForces:Model:inputState      epoch, r, v or q disagree in size, or are not finite
 %   NonGravForces:Model:inputAttitude   no q was given and the Model has no attitude provider
 %   NonGravForces:Model:dependEop       evaluated without 'Eop'
-%   NonGravForces:Model:dependWeather   evaluated without 'SpaceWeather' for a driven backend
-%   NonGravForces:Model:unsupported     an option combination this level does not deliver
+%   NonGravForces:Model:dependWeather   evaluated without 'SpaceWeather' or 'Exponential' for the density backend, or without 'SpaceWeather' for drag.wind hwm14
+%   NonGravForces:Model:dependCeres     evaluated with erp.backend ceres and no 'Ceres'
+%   NonGravForces:Model:unsupported     a method option this Model cannot honour (partials of alpha for a
+%                                       computed accommodation, transient thermal under parfor, unknown quantities)
 %   NonGravForces:<unit>:*              propagated unwrapped from the unit that refused
 %
 % REFERENCES
-%   HANDOVER Part D.3 (workflow) and Part G, WP-14 to WP-17; theory sections 2, 3,
-%   5 and 7; Siemes C. et al. (2023) Adv. Space Res.
+%   HANDOVER Part D.3 (workflow), Part G LP-6 and LP-C; theory sections 2, 3, 5 and 7;
+%   Siemes C. et al. (2023) Adv. Space Res.
 %
 % EXAMPLE
 %   eop = referenceSystem.readEop(eopFile);
@@ -107,10 +112,10 @@ classdef Model
 %   [a, info] = M.accel(ep, r, v, q);
 %   vecnorm(info.drag)          % ~1e-8 m/s^2 at solar minimum
 %
-% See also NonGravForces.Options, NonGravForces.geom.MacroModel, NonGravForces.env.wind, NonGravForces.kernel.assemble.
+% See also NonGravForces.Options, NonGravForces.geom.MacroModel, NonGravForces.app.DynamicsSource, NonGravForces.kernel.assemble.
 %
 % KEYWORDS model accel torque series partials budget single point of access
-% Created 2026-08-27 by Claude Fable 5 (Anthropic).
+% Created 2026-08-27 by Claude Fable 5 (Anthropic); flow shadowing, per-source heating, honest options 2026-09-15 by Claude Opus 5 (Anthropic).
     properties (SetAccess = private)
         macro
         options (1,1) NonGravForces.Options
@@ -120,6 +125,7 @@ classdef Model
         spaceWeather
         ephemeris
         exponential
+        ceres
         lut struct
         provenance struct
     end
@@ -129,11 +135,12 @@ classdef Model
                 macro
                 options = NonGravForces.Options("standard")
                 nv.Attitude = []
-                nv.Mass struct = struct('kind', "constant", 'value_kg', NaN)
+                nv.Mass = []
                 nv.Eop = []
                 nv.SpaceWeather = []
                 nv.Ephemeris = []
                 nv.Exponential = []
+                nv.Ceres = []
             end
             if ~isa(options, 'NonGravForces.Options') || ~isscalar(options)
                 NonGravForces.fail("Model", "inputOptions", ...
@@ -143,21 +150,17 @@ classdef Model
                 NonGravForces.fail("Model", "inputMacro", ...
                     "macro must be a NonGravForces.geom.MacroModel -> build one with geom.graceFO or geom.boxWing");
             end
+            localCheckOptions(options, macro);
             obj.macro = macro;
             obj.options = options;
             obj.attitude = nv.Attitude;
-            if isnan(nv.Mass.value_kg) && nv.Mass.kind == "constant"
-                obj.mass = NonGravForces.io.massModel("C");     % the handbook constant, stated not assumed
-            else
-                obj.mass = nv.Mass;
-            end
+            obj.mass = localMass(nv.Mass, macro);
             obj.eop = nv.Eop;
             obj.spaceWeather = nv.SpaceWeather;
             obj.ephemeris = nv.Ephemeris;
             obj.exponential = nv.Exponential;
-            % The self-shadow look-up table costs a ray cast per icosphere vertex, so it is built
-            % once here rather than on every evaluation (measured 2026-09-08: rebuilding it made a
-            % 5-epoch accel take 1.7 s).
+            obj.ceres = nv.Ceres;
+            % The self-shadow table costs a ray cast per cube-map node, so it is built once here.
             if options.geom.selfShadow == "lut"
                 obj.lut = struct('built', true, 'table', ...
                     NonGravForces.geom.selfShadow(macro, [], 'Method', "lut", 'LutResolution', options.geom.lutResolution));
@@ -177,18 +180,9 @@ classdef Model
                 q double = []
                 nv.Frame (1,1) string {mustBeMember(nv.Frame, ["body","gcrs"])} = "body"
             end
-            st = obj.evaluate(epoch, r, v, q);
-            m = reshape(st.mass_kg, 1, []);
-            aD = NonGravForces.kernel.assemble(st.Fdrag, obj.macro) ./ m;
-            aR = NonGravForces.kernel.assemble(st.Frad, obj.macro) ./ m;
-            aT = NonGravForces.kernel.assemble(st.Fthermal, obj.macro) ./ m;
-            a = aD + aR + aT;
-            if nv.Frame == "gcrs"
-                [a, aD, aR, aT] = obj.toGcrs(st.R, a, aD, aR, aT);
-            end
-            info = obj.stateInfo(st, nv.Frame);
-            info.drag = aD; info.radiation = aR; info.thermal = aT;
-            info.provenance = NonGravForces.provenance("Model.accel", 'Options', obj.options.toStruct());
+            st = obj.environment(epoch, r, v, q, []);
+            [a, info] = obj.reduceAccel(st, nv.Frame);
+            if nargout > 1, info.provenance = localStamp(obj.provenance, "Model.accel"); end
         end
 
         function [tau, info] = torque(obj, epoch, r, v, q, nv)
@@ -203,26 +197,30 @@ classdef Model
                 nv.B_body double = []
                 nv.Dipole_Am2 double = []
             end
-            st = obj.evaluate(epoch, r, v, q);
-            [~, tD] = NonGravForces.kernel.assemble(st.Fdrag, obj.macro);
-            [~, tR] = NonGravForces.kernel.assemble(st.Frad, obj.macro);
-            [~, tT] = NonGravForces.kernel.assemble(st.Fthermal, obj.macro);
-            o = obj.options.torques;
-            if o.gravityGradient || o.magnetic
-                rBody = reshape(pagemtimes(pagetranspose(st.R), reshape(st.r, 3, 1, [])), 3, []);
-                tB = NonGravForces.kernel.bodyTorques(obj.macro, rBody, ...
-                    'GravityGradient', o.gravityGradient, 'Magnetic', o.magnetic, ...
-                    'B_body', nv.B_body, 'Dipole_Am2', nv.Dipole_Am2);
-            else
-                tB = zeros(3, st.K);
+            st = obj.environment(epoch, r, v, q, []);
+            [tau, info] = obj.reduceTorque(st, nv.Frame, nv.B_body, nv.Dipole_Am2);
+            if nargout > 1, info.provenance = localStamp(obj.provenance, "Model.torque"); end
+        end
+
+        function [a, tau, info] = evaluate(obj, epoch, r, v, q, nv)
+            %EVALUATE Acceleration AND torque from one environment pass (principle P2 at the method level).
+            arguments
+                obj
+                epoch (1,1) struct
+                r double
+                v double
+                q double = []
+                nv.Frame (1,1) string {mustBeMember(nv.Frame, ["body","gcrs"])} = "body"
+                nv.B_body double = []
+                nv.Dipole_Am2 double = []
+                nv.T0_K double = []
             end
-            tau = tD + tR + tT + tB;
-            if nv.Frame == "gcrs"
-                [tau, tD, tR, tT, tB] = obj.toGcrs(st.R, tau, tD, tR, tT, tB);
-            end
-            info = obj.stateInfo(st, nv.Frame);
-            info.drag = tD; info.radiation = tR; info.thermal = tT; info.bodyTorque = tB;
-            info.provenance = NonGravForces.provenance("Model.torque", 'Options', obj.options.toStruct());
+            st = obj.environment(epoch, r, v, q, nv.T0_K);
+            [a, info] = obj.reduceAccel(st, nv.Frame);
+            [tau, ti] = obj.reduceTorque(st, nv.Frame, nv.B_body, nv.Dipole_Am2);
+            info.bodyTorque = ti.bodyTorque;
+            info.torque = struct('drag', ti.drag, 'radiation', ti.radiation, 'thermal', ti.thermal);
+            info.provenance = localStamp(obj.provenance, "Model.evaluate");
         end
 
         function B = budget(obj, epoch, r, v, q, nv)
@@ -272,13 +270,18 @@ classdef Model
             nC = numel(first);
             aC = cell(1, nC); tC = cell(1, nC);
             wantA = any(nv.Quantities == "accel"); wantT = any(nv.Quantities == "torque");
+            transient = obj.options.thermal.model == "transient";
+            if obj.options.series.useParallel && transient
+                NonGravForces.fail("Model", "unsupported", "thermal.model transient integrates the panel temperatures from one chunk into the next -> set series.useParallel false, or use steadyState");
+            end
             if obj.options.series.useParallel
                 parfor c = 1:nC
-                    [aC{c}, tC{c}] = obj.chunkEval(epoch, r, v, q, first(c), last(c), wantA, wantT, nv.Frame); %#ok<PFBNS>
+                    [aC{c}, tC{c}] = obj.chunkEval(epoch, r, v, q, first(c), last(c), wantA, wantT, nv.Frame, []); %#ok<PFBNS>
                 end
             else
+                T0 = [];
                 for c = 1:nC
-                    [aC{c}, tC{c}] = obj.chunkEval(epoch, r, v, q, first(c), last(c), wantA, wantT, nv.Frame);
+                    [aC{c}, tC{c}, T0] = obj.chunkEval(epoch, r, v, q, first(c), last(c), wantA, wantT, nv.Frame, T0);
                 end
             end
             t = referenceSystem.epochTo(epoch, "datetime");
@@ -316,14 +319,24 @@ classdef Model
             end
             method = nv.Method;
             if method == "", method = obj.options.partials.method; end
-            if method == "complexStep"
+            if ~any(method == ["analytic", "finiteDiff"])
                 NonGravForces.fail("Model", "unsupported", ...
-                    "complexStep cannot differentiate this chain -> MATLAB's erf and erfc raise notFullReal on a complex argument and abs/vecnorm discard the imaginary part, so no complex step survives the gas-surface coefficients or the speed; use analytic or finiteDiff (HANDOVER, 2026-09-08)");
+                    "'Method' %s is not offered -> use analytic or finiteDiff (a complex step cannot pass MATLAB's erf/erfc or any norm, measured 2026-09-08)", method);
+            end
+            if any(nv.WithRespectTo == "alpha") && obj.options.drag.accommodation ~= "fixed"
+                NonGravForces.fail("Model", "unsupported", ...
+                    "alpha is a parameter only of accommodation fixed; %s computes it from the environment -> differentiate cdScale instead", obj.options.drag.accommodation);
             end
             K = numel(epoch.sec);
             obj.checkState(epoch, r, v, q, K);
             names = string.empty(1, 0);
             cols = {};
+            scalars = intersect(nv.WithRespectTo, ["cdScale", "crScale", "alpha"], 'stable');
+            if ~isempty(scalars)
+                if method == "analytic"
+                    st = obj.environment(epoch, r, v, q, []);          % one pass for every scalar parameter
+                end
+            end
             for p = nv.WithRespectTo
                 switch p
                     case {"r", "v"}
@@ -343,7 +356,11 @@ classdef Model
                             names(end+1) = p + axisName(i); %#ok<AGROW>
                         end
                     otherwise
-                        cols{end+1} = obj.parameterPartial(p, epoch, r, v, q, nv.Frame, method); %#ok<AGROW>
+                        if method == "finiteDiff"
+                            cols{end+1} = obj.parameterPartialNumeric(p, epoch, r, v, q, nv.Frame); %#ok<AGROW>
+                        else
+                            cols{end+1} = obj.parameterPartial(p, st, nv.Frame); %#ok<AGROW>
+                        end
                         names(end+1) = p; %#ok<AGROW>
                 end
             end
@@ -358,21 +375,11 @@ classdef Model
             info.K = K;
             info.provenance = NonGravForces.provenance("Model.partials", 'Options', struct('method', method, 'wrt', strjoin(nv.WithRespectTo, ",")));
         end
-
-        function f = rhs(obj)
-            %RHS Function handle of the non-gravitational acceleration in GCRS, for an integrator.
-            %   f(epoch, r, v, q) -> 3xK m/s^2 in GCRS. The Model supplies non-gravitational
-            %   forces only: the caller's integrator adds gravity and everything else.
-            %   The gjToolbox.Dynamics contract could not be confirmed on this host,
-            %   which has no gjToolbox (HANDOVER O-4), so the shape of this handle is
-            %   what Part B.3 records and nothing here proves the consumer accepts it.
-            f = @(epoch, r, v, q) obj.accel(epoch, r, v, q, 'Frame', "gcrs");
-        end
     end
 
     methods (Access = private)
-        function st = evaluate(obj, epoch, r, v, q)
-            %EVALUATE The one pass every method reduces from: environment, geometry, per-panel forces.
+        function st = environment(obj, epoch, r, v, q, T0)
+            %ENVIRONMENT The one pass every method reduces from: environment, occlusion, per-panel forces.
             K = numel(epoch.sec);
             q = obj.resolveAttitude(epoch, q, K);
             obj.checkState(epoch, r, v, q, K);
@@ -381,7 +388,14 @@ classdef Model
                 NonGravForces.fail("Model", "dependEop", "evaluating needs 'Eop' at construction -> the geodetic height and the co-rotation both come from the ITRS rotation, and neither may be guessed");
             end
             % 1. relative velocity, GCRS then body
-            [vrel, windInfo] = NonGravForces.env.wind(o.drag.wind, epoch, r, v, 'Eop', obj.eop);
+            windArgs = {};
+            if o.drag.wind == "hwm14"
+                if isempty(obj.spaceWeather)
+                    NonGravForces.fail("Model", "dependWeather", "drag.wind hwm14 needs 'SpaceWeather' at construction for the 3-hour ap -> pass io.spaceWeather(file)");
+                end
+                windArgs = {'SpaceWeather', obj.spaceWeather};
+            end
+            [vrel, windInfo] = NonGravForces.env.wind(o.drag.wind, epoch, r, v, 'Eop', obj.eop, windArgs{:});
             R = referenceSystem.rotationFromQuaternion(q);                 % body -> GCRS
             vrelBody = reshape(pagemtimes(pagetranspose(R), reshape(vrel, 3, 1, K)), 3, K);
             % 2. geodetic height from the ITRS position
@@ -392,23 +406,37 @@ classdef Model
             [rho, species, Tgas] = obj.callDensity(epoch, lla);
             % 4. radiation sources
             srcArgs = {};
-            if ~isempty(obj.ephemeris), srcArgs = {'Ephemeris', obj.ephemeris}; end
-            [src, srcInfo] = NonGravForces.env.radiationSources(epoch, r, q, o, srcArgs{:});
-            % 5. self-shadowing
-            [fDrag, fRad] = obj.shadowFractions(vrelBody, src, K);
-            % 6. panel temperatures
-            if o.thermal.model == "none"
-                Tpanel = zeros(obj.macro.n, K);
-            else
-                % geom.thermalState takes ONE exposure per panel and epoch, while self-shadowing is
-                % per source. The Sun carries the great majority of the absorbed flux, so its column
-                % is the one passed; the Earth tiles' self-shadowing does not reach the panel
-                % temperature (HANDOVER O-28).
-                Tpanel = NonGravForces.geom.thermalState(obj.macro, src, 'Model', o.thermal.model, ...
-                    'InternalPower_W', o.thermal.internalPower_W, 'Exposed', fRad(:, :, 1));
+            if ~isempty(obj.ephemeris), srcArgs = [srcArgs, {'Ephemeris', obj.ephemeris}]; end
+            if o.erp.backend == "ceres"
+                if isempty(obj.ceres)
+                    NonGravForces.fail("Model", "dependCeres", "erp.backend ceres needs 'Ceres' at construction -> pass io.importCERES(files); the Earth's fluxes are never assumed");
+                end
+                srcArgs = [srcArgs, {'Ceres', obj.ceres, 'RotationItrsToGcrs', Ritrs}];
             end
-            % 7. per-panel forces
-            st.Fdrag = o.drag.cdScale * obj.dragForces(rho, species, Tgas, vrelBody, fDrag);
+            [src, srcInfo] = NonGravForces.env.radiationSources(epoch, r, q, o, srcArgs{:});
+            % 5. occlusion: per radiation source, and flux-weighted for the gas
+            kinetic = o.drag.gsi ~= "constantCd";
+            [flow, fRad] = obj.occlusion(vrelBody, Tgas, src, K, kinetic);
+            % 6. panel temperatures, heated source by source through that source's own occlusion
+            switch o.thermal.model
+                case "none"
+                    Tpanel = zeros(obj.macro.n, K);
+                otherwise
+                    thArgs = {'Exposed', fRad};
+                    if o.thermal.internalPower_W > 0
+                        thArgs = [thArgs, {'InternalPower_W', o.thermal.internalPower_W, 'InternalShare', obj.macro.internalShare}];
+                    end
+                    if o.thermal.model == "transient"
+                        if isempty(T0)
+                            T0 = NonGravForces.geom.thermalState(obj.macro, localFirstEpoch(src), thArgs{1}, fRad(:, 1, :), thArgs{3:end});
+                        end
+                        thArgs = [thArgs, {'Model', "transient", 'Epoch', epoch, 'T0_K', T0(:)'}];
+                    end
+                    Tpanel = NonGravForces.geom.thermalState(obj.macro, src, thArgs{:});
+            end
+            % 7-8. accommodation and per-panel forces
+            [Fdrag, acc] = obj.dragForces(rho, species, Tgas, vrelBody, flow);
+            st.Fdrag = o.drag.cdScale * Fdrag;
             st.Frad = o.srp.crScale * NonGravForces.kernel.radiationPanelForce(obj.macro, src, 'Shadow', fRad);
             if o.thermal.model == "none"
                 st.Fthermal = zeros(3, obj.macro.n, K);
@@ -417,11 +445,45 @@ classdef Model
             end
             st.K = K; st.R = R; st.r = r; st.rho = rho; st.species = species; st.Tgas = Tgas;
             st.vrelBody = vrelBody; st.lla = lla; st.src = src; st.nu = src.nu;
-            st.shadowDrag = fDrag; st.shadowRad = fRad; st.Tpanel = Tpanel;
+            st.flow = flow; st.shadowRad = fRad; st.Tpanel = Tpanel; st.acc = acc;
             st.mass_kg = obj.mass.at(epoch);
             st.backends = struct('density', o.drag.density, 'wind', windInfo.model, 'gsi', o.drag.gsi, ...
-                'eclipse', o.srp.eclipse, 'erp', o.erp.backend, 'sun', srcInfo.sunSource, ...
-                'thermal', o.thermal.model, 'selfShadow', o.geom.selfShadow);
+                'accommodation', o.drag.accommodation, 'eclipse', o.srp.eclipse, 'erp', o.erp.backend, ...
+                'sun', srcInfo.sunSource, 'thermal', o.thermal.model, 'selfShadow', o.geom.selfShadow);
+        end
+
+        function [a, info] = reduceAccel(obj, st, frame)
+            m = reshape(st.mass_kg, 1, []);
+            aD = NonGravForces.kernel.assemble(st.Fdrag, obj.macro) ./ m;
+            aR = NonGravForces.kernel.assemble(st.Frad, obj.macro) ./ m;
+            aT = NonGravForces.kernel.assemble(st.Fthermal, obj.macro) ./ m;
+            a = aD + aR + aT;
+            if frame == "gcrs"
+                [a, aD, aR, aT] = obj.toGcrs(st.R, a, aD, aR, aT);
+            end
+            info = obj.stateInfo(st, frame);
+            info.drag = aD; info.radiation = aR; info.thermal = aT;
+        end
+
+        function [tau, info] = reduceTorque(obj, st, frame, B_body, dipole)
+            [~, tD] = NonGravForces.kernel.assemble(st.Fdrag, obj.macro);
+            [~, tR] = NonGravForces.kernel.assemble(st.Frad, obj.macro);
+            [~, tT] = NonGravForces.kernel.assemble(st.Fthermal, obj.macro);
+            o = obj.options.torques;
+            if o.gravityGradient || o.magnetic
+                rBody = reshape(pagemtimes(pagetranspose(st.R), reshape(st.r, 3, 1, [])), 3, []);
+                tB = NonGravForces.kernel.bodyTorques(obj.macro, rBody, ...
+                    'GravityGradient', o.gravityGradient, 'Magnetic', o.magnetic, ...
+                    'B_body', B_body, 'Dipole_Am2', dipole);
+            else
+                tB = zeros(3, st.K);
+            end
+            tau = tD + tR + tT + tB;
+            if frame == "gcrs"
+                [tau, tD, tR, tT, tB] = obj.toGcrs(st.R, tau, tD, tR, tT, tB);
+            end
+            info = obj.stateInfo(st, frame);
+            info.drag = tD; info.radiation = tR; info.thermal = tT; info.bodyTorque = tB;
         end
 
         function [rho, species, Tgas] = callDensity(obj, epoch, lla)
@@ -441,38 +503,46 @@ classdef Model
             Tgas = T(2, :);
         end
 
-        function F = dragForces(obj, rho, species, Tgas, vrelBody, fDrag)
-            %DRAGFORCES The gas-surface model the options name, with the arguments that model needs.
+        function [F, acc] = dragForces(obj, rho, species, Tgas, vrelBody, flow)
+            %DRAGFORCES The gas-surface model and the accommodation the options name.
             o = obj.options;
-            switch o.drag.gsi
-                case "constantCd"
-                    F = NonGravForces.kernel.dragPanelForce(obj.macro, rho, [], [], vrelBody, ...
-                        'Model', "constantCd", 'Cd', o.drag.cd, 'Shadow', fDrag);
-                case "maxwell"
-                    NonGravForces.fail("Model", "unsupported", "drag.gsi maxwell needs a specular fraction, which Options does not carry -> use sentman or constantCd; adding the fraction to Options would be a second authority for a number no preset sets");
-                otherwise
-                    % sentman here, and cll / schamberg refuse inside gsiCoefficients (O-17)
-                    alpha = NonGravForces.kernel.accommodation(o.drag.accommodation, species, Tgas, 'Alpha', o.drag.alpha);
-                    F = NonGravForces.kernel.dragPanelForce(obj.macro, rho, species, Tgas, vrelBody, ...
-                        'Model', o.drag.gsi, 'Alpha', alpha, 'Tw_K', o.drag.Tw_K, 'Shadow', fDrag);
-            end
-        end
-
-        function [fDrag, fRad] = shadowFractions(obj, vrelBody, src, K)
-            %SHADOWFRACTIONS Self-shadowing for the gas stream and for every radiation source.
-            N = obj.macro.n; M = size(src.dir, 2);
-            if obj.options.geom.selfShadow == "none"
-                fDrag = ones(N, K); fRad = ones(N, K, M);
+            shadowArgs = {};
+            if ~isempty(flow), shadowArgs = {'Shadow', flow}; end
+            if o.drag.gsi == "constantCd"
+                acc = [];
+                F = NonGravForces.kernel.dragPanelForce(obj.macro, rho, [], [], vrelBody, ...
+                    'Model', "constantCd", 'Cd', o.drag.cd, shadowArgs{:});
                 return
             end
+            switch o.drag.accommodation
+                case "fixed"
+                    acc = NonGravForces.kernel.accommodation("fixed", species, Tgas, 'Alpha', o.drag.alpha);
+                case "pilinski2010"
+                    acc = NonGravForces.kernel.accommodation("pilinski2010", species, Tgas);
+                case "walker2014"
+                    acc = NonGravForces.kernel.accommodation("walker2014", species, Tgas, 'SurfaceMass_amu', o.drag.surfaceMass_amu);
+            end
+            extra = {};
+            if o.drag.gsi == "maxwell", extra = {'SpecularFraction', o.drag.specularFraction}; end
+            F = NonGravForces.kernel.dragPanelForce(obj.macro, rho, species, Tgas, vrelBody, ...
+                'Model', o.drag.gsi, 'Alpha', acc, 'Tw_K', o.drag.Tw_K, extra{:}, shadowArgs{:});
+        end
+
+        function [flow, fRad] = occlusion(obj, vrelBody, Tgas, src, K, kinetic)
+            %OCCLUSION geom.flowShadow for the gas stream, geom.selfShadow for every radiation source.
+            N = obj.macro.n; M = size(src.dir, 2);
             method = obj.options.geom.selfShadow;
+            if method == "none"
+                flow = []; fRad = ones(N, K, M);
+                return
+            end
             args = {'Method', method};
             if method == "lut", args = [args, {'Lut', obj.lut.table}]; end   % built once at construction
-            dirGas = vrelBody ./ vecnorm(vrelBody);                 % the gas arrives from +v_rel
-            fDrag = NonGravForces.geom.selfShadow(obj.macro, dirGas, args{:});
-            dirAll = reshape(permute(src.dir, [1 3 2]), 3, K * M);  % every source direction of every epoch
-            fFlat = NonGravForces.geom.selfShadow(obj.macro, dirAll, args{:});
-            fRad = reshape(fFlat, N, K, M);
+            T = [];
+            if kinetic, T = Tgas; end                                        % constantCd reads the parallel beam only
+            flow = NonGravForces.geom.flowShadow(obj.macro, vrelBody, T, args{:});
+            dirAll = reshape(src.dir, 3, M * K);                            % every source direction of every epoch
+            fRad = permute(reshape(NonGravForces.geom.selfShadow(obj.macro, dirAll, args{:}), N, M, K), [1 3 2]);
         end
 
         function q = resolveAttitude(obj, epoch, q, K)
@@ -509,30 +579,27 @@ classdef Model
             if nargin > 6, e = rot(e); end
         end
 
-        function info = stateInfo(obj, st, frame) %#ok<INUSL>
+        function info = stateInfo(~, st, frame)
             info = struct('frame', frame, 'K', st.K, 'rho', st.rho, 'nu', st.nu, ...
                 'mass_kg', st.mass_kg, 'vrel_body', st.vrelBody, 'sources', size(st.src.dir, 2), ...
-                'temperature_K', st.Tpanel, 'shadowDrag', st.shadowDrag, 'lla', st.lla, ...
+                'temperature_K', st.Tpanel, 'flowShadow', st.flow, 'accommodation', st.acc, 'lla', st.lla, ...
                 'backends', st.backends);
         end
 
-        function [a, tq] = chunkEval(obj, epoch, r, v, q, i0, i1, wantA, wantT, frame)
-            %CHUNKEVAL One chunk of series; the slice must give the same numbers as the whole.
+        function [a, tq, Tlast] = chunkEval(obj, epoch, r, v, q, i0, i1, wantA, wantT, frame, T0)
+            %CHUNKEVAL One chunk of series from ONE environment pass; the transient temperatures carry over.
             idx = i0:i1;
             ep = referenceSystem.daySecondToEpoch([epoch.day(idx) epoch.sec(idx)], epoch.scale);
             qc = []; if ~isempty(q), qc = q(:, idx); end
+            st = obj.environment(ep, r(:, idx), v(:, idx), qc, T0);
             a = []; tq = [];
-            if wantA, a = obj.accel(ep, r(:, idx), v(:, idx), qc, 'Frame', frame); end
-            if wantT, tq = obj.torque(ep, r(:, idx), v(:, idx), qc, 'Frame', frame); end
+            if wantA, a = obj.reduceAccel(st, frame); end
+            if wantT, tq = obj.reduceTorque(st, frame, [], []); end
+            Tlast = st.Tpanel(:, end);
         end
 
-        function d = parameterPartial(obj, p, epoch, r, v, q, frame, method)
+        function d = parameterPartial(obj, p, st, frame)
             %PARAMETERPARTIAL Analytic derivatives of the acceleration with respect to a scalar parameter.
-            if method == "finiteDiff"
-                d = obj.parameterPartialNumeric(p, epoch, r, v, q, frame);
-                return
-            end
-            st = obj.evaluate(epoch, r, v, q);
             m = reshape(st.mass_kg, 1, []);
             o = obj.options;
             switch p
@@ -544,10 +611,13 @@ classdef Model
                     if o.drag.gsi == "constantCd"
                         dF = zeros(size(st.Fdrag));                 % constantCd has no accommodation coefficient
                     else
-                        alpha = NonGravForces.kernel.accommodation(o.drag.accommodation, st.species, st.Tgas, 'Alpha', o.drag.alpha);
+                        shadowArgs = {};
+                        if ~isempty(st.flow), shadowArgs = {'Shadow', st.flow}; end
+                        extra = {};
+                        if o.drag.gsi == "maxwell", extra = {'SpecularFraction', o.drag.specularFraction}; end
                         dF = o.drag.cdScale * NonGravForces.kernel.partials("drag", "alpha", obj.macro, ...
                             'Rho', st.rho, 'Species', st.species, 'T_K', st.Tgas, 'Vrel_body', st.vrelBody, ...
-                            'Model', o.drag.gsi, 'Alpha', alpha, 'Tw_K', o.drag.Tw_K, 'Shadow', st.shadowDrag);
+                            'Model', o.drag.gsi, 'Alpha', st.acc, 'Tw_K', o.drag.Tw_K, extra{:}, shadowArgs{:});
                     end
             end
             d = NonGravForces.kernel.assemble(dF, obj.macro) ./ m;
@@ -561,6 +631,12 @@ classdef Model
             name = field.(p);
             parts = split(name, "."); x0 = base.(parts(1)).(parts(2));
             h = max(1e-6 * abs(x0), 1e-8);
+            if p == "alpha"
+                h = min(h, min(x0, 1 - x0) / 2);                  % stay inside [0, 1]: the option refuses the edge
+                if h <= 0
+                    NonGravForces.fail("Model", "unsupported", "alpha = %g sits on the edge of [0, 1], where no central difference exists -> use the analytic method", x0);
+                end
+            end
             up = obj; up.options = base.set(name, x0 + h);
             dn = obj; dn.options = base.set(name, x0 - h);
             aP = up.accel(epoch, r, v, q, 'Frame', frame);
@@ -568,4 +644,59 @@ classdef Model
             d = (aP - aM) / (2 * h);
         end
     end
+end
+
+function mass = localMass(m, macro)
+%LOCALMASS A constant mass, a massModel, or the macro model's own; never an assumed spacecraft.
+if isempty(m)
+    if isnan(macro.mass_kg)
+        NonGravForces.fail("Model", "inputMass", ...
+            "the macro model '%s' carries no mass and no 'Mass' was given -> pass 'Mass', <kg> or io.massModel(...), or build the macro model with 'Mass_kg'", macro.name);
+    end
+    mass = localConstant(macro.mass_kg, "macro model " + macro.name);
+elseif isnumeric(m) && isscalar(m) && isfinite(m) && m > 0
+    mass = localConstant(m, "caller");
+elseif isstruct(m) && isscalar(m) && isfield(m, 'at') && isa(m.at, 'function_handle')
+    mass = m;
+else
+    NonGravForces.fail("Model", "inputMass", "'Mass' must be a positive mass in kg or an io.massModel result -> got a %s", class(m));
+end
+end
+
+function mass = localConstant(m, source)
+mass = struct('kind', "constant", 'value_kg', m, 'source', source, 'at', @(epoch) repmat(m, 1, numel(epoch.sec)));
+end
+
+function localCheckOptions(o, macro)
+%LOCALCHECKOPTIONS Choices that contradict each other are refused at construction, not ignored at evaluation.
+d = o.drag;
+if d.gsi ~= "constantCd"
+    if d.accommodation == "fixed" && isempty(d.alpha)
+        NonGravForces.fail("Model", "inputOptions", "drag.accommodation fixed needs drag.alpha -> set('drag.alpha', 0.85) or choose pilinski2010 / walker2014");
+    end
+    if d.accommodation ~= "fixed" && ~isempty(d.alpha)
+        NonGravForces.fail("Model", "inputOptions", "drag.alpha is read only by accommodation fixed, and %s computes its own -> set('drag.alpha', []) so the value is not silently ignored", d.accommodation);
+    end
+    if d.accommodation == "walker2014" && isempty(d.surfaceMass_amu)
+        NonGravForces.fail("Model", "inputOptions", "drag.accommodation walker2014 needs drag.surfaceMass_amu -> the precise preset sets 263.3223 (Mehta et al. 2022); state your value");
+    end
+    if d.gsi == "maxwell" && isempty(d.specularFraction)
+        NonGravForces.fail("Model", "inputOptions", "drag.gsi maxwell needs drag.specularFraction -> set('drag.specularFraction', 0.1), say");
+    end
+end
+if o.thermal.internalPower_W > 0 && any(isnan(macro.internalShare))
+    NonGravForces.fail("Model", "inputOptions", "thermal.internalPower_W > 0 needs every panel's internalShare on the macro model '%s' -> give the panels internalShare, or set the power to 0", macro.name);
+end
+end
+
+function p = localStamp(p, unit)
+%LOCALSTAMP The Model's own provenance record, renamed and re-timed: the option hash was formed once.
+p.unit = unit;
+p.created = datetime('now', 'TimeZone', 'UTC');
+end
+
+function s = localFirstEpoch(src)
+%LOCALFIRSTEPOCH The source list of the first epoch only, for the steady state that starts a transient.
+s = src;
+s.dir = src.dir(:, :, 1); s.P = src.P(:, 1); s.nu = src.nu(1); s.K = 1;
 end

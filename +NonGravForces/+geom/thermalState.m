@@ -7,11 +7,15 @@ function [T, info] = thermalState(macro, src, options)
 %
 %   Absorbed flux per panel and epoch from the body-frame source list of
 %   env.radiationSources (Wöske 2019 eq. 5.15):
-%       q_abs,k = sum_sources  alpha_k(band) * c * P_source * max(0, n_k . dir_source)
+%       q_abs,k = sum_m  alpha_k(band_m) * c * P_m * max(0, n_k . dir_m) * o_km
 %   with alpha the visible absorptivity for "vis" sources and the infrared
-%   emissivity for "ir" sources (Kirchhoff), optionally reduced by an
-%   exposed-fraction array from geom.selfShadow ('Exposed'), plus an internal
-%   power share q_int,k = InternalPower_W * InternalShare_k / A_k.
+%   emissivity for "ir" sources (Kirchhoff), o_km the unobstructed fraction of
+%   plate k toward source m from geom.selfShadow ('Exposed', one value PER
+%   SOURCE), plus an internal power share q_int,k = InternalPower_W * InternalShare_k / A_k.
+%   The occlusion is applied source by source, as the radiation force applies it:
+%   until 2026-09-15 one fraction per panel was applied to the flux of every
+%   source, and the Sun's fraction zeroed the Earth heating of every panel facing
+%   away from the Sun (HANDOVER LP-C, finding F2).
 %
 %   steadyState  (Wöske eq. 5.17) eps_k sigma T_k^4 = q_abs,k + q_int,k, so
 %                T_k = ((q_abs + q_int) / (eps sigma))^(1/4); a panel with no
@@ -34,8 +38,9 @@ function [T, info] = thermalState(macro, src, options)
 %   Name             Size  Type    Units  Description
 %   ----             ----  ----    -----  -----------
 %   Model            1x1   string  -      "steadyState" (default) | "transient"
-%   Exposed          NxK   double  -      Exposed fractions from geom.selfShadow, applied to
-%                                         every source alike (default: none = 1)
+%   Exposed          NxKxM double  -      Unobstructed fraction of every plate toward every
+%                                         source, from geom.selfShadow (default: none = 1);
+%                                         N x K when the list has one source
 %   InternalPower_W  1x1   double  W      Total internal dissipation radiated through the
 %                                         panels (default 0)
 %   InternalShare    1xN   double  -      Share of the internal power per panel (sums to 1);
@@ -65,7 +70,7 @@ function [T, info] = thermalState(macro, src, options)
 % ERRORS
 %   NonGravForces:thermalState:inputMacro      not a MacroModel; transient with NaN heat capacity
 %   NonGravForces:thermalState:inputSources    src lacks dir/P/band or its sizes disagree
-%   NonGravForces:thermalState:inputShape      Exposed not NxK, T0_K not 1xN, Epoch not K entries
+%   NonGravForces:thermalState:inputShape      Exposed not NxKxM in [0,1], T0_K not 1xN, Epoch not K entries
 %   NonGravForces:thermalState:inputInternal   InternalPower_W > 0 without a share summing to 1
 %   NonGravForces:thermalState:numericNaN      NaN/Inf in the sources or the result
 %
@@ -110,13 +115,15 @@ alphaVis = macro.optVis(1, :)'; epsIR = macro.optIR(1, :)';                  % N
 cosI = max(0, reshape(pagemtimes(macro.N', src.dir), N, M, K));
 E = reshape(c * src.P, 1, M, K);                                           % irradiance W/m^2, 1xMxK
 absorptivity = alphaVis .* isVis' + epsIR .* (~isVis');                    % NxM
-qAbs = reshape(sum(absorptivity .* cosI .* E, 2), N, K);                   % NxK
+w = absorptivity .* cosI .* E;                                             % NxMxK
 if ~isempty(options.Exposed)
-    if ~isequal(size(options.Exposed), [N K]) || any(options.Exposed(:) < 0 | options.Exposed(:) > 1)
-        NonGravForces.fail(unit, "inputShape", "Exposed must be %dx%d in [0,1] -> geom.selfShadow output for these directions", N, K);
+    X = options.Exposed;
+    if ~isequal(size(X, 1:3), [N K M]) || any(~isfinite(X(:))) || any(X(:) < 0 | X(:) > 1)
+        NonGravForces.fail(unit, "inputShape", "Exposed must be %dx%dx%d (plates x epochs x sources) in [0,1] -> geom.selfShadow for every source direction", N, K, M);
     end
-    qAbs = qAbs .* options.Exposed;
+    w = w .* permute(X, [1 3 2]);                                          % per source, before the sum
 end
+qAbs = reshape(sum(w, 2), N, K);                                           % NxK
 if options.InternalPower_W > 0
     s = options.InternalShare;
     if ~(numel(s) == N && all(s >= 0) && abs(sum(s) - 1) < 1e-9)

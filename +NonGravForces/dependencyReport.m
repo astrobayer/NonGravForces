@@ -48,7 +48,11 @@ spec = { ...
 % is gone rather than kept as a courtesy. If a future unit needs variance components, it comes back.
   "referenceSystem", true,  "2.1", "setupReferenceSystem", "time, frames, ephemerides, attitude kinematics", @() string(referenceSystem.toolboxVersion().version); ...
   "gracefoReading",  true,  "1.0.1", "setupGraceFOReading",  "GRACE-FO Level-1B reading",                        @() string(gracefoReading.version()); ...
-  "gjToolbox",       false, "0.1", "gjToolboxSetup",       "orbit integration (Gauss-Jackson)",                @() string(gjToolbox.versionInfo("string"))};
+% gjToolbox stays OPTIONAL: the toolbox computes forces without an integrator. It is required by
+% exactly one unit, app.DynamicsSource, which subclasses gjToolbox.DynamicsSource and therefore
+% cannot even load without it, and by the buildMex target "rhs", which compiles against its
+% csrc/gj_native.h. ciGate requires it anyway, because a gate that skips those is not a gate.
+  "gjToolbox",       false, "0.1", "gjToolboxSetup",       "orbit integration; app.DynamicsSource and the rhs MEX", @() string(gjToolbox.versionInfo("string"))};
 n = size(spec,1);
 deps = repmat(struct('name',"",'required',false,'present',false,'version',"",'minimum',"",'setup',"",'role',""), 1, n);
 for k = 1:n

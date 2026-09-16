@@ -8,4 +8,4 @@
 %   executes rots exactly as a hand-written documentation page does, and this
 %   project watched that happen to doc/html/Sensors.html on 2026-09-09.
 %
-% Version 0.9.1  09-Sep-2026
+% Version 0.10.0  16-Sep-2026

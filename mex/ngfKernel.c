@@ -93,13 +93,13 @@ const char *ngfStatusText(int status)
 /* =========================================================================
  * gsiCoefficients  --  port of +NonGravForces/+kernel/gsiCoefficients.m
  * ========================================================================= */
-int ngfGsiCoefficients(ngfGsiModel model, double s, double theta, double alpha,
-                       double tw, double tinf, double cd, double specular,
-                       double *cp, double *ctau)
+int ngfGsiParts(ngfGsiModel model, double s, double theta, double alpha,
+                double tw, double tinf, double cd, double specular,
+                double *cpIncOut, double *cpReOut, double *ctau)
 {
     double g, l, P, Z, cpInc, ctauInc, vRatio, cpRe, gmax;
 
-    if (cp == NULL || ctau == NULL) {
+    if (cpIncOut == NULL || cpReOut == NULL || ctau == NULL) {
         return NGF_NULL_ARGUMENT;
     }
     if (model != NGF_GSI_SENTMAN && model != NGF_GSI_MAXWELL &&
@@ -124,8 +124,9 @@ int ngfGsiCoefficients(ngfGsiModel model, double s, double theta, double alpha,
             return NGF_BAD_RANGE;
         }
         gmax = (g > 0.0) ? g : 0.0;                 /* MATLAB max(g, 0)       */
-        *cp   = (cd * gmax) * g;
-        *ctau = (cd * gmax) * l;
+        *cpIncOut = (cd * gmax) * g;
+        *cpReOut  = 0.0;                            /* info.CpReemitted = zeros */
+        *ctau     = (cd * gmax) * l;
         return NGF_OK;
     }
 
@@ -158,12 +159,33 @@ int ngfGsiCoefficients(ngfGsiModel model, double s, double theta, double alpha,
     cpRe   = (0.5 * vRatio) * ((g * sqrt(NGF_PI)) * Z + P);
 
     if (model == NGF_GSI_SENTMAN) {
-        *cp   = cpInc + cpRe;
-        *ctau = ctauInc;
+        *cpIncOut = cpInc;
+        *cpReOut  = cpRe;
+        *ctau     = ctauInc;
     } else {
-        *cp   = (1.0 - specular) * (cpInc + cpRe) + (specular * 2.0) * cpInc;
-        *ctau = (1.0 - specular) * ctauInc;
+        /* LP-C WP-C1: the diffuse part (1 - sig) carries incident and re-emitted
+         * momentum, the specular part doubles the incident normal momentum. */
+        *cpIncOut = (1.0 + specular) * cpInc;
+        *cpReOut  = (1.0 - specular) * cpRe;
+        *ctau     = (1.0 - specular) * ctauInc;
     }
+    return NGF_OK;
+}
+
+int ngfGsiCoefficients(ngfGsiModel model, double s, double theta, double alpha,
+                       double tw, double tinf, double cd, double specular,
+                       double *cp, double *ctau)
+{
+    double inc, re;
+    int status;
+    if (cp == NULL || ctau == NULL) {
+        return NGF_NULL_ARGUMENT;
+    }
+    status = ngfGsiParts(model, s, theta, alpha, tw, tinf, cd, specular, &inc, &re, ctau);
+    if (status != NGF_OK) {
+        return status;
+    }
+    *cp = inc + re;                                 /* Cp = CpIncident + CpReemitted */
     return NGF_OK;
 }
 

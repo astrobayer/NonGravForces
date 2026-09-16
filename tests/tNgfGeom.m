@@ -10,8 +10,19 @@ classdef tNgfGeom < NgfTestCase
             tc.verifyErrorId(@() NonGravForces.geom.MacroModel(p), 'NonGravForces:MacroModel:inputEnergy');
             p = mm.panels; p(1).normal = [2;0;0];
             tc.verifyErrorId(@() NonGravForces.geom.MacroModel(p), 'NonGravForces:MacroModel:inputNormal');
-            p = rmfield(mm.panels, 'alpha');
+            p = rmfield(mm.panels, 'group');
             tc.verifyErrorId(@() NonGravForces.geom.MacroModel(p), 'NonGravForces:MacroModel:inputPanels');
+            % the per-panel alpha is no longer read (O-23 closed by removal): a panel table carrying it is still accepted
+            pa = mm.panels; [pa.alpha] = deal(0.85); tc.verifyEqual(NonGravForces.geom.MacroModel(pa).A, mm.A);
+            % mass and internal shares (LP-C F10): graceFO carries the handbook mass, a share must cover every panel
+            tc.verifyEqual(mm.mass_kg, NonGravForces.const().graceFO.massC); tc.verifyTrue(all(isnan(mm.internalShare)));
+            ps = mm.panels; [ps.internalShare] = deal(0); ps(7).internalShare = 1;
+            tc.verifyEqual(NonGravForces.geom.MacroModel(ps).internalShare, [0 0 0 0 0 0 1 0]);
+            ps(1).internalShare = 0.5;
+            tc.verifyErrorId(@() NonGravForces.geom.MacroModel(ps), 'NonGravForces:MacroModel:inputPanels');
+            ps = mm.panels; [ps.internalShare] = deal([]); ps(7).internalShare = 1;
+            tc.verifyErrorId(@() NonGravForces.geom.MacroModel(ps), 'NonGravForces:MacroModel:inputPanels');
+            tc.verifyErrorId(@() NonGravForces.geom.MacroModel(mm.panels, 'Mass_kg', -1), 'NonGravForces:MacroModel:inputPanels');
         end
         function graceFOContract(tc)
             tc.verifyError(@() NonGravForces.geom.graceFO("E"), 'MATLAB:validators:mustBeMember');

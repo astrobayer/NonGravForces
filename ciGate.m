@@ -2,7 +2,7 @@ function ciGate(options)
 %CIGATE The ONE CI entry point for NonGravForces: install dependencies, run the suite, judge.
 %
 %   ciGate                       % what .github/workflows/ci.yml runs
-%   ciGate('DependencyRoot', p)  % folder holding referenceSystem/ and gracefoReading/
+%   ciGate('DependencyRoot', p)  % folder holding referenceSystem/, gracefoReading/ and odeSuite/
 %
 %   Usable locally as a postflight: matlab -batch ciGate. It is never a bare
 %   runNgfTests call: runNgfTests RETURNS a result and errors only with
@@ -10,10 +10,11 @@ function ciGate(options)
 %   that matlab -batch exits non-zero.
 %
 % NAME-VALUE ARGUMENTS
-%   DependencyRoot  1x1 string  Folder that contains referenceSystem/ and
-%                               gracefoReading/ as siblings. Default: the
-%                               parent of this repository, which is the CI
-%                               checkout layout and the owner's local layout.
+%   DependencyRoot  1x1 string  Folder that contains referenceSystem/,
+%                               gracefoReading/ and odeSuite/ as siblings.
+%                               Default: the parent of this repository, which
+%                               is the CI checkout layout and the owner's
+%                               local layout.
 %   ExcludeSlow     1x1 logical Skip the 'speed' tag (default false in CI:
 %                               the speed tests are ratios, not host times).
 %
@@ -29,7 +30,12 @@ arguments
     options.ExcludeSlow (1,1) logical = false
 end
 here = fileparts(mfilename('fullpath'));
-deps = ["referenceSystem/setupReferenceSystem.m", "gracefoReading/setupGraceFOReading.m"];
+% odeSuite is OPTIONAL for the toolbox (NonGravForces computes forces without an integrator)
+% and REQUIRED for the gate: since LP-C WP-C9 the app layer serves gjToolbox's frozen interface
+% and the rhs MEX compiles against its csrc/gj_native.h, so a gate without it would leave
+% app.DynamicsSource and the whole native evaluator unrun and still report GREEN.
+deps = ["referenceSystem/setupReferenceSystem.m", "gracefoReading/setupGraceFOReading.m", ...
+        "odeSuite/gjToolboxSetup.m"];
 for k = 1:numel(deps)
     f = fullfile(options.DependencyRoot, deps(k));
     if ~isfile(f)
@@ -38,10 +44,42 @@ for k = 1:numel(deps)
     run(f);
 end
 cd(here);
-info = setupNonGravForces('Verbose', true);
+% gjToolbox's NATIVE STEPPING KERNEL is an optional build of that toolbox, and this gate asserts
+% through it: tNgfIntegration propagates one arc on Binding "native" and requires it to agree with
+% the vectorized binding. A fresh CI checkout carries no gj_stepper (the binary is not committed,
+% rightly), so the gate builds it -- with the DEPENDENCY'S OWN build task, never a recipe copied
+% here (R1), which also smoke-tests the gateway it just built. The owner's host usually has it
+% already and this is then a no-op.
+if ~gjToolbox.nativeStepper("available")
+    odeRoot = char(fullfile(options.DependencyRoot, "odeSuite"));
+    fprintf("ciGate: building gjToolbox's native stepping kernel in %s\n", odeRoot);
+    back = pwd;
+    try
+        cd(odeRoot);
+        buildtool("mex");
+        cd(back);
+    catch err
+        cd(back);
+        rethrow(err);
+    end
+    if ~gjToolbox.nativeStepper("available")
+        error("NonGravForces:ciGate:depMissing", ...
+            "gjToolbox's native stepping kernel is still not available after buildtool mex in %s -> the native binding cannot be gated without it", odeRoot);
+    end
+end
+% The model sources are fetched when missing (buildMex cannot build without them); the data are NOT:
+% every test reads the committed excerpts, and a 147 MB archive per CI run would test the network.
+info = setupNonGravForces('Verbose', true, 'FetchData', "never");
 mexReport = NonGravForces.buildMex();          % O-14: a runner without a compiler turns the gate red here, by design
-for m = 1:numel(mexReport)                     % one element per target since 0.6.1 (msis, kernel)
-    fprintf("ciGate: MEX %s (%s) built with %s\n", mexReport(m).file, mexReport(m).target, mexReport(m).compiler);
+for m = 1:numel(mexReport)                     % one element per target (msis, msis21, hwm14, rhs, kernel)
+    fprintf("ciGate: MEX %s (%s) present=%d, built with %s\n", mexReport(m).file, mexReport(m).target, ...
+        mexReport(m).upToDate, mexReport(m).compiler);
+end
+% buildMex REPORTS an unbuildable rhs instead of raising, so that a user without gjToolbox still
+% gets the other four. The gate is the place where that report becomes a verdict.
+notBuilt = [mexReport(~[mexReport.upToDate]).target];
+if ~isempty(notBuilt)
+    error("NonGravForces:ciGate:depMissing", "the MEX target(s) %s did not build -> read the table above", strjoin(notBuilt, ", "));
 end
 req = info.dependencies([info.dependencies.required]);
 if ~all([req.present])

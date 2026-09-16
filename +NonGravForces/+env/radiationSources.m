@@ -3,6 +3,7 @@ function [src, info] = radiationSources(epoch, r, q_body2gcrs, options, nv)
 %
 %   [src, info] = NonGravForces.env.radiationSources(epoch, r, q, options)
 %   [src, info] = NonGravForces.env.radiationSources(epoch, r, q, options, 'Ephemeris', eph)
+%   [src, info] = NonGravForces.env.radiationSources(epoch, r, q, options, 'Ceres', cer, 'RotationItrsToGcrs', R)
 %
 %   The one place where solar and Earth radiation become SOURCES (principle
 %   P3): the kernel later computes the force on each panel from every source
@@ -24,7 +25,11 @@ function [src, info] = radiationSources(epoch, r, q_body2gcrs, options, nv)
 %   outgoing cosine mu = n_j . rho_hat (visible when mu > 0) and solar cosine
 %   mu_s = n_j . s_hat (lit when mu_s > 0):
 %       P_albedo = a_j S mu_s mu A_j / (pi rho^2 c),   P_ir = e_j (S/4) mu A_j / (pi rho^2 c)
-%   with S = tsi (au/|r_sun|)^2. pointSource: the far-field Lambert sphere,
+%   with S = tsi (au/|r_sun|)^2. ceres: the same cap geometry on the product's
+%   reference sphere (earthRadiance "ceres"), with the measured monthly albedo a_j
+%   and the measured longwave exitance L_j in place of e_j S/4:
+%       P_albedo = a_j S mu_s mu A_j / (pi rho^2 c),   P_ir = L_j mu A_j / (pi rho^2 c).
+%   pointSource: the far-field Lambert sphere,
 %   P_albedo = (2/3) a0 S (R/|r|)^2 psi(theta) / c with the Lambert phase law
 %   psi = (sin theta + (pi - theta) cos theta)/pi, theta the Sun-Earth-satellite
 %   angle, and P_ir = e0 (S/4) (R/|r|)^2 / c; both directed at the Earth's
@@ -55,6 +60,8 @@ function [src, info] = radiationSources(epoch, r, q_body2gcrs, options, nv)
 %   EclipticNormal 3xK  double  -      Caller-supplied unit ecliptic normal, needed with
 %                                     'Sun' when srp.eclipse is solaarsCF (the ephemeris
 %                                     path measures it as r_sun x v_sun). Default [].
+%   Ceres         1x1   struct  -      io.importCERES result; erp.backend ceres only. Default [].
+%   RotationItrsToGcrs 3x3xK double -  ITRS->GCRS rotation; erp.backend ceres only. Default [].
 %
 % OUTPUT ARGUMENTS
 %   Name     Size    Type    Units  Description
@@ -85,6 +92,8 @@ function [src, info] = radiationSources(epoch, r, q_body2gcrs, options, nv)
 %   NonGravForces:radiationSources:inputShape      r not 3xK, q not 4xK, or K differs from epoch
 %   NonGravForces:radiationSources:numericNaN      NaN/Inf in r or q
 %   NonGravForces:radiationSources:depKernel       sun.source rs.de440 without 'Ephemeris'
+%   NonGravForces:radiationSources:inputCeres      'Ceres' or 'RotationItrsToGcrs' given with erp.backend none
+%   NonGravForces:earthRadiance:inputCeres         ceres inputs missing, or given to another backend
 %   NonGravForces:eclipseFactor:*, NonGravForces:earthRadiance:*   from the callees
 %   referenceSystem:*                              propagated unwrapped
 %
@@ -99,8 +108,8 @@ function [src, info] = radiationSources(epoch, r, q_body2gcrs, options, nv)
 %
 % See also NonGravForces.env.eclipseFactor, NonGravForces.env.earthRadiance, NonGravForces.Options.
 %
-% KEYWORDS radiation sources SRP albedo longwave source list body frame
-% Created 2026-09-07 by Claude Fable 5.1 (Anthropic).
+% KEYWORDS radiation sources SRP albedo longwave source list body frame CERES
+% Created 2026-09-07 by Claude Fable 5.1 (Anthropic); ceres 2026-09-15 by Claude Opus 5 (Anthropic).
 arguments
     epoch (1,1) struct
     r double
@@ -110,6 +119,8 @@ arguments
     nv.Sun = []
     nv.Moon = []
     nv.EclipticNormal = []
+    nv.Ceres = []
+    nv.RotationItrsToGcrs = []
 end
 unit = "radiationSources";
 if ~all(isfield(epoch, ["day","sec","scale"]))
@@ -172,10 +183,11 @@ sHat = rs ./ vecnorm(rs);                                           % 3xK
 R = ecl.radiusEarth_m;
 switch options.erp.backend
     case "none"
+        localNoCeres(nv);
         tiles = []; M = 0;
         dirE = zeros(3, 0, K); PE = zeros(0, K); bandE = string.empty(1, 0);
     case "pointSource"
-        tiles = NonGravForces.env.earthRadiance("pointSource", epoch, [], r);
+        tiles = NonGravForces.env.earthRadiance("pointSource", epoch, [], r, 'Ceres', nv.Ceres, 'RotationItrsToGcrs', nv.RotationItrsToGcrs);
         nr = vecnorm(r); rhat = r ./ nr;
         cosT = max(-1, min(1, sum(rhat .* sHat, 1)));
         theta = acos(cosT);
@@ -186,10 +198,10 @@ switch options.erp.backend
         dirE = repmat(reshape(-rhat, 3, 1, K), 1, 2, 1);
         PE = [Ealb; Eir] / cLight;
         bandE = ["vis", "ir"];
-    case "knocke"
-        tiles = NonGravForces.env.earthRadiance("knocke", epoch, options.erp.grid, r);
+    otherwise                                                       % knocke and ceres: tiles on a cap
+        tiles = NonGravForces.env.earthRadiance(options.erp.backend, epoch, options.erp.grid, r, 'Ceres', nv.Ceres, 'RotationItrsToGcrs', nv.RotationItrsToGcrs);
         Mt = tiles.M;
-        p = R * tiles.n;                                            % 3xMtxK tile centres
+        p = tiles.radius_m * tiles.n;                               % 3xMtxK tile centres (ceres: the 20 km reference sphere)
         rho = reshape(r, 3, 1, K) - p;                              % 3xMtxK tile -> satellite
         dist2 = sum(rho.^2, 1);                                     % 1xMtxK
         dist = sqrt(dist2);
@@ -198,13 +210,15 @@ switch options.erp.backend
         muS = max(0, reshape(sum(tiles.n .* reshape(sHat, 3, 1, K), 1), Mt, K));   % MtxK solar cosine
         g = reshape(mu, Mt, K) .* tiles.area_m2 ./ reshape(pi * dist2, Mt, K);    % MtxK
         Ealb = tiles.albedo .* S_earth .* muS .* g;
-        Eir  = tiles.emissivity .* (S_earth / 4) .* g;
+        if isempty(tiles.exitanceLw_W_m2)
+            Eir = tiles.emissivity .* (S_earth / 4) .* g;           % knocke: emissivity of the mean insolation
+        else
+            Eir = tiles.exitanceLw_W_m2 .* g;                       % ceres: the measured exitance
+        end
         M = 2 * Mt;
         dirE = cat(2, -rhoHat, -rhoHat);                            % satellite -> tile, twice (vis, ir)
         PE = [Ealb; Eir] / cLight;
         bandE = [repmat("vis", 1, Mt), repmat("ir", 1, Mt)];
-    case "ceres"
-        tiles = NonGravForces.env.earthRadiance("ceres", epoch, options.erp.grid, r);   % refuses (WP-27)
 end
 % --- to the body frame, assemble
 Rq = referenceSystem.rotationFromQuaternion(q_body2gcrs);            % 3x3xK BODY->GCRS
@@ -230,4 +244,11 @@ info.earthRadius_m = R;
 info.speedOfLight_m_s = cLight;
 info.provenance = NonGravForces.provenance("env.radiationSources", 'Options', options.toStruct());
 src.meta = info;
+end
+
+function localNoCeres(nv)
+%LOCALNOCERES With no Earth sources nothing reads the CERES inputs, so passing them is a contradiction.
+if ~isempty(nv.Ceres) || ~isempty(nv.RotationItrsToGcrs)
+    NonGravForces.fail("radiationSources", "inputCeres", "'Ceres' and 'RotationItrsToGcrs' belong to erp.backend ceres -> remove them, or choose ceres");
+end
 end

@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-08 (LP-7 opened, over the same day's LP-6b) by Claude Opus 5. Toolbox version 0.9.1.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-16 (LP-C delivered) by Claude Opus 5. Toolbox version 0.10.0.
 
 ---
 
@@ -33,13 +33,13 @@ No gravity field, no equations of motion, no integrator, no least-squares code.
 Nine layers; a layer calls only lower layers plus the four dependencies.
 
 ```
-L8 app      calibrate (lsqvce bridge), forceBudget, densityInversion
+L8 app      calibrate, forceBudget, densityInversion, DynamicsSource (gjToolbox entry, native C)
 L7 qc       residuals, hampel, detectImpulses, detectJumps, eventTable, screen
 L6 sensor   Sensor (abstract), Electrostatic, AtomInterferometer, DragFree
-L5 Model    accel | torque | series | partials | rhs | budget   <- single point of access
+L5 Model    accel | torque | series | partials | budget   <- single point of access
 L4 kernel   gsiCoefficients, accommodation, dragPanelForce, radiationPanelForce,
             thermalRecoil, assemble, bodyTorques, partials, singleEpoch (C/MEX)
-L3 geom     MacroModel, graceFO, boxWing, selfShadow, thermalState,
+L3 geom     MacroModel, graceFO, boxWing, selfShadow, flowShadow, thermalState,
             AttitudeProvider, checkAttitudeSense
 L2 env      density, wind, eclipseFactor, earthRadiance, magneticField, radiationSources
 L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
@@ -47,8 +47,11 @@ L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
 L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options, buildMex
 ```
 
-53 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
-both directions against the files on disk, and this sentence's number against it).
+55 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
+both directions against the files on disk, and this sentence's number against it
+— which it genuinely did not until 2026-09-16, when the sentence said 53 and the
+catalogue held 55; `auditPackage.py` check 5 now compares both this number and
+this file's version stamp).
 
 ### Dependencies — called by qualified name, never copied, wrapped or aliased
 
@@ -56,8 +59,7 @@ both directions against the files on disk, and this sentence's number against it
 |---|---|
 | `referenceSystem` ≥ 2.1 (2.1.216) | time scales, EOP, ITRS↔GCRS with derivatives, geodesy, quaternions, attitude interpolation, Sun/Moon states |
 | `gracefoReading` ≥ 1.0.1 (1.0.1) | L1B ASCII reading, quality flags, GROOPS instrument export/import. The PATCH minimum is deliberate and is the one exception to VERSIONING.md's MAJOR.MINOR rule (HANDOVER O-12, O-25) |
-| `gjToolbox` (odeSuite) | Gauss-Jackson integration. **At level L0: no integrator and no dynamics interface yet, and `Model.rhs()`'s 4-argument handle does not match the 3-argument one its validator documents — HANDOVER B.3, O-4** |
-| `lsqvce` ≥ 5.3 (5.3) | batch least squares, VCE, ARMA whitening; `app.calibrate` delegates the adjustment through `fit`/`layout`/`Options` (O-24) |
+| `gjToolbox` (odeSuite) ≥ 0.1 (0.1.0) | Gauss-Jackson integration. **Optional for the toolbox, required by `ciGate`**: `app.DynamicsSource` subclasses `gjToolbox.DynamicsSource` (so it cannot even load without it) and the `buildMex` target `rhs` compiles against `csrc/gj_native.h` (ABI 1). `Model.rhs` is gone — O-4 closed by removal, 2026-09-16 |
 
 ### Key design decisions
 
@@ -78,7 +80,11 @@ both directions against the files on disk, and this sentence's number against it
   compiled path (`kernel.singleEpoch`) for a right-hand side. Neither replaces the
   other, neither is justified by speed, and `Model` gains no `'Backend'` option —
   that would make one a mode of the other. The price is that they must agree, and
-  `tNgfMex/singleEpochEndToEndPrecision` is where that is checked.
+  `tNgfMex/singleEpochEndToEndPrecision` is where that is checked. **LP-C adds a
+  third, at L8 and not in `Model`**: `app.DynamicsSource`'s native entry
+  (`mex/ngfRhs.c`) evaluates the WHOLE chain in C over tables built once per run,
+  for an integrator's inner loop. Same rule — MATLAB is normative, parity is
+  asserted in four configurations in `tNgfIntegration`, and `Model` is untouched.
 - **MATLAB is normative.** The C/MEX port (LP-6b, hand-written, no MATLAB Coder,
   `mex/ngfKernel.c` + `kernel.singleEpoch`) and the standard-library kernel mirror
   (WP-33) are verified *against* MATLAB, never the reverse. The C is written in the
@@ -129,6 +135,7 @@ both directions against the files on disk, and this sentence's number against it
 ```matlab
 run('...\referenceSystem\setupReferenceSystem.m')
 run('...\gracefoReading\setupGraceFOReading.m')     % must run, or reader tests error
+run('...\odeSuite\gjToolboxSetup.m')                % must run, or tNgfIntegration errors
 cd('...\NonGravForces'); setupNonGravForces          % adds root, tests/, tools/; registers doc
 runNgfTests                                          % 'ExcludeSlow',false adds the speed tag
 doc NonGravForces
@@ -158,9 +165,17 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-09-07, after LP-5x and the debt sweep)
+## 5. Current status (2026-09-16, after LP-C)
 
-- **276/276 GREEN on the CI runner** (2026-09-08, LP-7 WP-30, R2026a Update 5, 219.6 s; predicted
+- **365/365 GREEN ON BOTH TIERS** (2026-09-16, LP-C complete, R2026a Update 4): on Tier A by
+  `matlab -batch ciGate` over an isolated dependency root, and **on the CI runner** (run
+  `35054822337`, both jobs, `GATE TRUE`). Predicted 365, 0 failed, 0 incomplete, 0 category shortfalls;
+  Code Analyzer clean on `+NonGravForces`, `auditPackage.py` clean (55 units, 55 catalogue rows,
+  version 0.10.0), `mex/test/runCChecks.sh` clean (14 bounds). Earlier rounds of LP-C: 334
+  (C1–C4, C7), 352 (C8, C10), 358 (C11). **`Model.rhs` is gone** and the integrator's entry point
+  is `app.DynamicsSource`, whose native C evaluator agrees with `Model.accel` to 2.5e-14 relative
+  at a table node in four configurations.
+- Before LP-C: **276/276 GREEN on the CI runner** (2026-09-08, LP-7 WP-30, R2026a Update 5, 219.6 s; predicted
   276). Before that LP-6b at 270/270, and: **262/262 tests GREEN** (2026-09-08, R2026a Update 4, Tier A host run; predicted 263,
   261 on the branch and 262 after merging main — reconciled in HANDOVER Part I),
   Code Analyzer 0 findings, gate TRUE;
@@ -191,9 +206,13 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   `tools/pyxcheck/sentman_check.py`, `pelt_check.py`); and the LP-5x cross-validation tooling:
   `tools/pyxcheck/ngfkernel/`, an independent standard-library Python mirror of the frozen
   kernel with its parity driver and `tests/tNgfMirror.m` (WP-33; WP-34 needs GROOPS, O-19).
-- **2 documented stubs** raising `NonGravForces:<unit>:notImplemented`.
-- LP-6 added the six `Model` evaluation methods (`accel`, `torque`, `series`, `partials`,
-  `rhs`, `budget`), `env.wind` (co-rotation) and `kernel.partials` (analytic derivatives).
+- **No stubs left.** `io.importCERES` (WP-C8) and `env.magneticField` (WP-C10) were the last two;
+  every catalogued unit is `done` except the `sensor.Sensor` interface row. The catalogue's
+  `status` column is the authority (`doc/functionlist.csv`), not this sentence.
+- LP-6 added five of the `Model` evaluation methods (`accel`, `torque`, `series`, `partials`,
+  `budget`), `env.wind` (co-rotation) and `kernel.partials` (analytic derivatives). A sixth,
+  `rhs`, existed from LP-6 to LP-C and is **removed**: the integrator's entry point is
+  `app.DynamicsSource` (O-4, issue #35).
 - Repository `github.com/astrobayer/NonGravForces` (the account was renamed
   from `matweigelt` on 2026-09-06; `referenceSystem` and `gracefoReading` moved
   with it), local clone at
@@ -263,8 +282,10 @@ O-33 are void.
 `sensor.AtomInterferometer` (WP-29) is delivered: the triangular sensitivity kernel (a phase is an
 average, not a sample), one reading per cycle with nothing interpolated across the dead time, and
 the 2 pi ambiguity kept explicit — full phase, wrapped phase, and the fringe integer between them.
-The Coriolis phase at orbital rates is **6.7e7 rad**, an apparent 16.7 m/s^2: not a correction to
-the measurement but larger than everything the instrument exists to see.
+The Coriolis phase is driven by the ATOM velocity relative to the instrument (`dyn.atomVelocity`,
+mm/s), not the orbital velocity, which atoms and satellite share: at 1.1 mrad/s and 1 mm/s it is
+8.9 rad, an apparent 2.2e-6 m/s^2, seven times the drag. The 16.7 m/s^2 recorded here until
+2026-09-15 came from feeding the orbital velocity in (LP-C F6).
 
 `sensor.DragFree` (WP-29) closes the level: the residual a loop FAILS to remove, as a cascade of
 bilinear high-pass sections with actuator saturation and a masked start-up transient.
@@ -299,6 +320,27 @@ bash, which is how the CI-step version died and how the better design was found.
 upstream cannot silently invalidate a reference value — and that table turned out byte-identical
 to the old copy's, so the move disturbed nothing.
 
+**Done 2026-09-16: LP-C (completion), all twelve work packages, 365/365 on Tier A.** It answered a
+whole-repository review's fifteen findings (F1–F15, HANDOVER Part G) and finished the `precise`
+preset. What a later session most needs to know:
+- **Self-shadowing was stated wrongly, not merely coarsely** (F1, F2). The table's "f = 0 on unlit
+  plates" was a radiation-beam rule applied to a thermal gas; it deleted Sentman's edge-on shear on
+  ~15 m² of plates and zeroed the Earth heating of every panel facing away from the Sun. New unit
+  `geom.flowShadow` weights the occlusion by the incident drifting-Maxwellian flux. Measured on 120
+  real epochs: drag moves 1.68e-9 m/s² RMS, thermal 1.77e-9, and the nadir panel stops reading 0 K.
+- **`precise` now evaluates**: NRLMSIS 2.1, HWM14, CERES EBAF 4.2.1, `walker2014` accommodation,
+  IGRF-14. All third-party model source and data are FETCHED by `setupNonGravForces` at pinned
+  SHA-256s and redistributed by nobody.
+- **The integrator's entry exists** (WP-C9): `app.DynamicsSource` and `mex/ngfRhs.c`. `Model.rhs`
+  is gone; `odeSuite` is a gate dependency. See §2's P11 and the dependency table.
+- **Two instruments were found claiming checks they did not make**: the category audit credited a
+  test to any unit whose name appeared in the suite name (F8; four collisions, so a unit could lose
+  all its own tests and stay "complete"), and `CLAUDE.md`'s unit count was compared by nothing.
+  Both now hold. **An instrument's silence is evidence only about what it inspects.**
+- Open after it: O-38 (the theory PDF is behind its `.tex`; no LaTeX on this host), O-3 (CERES
+  SYN1deg), O-16/O-17 (SESAM, CLL/Schamberg — no source in hand), O-19 (GROOPS), O-26 (tagging).
+  **Next is LP-R (release).**
+
 **LP-5x cross-validation** (owner rulings of 2026-08-27):
 - WP-33: standard-library mirror of the **kernel layer only** under
   `tools/pyxcheck/ngfkernel/`, written from the equations (not transcribed from
@@ -308,13 +350,17 @@ to the old copy's, so the move disturbed nothing.
   under `tests/fixtures/groops/` and committed; neither CI nor the host needs a
   GROOPS installation.
 
-**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-31 with an owner
+**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-39 with an owner
 and a re-entry condition each. This file deliberately does NOT list them: the copy that
 used to live here had drifted to O-15 of 21 and showed two closed items as open, and no
 check compared the two (R1). Read Part H.
 
-Housekeeping: the repository has no LICENSE file, and the vendored NRLMSISE-00 sources
-carry no redistribution grant (O-22, the owner's to settle before the repository is public).
+Housekeeping: **both halves of this paragraph are stale and kept as a warning.** The repository has
+carried `LICENSE` (MIT) since 2026-09-09, and NRLMSISE-00 is no longer vendored at all (O-34
+closed the same day) — `setupNonGravForces` clones it at a pinned commit. Every third-party model
+this toolbox uses is now fetched, never redistributed, and each is recorded in
+`THIRD-PARTY-NOTICES.md`. Corrected 2026-09-16 (LP-C WP-C12); it had been wrong for a week because
+nothing compares this file with the repository.
 
 **Version rule (decided 2026-09-06):** the numeric fields of `toolboxVersion`
 are the authority and `semantic` is composed from them; minor = levels
@@ -399,9 +445,10 @@ Every one of these was an actual defect found in a predecessor or a dependency.
 - **The co-rotation term is `v - Rdot*(R'*r)`**, from `env.wind`, never a hand-written omega x r.
 - **Sentman's published C_D/C_L are drag and lift, not normal and tangential**; the kernel
   derives Cp (normal) and Ctau (tangential) from the momentum integrals and asserts both
-  projections. The theory document §2.3 mislabels them (to be corrected at LP-R). Three
-  independent derivations reached the same conclusion in LP-5x. The limit that settles it:
-  edge-on, Cp = 1/(2s^2) and Ctau = l/(s*sqrt(pi)).
+  projections. Three independent derivations reached the same conclusion in LP-5x. The limit
+  that settles it: edge-on, Cp = 1/(2s^2) and Ctau = l/(s*sqrt(pi)). The theory document §2.3
+  mislabelled them until 0.10.0; `doc/src/*.tex` is corrected and **the committed PDF is not
+  rebuilt** — no LaTeX on the host (O-38).
 - **The speed ratio is per SPECIES, not from a mean molar mass**: the mean-mass form is
   harmless on a ram face, -24 % at 100 deg incidence and collapses at 135 deg (measured 2026-09-07).
 - **1 + erf(x) cancels for x << 0**: use erfc(-x). **1 + a(x - 1) loses 1e-8 at a = 1**: write
@@ -459,6 +506,16 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   `referenceSystem.angularVelocityFromRotationRate(R, Rdot, 'Resolution', "reference")` returns its
   NEGATIVE (ratio -1.0, measured). Reading the skew entries off `R' Rdot` without projecting the
   symmetric part out leaves the differencing error in (6e-7 relative).
+- **A rehearsal that gives the local run a hint CI does not get is not a rehearsal.** `buildMex`'s
+  walk to odeSuite's `csrc` overshot by one directory (`fileparts` x3 already reaches the repository
+  root; the extra `'..'` left it). Four green gates in a row said nothing, because every local script
+  set `NGF_GJTOOLBOX` and CI sets nothing — the branch CI depends on had never once run. Clear the
+  environment variables the runner lacks before believing a local gate, and TEST the fallback.
+  **The same trap has a second door: a build ARTEFACT the host happens to hold.** `gjToolbox`'s
+  native stepper is not committed, so a fresh checkout has none, and `tNgfIntegration` propagates
+  through it. Two green gates hid that too, because this host's odeSuite clone had been built by
+  hand. `ciGate` now runs the dependency's own `buildtool mex` (never a recipe copied here), and the
+  rehearsal deletes `gj_stepper` first. **Ask what the runner does NOT have that you do.**
 - **Never assert a host-dependent absolute** (rule T5). A 500 us per-epoch bound written from a
   guess reddened the gate on a runner that measured 901.8 us, in the same session that quoted the
   rule. Assert the ratio; record the absolute with a ceiling an order of magnitude above it.

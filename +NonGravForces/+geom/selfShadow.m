@@ -1,42 +1,55 @@
 function [f, info] = selfShadow(macro, dir_body, options)
-%SELFSHADOW Exposed (unoccluded) fraction of every plate for light arriving from given body-frame directions.
+%SELFSHADOW Unobstructed fraction of every plate toward body-frame directions: ray cast or cube-map table.
 %
 %   [f, info] = NonGravForces.geom.selfShadow(macro, dir_body)                       % ray cast
-%   [f, info] = NonGravForces.geom.selfShadow(macro, dir_body, 'Method', "lut", 'LutResolution', 642)
-%   lut = NonGravForces.geom.selfShadow(macro, [], 'Method', "lut", 'LutResolution', 642)   % table only
+%   [f, info] = NonGravForces.geom.selfShadow(macro, dir_body, 'Method', "lut", 'LutResolution', 16)
+%   lut = NonGravForces.geom.selfShadow(macro, [], 'Method', "lut")                   % table only
+%   f = NonGravForces.geom.selfShadow(macro, dir_body, 'Method', "lut", 'Lut', lut)   % reuse a table
 %
-%   For each plate k and each direction d (unit vector FROM the body TO the
-%   source, the convention of env.radiationSources' src.dir), f(k) is the
-%   fraction of the plate's area that a parallel beam from d reaches without
-%   hitting another plate. Plates facing away from the beam (n_k . d <= 0)
-%   get f = 0 (they are not illuminated; the kernel applies the cosine
-%   separately). A convex closed body has f = 1 on every lit plate; GRACE-FO
-%   is not convex (the array flanks overhang the nadir plate), so f < 1
-%   occurs for low elevations, which is why this exists.
+%   OCCLUSION, AND NOTHING ELSE. For each plate k and each direction d (unit
+%   vector FROM the body TOWARD a radiation source, or toward where gas molecules
+%   come from), f(k) is the fraction of the plate's area from which a ray along
+%   +d leaves the body without striking another plate. Whether the plate FACES d
+%   is not this unit's fact: every consumer multiplies by (n_k . d)+ itself
+%   (kernel.radiationPanelForce, geom.thermalState, geom.flowShadow). Until
+%   2026-09-15 this unit also returned 0 for back-facing plates, and that
+%   radiation-beam convention, applied to a thermal gas, deleted the edge-on
+%   shear of every plate the stream grazes (HANDOVER LP-C, finding F1).
+%
+%   For a back-facing direction (n_k . d < 0) the value returned is that of the
+%   MIRROR direction d - 2 (n_k . d) n_k, which lies in the plate's front
+%   hemisphere. It is a continuous extension across the plate's horizon: no
+%   consumer weights it, and it keeps the table's interpolation honest at grazing
+%   incidence, where a raw back-facing ray would run into the body and drag the
+%   interpolated value toward 0. A direction lying in the plate's own plane is
+%   replaced by its front-side limit, 1e-6 rad out of the plane, so both sides of
+%   the horizon approach one value. A convex closed body has f = 1 on every plate;
+%   GRACE-FO is not convex (the array flanks overhang the nadir plate).
 %
 %   METHODS
 %     raycast   Stratified sampling: an m x m grid of points on each plate
 %               polygon (m = 'Samples', default 40; the polygon is mapped
-%               bilinearly from the unit square for quadrilaterals, and by
-%               fan triangles otherwise); a point is occluded when the ray
-%               from it along +d intersects any other plate polygon in
-%               front of it. Exact to the sampling: the error of the area
-%               fraction is at most ~2/m for a straight shadow edge (measured
-%               against an analytic two-plate case and a pure-Python ray cast
-%               in tests/tNgfGeom.m).
-%     lut       Look-up table over incidence directions: the ray cast is
-%               evaluated once at the V vertices of a unit icosphere
-%               ('LutResolution' V = 12, 42, 162, 642, 2562, ...) and
-%               interpolated barycentrically inside the spherical triangle
-%               containing d (C^0). Options.geom.lutResolution is the tier
-%               default (642). The table is returned in info.lut and can be
-%               passed back as 'Lut' to skip the build.
+%               bilinearly from the unit square for quadrilaterals, and by fan
+%               triangles otherwise); a point is occluded when the ray from it
+%               along +d intersects any other plate polygon in front of it.
+%               Exact to the sampling: the error of the area fraction is at
+%               most ~2/m for a straight shadow edge.
+%     lut       Equiangular cube map. The ray cast is evaluated once at the
+%               (n+1)^2 nodes of each of the six faces of a cube projected onto
+%               the unit sphere, uniform in the two face angles (n =
+%               'LutResolution' cells per face edge; 6 n^2 + 2 distinct
+%               directions, nodes shared by two or three faces cast once), and
+%               read back by bilinear interpolation in those angles. The look-up
+%               is O(1) per direction: the face is the direction's largest
+%               component and the cell follows from two arctangents. The
+%               interpolant is continuous across face edges. The table is
+%               returned in info.lut and can be passed back as 'Lut'.
 %
 % INPUT ARGUMENTS
 %   Name       Size  Type                          Units  Description
 %   ----       ----  ----                          -----  -----------
 %   macro      1x1   NonGravForces.geom.MacroModel  -      With vertices on every plate (hasVertices)
-%   dir_body   3xK   double                         -      Unit directions to the source, body frame;
+%   dir_body   3xK   double                         -      Unit directions from the body, body frame;
 %                                                          [] with Method "lut" returns only the table
 %
 % NAME-VALUE ARGUMENTS
@@ -44,49 +57,54 @@ function [f, info] = selfShadow(macro, dir_body, options)
 %   ----            ----  ----    -----  -----------
 %   Method          1x1   string  -      "raycast" (default) | "lut"
 %   Samples         1x1   double  -      grid points per plate edge for the ray cast (default 40)
-%   LutResolution   1x1   double  -      icosphere vertex count 12, 42, 162, 642, 2562, ...;
-%                                         default: the resolution of 'Lut' if given, else 642
-%   Lut             1x1   struct  -      a previously returned info.lut for this macro model
+%   LutResolution   1x1   double  -      cells per cube-face edge, integer in [1, 256]; default:
+%                                         the resolution of 'Lut' if given, else 16 (5.6 deg)
+%   Lut             1x1   struct  -      a previously returned table for this macro model
+%   Plate           1x1   double  -      evaluate this one plate only (index into the macro model):
+%                                         f is then 1xK; default [] (every plate)
 %
 % OUTPUT ARGUMENTS
 %   Name     Size  Type    Units  Description
 %   ----     ----  ----    -----  -----------
-%   f        NxK   double  -      Exposed fraction per plate and direction, in [0, 1]
-%   info     1x1   struct  -      .method, .samples, .lut (struct .verts 3xV, .faces
-%                                 3xF, .f NxV, .resolution, .samples, .macroName; only
-%                                 for "lut"), .provenance
+%   f        NxK   double  -      Unobstructed fraction per plate and direction, in [0, 1]; or,
+%                                 with dir_body = [] and Method "lut", the table struct itself
+%   info     1x1   struct  -      .method, .samples, .lut (struct .f N x 6(n+1)^2, .nodes 3 x 6(n+1)^2
+%                                 node directions face by face, .resolution, .samples, .macroName,
+%                                 .geometry; only for "lut"), .provenance (built only when info
+%                                 is requested)
 %
 % ACCURACY
-%   Ray cast: area-fraction error <= ~2/Samples at a shadow edge (a
-%   straight edge crossing an m x m grid misclassifies at most ~2m of m^2
-%   cells): 40 samples give ~5e-2 worst case and ~1e-2 typical; measured
-%   values per run in tests/last_run.txt, including the convergence over
-%   Samples and LutResolution (T4). LUT: the barycentric interpolation adds
-%   the table's angular discretisation (~6 deg between vertices at 642,
-%   ~3 deg at 2562); the test records the LUT-vs-raycast difference. The
-%   plate polygons themselves are approximations of the exterior geometry
-%   (geom.graceFO: ~1-4 cm).
+%   Ray cast: area-fraction error <= ~2/Samples at a shadow edge (a straight
+%   edge crossing an m x m grid misclassifies at most ~2m of m^2 cells): 40
+%   samples give ~5e-2 worst case and ~1e-2 typical, measured against the
+%   pure-Python ray cast tools/pyxcheck/selfshadow_check.py (tests/tNgfGeometry.m).
+%   Table: bilinear interpolation adds the angular discretisation, 90/n deg
+%   between nodes (5.6 deg at the default 16); a shadow edge sharper than that is
+%   smeared over one cell, and the mean table-vs-ray-cast difference over random
+%   directions is recorded per run with its convergence over n. The plate polygons
+%   themselves approximate the exterior geometry (geom.graceFO: ~1-4 cm).
 %
 % ERRORS
 %   NonGravForces:selfShadow:inputMacro       not a MacroModel, or without vertices on every plate
-%   NonGravForces:selfShadow:inputShape       dir_body not 3xK, not unit, or NaN
-%   NonGravForces:selfShadow:inputResolution  LutResolution not of the form 10*4^n + 2
-%   NonGravForces:selfShadow:inputLut         'Lut' built for another macro model or resolution
-%   NonGravForces:selfShadow:numericNaN       a direction lies in no icosphere face, or the look-up
-%                                             interpolation produced a non-finite fraction
+%   NonGravForces:selfShadow:inputShape       dir_body not 3xK, not unit, or not finite; 'Plate' not a plate index
+%   NonGravForces:selfShadow:inputResolution  LutResolution not an integer in [1, 256]
+%   NonGravForces:selfShadow:inputLut         'Lut' built for another geometry, resolution or sample count
 %
 % REFERENCES
 %   Wöske et al. (2019) Adv. Space Res. 63:1096 (finite-element ray tracing vs plates);
-%   HANDOVER D.6 (LUT strategy), C.3.
+%   Ronchi C., Iacono R., Paolucci P.S. (1996) J. Comput. Phys. 124:93 (the equiangular
+%   cubed sphere); HANDOVER LP-C WP-C1 and WP-C3.
 %
 % EXAMPLE
 %   mm = NonGravForces.geom.graceFO("C");
 %   f = NonGravForces.geom.selfShadow(mm, [0; sind(70); cosd(70)])   % low elevation: the port flank shadows the nadir plate
+%   lut = NonGravForces.geom.selfShadow(mm, [], 'Method', "lut");
+%   fl = NonGravForces.geom.selfShadow(mm, [0; sind(70); cosd(70)], 'Method', "lut", 'Lut', lut);
 %
-% See also NonGravForces.geom.MacroModel, NonGravForces.geom.graceFO, NonGravForces.env.radiationSources.
+% See also NonGravForces.geom.flowShadow, NonGravForces.geom.MacroModel, NonGravForces.env.radiationSources.
 %
-% KEYWORDS self-shadowing ray cast look-up table icosphere occlusion
-% Created 2026-09-07 by Claude Fable 5.1 (Anthropic).
+% KEYWORDS self-shadowing occlusion ray cast look-up table cube map
+% Created 2026-09-07 by Claude Fable 5.1 (Anthropic); occlusion-only semantics and cube map 2026-09-15 by Claude Opus 5 (Anthropic).
 arguments
     macro
     dir_body double
@@ -94,10 +112,18 @@ arguments
     options.Samples (1,1) double {mustBeInteger, mustBeGreaterThanOrEqual(options.Samples, 2)} = 40
     options.LutResolution double = []
     options.Lut struct = struct([])
+    options.Plate double = []
 end
 unit = "selfShadow";
 if ~isa(macro, 'NonGravForces.geom.MacroModel') || ~macro.hasVertices
     NonGravForces.fail(unit, "inputMacro", "macro must be a NonGravForces.geom.MacroModel with vertices_m on every plate -> geom.graceFO and geom.boxWing (bus) provide them");
+end
+plates = 1:macro.n;
+if ~isempty(options.Plate)
+    if ~(isscalar(options.Plate) && any(options.Plate == plates))
+        NonGravForces.fail(unit, "inputShape", "'Plate' must be one plate index in 1..%d -> got %s", macro.n, mat2str(options.Plate));
+    end
+    plates = options.Plate;
 end
 if ~isempty(dir_body)
     if ~(ismatrix(dir_body) && size(dir_body, 1) == 3) || any(~isfinite(dir_body(:)))
@@ -109,69 +135,85 @@ if ~isempty(dir_body)
 elseif options.Method == "raycast"
     NonGravForces.fail(unit, "inputShape", "dir_body is empty -> pass directions, or Method lut to build the table only");
 end
-info.method = options.Method;
-info.samples = options.Samples;
 switch options.Method
     case "raycast"
-        f = localRaycast(macro, dir_body, options.Samples);
+        f = localRaycast(macro, dir_body, options.Samples, plates);
+        lut = [];
     case "lut"
-        if isempty(options.LutResolution)
-            if ~isempty(options.Lut) && isfield(options.Lut, 'resolution'), options.LutResolution = options.Lut.resolution; else, options.LutResolution = 642; end
+        n = options.LutResolution;
+        if isempty(n)
+            if ~isempty(options.Lut) && isfield(options.Lut, 'resolution'), n = options.Lut.resolution; else, n = 16; end
         end
-        if ~isscalar(options.LutResolution)
-            NonGravForces.fail(unit, "inputResolution", "LutResolution must be a scalar -> 12, 42, 162, 642, 2562, ...");
-        end
-        level = log(max(options.LutResolution - 2, 1) / 10) / log(4);
-        if abs(level - round(level)) > 1e-9 || level < 0 || level > 7
-            NonGravForces.fail(unit, "inputResolution", "LutResolution %g is not 10*4^n + 2 (12, 42, 162, 642, 2562, ...) -> pick one of those", options.LutResolution);
+        if ~(isscalar(n) && isfinite(n) && n == round(n) && n >= 1 && n <= 256)
+            NonGravForces.fail(unit, "inputResolution", "LutResolution must be an integer number of cells per cube-face edge in [1, 256] -> got %s; 16 gives 5.6 deg", mat2str(n));
         end
         if ~isempty(options.Lut)
             lut = options.Lut;
-            if ~(isfield(lut, 'macroName') && lut.macroName == macro.name && isfield(lut, 'resolution') && lut.resolution == options.LutResolution && isequal(size(lut.f), [macro.n, options.LutResolution]))
-                NonGravForces.fail(unit, "inputLut", "the Lut was built for '%s' at resolution %g -> build one for this model and resolution", string(lut.macroName), lut.resolution);
+            ok = isfield(lut, 'geometry') && isfield(lut, 'resolution') && isfield(lut, 'f') && ...
+                 lut.resolution == n && isequal(lut.geometry, localGeometry(macro)) && ...
+                 isequal(size(lut.f), [macro.n, 6 * (n + 1)^2]);
+            if ~ok
+                NonGravForces.fail(unit, "inputLut", "the Lut was not built for this macro model at resolution %g -> build one with selfShadow(macro, [], 'Method', ""lut"")", n);
             end
         else
-            [verts, faces] = icosphere(round(level));
-            lut = struct('verts', verts, 'faces', faces, 'f', localRaycast(macro, verts, options.Samples), ...
-                         'resolution', options.LutResolution, 'samples', options.Samples, 'macroName', macro.name);
+            lut = localBuildTable(macro, n, options.Samples);
         end
-        info.lut = lut;
         if isempty(dir_body)
             f = lut;                                             % table only
         else
-            f = localInterpolate(lut, dir_body);
+            f = localLookup(lut, dir_body, plates);
         end
 end
-info.provenance = NonGravForces.provenance("geom.selfShadow", 'Options', struct('method', options.Method, 'samples', options.Samples, 'lutResolution', options.LutResolution));
+if nargout > 1
+    info.method = options.Method;
+    info.samples = options.Samples;
+    info.lut = lut;
+    info.provenance = NonGravForces.provenance("geom.selfShadow", 'Options', struct('method', options.Method, 'samples', options.Samples, 'lutResolution', options.LutResolution));
+end
 end
 
 % ------------------------------------------------------------------------- ray cast
-function f = localRaycast(macro, d, m)
-% d: 3xK unit directions to the source. Sample points on each plate, occlusion by every other plate.
+function f = localRaycast(macro, d, m, plates)
+% d: 3xK unit directions. Sample points on each plate, occlusion by every other plate. A
+% back-facing direction is replaced, for that plate only, by its mirror in the plate's plane.
 N = macro.n; K = size(d, 2);
-f = zeros(N, K);
+f = zeros(numel(plates), K);
 [P, w] = localSamples(macro, m);                     % P{k} 3xS points, w{k} 1xS weights (sum 1)
-for k = 1:N
-    lit = (macro.N(:, k)' * d) > 0;                  % 1xK plates facing the beam
-    if ~any(lit), continue; end
-    dl = d(:, lit); Kl = size(dl, 2);
+for row = 1:numel(plates)
+    k = plates(row);
+    nk = macro.N(:, k);
+    g = nk' * d;                                     % 1xK
+    dk = d;
+    back = g < 0;
+    if any(back)
+        dk(:, back) = d(:, back) - 2 * nk .* g(back);    % mirror into the front hemisphere
+    end
+    % A direction in the plate's own plane is replaced by its front-side limit, 1e-6 rad out of the
+    % plane: a ray skimming the plane otherwise meets a neighbouring plate exactly on their shared edge
+    % and counts as occluded, a value that belongs to neither side of the horizon.
+    gm = abs(g);
+    skim = gm < 1e-6;
+    if any(skim)
+        dk(:, skim) = dk(:, skim) + (1e-6 - gm(skim)) .* nk;
+        dk(:, skim) = dk(:, skim) ./ vecnorm(dk(:, skim));
+    end
     S = size(P{k}, 2);
-    occluded = false(S, Kl);
+    occluded = false(S, K);
     for j = 1:N
         if j == k, continue; end
         nj = macro.N(:, j); Vj = macro.V{j};
-        denom = nj' * dl;                                                       % 1xKl
+        denom = nj' * dk;                                                       % 1xK
         hit = abs(denom) > 1e-12;
         if ~any(hit), continue; end
         % t = n_j . (p_j - P) / (n_j . d), one value per (sample, direction)
-        t = (nj' * (Vj(:, 1) - P{k})).' ./ denom;                              % SxKl
+        t = (nj' * (Vj(:, 1) - P{k})).' ./ denom;                              % SxK
         ahead = t > 1e-9;
         % intersection points and the point-in-polygon test in the plane of j
         e1 = Vj(:, 2) - Vj(:, 1); e1 = e1 / norm(e1); e2 = cross(nj, e1);
         px = e1' * (Vj - Vj(:, 1)); py = e2' * (Vj - Vj(:, 1));                 % polygon in 2-D
-        Xk = reshape(P{k}, 3, S, 1) + reshape(t, 1, S, Kl) .* reshape(dl, 3, 1, Kl);   % 3xSxKl hit points
+        Xk = reshape(P{k}, 3, S, 1) + reshape(t, 1, S, K) .* reshape(dk, 3, 1, K);    % 3xSxK hit points
         Xr = Xk - Vj(:, 1);
-        hx = reshape(sum(Xr .* e1, 1), S, Kl); hy = reshape(sum(Xr .* e2, 1), S, Kl);
+        hx = reshape(sum(Xr .* e1, 1), S, K); hy = reshape(sum(Xr .* e2, 1), S, K);
         inside = localInPolygon(hx, hy, px, py);
         occluded = occluded | (ahead & inside & hit);
     end
@@ -180,7 +222,7 @@ for k = 1:N
     frac = sum(w{k}' .* double(occluded), 1);
     frac(all(occluded, 1)) = 1;
     frac(~any(occluded, 1)) = 0;
-    f(k, lit) = 1 - frac;
+    f(row, :) = 1 - frac;
 end
 f = min(1, max(0, f));
 end
@@ -224,49 +266,56 @@ for i = 1:nV
 end
 end
 
-% ------------------------------------------------------------------------- LUT interpolation
-function f = localInterpolate(lut, d)
-% Barycentric interpolation of the table inside the icosphere triangle that contains each direction.
-K = size(d, 2);
-A = lut.verts(:, lut.faces(1, :)); B = lut.verts(:, lut.faces(2, :)); C = lut.verts(:, lut.faces(3, :));
-f = zeros(size(lut.f, 1), K);
-for k = 1:K
-    dk = d(:, k);
-    % barycentric coordinates of the central projection of dk onto each face plane
-    nrm = cross(B - A, C - A, 1);                       % face normals (outward, consistent winding)
-    den = sum(nrm .* dk, 1);                            % the ray is parallel to the plane where this is 0
-    s = sum(nrm .* A, 1) ./ den;                        % ray scale to the plane; Inf or NaN where den = 0
-    X = s .* dk;                                          % 3xF intersection points
-    % barycentric via areas
-    w0 = sum(cross(B - X, C - X, 1) .* nrm, 1); w1 = sum(cross(C - X, A - X, 1) .* nrm, 1); w2 = sum(cross(A - X, B - X, 1) .* nrm, 1);
-    tot = sum(nrm.^2, 1);
-    bc = [w0; w1; w2] ./ tot;
-    % den > 0 AND weights summing to one are both required. Without them a face the ray is nearly
-    % parallel to passes the test: s explodes to 1e16, X runs off with it, and the three areas come
-    % out [0 0 0], which satisfies bc >= 0 and then divides by zero. Measured 2026-09-08 at
-    % resolution 162: 8 of the first 40 icosphere vertices returned NaN for every plate that way,
-    % and the metamorphic test could not see it because max omits NaN.
-    ok = den > 0 & s > 0 & all(bc >= -1e-9, 1) & abs(sum(bc, 1) - 1) <= 1e-6;
-    idx = find(ok, 1);
-    if isempty(idx)
-        cand = find(den > 0 & s > 0 & abs(sum(bc, 1) - 1) <= 1e-6);
-        if isempty(cand)
-            NonGravForces.fail("selfShadow", "numericNaN", "direction %d lies in no icosphere face -> check that it is a unit vector", k);
-        end
-        [~, m] = max(min(bc(:, cand), [], 1));
-        idx = cand(m);
-    end
-    b = max(0, bc(:, idx)); b = b / sum(b);
-    f(:, k) = lut.f(:, lut.faces(1, idx)) * b(1) + lut.f(:, lut.faces(2, idx)) * b(2) + lut.f(:, lut.faces(3, idx)) * b(3);
+% ------------------------------------------------------------------------- cube map
+function g = localGeometry(macro)
+% Everything the ray cast reads, as one column: a table built for other geometry is refused.
+g = [macro.N(:); cell2mat(cellfun(@(v) v(:), macro.V(:), 'UniformOutput', false))];
 end
-% The interpolant is a convex combination of three vertex values that all lie in [0, 1], so the
-% result does too - mathematically. In floating point the weighted sum can land one ulp above 1
-% (measured 2026-09-08: 2210 of 20000 random directions, worst excess 2.22e-16, never below 0),
-% which a consumer checking 0 <= f <= 1 refuses. Clamping restores what the algebra guarantees.
-% A non-finite value is NOT clamped away: min and max would turn a NaN into 0 in silence, which is
-% how the face-selection defect above stayed hidden for four levels (rule R4).
-if any(~isfinite(f(:)))
-    NonGravForces.fail("selfShadow", "numericNaN", "the look-up interpolation produced a non-finite fraction -> report this: the face selection should make it impossible");
+
+function lut = localBuildTable(macro, n, samples)
+% Ray cast at the distinct cube-map nodes, then expand to the per-face node layout.
+tv = tan(-pi/4 + (0:n) * (pi / 2) / n);
+tv(1) = -1; tv(end) = 1;                                  % the face edges exactly, so shared nodes coincide
+tv = (tv - flip(tv)) / 2;                                 % exactly antisymmetric about the face centre
+UA = [2 3 1]; VA = [3 1 2];
+[I, J] = ndgrid(1:n+1, 1:n+1);                            % node (i, j): i along the u axis, j along v
+raw = zeros(3, 6 * (n + 1)^2);
+for F = 1:6
+    m = ceil(F / 2); sg = 1 - 2 * mod(F + 1, 2);          % F = 1 +x, 2 -x, 3 +y, 4 -y, 5 +z, 6 -z
+    cols = (F - 1) * (n + 1)^2 + (1:(n + 1)^2);
+    raw(m, cols) = sg;
+    raw(UA(m), cols) = tv(I(:));
+    raw(VA(m), cols) = tv(J(:));
 end
+[uniq, ~, index] = unique(raw', 'rows');                  % exact: shared edge and corner nodes are identical
+nodes = uniq' ./ vecnorm(uniq');
+fu = localRaycast(macro, nodes, samples, 1:macro.n);      % N x U
+lut = struct('f', fu(:, index), 'nodes', nodes(:, index), 'resolution', n, 'samples', samples, ...
+             'macroName', macro.name, 'geometry', localGeometry(macro));
+end
+
+function f = localLookup(lut, d, plates)
+% O(1) bilinear read of the cube map, element-wise, so a batch equals single calls bitwise.
+n = lut.resolution; K = size(d, 2);
+[~, m] = max(abs(d), [], 1);                              % major axis, ties to the lower index
+col = (0:K-1) * 3;
+dm = d(col + m);
+face = 2 * m - (dm > 0);                                  % +x 1, -x 2, +y 3, -y 4, +z 5, -z 6
+UA = [2 3 1]; VA = [3 1 2];
+a = atan(d(col + UA(m)) ./ abs(dm));                      % face angles in [-pi/4, pi/4]
+b = atan(d(col + VA(m)) ./ abs(dm));
+x = (a + pi/4) / (pi/2) * n; y = (b + pi/4) / (pi/2) * n;
+i0 = min(max(floor(x), 0), n - 1); j0 = min(max(floor(y), 0), n - 1);
+wx = min(max(x - i0, 0), 1); wy = min(max(y - j0, 0), 1);
+c00 = (face - 1) * (n + 1)^2 + j0 * (n + 1) + i0 + 1;
+c10 = c00 + 1; c01 = c00 + n + 1; c11 = c01 + 1;
+T = lut.f(plates, :);
+T00 = T(:, c00);
+% Bilinear interpolation in difference form: four equal corners return that value EXACTLY (the
+% weighted sum of four equal values lands one ulp off), so an unobstructed region reads 1 bitwise,
+% which geom.flowShadow's limit "nothing in front of the plate gives exactly 1" relies on.
+f = T00 + wx .* (T(:, c10) - T00) + wy .* (T(:, c01) - T00) + (wx .* wy) .* ((T(:, c11) - T(:, c10)) - (T(:, c01) - T00));
+% A convex combination of values in [0, 1] can land one ulp outside; the clamp restores what the
+% algebra guarantees. A non-finite value cannot arise: every factor is finite by construction.
 f = min(1, max(0, f));
 end

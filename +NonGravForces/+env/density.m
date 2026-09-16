@@ -1,6 +1,7 @@
 function [rho, species, T, info] = density(model, epoch, lla, sw, options)
-%DENSITY Thermosphere density and composition dispatcher: exponential, NRLMSISE-00 (MEX); others refuse until LP-3b.
+%DENSITY Thermosphere density and composition: exponential, NRLMSISE-00 or NRLMSIS 2.1 (both compiled).
 %
+%   [rho, species, T, info] = NonGravForces.env.density("msis21", epoch, lla, sw)
 %   [rho, species, T, info] = NonGravForces.env.density("msis00", epoch, lla, sw)
 %   [rho, species, T, info] = NonGravForces.env.density("msis00", epoch, lla, [], 'Drivers', d)
 %   rho = NonGravForces.env.density("exponential", epoch, lla, [], 'Exponential', p)
@@ -14,16 +15,32 @@ function [rho, species, T, info] = density(model, epoch, lla, sw, options)
 %
 %   BACKENDS
 %     msis00       NRLMSISE-00 (Picone et al. 2002) through the MEX of the
-%                  vendored Brodowski C (NonGravForces.buildMex). Drivers from
+%                  Brodowski C fetched by setup (NonGravForces.buildMex). Drivers from
 %                  a celestrak-family spaceWeather struct queried at the
 %                  epochs: previous-day observed F10.7, 81-day centred mean,
 %                  the 7-element ap history (switch 9 = -1); or from
 %                  'Drivers'. gtd7d by default: the total mass density
 %                  includes anomalous oxygen, as the model authors recommend
 %                  for drag above ~500 km; 'AnomalousOxygen', false gives gtd7.
+%     msis21       NRLMSIS 2.1 (NRL 2022; formulation Emmert et al. 2021) through the MEX of NRL's
+%                  unmodified Fortran, compiled in double precision
+%                  (NonGravForces.buildMex; setupNonGravForces fetches the package).
+%                  The same drivers as msis00, with the same meaning (MSISCALC's
+%                  header: previous-day F10.7, 81-day centred mean, ap history read
+%                  when 7xK). The model forms local time from UT and longitude
+%                  itself, so 'LocalSolarTime_h' is refused. The day of year is the
+%                  integer day, as the legacy interface NRL tests the model with.
+%                  The mass density includes anomalous oxygen unless
+%                  'AnomalousOxygen' is false, which is passed to the model as its
+%                  own mass-density flag, not subtracted here. Where NRLMSIS marks a
+%                  species as not modelled (its value 9.999e-38, e.g. O, H and N in
+%                  the fully mixed lower atmosphere of NRL's test cases at 0.2 km),
+%                  that species is returned as 0.
+%                  NRLMSIS 2.1 is NRLMSIS 2.0 plus nitric oxide: its temperature and
+%                  every species this toolbox reads are those of 2.0.
 %     exponential  rho = rho0 exp(-(h - h0)/H) with the caller's rho0, h0, H
 %                  ('Exponential'); sizing only, no composition, no drivers.
-%     msis21, dtm2020, jb2008   refuse with notImplemented (LP-3b, WP-25).
+%   DTM2020 and JB2008 are not provided (owner ruling 2026-09-15, HANDOVER Part I).
 %
 %   NaN POLICY: a NaN anywhere in lla or in the drivers raises numericNaN,
 %   because a NaN density silently zeroes the drag (HANDOVER E.2 rule 7).
@@ -31,7 +48,7 @@ function [rho, species, T, info] = density(model, epoch, lla, sw, options)
 % INPUT ARGUMENTS
 %   Name     Size  Type    Units      Description
 %   ----     ----  ----    -----      -----------
-%   model    1x1   string  -          "exponential" | "msis00" | "msis21" | "dtm2020" | "jb2008"
+%   model    1x1   string  -          "exponential" | "msis00" | "msis21"
 %   epoch    1x1   struct  -          referenceSystem epoch struct, K entries, any scale
 %   lla      3xK   double  rad,rad,m  Geodetic latitude, longitude, height (WGS-84)
 %   sw       1x1   struct  -          NonGravForces.io.spaceWeather result of the
@@ -45,10 +62,12 @@ function [rho, species, T, info] = density(model, epoch, lla, sw, options)
 %                                             F10.7), .f107a (1xK, 81-day
 %                                             centred), .ap (1xK daily Ap, or 7xK
 %                                             NRLMSISE history). Overrides sw.
-%   AnomalousOxygen   1x1   logical  -        true (default): gtd7d; false: gtd7.
+%   AnomalousOxygen   1x1   logical  -        true (default): the mass density includes
+%                                             anomalous oxygen (msis00: gtd7d; msis21: the
+%                                             model's default); false: it does not (gtd7).
 %   Exponential       1x1   struct   -        .rho0_kg_m3, .h0_m, .H_m; required
 %                                             for "exponential", ignored otherwise.
-%   LocalSolarTime_h  1xK   double   h        Override of the local solar time handed
+%   LocalSolarTime_h  1xK   double   h        msis00 only. Override of the local solar time handed
 %                                             to MSIS. Default [] = sec/3600 + lon/15,
 %                                             the consistent choice the reference
 %                                             recommends. The published test cases
@@ -68,8 +87,8 @@ function [rho, species, T, info] = density(model, epoch, lla, sw, options)
 %                                   f107 f107a ap, and .source "spaceWeather" |
 %                                   "caller" | "none"), .anomalousOxygen,
 %                                   .msisInput (struct doy sec alt_km lat_deg
-%                                   lon_deg lst_h, 1xK each; msis00 only),
-%                                   .provenance.
+%                                   lon_deg, 1xK each, and lst_h for msis00;
+%                                   both msis backends), .provenance.
 %
 % ACCURACY
 %   msis00 is bit-identical to the reference C for the same inputs (same
@@ -79,6 +98,11 @@ function [rho, species, T, info] = density(model, epoch, lla, sw, options)
 %   solar time is sec/3600 + lon/15 as the reference documents; the equation
 %   of time (< 17 min) is neglected, as the reference recommends. The model
 %   itself is uncertain by 10-30 % (HANDOVER C.4).
+%   msis21 returns the model's SI outputs unconverted. NRL's 200 reference cases
+%   (msis2.1_test_ref_dp.txt, printed to 4 significant digits) are reproduced
+%   within half a unit of the last printed digit every run. The model error of
+%   the climatology itself is not measured here; the gas-surface interaction and
+%   the drivers' daily and 3-hourly resolution bound what either MSIS can give.
 %
 % ERRORS
 %   NonGravForces:density:inputShape        lla not 3xK or K differs from epoch
@@ -88,14 +112,17 @@ function [rho, species, T, info] = density(model, epoch, lla, sw, options)
 %   NonGravForces:density:inputExponential  "exponential" without a complete
 %                                           Exponential struct
 %   NonGravForces:density:numericNaN        NaN in lla or in the drivers
-%   NonGravForces:density:depMissing        msis00 MEX not built
-%   NonGravForces:density:notImplemented    msis21 | dtm2020 | jb2008 (LP-3b)
+%   NonGravForces:density:depMissing        the backend's MEX is not built
+%   NonGravForces:density:inputOption       LocalSolarTime_h given to msis21, which forms local time itself
+%   NonGravForces:msis21Gateway:*           path, parameter file and screening errors of the gateway, unwrapped
 %   NonGravForces:spaceWeather:*            from sw.query, unwrapped
 %   referenceSystem:*                       propagated unwrapped
 %
 % REFERENCES
 %   Picone, Hedin, Drob, Aikin (2002) JGR 107(A12) 1468, NRLMSISE-00.
 %   Brodowski, NRLMSISE-00 C release 20041227, DOCUMENTATION §5 (inputs) and §7 (table).
+%   Emmert J.T. et al. (2021) NRLMSIS 2.0, Earth Space Sci. 8, e2020EA001321;
+%   NRL, nrlmsis2.1 package (2022-04-04): readme.txt and the header of msis_calc.F90.
 %
 % EXAMPLE
 %   ep = referenceSystem.mjdToEpoch(58849.5, "UTC");
@@ -105,10 +132,10 @@ function [rho, species, T, info] = density(model, epoch, lla, sw, options)
 %
 % See also NonGravForces.io.spaceWeather, NonGravForces.buildMex, referenceSystem.cartesianToGeodetic.
 %
-% KEYWORDS density thermosphere NRLMSISE-00 exponential drag
-% Created 2026-09-07 by Claude Fable 5.1 (Anthropic).
+% KEYWORDS density thermosphere NRLMSISE-00 NRLMSIS exponential drag
+% Created 2026-09-07 by Claude Fable 5.1 (Anthropic); msis21 2026-09-15 by Claude Opus 5 (Anthropic).
 arguments
-    model (1,1) string {mustBeMember(model, ["exponential","msis00","msis21","dtm2020","jb2008"])}
+    model (1,1) string {mustBeMember(model, ["exponential","msis00","msis21"])}
     epoch (1,1) struct
     lla double
     sw = []
@@ -170,9 +197,29 @@ switch model
         info.drivers = drv;
         info.anomalousOxygen = options.AnomalousOxygen;
         info.msisInput = in;
-    otherwise
-        rho = []; species = []; T = [];
-        NonGravForces.fail(unit, "notImplemented", "backend %s is specified in LP-3b (WP-25) -> use msis00 or exponential until it lands", model);
+    case "msis21"
+        if ~isempty(options.LocalSolarTime_h)
+            NonGravForces.fail(unit, "inputOption", "msis21 forms the local solar time from UT and longitude itself -> remove 'LocalSolarTime_h' (it serves msis00's published test cases only)");
+        end
+        drv = localDrivers(unit, epoch, sw, options.Drivers, K);
+        here = fullfile(fileparts(mfilename('fullpath')), 'private');
+        gw = fullfile(here, "msis21Gateway." + mexext);
+        if ~isfile(gw)
+            NonGravForces.fail(unit, "depMissing", "the NRLMSIS 2.1 MEX %s is not built -> run setupNonGravForces (fetches NRL's package) and NonGravForces.buildMex once on this machine", gw);
+        end
+        utc = referenceSystem.convertTimeScale(epoch, "UTC");
+        dt = referenceSystem.epochTo(utc, "datetime");
+        in = struct('doy', double(day(dt, 'dayofyear'))', 'sec', double(utc.sec(:))', 'alt_km', lla(3, :) / 1000, ...
+                    'lat_deg', rad2deg(lla(1, :)), 'lon_deg', rad2deg(lla(2, :)));
+        [d, t] = msis21Gateway([here filesep], double(options.AnomalousOxygen), in.doy, in.sec, in.alt_km, in.lat_deg, in.lon_deg, drv.f107a, drv.f107, drv.ap);
+        dmissing = 9.999e-38;                                  % msis_constants.F90: the model's marker for "not modelled here"
+        d(d == dmissing) = 0;
+        rho = d(1, :);                                         % kg/m^3, SI from the model
+        species = d([5 4 2 3 7 6 8 9], :);                     % MSIS 2.1 order rho N2 O2 O He H Ar N Oanom NO -> He O N2 O2 Ar H N Oanom
+        T = t;
+        info.drivers = drv;
+        info.anomalousOxygen = options.AnomalousOxygen;
+        info.msisInput = in;
 end
 info.provenance = NonGravForces.provenance("env.density", 'Options', struct('model', model, 'anomalousOxygen', options.AnomalousOxygen, 'lstOverride', ~isempty(options.LocalSolarTime_h)));
 end
@@ -194,13 +241,13 @@ if ~isempty(drivers)
     src = "caller";
 elseif isstruct(sw) && isfield(sw, 'format') && isfield(sw, 'query')
     if sw.format ~= "celestrak"
-        NonGravForces.fail(unit, "inputDrivers", "spaceWeather family %s does not drive NRLMSISE-00 -> load the CelesTrak SW-All file (family celestrak)", sw.format);
+        NonGravForces.fail(unit, "inputDrivers", "spaceWeather family %s does not drive NRLMSIS -> load the CelesTrak SW-All file (family celestrak)", sw.format);
     end
     q = sw.query(epoch);
     f107 = q.f107; f107a = q.f107a; ap = q.apHistory;
     src = "spaceWeather";
 else
-    NonGravForces.fail(unit, "inputDrivers", "msis00 needs drivers -> pass a celestrak spaceWeather struct as sw, or 'Drivers', struct('f107', .., 'f107a', .., 'ap', ..)");
+    NonGravForces.fail(unit, "inputDrivers", "the msis backends need drivers -> pass a celestrak spaceWeather struct as sw, or 'Drivers', struct('f107', .., 'f107a', .., 'ap', ..)");
 end
 if any(~isfinite([f107(:); f107a(:); ap(:)]))
     NonGravForces.fail(unit, "numericNaN", "a driver is NaN/Inf -> spaceWeather never returns NaN; check the caller's Drivers");

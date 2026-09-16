@@ -96,7 +96,8 @@ function [cal, info] = calibrate(yMeas, aModel, epoch, options)
 %   NonGravForces:calibrate:inputShape      yMeas, aModel, Weights or Mask do not match the epoch count
 %   NonGravForces:calibrate:inputRange      KnotInterval_s <= 0, MaxIterations < 1, a weight < 0,
 %                                           or an event outside the arc
-%   NonGravForces:calibrate:numericNaN      an unmasked sample is NaN or Inf
+%   NonGravForces:calibrate:numericNaN      an unmasked sample is NaN or Inf; with Scale "full", any model
+%                                           axis of an epoch that some axis uses
 %   NonGravForces:calibrate:numericSingular the equilibrated design matrix exceeds MaxCondition,
 %                                           or an axis has fewer usable samples than unknowns
 %
@@ -154,6 +155,11 @@ if any(W(:) < 0) || any(~isfinite(W(:)))
 end
 if any(~isfinite(yMeas(mask))) || any(~isfinite(aModel(mask)))
     NonGravForces.fail(unit, "numericNaN", "an UNMASKED sample of yMeas or aModel is NaN/Inf -> mask the gaps out instead of letting them into the normal matrix");
+end
+% "full" puts ALL THREE model axes into the row of every axis, so a sample unmasked on one axis
+% reads the model on the other two as well, whatever their mask says (LP-C F14).
+if options.Scale == "full" && any(~isfinite(aModel(:, any(mask, 1))), 'all')
+    NonGravForces.fail(unit, "numericNaN", "Scale full couples the three model axes, and aModel is NaN/Inf on an axis of an epoch that another axis uses -> mask that epoch on every axis, or use Scale diag");
 end
 if ~(options.KnotInterval_s > 0) || ~isfinite(options.KnotInterval_s)
     NonGravForces.fail(unit, "inputRange", "'KnotInterval_s' must be finite and positive -> it is the spacing of the hat knots in seconds");
