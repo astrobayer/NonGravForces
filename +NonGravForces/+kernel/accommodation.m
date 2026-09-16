@@ -1,8 +1,9 @@
 function [acc, info] = accommodation(model, species, T_K, options)
-%ACCOMMODATION Energy accommodation of the gas-surface interaction per epoch: fixed, Pilinski (2010) or the Walker/Mehta adsorbate mixture.
+%ACCOMMODATION Energy accommodation of the gas-surface interaction per epoch: fixed, either Pilinski fit, or the Walker/Mehta adsorbate mixture.
 %
 %   acc = NonGravForces.kernel.accommodation("fixed", species, T_K, 'Alpha', 0.85)
 %   acc = NonGravForces.kernel.accommodation("pilinski2010", species, T_K)
+%   acc = NonGravForces.kernel.accommodation("pilinski2011", species, T_K)
 %   acc = NonGravForces.kernel.accommodation("walker2014", species, T_K, 'SurfaceMass_amu', 263.3223)
 %   [acc, info] = NonGravForces.kernel.accommodation(___)
 %
@@ -14,13 +15,28 @@ function [acc, info] = accommodation(model, species, T_K, options)
 %   MODELS
 %     fixed         alpha = Alpha at every epoch (Alpha scalar or 1xK). The value is
 %                   the caller's statement; nothing is assumed when it is omitted.
-%     pilinski2010  alpha = K n_O T / (1 + K n_O T), K = 4.98e-17 m^3 K^-1, with the
-%                   atomic-oxygen number density n_O and the gas temperature T of
-%                   NRLMSISE-00 (Pilinski, Argrow & Palo 2010; the constant as printed
-%                   in Pilinski 2011, sect. 7.3, eqs 7.1-7.2, fitted with a clean
-%                   substrate of alpha 0 to satellites between 150 and 500 km, where
-%                   the fitted alpha spans 0.85-1.00). Outside that range it is an
-%                   extrapolation and info says so.
+%     pilinski2010  alpha = K n_O T / (1 + K n_O T) with the atomic-oxygen number
+%     pilinski2011  density n_O and the gas temperature T. ONE MODEL, TWO PUBLISHED
+%                   FITS, and each option is named after the source that fits it:
+%                     pilinski2010  K = 7.50e-17 m^3 K^-1  Pilinski, Argrow & Palo
+%                                   (2010) eq. 8, fitted to the Bowman & Moe sphere
+%                                   accommodations, mean error -0.9 %, sd 1.7 %
+%                     pilinski2011  K = 4.98e-17 m^3 K^-1  Pilinski (2011) sect. 7.3,
+%                                   eqs 7.1-7.2, the author's later refit
+%                   Both assume a CLEAN SUBSTRATE of alpha 0 and are fitted between
+%                   150 and 500 km, where the fitted alpha spans 0.85-1.00; outside
+%                   that range it is an extrapolation and info says so. Until
+%                   2026-09-16 a single option pilinski2010 carried the 2011 value,
+%                   so its name and its constant cited different papers; the owner
+%                   ruled both should ship (HANDOVER LP-D, WP-D1).
+%                   K IS TIED TO THE DENSITY MODEL IT WAS FITTED WITH. Pilinski
+%                   (2010) is explicit that n_O and T came from NRLMSISE-00 and that
+%                   "the application of this value should only be performed with
+%                   NRLMSISE-00"; a different model needs K refitted. This toolbox
+%                   does not refuse another backend -- the precise preset evaluates
+%                   msis21, which runs ~10 % below NRLMSISE-00 at GRACE altitudes --
+%                   but that combination is outside the fit and is stated here
+%                   because nothing in the numbers would reveal it.
 %     walker2014    The adsorbate model as Paul, Sheridan, Licata & Mehta (2022, eqs
 %                   10-13) state it: a fraction theta of the surface carries adsorbed
 %                   atomic oxygen and accommodates fully, the rest is clean substrate,
@@ -31,8 +47,14 @@ function [acc, info] = accommodation(model, species, T_K, options)
 %                   over those six) and m_s the mass of a surface lattice particle; the
 %                   drag of the two states is mixed with weight theta. ATTRIBUTION, as
 %                   that paper gives it: the coverage law and K_L to Walker, Mehta &
-%                   Koller (2014, JSR 51(5)), the substrate coefficient to Mehta et al.
-%                   (2022); the name of this option follows the first. K_L's unit is not
+%                   Koller (2014, JSR 51(5) *1544*, the CLL drag-coefficient model), the
+%                   substrate coefficient to Mehta et al. (2022); the name of this option
+%                   follows the first. THE PAGE MATTERS: that issue carries two papers by
+%                   the same three authors, and the other one (51(5) 1522, DOI
+%                   10.2514/1.A32668, read 2026-09-16) does NOT contain this law -- it
+%                   mentions the Langmuir isotherm once and credits it to Pilinski. 1544
+%                   is not in hand, so the attribution is still Paul et al. 2022's and
+%                   not this project's reading (HANDOVER O-17). K_L's unit is not
 %                   printed; Pa^-1 follows from P_O formed in SI in the WVU RSM Suite
 %                   that implements it (read as Torr^-1, theta would be 0.13 instead of
 %                   0.95 at n_O = 1e15 m^-3, 1000 K). m_s has no universally
@@ -46,7 +68,7 @@ function [acc, info] = accommodation(model, species, T_K, options)
 % INPUT ARGUMENTS
 %   Name      Size  Type    Units  Description
 %   ----      ----  ----    -----  -----------
-%   model     1x1   string  -      "fixed" | "pilinski2010" | "walker2014"
+%   model     1x1   string  -      "fixed" | "pilinski2010" | "pilinski2011" | "walker2014"
 %   species   8xK   double  1/m^3  Number densities in const.speciesName order (env.density)
 %   T_K       1xK   double  K      Gas kinetic temperature at the satellite (density's T(2,:))
 %
@@ -59,11 +81,11 @@ function [acc, info] = accommodation(model, species, T_K, options)
 % OUTPUT ARGUMENTS
 %   Name      Size  Type    Units  Description
 %   ----      ----  ----    -----  -----------
-%   acc       1x1   struct  -      .model; .alpha 1xK (fixed, pilinski2010; for walker2014 the
+%   acc       1x1   struct  -      .model; .alpha 1xK (fixed, pilinski20xx; for walker2014 the
 %                                  adsorbate state's, 1); .coverage 1xK (walker2014: theta; [] for a
 %                                  single state); .alphaSubstrate 1xK (walker2014; [] otherwise)
 %   info      1x1   struct  -      .K, .pressureO_Pa (walker2014), .meanMass_amu (walker2014),
-%                                  .insideFit (pilinski2010: alpha within the fitted 0.85-1), .provenance
+%                                  .insideFit (pilinski20xx: alpha within the fitted 0.85-1), .provenance
 %
 % ACCURACY
 %   Exact evaluation of the published formulas. The model error is the
@@ -81,7 +103,8 @@ function [acc, info] = accommodation(model, species, T_K, options)
 %   NonGravForces:accommodation:inputRange       a negative density or a non-positive temperature (models that read them)
 %
 % REFERENCES
-%   Pilinski M.D., Argrow B.M., Palo S.E. (2010) J. Spacecraft Rockets 47(6);
+%   Pilinski M.D., Argrow B.M., Palo S.E. (2010) J. Spacecraft Rockets 47(6) 951-956,
+%   DOI 10.2514/1.49330, eq. 8 and the K of the Results section;
 %   Pilinski M.D. (2011) Dynamic gas-surface interaction modeling for satellite
 %   aerodynamic computations, PhD thesis, University of Colorado, sect. 7.3 and
 %   Table 11.1. Walker A., Mehta P., Koller J. (2014) J. Spacecraft Rockets 51(5)
@@ -96,9 +119,10 @@ function [acc, info] = accommodation(model, species, T_K, options)
 % See also NonGravForces.kernel.dragPanelForce, NonGravForces.kernel.gsiCoefficients, NonGravForces.env.density.
 %
 % KEYWORDS accommodation coefficient adsorption Langmuir atomic oxygen gas-surface interaction
-% Created 2026-09-07 by Claude Fable 5.1 (Anthropic); pilinski2010 and walker2014 2026-09-15 by Claude Opus 5 (Anthropic).
+% Created 2026-09-07 by Claude Fable 5.1 (Anthropic); pilinski2010 and walker2014 2026-09-15,
+% pilinski2011 and the 2010 constant from the paper itself 2026-09-16, by Claude Opus 5 (Anthropic).
 arguments
-    model (1,1) string {mustBeMember(model, ["fixed","pilinski2010","walker2014"])}
+    model (1,1) string {mustBeMember(model, ["fixed","pilinski2010","pilinski2011","walker2014"])}
     species double
     T_K double
     options.Alpha double = []
@@ -128,10 +152,17 @@ switch model
             NonGravForces.fail(unit, "inputAlpha", "Alpha must lie in [0, 1] -> got %g", a(find(a < 0 | a > 1, 1)));
         end
         acc.alpha = a + zeros(1, K);
-    case "pilinski2010"
+    case {"pilinski2010", "pilinski2011"}
+        % ONE MODEL, TWO PUBLISHED FITS, and each option is named after the source that fits it.
+        % Until 2026-09-16 the single option pilinski2010 carried the 2011 thesis's constant, so its
+        % name and its value cited different papers; the owner ruled both should ship (LP-D WP-D1).
         localNoAlpha(unit, model, options.Alpha);
         localRange(unit, species, T_K);
-        KL = 4.98e-17;                                     % m^3 K^-1, Pilinski (2011) sect. 7.3
+        if model == "pilinski2010"
+            KL = 7.50e-17;                                 % m^3 K^-1, Pilinski, Argrow & Palo (2010) eq. 8
+        else
+            KL = 4.98e-17;                                 % m^3 K^-1, Pilinski (2011) sect. 7.3
+        end
         x = KL * species(2, :) .* T_K;                      % n_O T in m^-3 K
         acc.alpha = x ./ (1 + x);
         info.insideFit = acc.alpha >= 0.85 & acc.alpha <= 1;

@@ -582,8 +582,12 @@ static void ngfAccommodation(const ngfRhsContext *c, const double *sp, double T,
     *alphaS = 0.0;
     if (S->accommodation == NGF_ACC_FIXED) {
         *alphaA = S->alphaFixed;
-    } else if (S->accommodation == NGF_ACC_PILINSKI2010) {
-        double x = 4.98e-17 * sp[1] * T;
+    } else if (S->accommodation == NGF_ACC_PILINSKI2010 ||
+               S->accommodation == NGF_ACC_PILINSKI2011) {
+        /* One model, two published fits: 7.50e-17 is Pilinski, Argrow & Palo (2010) eq. 8,
+           4.98e-17 is Pilinski (2011) sect. 7.3. Same association order as the MATLAB. */
+        double kL = (S->accommodation == NGF_ACC_PILINSKI2010) ? 7.50e-17 : 4.98e-17;
+        double x = kL * sp[1] * T;
         *alphaA = x / (1.0 + x);
     } else {
         static const int six[6] = {5, 0, 6, 2, 1, 3};          /* H He N N2 O O2, 0-based */

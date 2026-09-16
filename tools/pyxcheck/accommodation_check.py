@@ -69,7 +69,8 @@ OUTPUT COLUMNS
   caseId, He, O, N2, O2, Ar, H, N, Oanom      number densities [m^-3]
   T_K                                          temperature [K]
   surfaceMass_amu                              m_surf [amu]
-  alpha_pilinski2010                           eq. (7.1) of the thesis
+  alpha_pilinski2010                           Langmuir with K = 7.50e-17 (2010 paper eq. 8)
+  alpha_pilinski2011                           Langmuir with K = 4.98e-17 (2011 thesis eq. 7.1)
   coverage_walker2014                          f_sc, eq. (11) of Paul et al.
   alphaSubstrate_walker2014                    alpha_surf, eq. (13) of Paul et al.
   PO_Pa                                        n_O k_B T [Pa]
@@ -104,14 +105,17 @@ MOLAR_MASS_G = {
 PAUL_SPECIES = ("H", "He", "N", "N2", "O", "O2")
 
 # Model constants
-K_L_PILINSKI = 4.98e-17           # m^3 K^-1        (thesis p. 130)
+# ONE MODEL, TWO PUBLISHED FITS. The 2010 paper states K in its Results section; the thesis
+# refits it. Both are transcribed from their own source, which is what keeps this an oracle.
+K_L_PILINSKI_2010 = 7.50e-17      # m^3 K^-1        (2010 paper, Results)
+K_L_PILINSKI_2011 = 4.98e-17      # m^3 K^-1        (thesis p. 130)
 K_DRIA = 1.44e6                   # Pa^-1 (assumed) (Paul et al. p. 8, eq. 11)
 
 SURFACE_MASSES_AMU = (263.3223, 65.0)
 N_CASES = 12
 
 HEADER = ["caseId"] + list(SPECIES) + [
-    "T_K", "surfaceMass_amu", "alpha_pilinski2010", "coverage_walker2014",
+    "T_K", "surfaceMass_amu", "alpha_pilinski2010", "alpha_pilinski2011", "coverage_walker2014",
     "alphaSubstrate_walker2014", "PO_Pa", "meanMass_amu"]
 
 
@@ -121,8 +125,13 @@ def langmuir(kp):
 
 
 def alpha_pilinski2010(n_o, t_k):
+    """Pilinski, Argrow & Palo (2010) eq. 8 with P = n_O T and K = 7.50e-17 m^3/K (Results)."""
+    return langmuir(K_L_PILINSKI_2010 * n_o * t_k)
+
+
+def alpha_pilinski2011(n_o, t_k):
     """Thesis eq. (7.1) with P = n_O * T_a (p. 129) and K_L = 4.98e-17 m^3/K (p. 130)."""
-    return langmuir(K_L_PILINSKI * n_o * t_k)
+    return langmuir(K_L_PILINSKI_2011 * n_o * t_k)
 
 
 def partial_pressure_o(n_o, t_k):
@@ -211,6 +220,7 @@ def main(argv=None):
             fmt(t_k),
             fmt(m_s),
             fmt(alpha_pilinski2010(n_o, t_k)),
+            fmt(alpha_pilinski2011(n_o, t_k)),
             fmt(coverage_walker2014(n_o, t_k)),
             fmt(alpha_substrate_mehta2022(dens, m_s)),
             fmt(partial_pressure_o(n_o, t_k)),

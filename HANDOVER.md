@@ -587,9 +587,44 @@ approximation justified" and the toolbox has never carried a number for it.
 *Semiempirical Satellite Accommodation Model for Spacecraft Aerodynamic Analysis*, JSR 50(3), 2013,
 DOI 10.2514/1.A32348. Closed-form CLL (O-17) needs Walker, Mehta & Koller, *Drag Coefficient Model
 Using the Cercignani-Lampis-Lord Gas-Surface Interaction Model*, JSR 51(5), 2014, DOI 10.2514/1.A32677
-- the companion paper in the same issue, which is also the likely home of the adsorbate coverage law
-that `walker2014` currently attributes to "JSR 51(5)": A32668 is 51(5) and does **not** contain that
-law, mentioning the Langmuir isotherm once and crediting it to Pilinski.
+- the companion paper in the same issue, which is also the home of the adsorbate coverage law
+`walker2014` uses. **Correction to this session's own first reading:** the REFERENCES block of
+`kernel.accommodation` already disambiguated by PAGE (51(5) *1544*, the CLL paper), so the citation
+was right all along; only the ATTRIBUTION prose's bare "JSR 51(5)" was ambiguous between two papers
+by the same three authors in one issue, and it now carries the page. What A32668 does establish is
+that it is *not* the source: it mentions the Langmuir isotherm once and credits it to Pilinski.
+
+**Delivered on Tier A, 2026-09-16** (R2026a Update 4, `matlab -batch ciGate` over an isolated
+dependency root with `NGF_GJTOOLBOX` cleared): **366 passed, 0 failed, 0 incomplete, 0 category
+shortfalls**, predicted 366 (365 + `gsiCoefficientsPublishedPlate`).
+
+- **WP-D1.** `drag.accommodation` is `fixed | pilinski2010 | pilinski2011 | walker2014`; the 2010
+  option now carries the 2010 paper's own K = 7.50e-17 and the thesis refit ships as `pilinski2011`.
+  The MATLAB and C enumerations moved in one commit, and the native parity test gained TWO
+  configurations so that both new values are evaluated in C against `Model.accel`: worst 2.504e-14
+  relative at a table node over **five** configurations. The oracle carries both fits and agrees at
+  0 relative. A metamorphic check pins what no per-column comparison could: alpha/(1-alpha) is
+  K n_O T, so the odds ratio of the two options is K2010/K2011 = 1.5060 whatever the state
+  (measured 2.9e-15). **A domain restriction is now stated that never was**: [P10] fitted K with
+  NRLMSISE-00 and says the value "should only be performed with NRLMSISE-00" - the `precise` preset
+  evaluates msis21, which is outside the fit.
+- **WP-D2.** `tools/pyxcheck/dria_plate_check.py` evaluates [W14b] eq. 12. At alpha = 1 their
+  sqrt(T_kr/T_inf)/s and this toolbox's Doornbos-form v_re/v_in are the same number, so the
+  comparison is an identity and is asserted as one: **1.6e-15 relative at speed ratios 5, 7 and 9**.
+  That is the first check of the drag chain against arithmetic written outside this project.
+- **WP-D3, and it is a finding, not a formality.** Below full accommodation the two formulations
+  separate, because ours carries (1-alpha)/2 of the incident energy into the re-emitted speed and
+  the kinetic-temperature form carries (1-alpha) 2/3. **Measured on the plate: 1.7 % at alpha 0.95,
+  2.4 % at 0.90, 5.6 % at alpha 0, this toolbox reading LOWER.** [W14b] separately measures the
+  kinetic-temperature form against a physically correct CLL distribution at ~1.4 % for GRACE at
+  alpha 0.9. Both are of order 1-2 % of C_D at a real LEO surface, inside the 5-10 % that alpha
+  itself is uncertain by, so the closed form is kept - but the toolbox no longer implies the
+  deviation is zero. Recorded in `gsiCoefficients`'s ACCURACY and theory sect. 2.3.
+- Two test repairs, both the test being wrong rather than a bound being tight: the precision test
+  hard-coded 4.98e-17 to build the state where alpha = 1/2 (it now pins each fit at its OWN unit
+  argument, so it measures the formula and not the constant), and the new parity configurations had
+  to clear `drag.alpha` because `Model` REFUSES a stated alpha beside a computed accommodation
+  rather than ignoring it. The second is the guard doing its job.
 
 ---
 

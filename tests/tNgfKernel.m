@@ -269,23 +269,66 @@ classdef tNgfKernel < NgfTestCase
             tc.verifyGreaterThan(abs(wrong - o.Ctau(i)) / o.Ctau(i), 0.05, 'the D1 regression must be distinguishable from the correct value');
         end
         function accommodationReference(tc)
-            % Oracle: tools/pyxcheck/accommodation_check.py, a standard-library evaluation of Pilinski (2011) eq. 7.1 with
-            % K_L = 4.98e-17 m^3/K (p. 129-130) and of Paul et al. (2022) eqs. 10-13, written from the source texts by an agent
-            % that did not open this toolbox (T9), over 12 thermosphere cases from 1e12 to 1e17 m^-3 of atomic oxygen and both
-            % substrate masses in circulation. Ar and anomalous O are in the inputs and must not enter the mean mass.
+            % Oracle: tools/pyxcheck/accommodation_check.py, a standard-library evaluation of BOTH published Pilinski fits
+            % (2010 paper eq. 8, K = 7.50e-17 m^3/K; 2011 thesis eq. 7.1, K = 4.98e-17) and of Paul et al. (2022) eqs. 10-13,
+            % written from the source texts by an agent that did not open this toolbox (T9), over 12 thermosphere cases from
+            % 1e12 to 1e17 m^-3 of atomic oxygen and both substrate masses in circulation. Ar and anomalous O are in the
+            % inputs and must not enter the mean mass.
             % Bound: the same closed forms in two languages, rounding only; the oracle's mass conversion through N_A u
             % (0.99999999965e-3 kg/mol) is the same as this toolbox's, so 1e-13 relative covers every column.
             T = readtable(fullfile(tc.root, 'tools', 'pyxcheck', 'accommodation_oracle.csv'));
             sp = [T.He T.O T.N2 T.O2 T.Ar T.H T.N T.Oanom]';
             worst = 0;
             for i = 1:height(T)
-                ap = NonGravForces.kernel.accommodation("pilinski2010", sp(:, i), T.T_K(i));
+                a10 = NonGravForces.kernel.accommodation("pilinski2010", sp(:, i), T.T_K(i));
+                a11 = NonGravForces.kernel.accommodation("pilinski2011", sp(:, i), T.T_K(i));
                 [aw, iw] = NonGravForces.kernel.accommodation("walker2014", sp(:, i), T.T_K(i), 'SurfaceMass_amu', T.surfaceMass_amu(i));
-                got = [ap.alpha, aw.coverage, aw.alphaSubstrate, iw.pressureO_Pa, iw.meanMass_amu];
-                ref = [T.alpha_pilinski2010(i), T.coverage_walker2014(i), T.alphaSubstrate_walker2014(i), T.PO_Pa(i), T.meanMass_amu(i)];
+                got = [a10.alpha, a11.alpha, aw.coverage, aw.alphaSubstrate, iw.pressureO_Pa, iw.meanMass_amu];
+                ref = [T.alpha_pilinski2010(i), T.alpha_pilinski2011(i), T.coverage_walker2014(i), T.alphaSubstrate_walker2014(i), T.PO_Pa(i), T.meanMass_amu(i)];
                 worst = max(worst, max(abs(got - ref) ./ abs(ref)));
             end
-            tc.verifyBoundAndRecord("accommodation vs the independent formula oracle (12 cases, 5 columns)", worst, 1e-13, "-", "closed forms evaluated twice; rounding only");
+            tc.verifyBoundAndRecord("accommodation vs the independent formula oracle (12 cases, 6 columns)", worst, 1e-13, "-", "closed forms evaluated twice; rounding only");
+            % THE TWO FITS MUST NOT BE THE SAME NUMBER. A copy-paste that gave both options one constant would
+            % pass every bound above, because each column would still match its own oracle entry only if the
+            % oracle were wrong too. This pins the separation at the ratio the two K values imply.
+            mid = NonGravForces.kernel.accommodation("pilinski2010", sp(:, 6), T.T_K(6));
+            mid11 = NonGravForces.kernel.accommodation("pilinski2011", sp(:, 6), T.T_K(6));
+            ratio = (mid.alpha / (1 - mid.alpha)) / (mid11.alpha / (1 - mid11.alpha));   % = K2010 / K2011 exactly
+            tc.verifyBoundAndRecord("pilinski2010 / pilinski2011 odds ratio equals the ratio of the two K", ...
+                abs(ratio - 7.50e-17 / 4.98e-17) / (7.50e-17 / 4.98e-17), 1e-13, "-", ...
+                "alpha/(1-alpha) = K n_O T, so the odds ratio is K2010/K2011 = 1.5060 independently of the state");
+        end
+        function gsiCoefficientsPublishedPlate(tc)
+            % THE FIRST ORACLE FOR THIS CHAIN THAT THIS PROJECT DID NOT WRITE. Every other one --
+            % the ngfkernel mirror, Sentman's incident closed forms -- is this project's own reading,
+            % so a shared misreading would survive all of them. Walker, Mehta & Koller (2014, JSR
+            % 51(5) 1522, eq. 12) print a closed-form drag coefficient for a flat plate under diffuse
+            % reflection with incomplete accommodation; tools/pyxcheck/dria_plate_check.py evaluates it.
+            %
+            % AT alpha = 1 IT IS AN IDENTITY. Their sqrt(T_kr/T_inf)/s and this toolbox's
+            % Doornbos-form v_re/v_in are sqrt((2/3)(1-a) + 2 a k T_s/(m U^2)) and
+            % sqrt((1/2)(1-a) + 2 a k T_w/(m U^2)): the same number when a = 1, and a different
+            % treatment of the unaccommodated fraction below it. So the a = 1 rows are asserted to
+            % rounding and the rest are MEASURED and recorded -- a modelling difference is not an error
+            % and must not be bounded as if it were one.
+            T = readtable(fullfile(tc.root, 'tools', 'pyxcheck', 'dria_plate_oracle.csv'));
+            worstOne = 0; worstBelow = 0;
+            for i = 1:height(T)
+                % theta = 0 is normal incidence, where the tangential coefficient vanishes and the
+                % plate's drag coefficient IS the normal coefficient.
+                cp = NonGravForces.kernel.gsiCoefficients("sentman", T.s(i), 0, T.alpha(i), T.Tw_K(i), T.Tinf_K(i));
+                rel = abs(cp - T.cd_walker(i)) / T.cd_walker(i);
+                if T.alpha(i) == 1
+                    worstOne = max(worstOne, rel);
+                else
+                    worstBelow = max(worstBelow, rel);
+                end
+            end
+            tc.verifyBoundAndRecord("plate Cp vs Walker et al. (2014) eq. 12 at full accommodation (3 speed ratios)", ...
+                worstOne, 1e-14, "-", "the two formulations are algebraically the same number at alpha = 1; rounding only");
+            tc.verifyBoundAndRecord("...and the convention difference below it (alpha 0.95 down to 0, RECORDED)", ...
+                worstBelow, 0.07, "-", ...
+                "NOT an error: 1/2 of the unaccommodated fraction in the energy-flux form against 2/3 in a 3-DOF kinetic temperature; 2.4 % at alpha 0.9, 5.6 % at alpha 0, measured 2026-09-16");
         end
         function dragPanelForceReference(tc)
             % Woeske (2019) eq. 5.20 with the projected area as reference: the constantCd plate sum reproduces it
@@ -372,9 +415,15 @@ classdef tNgfKernel < NgfTestCase
             % The published forms at the points where they are exact: K x = 1 gives 1/2, and a gas whose mean molecular mass
             % equals the substrate's gives alpha_s = 3/4 (mu = 1). Bounds are rounding of one product and one quotient.
             c = tc.c; T = [900 1100];
-            sp = zeros(8, 2); sp(2, :) = 1 ./ (4.98e-17 * T);                 % K n_O T = 1
-            ap = NonGravForces.kernel.accommodation("pilinski2010", sp, T);
-            tc.verifyBoundAndRecord("pilinski2010 at K n_O T = 1", max(abs(ap.alpha - 0.5)), 4 * eps, "-", "x/(1 + x) at x = 1 to rounding");
+            % Each fit is pinned at ITS OWN unit argument: the state where alpha = 1/2 moves with K, so a
+            % test that hard-codes one constant measures the constant and not the formula. Until 2026-09-16
+            % this line carried 4.98e-17 and would have passed silently had pilinski2010 kept the wrong K.
+            for kv = [7.50e-17, 4.98e-17]
+                name = "pilinski2010"; if kv == 4.98e-17, name = "pilinski2011"; end
+                sp = zeros(8, 2); sp(2, :) = 1 ./ (kv * T);                       % K n_O T = 1
+                ap = NonGravForces.kernel.accommodation(name, sp, T);
+                tc.verifyBoundAndRecord(name + " at K n_O T = 1", max(abs(ap.alpha - 0.5)), 4 * eps, "-", "x/(1 + x) at x = 1 to rounding");
+            end
             sp = zeros(8, 2); sp(4, :) = 1e20; sp(2, :) = 1 ./ (1.44e6 * c.kB * T);   % K_L P_O = 1 (n_O ~ 6e16); O2 at 1e20 dominates the mean mass
             mO2 = c.speciesMass(4) / c.NA / c.amu;
             aw = NonGravForces.kernel.accommodation("walker2014", sp, T, 'SurfaceMass_amu', mO2);

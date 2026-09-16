@@ -99,6 +99,34 @@ function [Cp, Ctau, info] = gsiCoefficients(model, s, theta, alpha, Tw_K, Tinf_K
 %   CHAMP-derived coefficients to 5-10 % (March et al. 2019); the tangential
 %   term of a leeward plate (gamma < 0) is exponentially small, not zero.
 %
+%   VERIFIED AGAINST A PUBLISHED CLOSED FORM. At alpha = 1 the normal coefficient
+%   at normal incidence IS the flat-plate drag coefficient of Walker, Mehta &
+%   Koller (2014, JSR 51(5) 1522, eq. 12), and reproduces it to 1.6e-15 relative
+%   at speed ratios 5, 7 and 9 (tests/tNgfKernel, oracle
+%   tools/pyxcheck/dria_plate_check.py). That is the first check of this chain
+%   against arithmetic written outside this project.
+%
+%   WHERE THIS IMPLEMENTATION SITS AMONG THE PUBLISHED ONES, and it is not the
+%   most accurate one. Three treatments of INCOMPLETE accommodation are in use:
+%     (a) the energy-flux form this toolbox implements (Sentman with
+%         Koppenwallner's re-emission ratio, as Doornbos 2011 writes it), which
+%         carries (1 - alpha)/2 of the incident energy into the re-emitted speed;
+%     (b) the kinetic-temperature form T_kr = T_ki (1 - alpha) + alpha T_w
+%         (Pilinski; Walker eqs. 10-12), which carries (1 - alpha) 2/3;
+%     (c) sampling the Cercignani-Lampis-Lord kernels, which is the physically
+%         correct reflected velocity distribution and needs a DSMC, not a closed
+%         form.
+%   MEASURED on the plate, this toolbox against (b): 0 at alpha = 1 by identity,
+%   1.7 % at alpha = 0.95, 2.4 % at 0.90, 5.6 % at alpha = 0 (2026-09-16; this
+%   toolbox reads LOWER). PUBLISHED, (b) against (c) for the GRACE geometry:
+%   ~1.4 % at alpha = 0.9 and ~1.7 % at alpha = 0, and for a flat plate ~1.3 % at
+%   normal incidence falling to ~0.5 % at 77.5 deg (Walker et al. 2014, sect. IV).
+%   The two are different quantities and do not simply add. At the alpha ~ 0.85-1
+%   of a LEO surface they are each of order 1-2 % of the drag coefficient, which
+%   is well inside the 5-10 % the accommodation coefficient itself is uncertain
+%   by -- which is why the closed form is kept, and why the number is stated here
+%   rather than left for a reader to assume it is zero.
+%
 % ERRORS
 %   NonGravForces:gsiCoefficients:unsupportedModel   cll or schamberg (O-17)
 %   NonGravForces:gsiCoefficients:inputShape         arrays not compatible for expansion
