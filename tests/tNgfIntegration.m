@@ -12,7 +12,7 @@ classdef tNgfIntegration < NgfTestCase
 %   it FAILS, never skips, when either is missing.
 % Created 2026-09-16 by Claude Opus 5 (Anthropic).
     properties
-        root, eop, sw, ep, r, v, att, macro, tai, cer
+        root, eop, sw, ep, r, v, att, macro, tai, cer, eph
     end
     methods (TestClassSetup)
         function setup(tc)
@@ -31,6 +31,11 @@ classdef tNgfIntegration < NgfTestCase
             tc.att = NonGravForces.geom.AttitudeProvider(eps2, qq);
             tc.macro = NonGravForces.geom.graceFO("C");
             tc.cer = NonGravForces.io.importCERES(string(f('data', 'ceres', ["rsut" "rlut" "rsdt"] + "_mon_CERES-EBAF-4-2-1_NASA-GISS_gn_201912-202001.nc")));
+            % The precise preset's own sun.source is rs.de440, so the kernel is a requirement of this
+            % class, not an extra. It is fetched by setupNonGravForces (FetchKernels) and never committed.
+            kernel = f('data', 'kernels', 'de440s.bsp');
+            tc.assertTrue(isfile(kernel), 'data/kernels/de440s.bsp is missing: run setupNonGravForces so the precise preset can be evaluated as shipped');
+            tc.eph = referenceSystem.readEphemeris(string(kernel));
             e1 = referenceSystem.daySecondToEpoch([tc.ep.day(1) tc.ep.sec(1)], tc.ep.scale);
             tc.tai = referenceSystem.epochTo(referenceSystem.convertTimeScale(e1, "TAI"), "datetime");
         end
@@ -39,15 +44,15 @@ classdef tNgfIntegration < NgfTestCase
         function M = modelFor(tc, o)
             %MODELFOR A Model of the sample day with everything the presets can ask for.
             M = NonGravForces.Model(tc.macro, o, 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw, ...
-                'Ceres', tc.cer, 'Exponential', struct('rho0_kg_m3', 3e-12, 'h0_m', 450e3, 'H_m', 60e3));
+                'Ceres', tc.cer, 'Ephemeris', tc.eph, 'Exponential', struct('rho0_kg_m3', 3e-12, 'h0_m', 450e3, 'H_m', 60e3));
         end
         function o = optionsFor(~, name)
-            %OPTIONSFOR The five configurations the parity is claimed over. DE440 is not on this host, so
-            % "precise" keeps every other precise value and takes the analytic Sun (env.radiationSources
-            % refuses rs.de440 without furnished kernels, which is a dependency, not a native limitation).
+            %OPTIONSFOR The five configurations the parity is claimed over, INCLUDING the precise preset
+            % exactly as shipped: since 2026-09-16 the DE440 kernel is fetched at setup, so sun.source
+            % rs.de440 is evaluated here rather than substituted away (HANDOVER O-7, O-15).
             switch name
                 case "precise"
-                    o = NonGravForces.Options("precise").set("sun.source", "rs.analytic");
+                    o = NonGravForces.Options("precise");
                 case "hwm14"
                     % pilinski2010 rides along here because the C accommodation enum gained a value in
                     % LP-D WP-D1 and an enum that MATLAB and C number differently is invisible in every

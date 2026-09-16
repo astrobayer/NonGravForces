@@ -516,6 +516,11 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   through it. Two green gates hid that too, because this host's odeSuite clone had been built by
   hand. `ciGate` now runs the dependency's own `buildtool mex` (never a recipe copied here), and the
   rehearsal deletes `gj_stepper` first. **Ask what the runner does NOT have that you do.**
+- **referenceSystem's analytic Sun is good enough for radiation pressure, measured**: against JPL
+  DE440 it is 0.0031 arcsec in direction and 0.3 km in range, i.e. **4.0e-9** of the solar radiation
+  pressure - three orders below the 1e-3 uncertainty of the solar constant. `rs.de440` is the
+  `precise` default and is now fetched and tested (O-7), but nobody should expect it to move a
+  number. **It had never been evaluated by any test until 2026-09-16**, only its refusal had.
 - **Never assert a host-dependent absolute** (rule T5). A 500 us per-epoch bound written from a
   guess reddened the gate on a runner that measured 901.8 us, in the same session that quoted the
   rule. Assert the ratio; record the absolute with a ceiling an order of magnitude above it.

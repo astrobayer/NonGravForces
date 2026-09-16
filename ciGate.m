@@ -44,6 +44,16 @@ for k = 1:numel(deps)
     run(f);
 end
 cd(here);
+% MICE, for the same reason and with the same rule as gjToolbox: optional for the toolbox,
+% required by the gate. tNgfEnv and tNgfIntegration evaluate sun.source rs.de440, which is the
+% precise preset's OWN DEFAULT, and it cannot be evaluated without NAIF's toolkit. It is reached
+% here only because it sits on this machine's MATLAB path, so the gate names it out loud instead
+% of depending on it silently -- the same trap that cost two green gates on 2026-09-16.
+if exist('cspice_tkvrsn', 'file') == 0
+    error("NonGravForces:ciGate:depMissing", ...
+        "NAIF MICE is not on the MATLAB path -> the suite evaluates sun.source rs.de440, the precise preset's default, and cannot without it; install MICE or add it to the path");
+end
+fprintf("ciGate: MICE %s\n", string(cspice_tkvrsn('TOOLKIT')));
 % gjToolbox's NATIVE STEPPING KERNEL is an optional build of that toolbox, and this gate asserts
 % through it: tNgfIntegration propagates one arc on Binding "native" and requires it to agree with
 % the vectorized binding. A fresh CI checkout carries no gj_stepper (the binary is not committed,

@@ -72,11 +72,31 @@ classdef tNgfCore < NgfTestCase
         end
         function dependencyReportContract(tc)
             d = NonGravForces.dependencyReport('Verbose', false);
-            tc.verifyEqual(numel(d), 3);
+            tc.verifyEqual(numel(d), 4);
             % lsqvce left this table on 2026-09-09 with the owner's ruling that it is overkill for
             % WP-19; app.calibrate carries its own solver now, so nothing in the toolbox calls it.
-            tc.verifyEqual([d.name], ["referenceSystem","gracefoReading","gjToolbox"]);
+            % mice joined on 2026-09-16: the suite evaluates sun.source rs.de440, the precise preset's
+            % own default, which cannot run without NAIF's toolkit. It is listed because it was
+            % reachable only through this machine's saved pathdef, and an undeclared dependency that
+            % happens to be present is the failure mode this project met twice that day.
+            tc.verifyEqual([d.name], ["referenceSystem","gracefoReading","gjToolbox","mice"]);
             tc.verifyTrue(all(islogical([d.present])));
+            % Only the two inviolable ones are required; the other two are the gate's business, not
+            % the toolbox's, and a user who computes forces without integrating needs neither.
+            tc.verifyEqual([d.required], [true true false false]);
+            % A BROKEN PROBE REPORTS ABSENCE, and absence is what this unit exists to report, so the
+            % two are indistinguishable from the table alone. On 2026-09-16 the mice probe passed a
+            % string to a MEX that takes a char, threw, and read as "mice absent" on a machine that
+            % had just printed its toolkit version. Each row is therefore cross-checked against a
+            % DIFFERENT observation of the same fact.
+            reachable = [~isempty(which('referenceSystem.toolboxVersion')), ...
+                         ~isempty(which('gracefoReading.version')), ...
+                         ~isempty(which('gjToolbox.versionInfo')), ...
+                         exist('cspice_tkvrsn', 'file') ~= 0];
+            tc.verifyEqual([d.present], reachable, ...
+                'a dependency whose entry point resolves must be reported present: a probe that throws is not evidence of absence');
+            tc.verifyTrue(all(strlength([d(logical([d.present])).version]) > 0), ...
+                'a present dependency must report a version, or the probe answered without measuring anything');
         end
     end
     methods (Test, TestTags = {'reference'})
