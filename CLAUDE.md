@@ -350,7 +350,7 @@ preset. What a later session most needs to know:
   under `tests/fixtures/groops/` and committed; neither CI nor the host needs a
   GROOPS installation.
 
-**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-39 with an owner
+**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-40 with an owner
 and a re-entry condition each. This file deliberately does NOT list them: the copy that
 used to live here had drifted to O-15 of 21 and showed two closed items as open, and no
 check compared the two (R1). Read Part H.
@@ -516,6 +516,22 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   through it. Two green gates hid that too, because this host's odeSuite clone had been built by
   hand. `ciGate` now runs the dependency's own `buildtool mex` (never a recipe copied here), and the
   rehearsal deletes `gj_stepper` first. **Ask what the runner does NOT have that you do.**
+- **A pin taken from the tool whose work it checks is not a check.** The DE440 digest was first
+  copied out of `referenceSystem.downloadKernels`' own manifest; it matches no file on disk (O-40),
+  so setup shipped a pin that failed on the very first CI run. Measure the artefact yourself.
+- **Existence is not content, and a check that runs only on download protects only the first run.**
+  `localFetchKernel` verified the SHA-256 when it fetched and returned "present" otherwise, so on
+  every machine that already had the file the pin did nothing - proved by injecting a deliberately
+  wrong pin and watching the gate stay green. It hashes on every call now.
+- **A failed check must destroy what it rejected, and the gate must read the report.** On
+  2026-09-16 CI printed `DATA de440 failed: SHA-256 ...` three lines above `GATE TRUE`: the
+  unverified kernel stayed exactly where every consumer looks, the tests read it and passed, and
+  nothing in `ciGate` had ever looked at `info.data.items`. Both are fixed and fault-injected.
+- **referenceSystem's analytic Sun is good enough for radiation pressure, measured**: against JPL
+  DE440 it is 0.0031 arcsec in direction and 0.3 km in range, i.e. **4.0e-9** of the solar radiation
+  pressure - three orders below the 1e-3 uncertainty of the solar constant. `rs.de440` is the
+  `precise` default and is now fetched and tested (O-7), but nobody should expect it to move a
+  number. **It had never been evaluated by any test until 2026-09-16**, only its refusal had.
 - **Never assert a host-dependent absolute** (rule T5). A 500 us per-epoch bound written from a
   guess reddened the gate on a runner that measured 901.8 us, in the same session that quoted the
   rule. Assert the ratio; record the absolute with a ceiling an order of magnitude above it.

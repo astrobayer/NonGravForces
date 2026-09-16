@@ -19,7 +19,9 @@ function ciGate(options)
 %                               the speed tests are ratios, not host times).
 %
 % ERRORS
-%   NonGravForces:ciGate:depMissing   a required dependency setup was not found
+%   NonGravForces:ciGate:depMissing   a required dependency setup was not found, MICE is absent,
+%                                     gjToolbox's stepper did not build, or a MEX target did not
+%   NonGravForces:ciGate:dataMissing  a data fetch failed its SHA-256 check
 %   NonGravForces:ciGate:red          the gate is not GREEN; message lists why
 %   NonGravForces:buildMex:*          no compiler / missing sources (O-14)
 %
@@ -44,6 +46,16 @@ for k = 1:numel(deps)
     run(f);
 end
 cd(here);
+% MICE, for the same reason and with the same rule as gjToolbox: optional for the toolbox,
+% required by the gate. tNgfEnv and tNgfIntegration evaluate sun.source rs.de440, which is the
+% precise preset's OWN DEFAULT, and it cannot be evaluated without NAIF's toolkit. It is reached
+% here only because it sits on this machine's MATLAB path, so the gate names it out loud instead
+% of depending on it silently -- the same trap that cost two green gates on 2026-09-16.
+if exist('cspice_tkvrsn', 'file') == 0
+    error("NonGravForces:ciGate:depMissing", ...
+        "NAIF MICE is not on the MATLAB path -> the suite evaluates sun.source rs.de440, the precise preset's default, and cannot without it; install MICE or add it to the path");
+end
+fprintf("ciGate: MICE %s\n", string(cspice_tkvrsn('TOOLKIT')));
 % gjToolbox's NATIVE STEPPING KERNEL is an optional build of that toolbox, and this gate asserts
 % through it: tNgfIntegration propagates one arc on Binding "native" and requires it to agree with
 % the vectorized binding. A fresh CI checkout carries no gj_stepper (the binary is not committed,
@@ -80,6 +92,15 @@ end
 notBuilt = [mexReport(~[mexReport.upToDate]).target];
 if ~isempty(notBuilt)
     error("NonGravForces:ciGate:depMissing", "the MEX target(s) %s did not build -> read the table above", strjoin(notBuilt, ", "));
+end
+% A FETCH THAT FAILED ITS CONTENT CHECK IS A RED GATE. setupNonGravForces reports per item and
+% nothing here read that report until 2026-09-16, when a kernel whose SHA-256 did not match was
+% printed as "failed" three lines above "GATE TRUE". A "missing (... never)" item is not a failure:
+% the gate deliberately does not fetch observations.
+failed = info.data.items(startsWith([info.data.items.action], "failed"));
+if ~isempty(failed)
+    error("NonGravForces:ciGate:dataMissing", "%d data fetch(es) failed their content check -> %s", ...
+        numel(failed), strjoin(compose("%s: %s", [failed.name]', [failed.action]'), "; "));
 end
 req = info.dependencies([info.dependencies.required]);
 if ~all([req.present])

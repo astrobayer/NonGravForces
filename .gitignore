@@ -53,3 +53,7 @@ doc/src/*.aux
 doc/src/*.log
 doc/src/*.out
 doc/src/*.toc
+
+# The DE440 ephemeris is FETCHED by setupNonGravForces, never committed: 33 MB that NAIF
+# publishes and keeps current (the same case as the MSIS and HWM14 sources, O-34).
+data/kernels/

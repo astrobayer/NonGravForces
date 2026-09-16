@@ -260,6 +260,39 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyErrorId(@() E("knocke", ep, [12 24], rC, 'Ceres', tc.cer), 'NonGravForces:earthRadiance:inputCeres');
             tc.verifyErrorId(@() E("ceres", referenceSystem.mjdToEpoch([58870; 58849.5], "UTC"), [12 24], rC, 'Ceres', tc.cer, 'RotationItrsToGcrs', tc.eyes(2)), 'NonGravForces:earthRadiance:dataRange');
         end
+        function radiationSourcesDe440Reference(tc)
+            % THE PRECISE PRESET'S OWN DEFAULT, evaluated at last. Until 2026-09-16 the only test
+            % naming rs.de440 asserted that it REFUSES without kernels, so a shipped preset's default
+            % sun.source had never produced a number (HANDOVER O-7, O-15).
+            %
+            % Oracle: JPL's DE440 through referenceSystem's MICE provider -- an ephemeris this project
+            % did not compute. The claim is NOT that the two agree to rounding; they are different
+            % ephemerides. It is that referenceSystem's analytic Sun is accurate enough for radiation
+            % pressure, which is what justifies rs.analytic being a preset value at all.
+            kernel = fullfile(tc.root, 'data', 'kernels', 'de440s.bsp');
+            tc.assertTrue(isfile(kernel), ...
+                'data/kernels/de440s.bsp is missing: run setupNonGravForces (FetchKernels ifMissing). This test does NOT skip -- a preset default that nothing evaluates is exactly how rs.de440 stayed unrun for two levels.');
+            eph = referenceSystem.readEphemeris(string(kernel));
+            [ep, r, q] = tc.sampleState();
+            ep5 = referenceSystem.daySecondToEpoch([ep.day(1:5) ep.sec(1:5)], "GPS"); r5 = r(:, 1:5); q5 = q(:, 1:5);
+            [srcD, infoD] = NonGravForces.env.radiationSources(ep5, r5, q5, ...
+                NonGravForces.Options("standard", "sun.source", "rs.de440"), 'Ephemeris', eph);
+            [srcA, infoA] = NonGravForces.env.radiationSources(ep5, r5, q5, NonGravForces.Options("standard"));
+            tc.verifyEqual(infoD.sunSource, "rs.de440", 'the source list must report which ephemeris produced it');
+            tc.verifyEqual(infoA.sunSource, "rs.analytic");
+            % Direction, in GCRS so the comparison does not run through the attitude.
+            d = infoD.sunUnit_gcrs; a = infoA.sunUnit_gcrs;
+            arcsec = max(atan2(vecnorm(cross(d, a)), dot(d, a))) * 180 / pi * 3600;
+            tc.verifyBoundAndRecord("DE440 vs the analytic Sun: direction", arcsec, 0.05, "arcsec", ...
+                "measured 0.0031 arcsec 2026-09-16; 1 arcsec of Sun direction moves a panel's cosine by 5e-6");
+            tc.verifyBoundAndRecord("DE440 vs the analytic Sun: distance", ...
+                max(abs(infoD.sunDistance_m ./ infoA.sunDistance_m - 1)), 1e-7, "-", ...
+                "measured 2.0e-9 (0.3 km) 2026-09-16");
+            % What the toolbox actually emits: the solar radiation pressure of source 1.
+            tc.verifyBoundAndRecord("DE440 vs the analytic Sun: solar radiation pressure", ...
+                max(abs(srcD.P(1, :) ./ srcA.P(1, :) - 1)), 1e-7, "-", ...
+                "twice the relative distance difference (1/r^2); measured 4.0e-9, far below the 1e-3 uncertainty of the solar constant itself");
+        end
         function radiationSourcesContract(tc)
             [ep, r, q] = tc.sampleState();
             ep5 = referenceSystem.daySecondToEpoch([ep.day(1:5) ep.sec(1:5)], "GPS"); r5 = r(:, 1:5); q5 = q(:, 1:5);

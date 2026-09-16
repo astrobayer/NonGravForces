@@ -52,7 +52,17 @@ spec = { ...
 % exactly one unit, app.DynamicsSource, which subclasses gjToolbox.DynamicsSource and therefore
 % cannot even load without it, and by the buildMex target "rhs", which compiles against its
 % csrc/gj_native.h. ciGate requires it anyway, because a gate that skips those is not a gate.
-  "gjToolbox",       false, "0.1", "gjToolboxSetup",       "orbit integration; app.DynamicsSource and the rhs MEX", @() string(gjToolbox.versionInfo("string"))};
+  "gjToolbox",       false, "0.1", "gjToolboxSetup",       "orbit integration; app.DynamicsSource and the rhs MEX", @() string(gjToolbox.versionInfo("string")); ...
+% MICE is NAIF's compiled MATLAB toolkit and is NOT a repository anyone can check out: it ships as
+% platform-specific MEX and sites manage it centrally, which is why referenceSystem DETECTS it and
+% never adds it to the path. It is listed here because since 2026-09-16 the suite evaluates
+% sun.source rs.de440, which cannot work without it, and because the ONE thing worse than a missing
+% dependency is one that is present only because a particular machine happens to carry it on a saved
+% pathdef. There is no setup function to name; "on the MATLAB path" is the instruction.
+% cspice_tkvrsn is a MEX and takes a CHAR: called with a string it throws, which this probe would
+% have reported as "mice absent" on a machine that has it. Measured 2026-09-16, when the table said
+% false while ciGate had just printed CSPICE_N0067 two lines above.
+  "mice",            false, "N0067", "(on the MATLAB path)", "SPICE kernels for sun.source rs.de440", @() string(cspice_tkvrsn('TOOLKIT'))};
 n = size(spec,1);
 deps = repmat(struct('name',"",'required',false,'present',false,'version',"",'minimum',"",'setup',"",'role',""), 1, n);
 for k = 1:n

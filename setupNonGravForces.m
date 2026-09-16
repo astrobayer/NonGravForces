@@ -23,7 +23,7 @@ function info = setupNonGravForces(options)
 %                           two DWM/QD data files NRL's server refuses (HTTP 403, 2026-09-15)
 %                           from the pyHWM14 repository at a pinned commit, where the model's
 %                           own check output, reproduced exactly, is what vouches for them
-%     data ('FetchData')
+%     data ('FetchData'), the DE440 ephemeris ('FetchKernels')
 %       finals2000A.all     IERS Earth orientation, into data/eop
 %       SW-All.csv          CelesTrak space weather, into data/spaceweather
 %       igrf14coeffs.txt    IAGA V-MOD IGRF-14 coefficients, into data/igrf
@@ -64,6 +64,12 @@ function info = setupNonGravForces(options)
 %   FetchMsis  1x1   string   -      "ifMissing" (default) fetches the model sources only when absent;
 %                                    "never" leaves the network alone; "force" fetches again.
 %   FetchData  1x1   string   -      The same three settings for the data files.
+%   FetchKernels 1x1 string   -      The same three settings for the DE440 ephemeris. It is SEPARATE
+%                                    from FetchData on purpose: ciGate passes FetchData "never" so
+%                                    that the gate does not test the network for OBSERVATIONS, which
+%                                    are committed as excerpts. A planetary ephemeris is model data,
+%                                    like the MSIS and HWM14 sources, and the gate needs it or the
+%                                    precise preset's own sun.source stays untested (HANDOVER O-7).
 %
 % OUTPUT ARGUMENTS
 %   Name      Size  Type     Units  Description
@@ -91,6 +97,7 @@ arguments
     options.Verbose (1,1) logical = true
     options.FetchMsis (1,1) string {mustBeMember(options.FetchMsis, ["ifMissing","never","force"])} = "ifMissing"
     options.FetchData (1,1) string {mustBeMember(options.FetchData, ["ifMissing","never","force"])} = "ifMissing"
+    options.FetchKernels (1,1) string {mustBeMember(options.FetchKernels, ["ifMissing","never","force"])} = "ifMissing"
 end
 % THE PINS AND URLS LIVE HERE AND NOWHERE ELSE (rule R1). Moving a pin is an act with a run behind it.
 % NRLMSISE-00: bc9a2fe is "gtd7: fix output at 32.5 km" (Argon densities and a memory corruption fixed
@@ -128,6 +135,17 @@ CERES_FILES = ["rsut" "rlut" "rsdt"] + "_mon_CERES-EBAF-4-2-1_NASA-GISS_gn_20000
 CERES_SHA256 = ["6869b2207d86ec6581a6518f63b65f41fc209dda4ea5e64afbf6f3b6d47ea592", ...
                 "1e611d51416d512a945ee4a61983f5c88a991f08a6aee6d6d7662ea76bd9ab5a", ...
                 "3e4cd4ad8f1c283369cd2dd385ac3f655c4e10c9ed2a6b954b829097a61125e8"];
+% DE440: the planetary ephemeris the precise preset names. THE URL IS NOT HERE -- 
+% referenceSystem.downloadKernels calls itself "the SINGLE AUTHORITY for where these files come
+% from" and it is, so this toolbox asks that catalogue to fetch and pins only WHAT ARRIVES.
+% de440s.bsp is the short issue (1849-2150), ample for anything GRACE-era, 32 726 016 bytes.
+% THE DIGEST IS MEASURED HERE, NOT QUOTED FROM THE FETCHER. The first value written into this
+% line was the one downloadKernels REPORTS in its manifest, and it describes no file this project
+% can find: MATLAB's own java digest, Python's hashlib and the CI runner all say c1c7feea... for
+% the bytes on disk. Taking a number from the tool whose work you are checking is not a check
+% (upstream finding, HANDOVER O-40).
+DE440_FILE = "de440s.bsp";
+DE440_SHA256 = "c1c7feeab882263fc493a9d5a5b2ddd71b54826cdf65d8d17a76126b260a49f2";
 root = fileparts(mfilename('fullpath'));
 addpath(root, fullfile(root,'tests'), fullfile(root,'tools'), fullfile(root,'demos'));
 % Help-browser registration: info.xml at the root is picked up by doc.
@@ -147,6 +165,7 @@ hwm14 = localFetchFiles("hwm14", fullfile(root, 'mex', 'hwm14'), HWM14_FILES, op
 info.sources = [struct('name', "nrlmsise00", 'action', info.msis.action, 'dir', info.msis.dir, 'source', MSIS_URL, 'message', info.msis.message), msis21, hwm14];
 info.data = localFetchData(root, EOP_URL, SW_URL, IGRF_URL, L1B_BASE, L1B_DAY, L1B_MEMBERS, options.FetchData);
 info.data.items = [info.data.items, localFetchCeres(root, CERES_BASE, CERES_FILES, CERES_SHA256, options.FetchData)];
+info.data.items = [info.data.items, localFetchKernel(root, DE440_FILE, DE440_SHA256, options.FetchKernels)];
 info.mex = NonGravForces.buildMex('Check', true);      % 1xT: one element per target
 if options.Verbose
     for m = 1:numel(info.mex)
@@ -247,6 +266,76 @@ else
 end
 items(end+1) = rec;
 d = struct('items', items, 'mode', mode);
+end
+
+function items = localFetchKernel(root, file, sha256, mode)
+%LOCALFETCHKERNEL The DE440 planetary ephemeris, fetched through referenceSystem's catalogue.
+%   TWO JOBS, ONE AUTHORITY EACH (R1). referenceSystem.downloadKernels owns where the kernel comes
+%   from -- it says so in its own help and this toolbox does not repeat the URL. What belongs here
+%   is the pin: the SHA-256 of the file this project has actually tested against, so a silently
+%   reissued kernel is a finding and not a mystery.
+%
+%   It is fetched and never committed: 32.7 MB of binary that NAIF publishes and keeps current is
+%   the same case as the MSIS and HWM14 sources (O-34), and the same answer.
+items = struct('name', {}, 'action', {}, 'file', {}, 'source', {});
+folder = fullfile(root, 'data', 'kernels');
+dst = fullfile(folder, file);
+rec = struct('name', "de440", 'action', "present", 'file', string(dst), ...
+    'source', "referenceSystem.downloadKernels(Set=minimal, Span=short)");
+present = isfile(dst);
+if present && mode ~= "force"
+    % CONTENT, NOT EXISTENCE. A pin checked only at download time protects the first run on a
+    % fresh machine and nothing after it, which is every run on every developer's host. Verified
+    % 2026-09-16 by fault injection: with the digest checked only on download, a deliberately wrong
+    % pin changed nothing and the gate stayed green. Hashing 33 MB costs about 0.2 s.
+    got = localSha256(dst);
+    if got ~= sha256
+        rec.action = "failed: the file on disk has SHA-256 " + got + ", not the pinned " + sha256 + ...
+            " -> it was NOT used; delete it and refetch, or verify it by hand before repinning";
+        rec.file = "";
+    end
+    items(end+1) = rec;
+    return
+end
+if mode == "never"
+    rec.action = "missing (FetchKernels never)"; rec.file = "";
+    items(end+1) = rec;
+    return
+end
+if strlength(string(which('referenceSystem.downloadKernels'))) == 0
+    % The installer does not require referenceSystem to be on the path yet; say so instead of
+    % failing, because every other fetch here works without it.
+    rec.action = "skipped: referenceSystem is not on the path -> run setupReferenceSystem first";
+    rec.file = "";
+    items(end+1) = rec;
+    return
+end
+if ~isfolder(folder), mkdir(folder); end
+fprintf('setupNonGravForces: fetching %s through referenceSystem.downloadKernels (about 33 MB)\n', file);
+try
+    referenceSystem.downloadKernels('Set', "minimal", 'Span', "short", 'Mode', "download", ...
+        'CacheDir', string(folder), 'Overwrite', mode == "force");
+    got = localSha256(dst);
+    if got == sha256
+        rec.action = "fetched";
+    else
+        % DELETE IT. downloadKernels writes straight to the destination, so a file that fails its
+        % check is sitting exactly where every consumer looks; on 2026-09-16 the tests read one and
+        % passed, and the run reported "failed" and GREEN in the same log. An unverified file must
+        % not survive the verification that rejected it.
+        localQuietDelete(dst);
+        rec.action = "failed: SHA-256 " + got + " is not the pinned " + sha256 + ...
+            " -> the file was DELETED; NAIF may have reissued the kernel, so verify it by hand before repinning";
+        rec.file = "";
+    end
+catch err
+    rec.action = "failed: " + string(err.message);
+    rec.file = "";
+end
+if rec.action ~= "fetched" && rec.action ~= "present"
+    fprintf('setupNonGravForces: %s\n', rec.action);
+end
+items(end+1) = rec;
 end
 
 function items = localFetchCeres(root, base, files, sha256, mode)
