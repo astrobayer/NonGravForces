@@ -30,7 +30,7 @@ classdef Model
 %     4. the radiation source list        env.radiationSources (Sun, Earth tiles, eclipse)
 %     5. occlusion                        geom.selfShadow per radiation source; geom.flowShadow for the gas
 %     6. panel temperatures               geom.thermalState with the per-source occlusion
-%     7. accommodation                    kernel.accommodation (fixed, pilinski2010, walker2014)
+%     7. accommodation                    kernel.accommodation (fixed, pilinski2010/2011, walker2014)
 %     8. per-panel forces                 kernel.dragPanelForce, radiationPanelForce, thermalRecoil
 %     9. reductions                       kernel.assemble, and kernel.bodyTorques for the torque
 %   Every step is the unit that owns that fact; the Model adds no physics. Until
@@ -517,8 +517,8 @@ classdef Model
             switch o.drag.accommodation
                 case "fixed"
                     acc = NonGravForces.kernel.accommodation("fixed", species, Tgas, 'Alpha', o.drag.alpha);
-                case "pilinski2010"
-                    acc = NonGravForces.kernel.accommodation("pilinski2010", species, Tgas);
+                case {"pilinski2010", "pilinski2011"}
+                    acc = NonGravForces.kernel.accommodation(o.drag.accommodation, species, Tgas);
                 case "walker2014"
                     acc = NonGravForces.kernel.accommodation("walker2014", species, Tgas, 'SurfaceMass_amu', o.drag.surfaceMass_amu);
             end
@@ -672,7 +672,7 @@ function localCheckOptions(o, macro)
 d = o.drag;
 if d.gsi ~= "constantCd"
     if d.accommodation == "fixed" && isempty(d.alpha)
-        NonGravForces.fail("Model", "inputOptions", "drag.accommodation fixed needs drag.alpha -> set('drag.alpha', 0.85) or choose pilinski2010 / walker2014");
+        NonGravForces.fail("Model", "inputOptions", "drag.accommodation fixed needs drag.alpha -> set('drag.alpha', 0.85) or choose pilinski2010 / pilinski2011 / walker2014");
     end
     if d.accommodation ~= "fixed" && ~isempty(d.alpha)
         NonGravForces.fail("Model", "inputOptions", "drag.alpha is read only by accommodation fixed, and %s computes its own -> set('drag.alpha', []) so the value is not silently ignored", d.accommodation);

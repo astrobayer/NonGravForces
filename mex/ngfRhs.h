@@ -43,7 +43,11 @@ extern "C" {
 /* option enumerations, each the position of the value in Options' member list */
 enum { NGF_DENS_EXPONENTIAL = 0, NGF_DENS_MSIS00 = 1, NGF_DENS_MSIS21 = 2 };
 enum { NGF_WIND_NONE = 0, NGF_WIND_COROTATION = 1, NGF_WIND_HWM14 = 2 };
-enum { NGF_ACC_FIXED = 0, NGF_ACC_PILINSKI2010 = 1, NGF_ACC_WALKER2014 = 2 };
+/* The order is Options.validateValue's `sets.drag_accommodation`, which app.DynamicsSource
+ * indexes into. A value inserted in MATLAB and not here evaluates a DIFFERENT model on the
+ * native path with nothing to say so, which is why the two move in one commit. */
+enum { NGF_ACC_FIXED = 0, NGF_ACC_PILINSKI2010 = 1, NGF_ACC_PILINSKI2011 = 2,
+       NGF_ACC_WALKER2014 = 3 };
 enum { NGF_ECL_CYLINDRICAL = 0, NGF_ECL_CONICAL = 1, NGF_ECL_SOLAARS = 2 };
 enum { NGF_ERP_NONE = 0, NGF_ERP_POINT = 1, NGF_ERP_KNOCKE = 2, NGF_ERP_CERES = 3 };
 enum { NGF_THERMAL_NONE = 0, NGF_THERMAL_STEADY = 1 };

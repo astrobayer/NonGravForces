@@ -42,15 +42,23 @@ classdef tNgfIntegration < NgfTestCase
                 'Ceres', tc.cer, 'Exponential', struct('rho0_kg_m3', 3e-12, 'h0_m', 450e3, 'H_m', 60e3));
         end
         function o = optionsFor(~, name)
-            %OPTIONSFOR The four configurations the parity is claimed over. DE440 is not on this host, so
+            %OPTIONSFOR The five configurations the parity is claimed over. DE440 is not on this host, so
             % "precise" keeps every other precise value and takes the analytic Sun (env.radiationSources
             % refuses rs.de440 without furnished kernels, which is a dependency, not a native limitation).
             switch name
                 case "precise"
                     o = NonGravForces.Options("precise").set("sun.source", "rs.analytic");
                 case "hwm14"
+                    % pilinski2010 rides along here because the C accommodation enum gained a value in
+                    % LP-D WP-D1 and an enum that MATLAB and C number differently is invisible in every
+                    % other test: both paths would run, and quietly evaluate different models.
                     o = NonGravForces.Options("standard").set("drag.wind", "hwm14").set("drag.gsi", "maxwell") ...
-                        .set("drag.specularFraction", 0.1).set("erp.backend", "pointSource").set("srp.lunarEclipse", true);
+                        .set("drag.specularFraction", 0.1).set("erp.backend", "pointSource").set("srp.lunarEclipse", true) ...
+                        .set("drag.alpha", []).set("drag.accommodation", "pilinski2010");
+                case "pilinski2011"
+                    % msis00 is the backend both Pilinski fits were made with, so this is the pairing
+                    % their K is actually valid for (the precise preset's msis21 is not).
+                    o = NonGravForces.Options("standard").set("drag.alpha", []).set("drag.accommodation", "pilinski2011");
                 otherwise
                     o = NonGravForces.Options(name);
             end
@@ -121,7 +129,7 @@ classdef tNgfIntegration < NgfTestCase
             % constantCd and no shadowing (fast); msis00, sentman, Knocke tiles, the cube-map shadow and the
             % steady thermal model (standard); msis21, walker2014, CERES, SOLAARS-CF and a 32-cell table
             % (precise); HWM14 winds, maxwell, the point source and the lunar shadow (hwm14).
-            worstNode = 0; worstBetween = 0; names = ["fast" "standard" "precise" "hwm14"];
+            worstNode = 0; worstBetween = 0; names = ["fast" "standard" "precise" "hwm14" "pilinski2011"];
             for name = names
                 [src, M] = tc.sourceFor(name);
                 for k = [121 151 181 241 301 361 391 421]
@@ -137,7 +145,7 @@ classdef tNgfIntegration < NgfTestCase
                 end
                 src.release();
             end
-            tc.verifyBoundAndRecord("native evaluator vs Model.accel at the table nodes (4 configurations)", worstNode, 1e-13, "-", ...
+            tc.verifyBoundAndRecord("native evaluator vs Model.accel at the table nodes (5 configurations)", worstNode, 1e-13, "-", ...
                 "accumulated rounding of two implementations of one expression set, written in the same association order where it decides the digits; measured 2.504e-14 on 2026-09-16");
             tc.verifyBoundAndRecord("native evaluator vs Model.accel between the table nodes (60 s tables)", worstBetween, 1e-9, "-", ...
                 "the cubic tables' interpolation error, not the model's: measured 8.124e-11 at 60 s spacing, and it falls as the fourth power of the step");
