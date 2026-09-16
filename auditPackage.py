@@ -119,6 +119,19 @@ else:
         note("CLAUDE.md: no '<n> public units, catalogued in `doc/functionlist.csv`' sentence")
     elif int(cn.group(1)) != len(rows):
         note(f"CLAUDE.md: claims {cn.group(1)} public units, the catalogue holds {len(rows)}")
+    # The README carried "51 of 53 catalogued units ... 2 documented stubs" beside "the four
+    # remaining stubs" -- two numbers that disagreed with each other AND with the catalogue, in the
+    # first thing a reader sees. Same rule, same instrument.
+    readme_all = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
+    rn = re.search(r"^Status: (\d+) catalogued units", readme_all, re.M)
+    if not rn:
+        note("README.md: no 'Status: <n> catalogued units' sentence")
+    elif int(rn.group(1)) != len(rows):
+        note(f"README.md: claims {rn.group(1)} catalogued units, the catalogue holds {len(rows)}")
+    stubs = [r for r in rows if r["status"] == "stub"]
+    if stubs and "no stubs left" in readme_all:
+        note(f"README.md says 'no stubs left', the catalogue holds {len(stubs)}: "
+             + ", ".join(f"{r['package']}.{r['name']}" for r in stubs))
 
 # 6. Every doc/html page is what the generator renders. Until 2026-09-09 only FunctionList.html
 #    was covered and the rest carried a hand-edited footer checked for its version string alone:
@@ -132,8 +145,39 @@ try:
         current = open(path, encoding="utf-8").read() if os.path.isfile(path) else ""
         if current != text:
             note(f"doc/html/{name} is stale -> python tools/buildDocs.py")
+    # The theory document's derivable facts (O-38). Its title page said "version 0.1.0" for three
+    # weeks and it offered three options the toolbox refuses, because no instrument compared it
+    # with anything. Now its version and every enumerated option list come from generated.tex.
+    gen = buildDocs.render_generated_tex()
+    cur = open(buildDocs.TEX_GENERATED, encoding="utf-8").read() if os.path.isfile(buildDocs.TEX_GENERATED) else ""
+    if cur != gen:
+        note("doc/src/generated.tex is stale -> python tools/buildDocs.py")
 except Exception as exc:                      # a broken generator must be a finding, not a crash
     note(f"tools/buildDocs.py could not render the documentation: {exc}")
+
+# 6b. NO BUILT PDF IN THE REPOSITORY (O-38). A PDF committed beside its own .tex has nothing
+#     keeping the two in step, and this one drifted nine minor versions before anyone looked.
+#     doc/src is the deliverable; the CI job "theory" builds the PDF and uploads it as an artefact.
+for pdf in sorted(glob.glob(os.path.join(ROOT, "doc", "**", "*.pdf"), recursive=True)):
+    rel = os.path.relpath(pdf, ROOT).replace(os.sep, "/")
+    if rel.startswith("doc/references/"):
+        continue                              # third-party papers, not built from anything here
+    note(f"{rel} is a built PDF in the repository -> doc/src is the deliverable and CI builds the "
+         f"PDF as an artefact; delete it and keep it out (O-38)")
+# The .tex must exist and must pull the generated facts in, or the macros above prove nothing.
+tex = os.path.join(ROOT, "doc", "src", "NonGravForces_Theory_and_Implementation.tex")
+if not os.path.isfile(tex):
+    note("doc/src/NonGravForces_Theory_and_Implementation.tex is missing -> it is the deliverable")
+else:
+    body = open(tex, encoding="utf-8").read()
+    # ANCHORED AND UNCOMMENTED. A plain substring test passed a "% \input{generated}" when this
+    # check was fault-injected on 2026-09-16 -- a check that its own injection does not fire is
+    # not a check, and finding that out is the only reason to inject one.
+    if not re.search(r"^[ \t]*\\input\{generated\}", body, re.M):
+        note("the theory document does not \\input{generated} on a live line -> its version and "
+             "option lists would be literals again (O-38)")
+    for literal in re.findall(r"version (\d+\.\d+\.\d+)", body):
+        note(f"the theory document writes version {literal} as a literal -> use \\ngfversion")
 
 # 7. the catalogue must survive a naive CSV read: an unquoted comma inside an h1 silently
 #    truncated env.eclipseFactor's purpose into Contents.m and FunctionList.html until 2026-09-07.

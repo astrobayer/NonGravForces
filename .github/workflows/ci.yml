@@ -51,6 +51,45 @@ jobs:
       - name: C kernel checks (shim compile + parity against the frozen mirror)
         run: bash mex/test/runCChecks.sh
 
+  # The theory document is BUILT, never committed (O-38). A PDF committed beside its own source
+  # has no instrument keeping the two in step: the one in this repository was generated on
+  # 2026-08-27, said "version 0.1.0" for three weeks and nine minor versions, and named three
+  # options the toolbox refuses. So doc/src is the deliverable, this job is what proves it still
+  # compiles, and the PDF is a run artefact anyone can download. A .tex that does not build is a
+  # red gate, which is the whole point: it is the check that never existed.
+  theory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: TeX Live (the packages the preamble names, not texlive-full)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            texlive-latex-base texlive-latex-recommended texlive-latex-extra \
+            texlive-science texlive-fonts-recommended
+      - name: Build the theory document
+        working-directory: doc/src
+        run: |
+          # Twice: the table of contents needs the first pass's .aux. -halt-on-error so a broken
+          # macro fails here and not in a reader's hands.
+          pdflatex -halt-on-error -interaction=nonstopmode NonGravForces_Theory_and_Implementation.tex
+          pdflatex -halt-on-error -interaction=nonstopmode NonGravForces_Theory_and_Implementation.tex
+      - name: Refuse an undefined reference or citation
+        working-directory: doc/src
+        run: |
+          # LaTeX reports these as warnings and still writes a PDF, so the exit code is not enough.
+          if grep -qE "undefined (references|citations)|Undefined control sequence" \
+               NonGravForces_Theory_and_Implementation.log; then
+            grep -nE "undefined (references|citations)|Undefined control sequence" \
+              NonGravForces_Theory_and_Implementation.log
+            echo "::error::the theory document has undefined references or control sequences"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: theoryDocument
+          path: doc/src/NonGravForces_Theory_and_Implementation.pdf
+
   matlab:
     needs: [audit]
     runs-on: [self-hosted, Windows]
