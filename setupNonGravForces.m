@@ -138,10 +138,14 @@ CERES_SHA256 = ["6869b2207d86ec6581a6518f63b65f41fc209dda4ea5e64afbf6f3b6d47ea59
 % DE440: the planetary ephemeris the precise preset names. THE URL IS NOT HERE -- 
 % referenceSystem.downloadKernels calls itself "the SINGLE AUTHORITY for where these files come
 % from" and it is, so this toolbox asks that catalogue to fetch and pins only WHAT ARRIVES.
-% de440s.bsp is the short issue (1849-2150), ample for anything GRACE-era; digest measured
-% 2026-09-16 on the first fetch, 32.7 MB.
+% de440s.bsp is the short issue (1849-2150), ample for anything GRACE-era, 32 726 016 bytes.
+% THE DIGEST IS MEASURED HERE, NOT QUOTED FROM THE FETCHER. The first value written into this
+% line was the one downloadKernels REPORTS in its manifest, and it describes no file this project
+% can find: MATLAB's own java digest, Python's hashlib and the CI runner all say c1c7feea... for
+% the bytes on disk. Taking a number from the tool whose work you are checking is not a check
+% (upstream finding, HANDOVER O-40).
 DE440_FILE = "de440s.bsp";
-DE440_SHA256 = "addede59d2cafeab5d90de87a12b7f0d3cc5338f9ebe5fcd499790c45b164703";
+DE440_SHA256 = "c1c7feeab882263fc493a9d5a5b2ddd71b54826cdf65d8d17a76126b260a49f2";
 root = fileparts(mfilename('fullpath'));
 addpath(root, fullfile(root,'tests'), fullfile(root,'tools'), fullfile(root,'demos'));
 % Help-browser registration: info.xml at the root is picked up by doc.
@@ -279,8 +283,22 @@ dst = fullfile(folder, file);
 rec = struct('name', "de440", 'action', "present", 'file', string(dst), ...
     'source', "referenceSystem.downloadKernels(Set=minimal, Span=short)");
 present = isfile(dst);
-if mode == "never" || (present && mode ~= "force")
-    if ~present, rec.action = "missing (FetchKernels never)"; rec.file = ""; end
+if present && mode ~= "force"
+    % CONTENT, NOT EXISTENCE. A pin checked only at download time protects the first run on a
+    % fresh machine and nothing after it, which is every run on every developer's host. Verified
+    % 2026-09-16 by fault injection: with the digest checked only on download, a deliberately wrong
+    % pin changed nothing and the gate stayed green. Hashing 33 MB costs about 0.2 s.
+    got = localSha256(dst);
+    if got ~= sha256
+        rec.action = "failed: the file on disk has SHA-256 " + got + ", not the pinned " + sha256 + ...
+            " -> it was NOT used; delete it and refetch, or verify it by hand before repinning";
+        rec.file = "";
+    end
+    items(end+1) = rec;
+    return
+end
+if mode == "never"
+    rec.action = "missing (FetchKernels never)"; rec.file = "";
     items(end+1) = rec;
     return
 end
@@ -301,7 +319,13 @@ try
     if got == sha256
         rec.action = "fetched";
     else
-        rec.action = "failed: SHA-256 " + got + " is not the pinned " + sha256 + " -> NAIF may have reissued the kernel; verify before trusting it";
+        % DELETE IT. downloadKernels writes straight to the destination, so a file that fails its
+        % check is sitting exactly where every consumer looks; on 2026-09-16 the tests read one and
+        % passed, and the run reported "failed" and GREEN in the same log. An unverified file must
+        % not survive the verification that rejected it.
+        localQuietDelete(dst);
+        rec.action = "failed: SHA-256 " + got + " is not the pinned " + sha256 + ...
+            " -> the file was DELETED; NAIF may have reissued the kernel, so verify it by hand before repinning";
         rec.file = "";
     end
 catch err
