@@ -44,3 +44,12 @@ data/eop/finals2000A.all
 data/spaceweather/SW-All.csv
 data/l1b/
 data/ceres/*_200003-202509.nc
+
+# The theory document is BUILT from doc/src, never committed (O-38): the CI job "theory"
+# compiles it and uploads the PDF as a run artefact.
+doc/*.pdf
+doc/src/*.pdf
+doc/src/*.aux
+doc/src/*.log
+doc/src/*.out
+doc/src/*.toc
