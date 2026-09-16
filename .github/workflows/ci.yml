@@ -97,13 +97,19 @@ jobs:
       # against, and tests/tNgfIntegration.m would not run at all - a green that
       # means nothing. It is optional for the toolbox and required for the gate.
       #
-      # ref IS GIVEN ON PURPOSE, and only here. Without it actions/checkout first
-      # asks the REST API for the default branch, which needs Metadata:read on
-      # THIS repository; with it, the action goes straight to git-over-HTTPS,
-      # which needs Contents:read. On 2026-09-16 the two sibling checkouts above
-      # succeeded with this same secret in the same job and odeSuite answered
-      # "Not Found" at exactly that API call, so the two permissions are worth
-      # separating rather than guessing between.
+      # ref IS GIVEN ON PURPOSE, and only here, and it was a MEASUREMENT before
+      # it was a preference. Without it actions/checkout first asks the REST API
+      # for the default branch (Metadata:read); with it the action goes straight
+      # to git-over-HTTPS (Contents:read). On 2026-09-16 the two sibling
+      # checkouts above succeeded with this same secret in the same job, seconds
+      # earlier, while odeSuite answered "Not Found" at that API call -- and,
+      # with the API call skipped, 403 on the fetch. Two mechanisms, two
+      # refusals: REFERENCE_READ_TOKEN does not reach this repository at all.
+      # The ref stays because pinning the dependency branch is right anyway.
+      # THIS STEP FAILS UNTIL THE TOKEN'S REPOSITORY SCOPE INCLUDES odeSuite
+      # (HANDOVER O-39). It is deliberately not made continue-on-error: the
+      # matlab job would then run without gjToolbox and report green about a
+      # gate that never loaded app.DynamicsSource.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: astrobayer/odeSuite

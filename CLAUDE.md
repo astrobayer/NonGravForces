@@ -349,7 +349,7 @@ preset. What a later session most needs to know:
   under `tests/fixtures/groops/` and committed; neither CI nor the host needs a
   GROOPS installation.
 
-**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-38 with an owner
+**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-39 with an owner
 and a re-entry condition each. This file deliberately does NOT list them: the copy that
 used to live here had drifted to O-15 of 21 and showed two closed items as open, and no
 check compared the two (R1). Read Part H.
@@ -447,7 +447,7 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   projections. Three independent derivations reached the same conclusion in LP-5x. The limit
   that settles it: edge-on, Cp = 1/(2s^2) and Ctau = l/(s*sqrt(pi)). The theory document §2.3
   mislabelled them until 0.10.0; `doc/src/*.tex` is corrected and **the committed PDF is not
-  rebuilt** — no LaTeX on the host (O-37).
+  rebuilt** — no LaTeX on the host (O-38).
 - **The speed ratio is per SPECIES, not from a mean molar mass**: the mean-mass form is
   harmless on a ram face, -24 % at 100 deg incidence and collapses at 135 deg (measured 2026-09-07).
 - **1 + erf(x) cancels for x << 0**: use erfc(-x). **1 + a(x - 1) loses 1e-8 at a = 1**: write
