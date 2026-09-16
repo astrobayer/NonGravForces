@@ -505,6 +505,11 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   `referenceSystem.angularVelocityFromRotationRate(R, Rdot, 'Resolution', "reference")` returns its
   NEGATIVE (ratio -1.0, measured). Reading the skew entries off `R' Rdot` without projecting the
   symmetric part out leaves the differencing error in (6e-7 relative).
+- **A rehearsal that gives the local run a hint CI does not get is not a rehearsal.** `buildMex`'s
+  walk to odeSuite's `csrc` overshot by one directory (`fileparts` x3 already reaches the repository
+  root; the extra `'..'` left it). Four green gates in a row said nothing, because every local script
+  set `NGF_GJTOOLBOX` and CI sets nothing — the branch CI depends on had never once run. Clear the
+  environment variables the runner lacks before believing a local gate, and TEST the fallback.
 - **Never assert a host-dependent absolute** (rule T5). A 500 us per-epoch bound written from a
   guess reddened the gate on a runner that measured 901.8 us, in the same session that quoted the
   rule. Assert the ratio; record the absolute with a ceiling an order of magnitude above it.

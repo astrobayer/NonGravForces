@@ -192,8 +192,16 @@ for t = 1:numel(targets)
         % Integrating is optional and computing forces is not: without gjToolbox's contract header
         % this target is REPORTED, and "all" builds the rest (asking for it by name refuses below).
         if options.Target == "rhs"
+            % Say which of the two it is, MEASURED. The message said "gjToolbox is not on the
+            % path" unconditionally until 2026-09-16, and on a host where it WAS on the path and
+            % only the folder walk was wrong, that sentence sent the reader to the wrong problem.
+            if strlength(string(which('gjToolbox.DynamicsSource'))) == 0
+                NonGravForces.fail(unit, "depMissing", ...
+                    "the rhs target compiles against gjToolbox's csrc/gj_native.h and gjToolbox is not on the path -> run gjToolboxSetup, or point 'GjToolboxSource' or NGF_GJTOOLBOX at odeSuite's csrc folder");
+            end
             NonGravForces.fail(unit, "depMissing", ...
-                "the rhs target compiles against gjToolbox's csrc/gj_native.h and gjToolbox is not on the path -> run gjToolboxSetup, or point 'GjToolboxSource' or NGF_GJTOOLBOX at odeSuite's csrc folder");
+                "gjToolbox is on the path (%s) but no gj_native.h was found beside it -> point 'GjToolboxSource' or NGF_GJTOOLBOX at odeSuite's csrc folder", ...
+                which('gjToolbox.DynamicsSource'));
         end
         rep.target = tg.name;
         rep.file = string(fullfile(tg.outDir, string(tg.output) + "." + mexext));
@@ -275,7 +283,12 @@ end
 
 function d = localGjDir(override)
 %LOCALGJDIR odeSuite's csrc folder, which owns gj_native.h: option, environment, then the
-% gjToolbox on the path (its toolbox/+gjToolbox is a sibling of csrc). "" when there is none.
+% gjToolbox on the path. "" when there is none.
+%   The layout this walks: <odeSuite>/toolbox/+gjToolbox/DynamicsSource.m, so three fileparts
+%   reach <odeSuite> and csrc sits directly in it. A stray '..' here sent the search to the
+%   PARENT of odeSuite until 2026-09-16, and every run on this host had set NGF_GJTOOLBOX, so
+%   the branch CI actually depends on was never once exercised (LP-C). tNgfEnv/buildMexContract
+%   now clears the environment variable and resolves through this branch on purpose.
 d = "";
 if strlength(override) > 0
     d = override;
@@ -284,7 +297,7 @@ elseif strlength(string(getenv('NGF_GJTOOLBOX'))) > 0
 else
     w = string(which('gjToolbox.DynamicsSource'));
     if strlength(w) > 0
-        d = string(fullfile(fileparts(fileparts(fileparts(w))), '..', 'csrc'));
+        d = string(fullfile(fileparts(fileparts(fileparts(w))), 'csrc'));
     end
 end
 if strlength(d) > 0 && ~isfile(fullfile(d, 'gj_native.h'))

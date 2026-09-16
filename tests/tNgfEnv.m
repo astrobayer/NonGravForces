@@ -311,6 +311,17 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyEqual(numel(rr.sources), 19);                    % 9 C/H + 8 msis21 F90 + 2 hwm14 F90
             tc.verifyTrue(any(endsWith(rr.sources, "gj_native.h")), 'the frozen ABI header takes part in the digest, so a new ABI rebuilds this target');
             tc.verifyTrue(endsWith(rr.sourceDir, "csrc"), 'the rhs target''s third-party source is odeSuite''s csrc');
+            % ... and it must resolve WITHOUT the environment variable, which is the branch CI
+            % depends on and the only one nothing had ever exercised: every run on the owner's host
+            % set NGF_GJTOOLBOX, so a stray '..' in the folder walk sent buildMex to the parent of
+            % odeSuite and four green gates in a row said nothing (LP-C, 2026-09-16).
+            saved = getenv('NGF_GJTOOLBOX');
+            restore = onCleanup(@() setenv('NGF_GJTOOLBOX', saved));
+            setenv('NGF_GJTOOLBOX', '');
+            fromPath = NonGravForces.buildMex('Check', true, 'Target', "rhs");
+            tc.verifyEqual(fromPath.sourceDir, rr.sourceDir, 'the path walk must reach the same csrc the environment variable names');
+            tc.verifyTrue(fromPath.sourcesPresent, 'gj_native.h must be found through the gjToolbox on the path alone');
+            clear restore
             tc.verifyEqual(all2(5).sourceDir, "", 'the kernel has no third-party source');
             tc.verifyError(@() NonGravForces.buildMex('Check', true, 'Target', "nosuch"), 'MATLAB:validators:mustBeMember');
         end
