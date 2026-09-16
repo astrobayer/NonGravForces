@@ -96,9 +96,18 @@ jobs:
       # cannot load, the buildMex target "rhs" has no csrc/gj_native.h to compile
       # against, and tests/tNgfIntegration.m would not run at all - a green that
       # means nothing. It is optional for the toolbox and required for the gate.
+      #
+      # ref IS GIVEN ON PURPOSE, and only here. Without it actions/checkout first
+      # asks the REST API for the default branch, which needs Metadata:read on
+      # THIS repository; with it, the action goes straight to git-over-HTTPS,
+      # which needs Contents:read. On 2026-09-16 the two sibling checkouts above
+      # succeeded with this same secret in the same job and odeSuite answered
+      # "Not Found" at exactly that API call, so the two permissions are worth
+      # separating rather than guessing between.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: astrobayer/odeSuite
+          ref: main
           path: odeSuite
           token: ${{ secrets.REFERENCE_READ_TOKEN }}
           persist-credentials: false
