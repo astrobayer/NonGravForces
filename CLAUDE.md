@@ -167,8 +167,9 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-09-16, after LP-C)
 
-- **365/365 GREEN on Tier A** (2026-09-16, LP-C complete, R2026a Update 4, `matlab -batch ciGate`
-  over an isolated dependency root; predicted 365, 0 failed, 0 incomplete, 0 category shortfalls),
+- **365/365 GREEN ON BOTH TIERS** (2026-09-16, LP-C complete, R2026a Update 4): on Tier A by
+  `matlab -batch ciGate` over an isolated dependency root, and **on the CI runner** (run
+  `35054822337`, both jobs, `GATE TRUE`). Predicted 365, 0 failed, 0 incomplete, 0 category shortfalls;
   Code Analyzer clean on `+NonGravForces`, `auditPackage.py` clean (55 units, 55 catalogue rows,
   version 0.10.0), `mex/test/runCChecks.sh` clean (14 bounds). Earlier rounds of LP-C: 334
   (C1–C4, C7), 352 (C8, C10), 358 (C11). **`Model.rhs` is gone** and the integrator's entry point
