@@ -44,6 +44,29 @@ for k = 1:numel(deps)
     run(f);
 end
 cd(here);
+% gjToolbox's NATIVE STEPPING KERNEL is an optional build of that toolbox, and this gate asserts
+% through it: tNgfIntegration propagates one arc on Binding "native" and requires it to agree with
+% the vectorized binding. A fresh CI checkout carries no gj_stepper (the binary is not committed,
+% rightly), so the gate builds it -- with the DEPENDENCY'S OWN build task, never a recipe copied
+% here (R1), which also smoke-tests the gateway it just built. The owner's host usually has it
+% already and this is then a no-op.
+if ~gjToolbox.nativeStepper("available")
+    odeRoot = char(fullfile(options.DependencyRoot, "odeSuite"));
+    fprintf("ciGate: building gjToolbox's native stepping kernel in %s\n", odeRoot);
+    back = pwd;
+    try
+        cd(odeRoot);
+        buildtool("mex");
+        cd(back);
+    catch err
+        cd(back);
+        rethrow(err);
+    end
+    if ~gjToolbox.nativeStepper("available")
+        error("NonGravForces:ciGate:depMissing", ...
+            "gjToolbox's native stepping kernel is still not available after buildtool mex in %s -> the native binding cannot be gated without it", odeRoot);
+    end
+end
 % The model sources are fetched when missing (buildMex cannot build without them); the data are NOT:
 % every test reads the committed excerpts, and a 147 MB archive per CI run would test the network.
 info = setupNonGravForces('Verbose', true, 'FetchData', "never");

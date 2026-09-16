@@ -510,6 +510,11 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   root; the extra `'..'` left it). Four green gates in a row said nothing, because every local script
   set `NGF_GJTOOLBOX` and CI sets nothing — the branch CI depends on had never once run. Clear the
   environment variables the runner lacks before believing a local gate, and TEST the fallback.
+  **The same trap has a second door: a build ARTEFACT the host happens to hold.** `gjToolbox`'s
+  native stepper is not committed, so a fresh checkout has none, and `tNgfIntegration` propagates
+  through it. Two green gates hid that too, because this host's odeSuite clone had been built by
+  hand. `ciGate` now runs the dependency's own `buildtool mex` (never a recipe copied here), and the
+  rehearsal deletes `gj_stepper` first. **Ask what the runner does NOT have that you do.**
 - **Never assert a host-dependent absolute** (rule T5). A 500 us per-epoch bound written from a
   guess reddened the gate on a runner that measured 901.8 us, in the same session that quoted the
   rule. Assert the ratio; record the absolute with a ceiling an order of magnitude above it.
