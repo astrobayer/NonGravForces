@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-16 (LP-C delivered) by Claude Opus 5. Toolbox version 0.10.0.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-16 (LP-C delivered) by Claude Opus 5. Toolbox version 0.11.0.
 
 ---
 

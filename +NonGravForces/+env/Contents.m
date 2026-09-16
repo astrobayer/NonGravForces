@@ -1,5 +1,5 @@
 % ENV  NonGravForces.env - L2 layer.
-% Version 0.10.0  16-Sep-2026
+% Version 0.11.0  16-Sep-2026
 %
 %   density              - Thermosphere density and composition (exponential msis00 msis21)
 %   wind                 - Relative-velocity builder: co-rotation from referenceSystem plus HWM14 or a given wind field
