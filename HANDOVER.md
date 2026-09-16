@@ -545,6 +545,52 @@ Original prompt: WP-21 documentation build (`tools/buildDocs.m` regenerates `doc
 
 **Out of scope, recorded:** DTM2020 and JB2008 (their SET drivers stay readable in `io.spaceWeather`); CLL and Schamberg (O-17); SESAM 2013 (O-16); CERES angular distribution models; multiple reflections of re-emitted molecules.
 
+### LP-D — Gas-surface interaction, from the sources in hand (opened 2026-09-16)
+
+The owner supplied two papers on 2026-09-16 that had been refused to the assistant (HTTP 403 on
+2026-09-07). **Read first, scoped second.** They do not unblock what O-16 and O-17 ask for, and the
+first duty of this level is to say so instead of implementing something adjacent and calling the
+obligation closed.
+
+**What the sources are.** [P10] Pilinski, Argrow & Palo, *Semiempirical Model for Satellite
+Energy-Accommodation Coefficients*, J. Spacecraft Rockets 47(6), 2010, DOI 10.2514/1.49330.
+[W14b] Walker, Mehta & Koller, *Different Implementations of Diffuse Reflection with Incomplete
+Accommodation for Drag Coefficient Modeling*, JSR 51(5) 1522-1532, 2014, DOI 10.2514/1.A32668.
+Both are filed untracked in `doc/references/`.
+
+**WP-D1 The two Pilinski fits** (owner ruling above). [P10] eq. 8 fits **K = 7.50e-17 m^3/K** to the
+Bowman & Moe sphere accommodations; the shipped `pilinski2010` carries **4.98e-17** from the 2011
+thesis, so the option's name and its constant have cited different sources since 2026-09-15.
+`drag.accommodation` gains `pilinski2011`; `pilinski2010` moves to the value of the paper it names.
+Both the MATLAB and the C enumeration change together, and `app.DynamicsSource`'s index mapping with
+them. **A domain restriction goes into ACCURACY that nothing has stated so far**: [P10] is explicit
+that K was fitted with NRLMSISE-00 n_O and T and that "the application of this value should only be
+performed with NRLMSISE-00" - and the `precise` preset evaluates `msis21`.
+
+**WP-D2 Published closed-form oracles.** Until now the kernel's oracles are this project's own Python
+mirror and Sentman's incident closed forms - both derived here. [W14b] eqs. 11 and 12 give the
+closed-form drag coefficient of a **sphere** and of a **flat plate** under diffuse reflection with
+incomplete accommodation, at stated conditions (U = 7500 m/s, T_w = 300 K, T_inf = 1100 K, s ~ 7.0).
+A standard-library Python oracle evaluates them and the suite compares this toolbox's per-panel
+coefficients integrated over the same geometry. That is the first oracle for the drag chain that
+this project did not write.
+
+**WP-D3 The deviation from the state of the art, quantified.** [W14b] measures what the closed-form
+incomplete-accommodation treatment this toolbox implements (Sentman with the Koppenwallner
+re-emission ratio, its T_k,r form) costs against a physically correct CLL reflected velocity
+distribution: **~1.7% in C_D for GRACE at alpha = 0 and ~1.4% at alpha = 0.9**; for a flat plate the
+difference falls from ~2.6% at normal incidence to ~1.4% at 77.5 deg. It belongs in the ACCURACY
+block of `kernel.gsiCoefficients` and in theory section 2.3, because it is the answer to "is the
+approximation justified" and the toolbox has never carried a number for it.
+
+**Out of scope, and what would change that.** SESAM (O-16) needs Pilinski, Argrow & Palo,
+*Semiempirical Satellite Accommodation Model for Spacecraft Aerodynamic Analysis*, JSR 50(3), 2013,
+DOI 10.2514/1.A32348. Closed-form CLL (O-17) needs Walker, Mehta & Koller, *Drag Coefficient Model
+Using the Cercignani-Lampis-Lord Gas-Surface Interaction Model*, JSR 51(5), 2014, DOI 10.2514/1.A32677
+- the companion paper in the same issue, which is also the likely home of the adsorbate coverage law
+that `walker2014` currently attributes to "JSR 51(5)": A32668 is 51(5) and does **not** contain that
+law, mentioning the Langmuir isotherm once and crediting it to Pilinski.
+
 ---
 
 ## Part H — Obligations and open items
@@ -597,6 +643,8 @@ Original prompt: WP-21 documentation build (`tools/buildDocs.m` regenerates `doc
 
 | Date | Decision | Reason |
 |---|---|---|
+| 2026-09-16 | **Both Pilinski fits ship, as separate options** (owner): `pilinski2010` takes K = 7.50e-17 m^3/K from Pilinski, Argrow & Palo (2010) eq. 8, `pilinski2011` takes K = 4.98e-17 from Pilinski (2011) sect. 7.3 | the owner supplied the 2010 paper and it fits a DIFFERENT constant from the one shipped under its name. One option cannot carry two published values; naming each after the source that fits it lets a user reproduce either result, which is what a reference implementation is for |
+| 2026-09-16 | **The papers close neither O-16 nor O-17, and that is recorded rather than stretched** | Pilinski 2010 is the Langmuir accommodation paper, not SESAM 2013: it contains no sticking law, no shape factor and no substrate model (the word SESAM does not occur). Walker, Mehta & Koller 2014 JSR 51(5) A32668 computes CLL by DSMC sampling of the scattering kernels and gives no closed form; the closed-form CLL model is the companion paper A32677 of the SAME issue. What they DO give is better than a partial implementation: published closed-form oracles and a quantified bound on the approximation this toolbox ships |
 | 2026-09-15 | **LP-C opened; LP-R waits for it** (owner) | a review of the whole repository found fifteen defects (LP-C, Part G); the release is cut from a toolbox whose presets evaluate and whose integrator entry is usable |
 | 2026-09-15 | **Self-shadowing is occlusion only; facing is the kernels'; gas occlusion is flux-weighted over the incident Maxwellian** (owner approved the design as proposed) | the table's "f = 0 on unlit plates" convention was a radiation-beam rule applied to a thermal gas, and it deleted the edge-on shear that Sentman's integrals carry on ~15 m² of GRACE-FO plates; the same convention zeroed the Earth heating of every panel facing away from the Sun (F1, F2) |
 | 2026-09-15 | **`gjToolbox.DynamicsSource` is the integration contract, with a native C entry** (owner) | gjToolbox's interface exists and is frozen (read at odeSuite `origin/main`, `csrc/gj_native.h` ABI 1); the handle `Model.rhs` returned was never callable by it (F3) and is removed rather than kept beside the source |
