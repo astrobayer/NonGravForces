@@ -84,6 +84,8 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
 % ERRORS
 %   NonGravForces:DynamicsSource:inputModel     model is not a NonGravForces.Model, or its options
 %                                               cannot be served (transient thermal, raycast, squad)
+%   NonGravForces:DynamicsSource:unsupportedOption  erp.backend ceresClimatology, which has no native
+%                                               evaluator; use Model.accel or series instead
 %   NonGravForces:DynamicsSource:inputEpoch     no 'Epoch', or a context Epoch that disagrees
 %   NonGravForces:DynamicsSource:inputGravity   'Gravity' is not a gjToolbox.DynamicsSource
 %   NonGravForces:DynamicsSource:depMissing     the rhs MEX is not built (Native), or gjToolbox is absent
@@ -141,6 +143,14 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
             o = model.options;
             if o.thermal.model == "transient"
                 NonGravForces.fail(unit, "inputModel", "thermal.model transient carries temperatures from epoch to epoch, and the integrator calls accel non-monotonically and repeatedly at one t -> use steadyState (or none) for an integrated arc");
+            end
+            % REFUSED AT CONSTRUCTION, not when the tables are packed: an option this evaluator
+            % cannot serve should cost the caller nothing to discover. It was first written into
+            % the packing path, where it fired only after prepare() and a contract test that
+            % expected it at construction reported "nothing was thrown" -- the guard existed and
+            % the test was still right to fail (HANDOVER O-44).
+            if o.erp.backend == "ceresClimatology"
+                NonGravForces.fail(unit, "unsupportedOption", "erp.backend ceresClimatology has no native evaluator: it reads a 64800-cell monthly grid, which is not table material for an integrator's inner loop -> use it through Model.accel or series, or choose erp.backend ceres for the integrated path");
             end
             if any(~ismember(nv.Parameters, ["cdScale", "crScale"]))
                 NonGravForces.fail(unit, "inputModel", "'Parameters' may name cdScale and crScale -> got %s", strjoin(nv.Parameters, ", "));
@@ -499,6 +509,9 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
             s.wind = double(find(["none","corotation","hwm14"] == o.drag.wind) - 1);
             s.eclipse = double(find(["cylindrical","conical","solaarsCF"] == o.srp.eclipse) - 1);
             s.lunar = double(o.srp.lunarEclipse);
+            % ceresClimatology is refused at CONSTRUCTION (see the constructor), so find() below
+            % cannot be handed a name this enum lacks -- which would return empty and pack 0, i.e.
+            % "none": a Model that computes Earth radiation silently becoming one that does not.
             s.erp = double(find(["none","pointSource","knocke","ceres"] == o.erp.backend) - 1);
             s.nRings = 0; s.nSectors = 0;
             if any(o.erp.backend == ["knocke", "ceres"])

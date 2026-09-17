@@ -66,6 +66,8 @@ classdef Model
 %   Exponential   1x1   struct          -      .rho0_kg_m3 .h0_m .H_m, required when
 %                                              drag.density is "exponential".
 %   Ceres         1x1   struct          -      io.importCERES result, required when erp.backend is "ceres".
+%   Climatology   1x1   struct          -      .albedo and .longwave io.importGroopsGrid results,
+%                                              required when erp.backend is "ceresClimatology".
 %
 % OUTPUT (accel / torque / evaluate)
 %   a, tau   3xK   double         acceleration [m/s^2] or torque [N m]
@@ -93,7 +95,8 @@ classdef Model
 %   NonGravForces:Model:inputAttitude   no q was given and the Model has no attitude provider
 %   NonGravForces:Model:dependEop       evaluated without 'Eop'
 %   NonGravForces:Model:dependWeather   evaluated without 'SpaceWeather' or 'Exponential' for the density backend, or without 'SpaceWeather' for drag.wind hwm14
-%   NonGravForces:Model:dependCeres     evaluated with erp.backend ceres and no 'Ceres'
+%   NonGravForces:Model:dependCeres     evaluated with erp.backend ceres and no 'Ceres', or
+%                                       ceresClimatology and no 'Climatology'
 %   NonGravForces:Model:unsupported     a method option this Model cannot honour (partials of alpha for a
 %                                       computed accommodation, transient thermal under parfor, unknown quantities)
 %   NonGravForces:<unit>:*              propagated unwrapped from the unit that refused
@@ -126,6 +129,7 @@ classdef Model
         ephemeris
         exponential
         ceres
+        climatology
         lut struct
         provenance struct
     end
@@ -141,6 +145,7 @@ classdef Model
                 nv.Ephemeris = []
                 nv.Exponential = []
                 nv.Ceres = []
+                nv.Climatology = []
             end
             if ~isa(options, 'NonGravForces.Options') || ~isscalar(options)
                 NonGravForces.fail("Model", "inputOptions", ...
@@ -160,6 +165,7 @@ classdef Model
             obj.ephemeris = nv.Ephemeris;
             obj.exponential = nv.Exponential;
             obj.ceres = nv.Ceres;
+            obj.climatology = nv.Climatology;
             % The self-shadow table costs a ray cast per cube-map node, so it is built once here.
             if options.geom.selfShadow == "lut"
                 obj.lut = struct('built', true, 'table', ...
@@ -412,6 +418,11 @@ classdef Model
                     NonGravForces.fail("Model", "dependCeres", "erp.backend ceres needs 'Ceres' at construction -> pass io.importCERES(files); the Earth's fluxes are never assumed");
                 end
                 srcArgs = [srcArgs, {'Ceres', obj.ceres, 'RotationItrsToGcrs', Ritrs}];
+            elseif o.erp.backend == "ceresClimatology"
+                if isempty(obj.climatology)
+                    NonGravForces.fail("Model", "dependCeres", "erp.backend ceresClimatology needs 'Climatology' at construction -> pass struct('albedo', io.importGroopsGrid(albedoFile), 'longwave', io.importGroopsGrid(longwaveFile)); the Earth's fluxes are never assumed");
+                end
+                srcArgs = [srcArgs, {'Climatology', obj.climatology, 'RotationItrsToGcrs', Ritrs}];
             end
             [src, srcInfo] = NonGravForces.env.radiationSources(epoch, r, q, o, srcArgs{:});
             % 5. occlusion: per radiation source, and flux-weighted for the gas

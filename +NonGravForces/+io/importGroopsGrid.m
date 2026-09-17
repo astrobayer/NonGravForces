@@ -25,7 +25,7 @@ function [grid, aux] = importGroopsGrid(file, options)
 %     'B'  uint64 n  <n bytes: type>  uint64 m  <m bytes: version>  spaces
 %     griddedData            : uint64 flag, double a, double b (ellipsoid)
 %     griddedDataTimeSeries  : uint64 x 4 (the second is the node count), a, b
-%     then four count-prefixed double vectors: longitude and latitude in RADIANS,
+%     then four count-prefixed double vectors: longitude and GEOCENTRIC latitude in RADIANS,
 %     one radius per latitude row in metres, and one solid angle per point;
 %     then uint64 1, double 1.0;
 %     time series only: T+1 records of (double fraction, int64 MJD), then uint64;
@@ -51,11 +51,14 @@ function [grid, aux] = importGroopsGrid(file, options)
 %   Name   Size  Type    Units  Description
 %   ----   ----  ----    -----  -----------
 %   grid   1x1   struct  -      .type, .version (string); .lon_deg (1xNlon), .lat_deg (1xNlat,
-%                               geodetic, decreasing); .radius_m (1xNlat); .area_sr (NlatxNlon);
-%                               .values (NlatxNlonxT); .mjd (1x(T+1) node epochs, [] for
-%                               griddedData); .isTimeSeries (logical)
+%                               GEOCENTRIC, decreasing -- see below); .radius_m (1xNlat); .area_sr (NlatxNlon);
+%                               .values (NlatxNlonxT); .mjd (1x(T+1) node epochs BOUNDING THE
+%                               GRIDS RETURNED, so after a 'TimeRange' seek it is the subrange and
+%                               not the file's whole node list; [] for griddedData);
+%                               .isTimeSeries (logical)
 %   aux    1x1   struct  -      .file, .bytes, .ellipsoid (.a, .b), .pointCount, .gridCount,
-%                               .gridsRead (1xT index of the grids actually read),
+%                               .gridsRead (1xT index of the grids actually read, into the FILE),
+%                               .mjdFile (1x2 first and last node of the file, whatever was read),
 %                               .areaSum_sr (must be 4*pi), .provenance
 %
 % ACCURACY
@@ -64,6 +67,20 @@ function [grid, aux] = importGroopsGrid(file, options)
 %   solid angles are the file's own and sum to 4*pi to 4e-6 relative (measured
 %   2026-09-17 on both 2.5 degree grids), which is the file's discretisation of the
 %   sphere, not this reader's error.
+%   THE LATITUDES ARE GEOCENTRIC, and this block said "geodetic" until 2026-09-17.
+%   The grid is laid out uniformly in GEODETIC latitude and the file stores the
+%   GEOCENTRIC latitude of those same points, which is why the stored centres are
+%   89.4966, 88.4899, ... rather than 89.5, 88.5, ... and why their spacing runs from
+%   0.9933 to 1.0067 instead of being uniform. Two independent measurements settle it:
+%     - atan((1 - e^2) tan(89.5 deg)) = 89.49664, the file's first centre, to 1e-7 deg;
+%     - .radius_m equals the ellipsoid radius at the stored latitude read as GEOCENTRIC,
+%       plus a constant 30000.1 m, to a spread of 0.168 m over all 180 rows. Read as
+%       geodetic the same comparison spreads by 71.6 m, i.e. 400 times worse.
+%   A consumer that converts its own geocentric latitude to geodetic before looking a
+%   value up in this grid misplaces every point by up to 0.19 deg, a fifth of a cell.
+%   The longitudes carry single-precision jitter: neighbouring gaps differ by 1.37e-05
+%   deg and the first centre is -179.499994 rather than -179.5 (3.2e-08 relative). The
+%   axis is uniform in intent, not in its bytes; index it with the average spacing.
 %
 % ERRORS
 %   NonGravForces:importGroopsGrid:inputFile       the file does not exist
@@ -178,13 +195,24 @@ for k = 1:numel(want)
     values(:, :, k) = reshape(v, nLon, nLat)';      % longitude varies fastest within a latitude row
 end
 
+% .mjd IS TRIMMED TO THE GRIDS RETURNED, so the struct says which months it holds. It used to
+% carry the file's whole node list beside a seeked subset of values, and a consumer could not tell
+% from the struct alone which grid was which -- env.earthRadiance's ceresClimatology backend hit
+% exactly that on 2026-09-17 (2413 nodes beside 2 grids). `want` is contiguous by construction, so
+% the bounding nodes are one run. The file's full span stays in aux, where it is a fact about the
+% FILE rather than about these values (R2: metadata travels with the data it describes).
+nodes = mjd; span = [];
+if isSeries && ~isempty(mjd)
+    nodes = mjd(want(1):want(end) + 1);
+    span = mjd([1 end]);
+end
 grid = struct('type', type, 'version', version, ...
     'lon_deg', rad2deg(lon(:))', 'lat_deg', rad2deg(lat(:))', 'radius_m', rad(:)', ...
     'area_sr', reshape(area, nLon, nLat)', 'values', values, ...
-    'mjd', mjd, 'isTimeSeries', isSeries);
+    'mjd', nodes, 'isTimeSeries', isSeries);
 aux = struct('file', string(file), 'bytes', bytes, ...
     'ellipsoid', struct('a', ell(1), 'b', ell(2)), 'pointCount', nPts, 'gridCount', nGrid, ...
-    'gridsRead', want, 'areaSum_sr', sum(area), ...
+    'gridsRead', want, 'mjdFile', span, 'areaSum_sr', sum(area), ...
     'provenance', NonGravForces.provenance(unit, 'Files', string(file)));
 end
 

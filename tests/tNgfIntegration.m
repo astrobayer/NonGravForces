@@ -107,6 +107,14 @@ classdef tNgfIntegration < NgfTestCase
             src = NonGravForces.app.DynamicsSource(M, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60);
             tc.verifyEqual(src.StateSize, 3); tc.verifyTrue(src.Vectorized); tc.verifyFalse(src.IsPrepared);
             tc.verifyErrorId(@() src.accel(0, tc.r(:, 1), tc.v(:, 1)), 'gjToolbox:dynamics:notPrepared');
+            % WP-E2: erp.backend ceresClimatology has no native evaluator and must REFUSE, because
+            % find() on a name the C enum lacks returns empty and the packed value would become 0,
+            % which is "none" -- a Model that computes Earth radiation silently becoming one that
+            % does not, on this path only. The parity test cannot catch what it cannot construct,
+            % so the refusal is the check (HANDOVER O-44).
+            Mc = tc.modelFor(NonGravForces.Options("standard").set("erp.backend", "ceresClimatology"));
+            tc.verifyErrorId(@() NonGravForces.app.DynamicsSource(Mc, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60), ...
+                'NonGravForces:DynamicsSource:unsupportedOption');
             ctx = struct('Span', [120 420], 'StencilSpan', [120 420], 'MaxColumns', 7, 'Epoch', tc.tai);
             src = src.prepare(ctx);
             tc.verifyTrue(src.IsPrepared);

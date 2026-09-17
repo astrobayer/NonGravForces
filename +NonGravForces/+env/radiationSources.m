@@ -61,6 +61,8 @@ function [src, info] = radiationSources(epoch, r, q_body2gcrs, options, nv)
 %                                     'Sun' when srp.eclipse is solaarsCF (the ephemeris
 %                                     path measures it as r_sun x v_sun). Default [].
 %   Ceres         1x1   struct  -      io.importCERES result; erp.backend ceres only. Default [].
+%   Climatology   1x1   struct  -      .albedo and .longwave io.importGroopsGrid results;
+%                                      erp.backend ceresClimatology only. Default [].
 %   RotationItrsToGcrs 3x3xK double -  ITRS->GCRS rotation; erp.backend ceres only. Default [].
 %
 % OUTPUT ARGUMENTS
@@ -92,7 +94,7 @@ function [src, info] = radiationSources(epoch, r, q_body2gcrs, options, nv)
 %   NonGravForces:radiationSources:inputShape      r not 3xK, q not 4xK, or K differs from epoch
 %   NonGravForces:radiationSources:numericNaN      NaN/Inf in r or q
 %   NonGravForces:radiationSources:depKernel       sun.source rs.de440 without 'Ephemeris'
-%   NonGravForces:radiationSources:inputCeres      'Ceres' or 'RotationItrsToGcrs' given with erp.backend none
+%   NonGravForces:radiationSources:inputCeres      'Ceres', 'Climatology' or 'RotationItrsToGcrs' given with erp.backend none
 %   NonGravForces:earthRadiance:inputCeres         ceres inputs missing, or given to another backend
 %   NonGravForces:eclipseFactor:*, NonGravForces:earthRadiance:*   from the callees
 %   referenceSystem:*                              propagated unwrapped
@@ -120,6 +122,7 @@ arguments
     nv.Moon = []
     nv.EclipticNormal = []
     nv.Ceres = []
+    nv.Climatology = []
     nv.RotationItrsToGcrs = []
 end
 unit = "radiationSources";
@@ -187,7 +190,7 @@ switch options.erp.backend
         tiles = []; M = 0;
         dirE = zeros(3, 0, K); PE = zeros(0, K); bandE = string.empty(1, 0);
     case "pointSource"
-        tiles = NonGravForces.env.earthRadiance("pointSource", epoch, [], r, 'Ceres', nv.Ceres, 'RotationItrsToGcrs', nv.RotationItrsToGcrs);
+        tiles = NonGravForces.env.earthRadiance("pointSource", epoch, [], r, 'Ceres', nv.Ceres, 'Climatology', nv.Climatology, 'RotationItrsToGcrs', nv.RotationItrsToGcrs);
         nr = vecnorm(r); rhat = r ./ nr;
         cosT = max(-1, min(1, sum(rhat .* sHat, 1)));
         theta = acos(cosT);
@@ -198,8 +201,8 @@ switch options.erp.backend
         dirE = repmat(reshape(-rhat, 3, 1, K), 1, 2, 1);
         PE = [Ealb; Eir] / cLight;
         bandE = ["vis", "ir"];
-    otherwise                                                       % knocke and ceres: tiles on a cap
-        tiles = NonGravForces.env.earthRadiance(options.erp.backend, epoch, options.erp.grid, r, 'Ceres', nv.Ceres, 'RotationItrsToGcrs', nv.RotationItrsToGcrs);
+    otherwise                                          % knocke, ceres and ceresClimatology: tiles on a cap
+        tiles = NonGravForces.env.earthRadiance(options.erp.backend, epoch, options.erp.grid, r, 'Ceres', nv.Ceres, 'Climatology', nv.Climatology, 'RotationItrsToGcrs', nv.RotationItrsToGcrs);
         Mt = tiles.M;
         p = tiles.radius_m * tiles.n;                               % 3xMtxK tile centres (ceres: the 20 km reference sphere)
         rho = reshape(r, 3, 1, K) - p;                              % 3xMtxK tile -> satellite
@@ -248,7 +251,7 @@ end
 
 function localNoCeres(nv)
 %LOCALNOCERES With no Earth sources nothing reads the CERES inputs, so passing them is a contradiction.
-if ~isempty(nv.Ceres) || ~isempty(nv.RotationItrsToGcrs)
-    NonGravForces.fail("radiationSources", "inputCeres", "'Ceres' and 'RotationItrsToGcrs' belong to erp.backend ceres -> remove them, or choose ceres");
+if ~isempty(nv.Ceres) || ~isempty(nv.Climatology) || ~isempty(nv.RotationItrsToGcrs)
+    NonGravForces.fail("radiationSources", "inputCeres", "'Ceres', 'Climatology' and 'RotationItrsToGcrs' belong to the gridded erp backends -> remove them, or choose ceres or ceresClimatology");
 end
 end

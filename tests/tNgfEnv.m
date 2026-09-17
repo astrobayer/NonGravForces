@@ -101,6 +101,34 @@ classdef tNgfEnv < NgfTestCase
                 c.rsut(:, :, m) = single(a); c.rlut(:, :, m) = single(b); c.rsdt(:, :, m) = single(d);
             end
         end
+        function clm = syntheticClimatology(~, fAlb, fLw, nLat, nLon, mjd)
+            %SYNTHETICCLIMATOLOGY Two io.importGroopsGrid-shaped structs with caller-defined fields.
+            %   THE LATITUDES ARE GEOCENTRIC AND THE RADII FOLLOW THEM, because that is what the real
+            %   file holds and what localCheckClimatology measures: the grid is laid out uniformly in
+            %   GEODETIC latitude and the file stores the geocentric latitude of those same points.
+            %   Building the fixture the other way round would make the unit look wrong for a fault
+            %   that was the fixture's -- the 2.5e-2 solid-angle lesson of WP-E1, one layer up.
+            ell = referenceSystem.ellipsoidParameters("WGS84");
+            latGeod = 90 - 180 * ((1:nLat) - 0.5) / nLat;                  % uniform GEODETIC centres
+            latGeoc = atand((1 - ell.e2) * tand(latGeod));                 % what the file stores
+            lon = -180 + 360 * ((1:nLon) - 0.5) / nLon;
+            th = deg2rad(latGeoc(:));
+            radius = ell.a * ell.b ./ sqrt((ell.a * sin(th)).^2 + (ell.b * cos(th)).^2) + 30000.1;
+            [LON, LAT] = meshgrid(lon, latGeoc);
+            T = numel(mjd) - 1;
+            va = zeros(nLat, nLon, T); vl = zeros(nLat, nLon, T);
+            for m = 1:T
+                va(:, :, m) = fAlb(LAT, LON, m);
+                vl(:, :, m) = fLw(LAT, LON, m);
+            end
+            dPhi = pi / nLat; dLam = 2 * pi / nLon;
+            phi = deg2rad(latGeoc(:));
+            area = repmat(dLam * (sin(phi + dPhi / 2) - sin(phi - dPhi / 2)), 1, nLon);
+            mk = @(v) struct('type', "griddedDataTimeSeries", 'version', "test", ...
+                'lon_deg', lon, 'lat_deg', latGeoc, 'radius_m', radius(:)', 'area_sr', area, ...
+                'values', v, 'mjd', mjd, 'isTimeSeries', true);
+            clm = struct('albedo', mk(va), 'longwave', mk(vl));
+        end
         function R = eyes(~, K)
             R = repmat(eye(3), 1, 1, K);
         end
@@ -686,6 +714,27 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyBoundAndRecord("SOLAARS-CF full-light limit", 1 - nuL(2), 1e-12, "-", "");
             tc.verifyEqual(nuL(3), 1, 'day side');
         end
+        function earthRadianceClimatologyPrecision(tc)
+            % A field LINEAR in the grid's own latitude is reproduced exactly by bilinear
+            % interpolation, so every tile must carry the closed form at the GEOCENTRIC latitude it
+            % was read at. The ceres test above forms the GEODETIC latitude for the same reason and
+            % the two differ by up to 0.19 deg: if this unit ever converted, this bound would break
+            % by four orders of magnitude rather than subtly.
+            clm = tc.syntheticClimatology(@(LAT, LON, m) 0.3 + 0.002 * LAT + 0.01 * m, ...
+                                          @(LAT, LON, m) 220 + 0 * LAT, 180, 360, [58800 58830 58860]);
+            ep = referenceSystem.mjdToEpoch([58810; 58840], "UTC");
+            r = [[6.87e6; 1e5; 2e6] [0; 1e3; 6.9e6]];
+            t = NonGravForces.env.earthRadiance("ceresClimatology", ep, [12 24], r, 'Climatology', clm, 'RotationItrsToGcrs', tc.eyes(2));
+            n = t.n;
+            latC = atan2d(squeeze(n(3, :, :)), squeeze(hypot(n(1, :, :), n(2, :, :))));
+            lim = max(clm.albedo.lat_deg);
+            want = 0.3 + 0.002 * min(max(latC, -lim), lim) + 0.01 * [1 2];      % PIECEWISE constant in time
+            tc.verifyBoundAndRecord("ceresClimatology albedo of a latitude-linear field vs its closed form", max(abs(t.albedo - want), [], 'all'), 1e-13, "-", "bilinear reproduces a linear field; rounding only");
+            tc.verifyBoundAndRecord("ceresClimatology longwave of a constant field", max(abs(t.exitanceLw_W_m2 - 220), [], 'all'), 1e-12, "W/m^2", "every node equal");
+            tc.verifyBoundAndRecord("ceresClimatology tile latitude is GEOCENTRIC", max(abs(rad2deg(t.lat_rad) - latC), [], 'all'), 1e-12, "deg", "the grid's own convention, not converted");
+            % the reference level is READ from the file, not assumed
+            tc.verifyBoundAndRecord("ceresClimatology reference height measured from the grid", abs(t.climatology.referenceHeight_m - 30000.1), 1e-6, "m", "the constant the synthetic radii were built with");
+        end
         function earthRadianceCeresPrecision(tc)
             % A field LINEAR in latitude is reproduced exactly by bilinear interpolation, and one linear in time by the
             % time blend, so every tile must carry the closed form at the geodetic latitude it was read at -- which this
@@ -779,6 +828,23 @@ classdef tNgfEnv < NgfTestCase
             nuSAll = NonGravForces.env.eclipseFactor(r, s, 'Model', "solaarsCF", 'EclipticNormal', [0; 0; 1]);
             oneS = arrayfun(@(k) NonGravForces.env.eclipseFactor(r(:, k), s(:, k), 'Model', "solaarsCF", 'EclipticNormal', [0; 0; 1]), 1:size(r, 2));
             tc.verifyEqual(nuSAll, oneS);
+        end
+        function earthRadianceClimatologyVectorization(tc)
+            clm = tc.syntheticClimatology(@(LAT, LON, m) 0.3 + 1e-4 * LON + 0.01 * m, ...
+                                          @(LAT, LON, m) 200 + 0.1 * LAT, 90, 180, [58800 58830 58860]);
+            ep = referenceSystem.mjdToEpoch([58810; 58815; 58840], "UTC");
+            r = [[6.87e6; 1e5; 2e6] [1e5; 6.9e6; 0] [0; 1e3; 6.9e6]];
+            t = NonGravForces.env.earthRadiance("ceresClimatology", ep, [6 12], r, 'Climatology', clm, 'RotationItrsToGcrs', tc.eyes(3));
+            for k = 1:3
+                % the epoch is INDEXED, not rebuilt: mjdToEpoch(day + sec/86400) is a different
+                % quantity from the struct's own (day, sec) split and the shapes diverge with it
+                epk = ep; epk.day = ep.day(k); epk.sec = ep.sec(k);
+                one = NonGravForces.env.earthRadiance("ceresClimatology", epk, ...
+                    [6 12], r(:, k), 'Climatology', clm, 'RotationItrsToGcrs', tc.eyes(1));
+                tc.verifyEqual(one.albedo, t.albedo(:, k), sprintf('epoch %d batched vs alone', k));
+                tc.verifyEqual(one.exitanceLw_W_m2, t.exitanceLw_W_m2(:, k));
+                tc.verifyEqual(one.climatology.gridIndex, t.climatology.gridIndex(k));
+            end
         end
         function earthRadianceCeresVectorization(tc)
             ep = referenceSystem.mjdToEpoch([58835.5; 58849.1; 58860.9], "UTC"); r = [[6.88e6; 0; 0] [0; 3e6; 6.2e6] [4e6; -4e6; 4e6]];
@@ -902,6 +968,35 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyErrorId(@() NonGravForces.env.eclipseFactor(r, [NaN; 0; 0]), 'NonGravForces:eclipseFactor:numericNaN');
             tc.verifyErrorId(@() NonGravForces.env.eclipseFactor(r, s, 'Moon', [1; 2]), 'NonGravForces:eclipseFactor:inputShape');
             tc.verifyEqual(NonGravForces.env.eclipseFactor(zeros(3, 0), s), zeros(1, 0), 'empty in, empty out');
+        end
+        function earthRadianceClimatologyRobustness(tc)
+            clm = tc.syntheticClimatology(@(LAT, LON, m) 0.3 + 0 * LAT, @(LAT, LON, m) 220 + 0 * LAT, 20, 40, [58800 58830 58860]);
+            ep = referenceSystem.mjdToEpoch(58810, "UTC");
+            r = [6.87e6; 0; 0];
+            f = @(varargin) NonGravForces.env.earthRadiance(varargin{:});
+            % the contradictions: a grid to a backend that does not read it, and a backend without its grid
+            tc.verifyErrorId(@() f("knocke", ep, [4 8], r, 'Climatology', clm), 'NonGravForces:earthRadiance:inputClimatology');
+            tc.verifyErrorId(@() f("ceresClimatology", ep, [4 8], r, 'RotationItrsToGcrs', tc.eyes(1)), 'NonGravForces:earthRadiance:inputClimatology');
+            tc.verifyErrorId(@() f("ceresClimatology", ep, [4 8], r, 'Climatology', clm), 'NonGravForces:earthRadiance:inputClimatology');
+            % the two files are separate products and only this check pairs them
+            bad = clm; bad.longwave.lat_deg = bad.longwave.lat_deg * 0.9;
+            tc.verifyErrorId(@() f("ceresClimatology", ep, [4 8], r, 'Climatology', bad, 'RotationItrsToGcrs', tc.eyes(1)), 'NonGravForces:earthRadiance:inputClimatology');
+            bad2 = clm; bad2.longwave.values = bad2.longwave.values(:, :, 1);
+            tc.verifyErrorId(@() f("ceresClimatology", ep, [4 8], r, 'Climatology', bad2, 'RotationItrsToGcrs', tc.eyes(1)), 'NonGravForces:earthRadiance:inputClimatology');
+            % a node count that does not bound the grids, and a non-uniform longitude axis
+            bad3 = clm; bad3.albedo.mjd = bad3.albedo.mjd(1:2); bad3.longwave.mjd = bad3.longwave.mjd(1:2);
+            tc.verifyErrorId(@() f("ceresClimatology", ep, [4 8], r, 'Climatology', bad3, 'RotationItrsToGcrs', tc.eyes(1)), 'NonGravForces:earthRadiance:inputClimatology');
+            bad4 = clm; bad4.albedo.lon_deg(3) = bad4.albedo.lon_deg(3) + 1; bad4.longwave.lon_deg = bad4.albedo.lon_deg;
+            tc.verifyErrorId(@() f("ceresClimatology", ep, [4 8], r, 'Climatology', bad4, 'RotationItrsToGcrs', tc.eyes(1)), 'NonGravForces:earthRadiance:inputClimatology');
+            % radii that are not one height above the ellipsoid: the check that caught the convention
+            bad5 = clm; bad5.albedo.radius_m(4) = bad5.albedo.radius_m(4) + 500;
+            tc.verifyErrorId(@() f("ceresClimatology", ep, [4 8], r, 'Climatology', bad5, 'RotationItrsToGcrs', tc.eyes(1)), 'NonGravForces:earthRadiance:inputClimatology');
+            % an epoch outside the nodes must refuse, not extrapolate silently
+            far = referenceSystem.mjdToEpoch(59000, "UTC");
+            tc.verifyErrorId(@() f("ceresClimatology", far, [4 8], r, 'Climatology', clm, 'RotationItrsToGcrs', tc.eyes(1)), 'NonGravForces:earthRadiance:dataRange');
+            % and the closing node itself is inside, not outside
+            edge = NonGravForces.env.earthRadiance("ceresClimatology", referenceSystem.mjdToEpoch(58860, "UTC"), [4 8], r, 'Climatology', clm, 'RotationItrsToGcrs', tc.eyes(1));
+            tc.verifyEqual(edge.climatology.gridIndex, 2, 'the last node closes the last grid rather than falling past it');
         end
         function earthRadianceCeresRobustness(tc)
             ep = referenceSystem.mjdToEpoch([58849.5; 58849.5], "UTC");
@@ -1057,6 +1152,29 @@ classdef tNgfEnv < NgfTestCase
             [~, iS] = min(abs(nuS - 0.5)); [~, iC] = min(abs(nuCn - 0.5));
             tc.verifyBoundAndRecord("SOLAARS-CF vs conical half-shadow radius shift", abs(rE(iS) - rE(iC)), 5e4, "m", "refraction and oblateness; measured see last_run");
         end
+        function earthRadianceClimatologyMetamorphic(tc)
+            % PIECEWISE CONSTANT IN TIME is the property that separates this backend from ceres, and
+            % it is asserted as an identity rather than described in a comment: two epochs inside one
+            % month must give bitwise equal tiles, and the step must land exactly at the node.
+            clm = tc.syntheticClimatology(@(LAT, LON, m) 0.2 + 0.1 * m, @(LAT, LON, m) 200 + 10 * m, 40, 80, [58800 58830 58860]);
+            r = [6.87e6; 0; 0];
+            R1 = tc.eyes(1);
+            a = NonGravForces.env.earthRadiance("ceresClimatology", referenceSystem.mjdToEpoch(58801, "UTC"), [4 8], r, 'Climatology', clm, 'RotationItrsToGcrs', R1);
+            b = NonGravForces.env.earthRadiance("ceresClimatology", referenceSystem.mjdToEpoch(58829, "UTC"), [4 8], r, 'Climatology', clm, 'RotationItrsToGcrs', R1);
+            tc.verifyEqual(b.albedo, a.albedo, 'two epochs in one month are the same month, bitwise');
+            tc.verifyEqual(b.exitanceLw_W_m2, a.exitanceLw_W_m2);
+            c = NonGravForces.env.earthRadiance("ceresClimatology", referenceSystem.mjdToEpoch(58830, "UTC"), [4 8], r, 'Climatology', clm, 'RotationItrsToGcrs', R1);
+            tc.verifyEqual(c.climatology.gridIndex, 2, 'the node opens the next month');
+            tc.verifyBoundAndRecord("ceresClimatology steps by exactly one month's difference at the node", max(abs((c.albedo - a.albedo) - 0.1), [], 'all'), 4 * eps, "-", "0.1 per month by construction; a linear blend would give a fraction of it");
+            % a field constant over the sphere comes back constant: the interpolation adds nothing
+            flat = tc.syntheticClimatology(@(LAT, LON, m) 0.37 + 0 * LAT, @(LAT, LON, m) 231 + 0 * LAT, 30, 60, [58800 58830]);
+            g = NonGravForces.env.earthRadiance("ceresClimatology", referenceSystem.mjdToEpoch(58810, "UTC"), [6 12], r, 'Climatology', flat, 'RotationItrsToGcrs', R1);
+            tc.verifyBoundAndRecord("ceresClimatology of a constant field is that constant", max(abs(g.albedo - 0.37), [], 'all'), 4 * eps, "-", "bilinear weights sum to one");
+            % longitude is periodic: the same point addressed from either side of the seam agrees
+            seam = tc.syntheticClimatology(@(LAT, LON, m) 0.3 + 1e-3 * cosd(LON), @(LAT, LON, m) 220 + 0 * LAT, 30, 60, [58800 58830]);
+            e1 = NonGravForces.env.earthRadiance("ceresClimatology", referenceSystem.mjdToEpoch(58810, "UTC"), [4 8], [-6.87e6; 0; 0], 'Climatology', seam, 'RotationItrsToGcrs', R1);
+            tc.verifyTrue(all(isfinite(e1.albedo), 'all'), 'the anti-meridian is interpolated, not dropped');
+        end
         function earthRadianceCeresMetamorphic(tc)
             % Turning the Earth by exactly one cell and shifting the fields by one column back leaves every tile value:
             % the ITRS longitudes all move by 1 deg and read the same numbers (rounding of atan2 and of the weights).
@@ -1153,6 +1271,16 @@ classdef tNgfEnv < NgfTestCase
             psi = linspace(0, pi, 86400); r = (6378137 + 490e3) * [-cos(psi); zeros(1, 86400); sin(psi)]; s = [tc.au; 0; 0];
             q = tc.speedRatio(@() NonGravForces.env.eclipseFactor(r, s), @() NonGravForces.env.eclipseFactor(r, s, 'Model', "cylindrical"));
             tc.verifyBoundAndRecord("eclipse conical / cylindrical time ratio", q, 8, "-", "");
+        end
+        function earthRadianceClimatologySpeed(tc)
+            % Against knocke on the same cap and epochs: the rotation, a latitude SEARCH per tile and
+            % 8 gathers. The search is what makes this dearer than ceres's arithmetic indexing.
+            clm = tc.syntheticClimatology(@(LAT, LON, m) 0.3 + 1e-4 * LON, @(LAT, LON, m) 220 + 0.1 * LAT, 180, 360, [58800 58900 59000]);
+            [ep, r] = tc.sampleState();
+            R = tc.eyes(numel(ep.sec));
+            q = tc.speedRatio(@() NonGravForces.env.earthRadiance("ceresClimatology", ep, [12 24], r, 'Climatology', clm, 'RotationItrsToGcrs', R), ...
+                @() NonGravForces.env.earthRadiance("knocke", ep, [12 24], r));
+            tc.verifyBoundAndRecord("earthRadiance ceresClimatology / knocke time ratio [12 24], 600 epochs", q, 30, "-", "see last_run; budget set above the measured figure, ratio not absolute");
         end
         function earthRadianceCeresSpeed(tc)
             % The CERES tiles over Knocke's on the same grid and 600 epochs: the rotation, the geodetic latitude and 8 x 3
