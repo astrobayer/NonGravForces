@@ -647,7 +647,10 @@ characterization with improved gas-surface interactions modelling*, Adv. Space R
 1225-1242, DOI 10.1016/j.asr.2019.06.023; [M21] March, van den IJssel, Siemes, Visser, Doornbos &
 Pilinski, *Gas-surface interactions modelling influence on satellite aerodynamics and thermosphere
 mass density*, J. Space Weather Space Clim. **11** 54, DOI 10.1051/swsc/2021035 -- the one the
-kernel's ACCURACY blocks mean and mis-cite (O-42). All are filed untracked in
+kernel's ACCURACY blocks mean and mis-cite (O-42). **Supplied by the owner 2026-09-17 in answer to
+the O-6 oracle question:** [V] Vielberg & Kusche, *Extended forward and inverse modeling of
+radiation pressure accelerations for LEO satellites*, J. Geodesy **94** 43 (2020), DOI
+10.1007/s00190-020-01368-6. All are filed untracked in
 `doc/references/`. And `data/albedo/earth_ceres_{reflectivity,emissivity}_grid2.5.dat`, two GROOPS
 binary `griddedData` files.
 
@@ -1129,6 +1132,45 @@ later calls went on printing it. 25 became 3, not 0: the flood had been MOVED ra
 restore that happens later than the thing it protects is not a restore**, and counting the
 remaining warnings is what showed the difference between 3 and 0.
 
+**[V] READ 2026-09-17. It does NOT close O-6, and it contradicts [H24] on a default this toolbox
+ships.**
+
+**O-6 stays open, for the reason predicted before reading**: [V] is **GRACE-A, 2010**, not GRACE-FO,
+and it never publishes a per-axis thermal acceleration. Thermal appears only as a DIFFERENTIAL
+effect, and the one figure given (mean differences up to 7e-9 m/s^2) lumps instantaneous thermal
+reradiation together with anisotropic reflection. GROOPS `SimulateAccelerometer` remains the only
+candidate that would give a per-axis thermal acceleration for the right satellite from independent
+code, and it is the standing ask.
+
+**THE FINDING THAT MATTERS IS NOT THE ORACLE.** [V] and [H24] disagree, in print, about whether
+modelling thermal reradiation instantaneously helps at all -- which is exactly what `standard` and
+`precise` do (`thermal.model = "steadyState"`).
+
+| source | satellite | on instantaneous reradiation |
+|---|---|---|
+| [H24] Table 3 | GRACE-FO | cross-track residual 4.22 -> **3.04** nm/s^2, and 1.70 with inertia: it HELPS |
+| [V] sect. 5 and conclusions | GRACE-A, one year from 2010 | fits "more than **39% worse**" in cross-track; "did not lead to improvements": it HURTS |
+
+`kernel.thermalRecoil`'s ACCURACY block had cited [V] since LP-5 -- as support for TRP being the
+second-largest radiation term -- **and had never mentioned the half of it that disagrees with this
+toolbox's own default**. That is the one-sided citation this session has been finding everywhere,
+and it is now recorded in the unit.
+
+**The presets do not move, and the reasons are about evidence rather than preference**: [H24] is the
+right satellite, it is four years later, and its whole Section 3 repairs the cross-track calibration
+that [V] itself names as a possible cause of its own result. [V] also names neglected horizontal
+winds in the drag model, which this toolbox models through `env.wind` and [V] did not. A user who
+holds the other position sets `thermal.model` to "none". **It is an open question in the field, and
+the ACCURACY block now says so instead of quoting the agreeing side.**
+
+**And [V] hands O-3 a justification it did not have.** Its extended Earth-radiation model is built on
+HOURLY CERES SYN1deg -- exactly the product O-3 wants -- and its Table 2 grades the radiation source
+in the order this project has been implementing: Knocke 1988, then EBAF albedo/emission, then EBAF
+outgoing flux, then **SYN1deg outgoing flux**. It concludes that "directly using the Earth's
+outgoing fluxes improves the radiation pressure force model", with RMS fits down 5 % and 27 % for
+its two calibrations. Its Table 2 also grades the DISCRETISATION, 19 surface elements against a
+1x1 degree grid, where this toolbox tiles a cap -- a third option neither paper tested.
+
 **WP-E6 Records**, including the licensing question the grids raise: they are CERES-derived and
 CERES data is open, but these particular files come from a GROOPS distribution and this project
 does not vendor what it cannot redistribute (the O-34 lesson). Recorded as O-41 for the owner.
@@ -1141,7 +1183,7 @@ does not vendor what it cannot redistribute (the O-34 lesson). Recorded as O-41 
 |---|---|---|---|---|
 | O-1 | `qc.hampel` loop is 382× slower than `movmedian` (0.64 s/day, acceptable); first candidate for the density/MEX session or a two-pass movmedian formulation with exact window-MAD | open | LP-5 | when a day-of-data screen exceeds 5 s end to end |
 | O-2 | **Closed 2026-09-07 (LP-5):** `MacroModel` packs unit normals (`N = N ./ |N|`) and keeps the printed value in `panels(k).normal`; no kernel renormalises. Measured before the change: thermalRecoil per-plate magnitude off by 7.3e-7 with the printed normals, 1e-16 after. Handbook normals are printed to six digits (norm 1 − 7.3e-7, measured 2026-09-07; the earlier rows declared 5e-7 for the squares); `MacroModel` still refuses beyond 1e-5 | closed | LP-5 | — |
-| O-3 | CERES SYN1deg variable names (B7) | open | owner supplies a file | before WP-27 |
+| O-3 | CERES SYN1deg variable names (B7) | open | owner supplies a file | before WP-27 **JUSTIFIED 2026-09-17 by [V], which this row previously lacked.** Vielberg & Kusche build their extended Earth-radiation model on HOURLY CERES SYN1deg and report that using the Earth's outgoing fluxes directly improves the force model, RMS fits down 5 % and 27 % for their two calibrations; their Table 2 grades the source in the order this project has implemented it (Knocke, EBAF albedo/emission, EBAF flux, SYN1deg flux). So the diurnal product is worth the work and someone has measured how much. Note the 1 degree GROOPS climatology delivered in WP-E2 is NOT this: a monthly mean has no diurnal cycle whatever its file is named |
 | O-4 | **CLOSED 2026-09-16 (LP-C WP-C9), by removal and not by an adapter.** odeSuite delivered `gjToolbox.DynamicsSource` and `csrc/gj_native.h` (ABI 1); `NonGravForces.app.DynamicsSource` subclasses it, and `Model.rhs` is deleted — a handle matching no signature the integrator takes was worse than no handle at all, and `tests/tNgfModel.m` now asserts the method does not come back. `Model` was not changed otherwise, as this row required. Issue #35 closes with it. Original entry (2026-09-08, narrowed by reading the repository instead of waiting for it): odeSuite was at L0 with no dynamics interface, its validator documented `@(t, r, v)` with numeric t, and `Model.rhs()` returned `@(epoch, r, v, q)`, which would have passed the validator's degraded branch and then been called with the wrong signature | closed | LP-C | — |
 | O-5 | `referenceSystem` MEX reported "present but not loadable" by its own setup on 2026-08-27; **2026-09-06: setup reports `mex current` (gateway built 2026-08-05, SOFA 20231011, OpenMP 32 threads), so it loads on the host**; open only for the CI runner. **The LP-6b re-entry is void: that MEX is not linked (B.1), so nothing in this toolbox depends on it loading.** Re-entered only if a C caller ever needs `rsApiRotation` | open | owner | if a C integrator is written |
 | O-6 | **Exact TRP oracle. Narrowed 2026-09-17 (WP-E5), still open.** [S] Table 3 gives RMS per axis for GRACE-A 2008 and is gated. [H24] was expected to supply the GRACE-FO equivalent and does NOT: its 0.148 nm/s^2 is its own thermal model against its own thermistors on the solar arrays at a fitted (C, k), not thermal recoil against truth, and its Table 3 is a ladder of cross-track RESIDUALS by modelling choice rather than a TRP acceleration. Two checks were taken from it and are gated: case (a) omits thermal emission and leaves 4.22 nm/s^2, which bounds the magnitude of the omitted term for THIS satellite (measured here 5.263 nm/s^2 cross-track, bracketed by 4.22 GRACE-FO and 6.4 GRACE-A), and the (b)->(c) step of 1.34 nm/s^2 says what thermal inertia is worth (measured 0.950 nm/s^2 as a model difference). **What is still missing is a published per-axis TRP acceleration for GRACE-FO** | open | owner | [V]'s 2025 update, an ACT1B residual analysis, or any source that publishes the TRP acceleration itself rather than a residual after it **SOURCE SUGGESTED 2026-09-17 and put to the owner: GROOPS `SimulateAccelerometer`.** It is the only candidate that gives a PER-AXIS thermal acceleration, for THIS satellite and day, from code this project did not write, and it closes O-19/WP-34 in the same stroke -- run once as a black box, freeze the per-effect output as CSV under `tests/fixtures/groops/`, commit that, and neither CI nor the host ever needs GROOPS again. The blocker is the installation, not the method. Fallbacks, both weaker: Vielberg & Kusche (J. Geodesy 2020), the `[V]` this row already names, which publishes modelled radiation-pressure accelerations rather than residuals but may cover GRACE rather than GRACE-FO (unverified, and the "2025 update" is an expectation this project has not confirmed exists); and Woeske et al. (ASR 2019), whose per-axis non-gravitational budget is GRACE-A class and would be a second comparator rather than the missing GRACE-FO one. An ACT1B residual analysis is corroboration and NOT an oracle: subtracting our own model from measurements and calling the remainder truth is circular |
