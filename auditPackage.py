@@ -155,6 +155,40 @@ try:
 except Exception as exc:                      # a broken generator must be a finding, not a crash
     note(f"tools/buildDocs.py could not render the documentation: {exc}")
 
+# 6a. HANDOVER Part H has ONE status field, and nothing else carries a status. Until 2026-09-17
+#     it had none: status lived in the body's prose, in the Owner column or in the Re-entry column,
+#     and eleven of forty rows disagreed with themselves -- nine announcing CLOSED while Re-entry
+#     still named a live trigger. A summary of "what is open" was wrong because there was nothing
+#     to read. The Status column is now the authority and this refuses the drift back.
+handover = open(os.path.join(ROOT, "HANDOVER.md"), encoding="utf-8").read()
+part_h = handover[handover.index("## Part H"):handover.index("## Part I")]
+if "| # | Item | Status | Owner | Re-entry |" not in part_h:
+    note("HANDOVER Part H: the obligations table has no Status column -> status would scatter again (O-26)")
+obligations = re.findall(r"^\| (O-\d+) \| (.*?) \| (.*?) \| (.*?) \| (.*?) \|\s*$", part_h, re.M)
+if not obligations:
+    note("HANDOVER Part H: no obligation rows parsed -> the table shape changed and nothing can read it")
+statuses = {}
+for num, body, status, owner, reentry in obligations:
+    st = status.strip().lower()
+    statuses[num] = st
+    if st not in ("open", "closed", "void"):
+        note(f"HANDOVER {num}: status {status.strip()!r} is not open, closed or void")
+    # A row that announces its own closure in CAPS must not be marked open, and vice versa.
+    announced = re.match(r"\*\*(CLOSED|VOID)\b", body.strip())
+    if announced and st == "open":
+        note(f"HANDOVER {num}: the item announces {announced.group(1)} but its status is open")
+    if st in ("closed", "void") and reentry.strip() not in ("\u2014", "-", ""):
+        note(f"HANDOVER {num}: status {st} but Re-entry still names {reentry.strip()[:40]!r}")
+    for col, name in ((owner, "Owner"), (reentry, "Re-entry")):
+        if re.fullmatch(r"(?i)\s*(closed|void|half closed)\s*", col):
+            note(f"HANDOVER {num}: the {name} column carries a status ({col.strip()!r}) -> the Status column is the authority")
+# CLAUDE.md quotes the range; it is derivable, so it is compared.
+rng = re.search(r"currently O-1 to O-(\d+) with an owner", claude)
+if not rng:
+    note("CLAUDE.md: no 'currently O-1 to O-N' sentence naming the obligation range")
+elif obligations and int(rng.group(1)) != max(int(n[2:]) for n in statuses):
+    note(f"CLAUDE.md: says O-1 to O-{rng.group(1)}, Part H holds up to O-{max(int(n[2:]) for n in statuses)}")
+
 # 6b. NO BUILT PDF IN THE REPOSITORY (O-38). A PDF committed beside its own .tex has nothing
 #     keeping the two in step, and this one drifted nine minor versions before anyone looked.
 #     doc/src is the deliverable; the CI job "theory" builds the PDF and uploads it as an artefact.
