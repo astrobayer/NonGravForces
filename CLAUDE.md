@@ -84,7 +84,7 @@ this file's version stamp).
   third, at L8 and not in `Model`**: `app.DynamicsSource`'s native entry
   (`mex/ngfRhs.c`) evaluates the WHOLE chain in C over tables built once per run,
   for an integrator's inner loop. Same rule — MATLAB is normative, parity is
-  asserted in four configurations in `tNgfIntegration`, and `Model` is untouched.
+  asserted in six configurations in `tNgfIntegration`, and `Model` is untouched.
 - **MATLAB is normative.** The C/MEX port (LP-6b, hand-written, no MATLAB Coder,
   `mex/ngfKernel.c` + `kernel.singleEpoch`) and the standard-library kernel mirror
   (WP-33) are verified *against* MATLAB, never the reverse. The C is written in the
@@ -174,7 +174,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   version 0.10.0), `mex/test/runCChecks.sh` clean (14 bounds). Earlier rounds of LP-C: 334
   (C1–C4, C7), 352 (C8, C10), 358 (C11). **`Model.rhs` is gone** and the integrator's entry point
   is `app.DynamicsSource`, whose native C evaluator agrees with `Model.accel` to 2.5e-14 relative
-  at a table node in four configurations.
+  at a table node in six configurations.
 - Before LP-C: **276/276 GREEN on the CI runner** (2026-09-08, LP-7 WP-30, R2026a Update 5, 219.6 s; predicted
   276). Before that LP-6b at 270/270, and: **262/262 tests GREEN** (2026-09-08, R2026a Update 4, Tier A host run; predicted 263,
   261 on the branch and 262 after merging main — reconciled in HANDOVER Part I),
@@ -328,7 +328,8 @@ preset. What a later session most needs to know:
   ~15 m² of plates and zeroed the Earth heating of every panel facing away from the Sun. New unit
   `geom.flowShadow` weights the occlusion by the incident drifting-Maxwellian flux. Measured on 120
   real epochs: drag moves 1.68e-9 m/s² RMS, thermal 1.77e-9, and the nadir panel stops reading 0 K.
-- **`precise` now evaluates**: NRLMSIS 2.1, HWM14, CERES EBAF 4.2.1, `walker2014` accommodation,
+- **`precise` now evaluates**: NRLMSIS 2.1, HWM14, CERES EBAF 4.2.1, `walker2014` accommodation (**since
+  2026-09-17 it takes the FITTED `fixed` 0.85 of March et al. 2021 instead -- O-42**),
   IGRF-14. All third-party model source and data are FETCHED by `setupNonGravForces` at pinned
   SHA-256s and redistributed by nobody.
 - **The integrator's entry exists** (WP-C9): `app.DynamicsSource` and `mex/ngfRhs.c`. `Model.rhs`
@@ -350,7 +351,7 @@ preset. What a later session most needs to know:
   under `tests/fixtures/groops/` and committed; neither CI nor the host needs a
   GROOPS installation.
 
-**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-42 with an owner
+**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-43 with an owner
 and a re-entry condition each. This file deliberately does NOT list them: the copy that
 used to live here had drifted to O-15 of 21 and showed two closed items as open, and no
 check compared the two (R1). Read Part H.

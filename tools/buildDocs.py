@@ -110,7 +110,11 @@ def render_generated_tex():
              "\\newcommand{\\ngfversion}{%s}                 %% +NonGravForces/toolboxVersion.m" % version,
              "\\newcommand{\\ngfdate}{%d %s %s}%s%% toolboxVersion.m .date"
              % (int(day), months[month - 1], year, " " * 10),
-             "\\newcommand{\\ngfmodel}{%s}%s%% toolboxVersion.m .model" % (model, " " * 6)]
+             "\\newcommand{\\ngfmodel}{%s}%s%% toolboxVersion.m .model" % (model, " " * 6),
+             # The .tex said "51 units" from LP-5 until 2026-09-17, four levels after it stopped being
+             # true, because nothing compared it with anything. Same defect as CLAUDE.md's count (F8).
+             "\\newcommand{\\ngfunitcount}{%d}%s%% rows of doc/functionlist.csv"
+             % (len(list(csv.DictReader(open(CSV, encoding="utf-8")))), " " * 6)]
     lines.append("%% The admissible option values, from Options.validateValue's `sets` struct:")
     for key, values in read_option_sets():
         pretty = ", ".join("\\texttt{%s}" % v for v in values)

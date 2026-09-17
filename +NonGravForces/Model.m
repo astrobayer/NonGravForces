@@ -678,7 +678,7 @@ if d.gsi ~= "constantCd"
         NonGravForces.fail("Model", "inputOptions", "drag.alpha is read only by accommodation fixed, and %s computes its own -> set('drag.alpha', []) so the value is not silently ignored", d.accommodation);
     end
     if d.accommodation == "walker2014" && isempty(d.surfaceMass_amu)
-        NonGravForces.fail("Model", "inputOptions", "drag.accommodation walker2014 needs drag.surfaceMass_amu -> the precise preset sets 263.3223 (Mehta et al. 2022); state your value");
+        NonGravForces.fail("Model", "inputOptions", "drag.accommodation walker2014 needs drag.surfaceMass_amu -> the sources disagree (263.3223 amu Mehta et al. 2022, 65 amu Pilinski 2013); state which one you use");
     end
     if d.gsi == "maxwell" && isempty(d.specularFraction)
         NonGravForces.fail("Model", "inputOptions", "drag.gsi maxwell needs drag.specularFraction -> set('drag.specularFraction', 0.1), say");

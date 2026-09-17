@@ -63,8 +63,15 @@ classdef tNgfCore < NgfTestCase
             tc.verifyErrorId(@() NonGravForces.Options("standard", "erp.anisotropy", "adm"), 'NonGravForces:Options:inputField');
             tc.verifyErrorId(@() NonGravForces.Options("standard", "geom.lutResolution", 16.5), 'NonGravForces:Options:inputValue');
             p2 = NonGravForces.Options("precise");
-            tc.verifyEqual([p2.drag.accommodation, p2.drag.density, p2.geom.selfShadow], ["walker2014", "msis21", "lut"]);
-            tc.verifyEqual(p2.drag.surfaceMass_amu, 263.3223); tc.verifyEmpty(p2.drag.alpha); tc.verifyEqual(p2.geom.lutResolution, 32);
+            % O-42, 2026-09-17: precise takes March et al. (2021)'s FITTED 0.85, not a computed
+            % accommodation. The substrate mass must clear with it -- a value left behind beside a
+            % model that does not read it is exactly the contradiction Options is supposed to refuse.
+            tc.verifyEqual([p2.drag.accommodation, p2.drag.density, p2.geom.selfShadow], ["fixed", "msis21", "lut"]);
+            tc.verifyEqual(p2.drag.alpha, 0.85); tc.verifyEmpty(p2.drag.surfaceMass_amu); tc.verifyEqual(p2.geom.lutResolution, 32);
+            % and the computed models stay reachable by name, with the mass the sources disagree over
+            pw = NonGravForces.Options("precise", "drag.alpha", [], "drag.accommodation", "walker2014", "drag.surfaceMass_amu", 263.3223);
+            tc.verifyEqual([pw.drag.accommodation, pw.drag.density], ["walker2014", "msis21"]);
+            tc.verifyEqual(pw.drag.surfaceMass_amu, 263.3223); tc.verifyEmpty(pw.drag.alpha);
             tc.verifyEmpty(o.set("drag.specularFraction", 0.1).set("drag.specularFraction", []).drag.specularFraction, 'an optional value clears back to empty');
             o2 = o.set("srp.tsi", 1367);
             tc.verifyEqual(o2.srp.tsi, 1367);

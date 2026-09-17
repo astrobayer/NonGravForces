@@ -109,7 +109,11 @@ function [acc, info] = accommodation(model, species, T_K, options)
 %   aerodynamic computations, PhD thesis, University of Colorado, sect. 7.3 and
 %   Table 11.1. Walker A., Mehta P., Koller J. (2014) J. Spacecraft Rockets 51(5)
 %   1544. Paul S.N., Sheridan P.L., Licata R.J., Mehta P.M. (2022) arXiv:2210.08364v2,
-%   eqs 10-13. March G. et al. (2019) J. Space Weather Space Clim. 9, A36.
+%   eqs 10-13. March G., van den IJssel J., Siemes C., Visser P.N.A.M., Doornbos E.N.,
+%   Pilinski M. (2021) Gas-surface interactions modelling influence on satellite
+%   aerodynamics and thermosphere mass density, J. Space Weather Space Clim. 11, 54,
+%   DOI 10.1051/swsc/2021035 -- the fitted alpha = 0.85 the presets use (corrected
+%   2026-09-17; this block cited "9, A36", which resolves to no paper, HANDOVER O-42).
 %
 % EXAMPLE
 %   [~, sp, T] = NonGravForces.env.density("msis00", ep, lla, sw);
