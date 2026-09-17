@@ -659,12 +659,98 @@ latitudes in radians, 72 row radii, 10368 solid angles, and a 10368 x 12 value t
 say the reading is right rather than merely plausible: the solid angles sum to 12.566424 against
 4*pi = 12.566371, and the payload fills the file exactly.
 
-**WP-E2 `env.earthRadiance` gains the gridded CERES climatology.** **The better file is the one the owner pointed at**: `earthRadiationPressure/CERES_SYN1deg_{albedo,longwaveFlux}_climatology.dat`, 1 degree rather than 2.5. Both are `griddedDataTimeSeries`, decoded from the bytes: ellipsoid, 360 longitudes (centres +-179.5), 180 geodetic latitudes, 180 row radii, 64800 solid angles, then **2413 time NODES** (16 bytes each: a double fraction and an int64 MJD, spacings 28-31 days, MJD 15020..88434 = 1900-01 to 2101-01) bounding **2412 monthly grids** of 64800 float64. Nodes minus one is exactly the grid count, which is what a piecewise-constant monthly mean requires. Albedo lands at 0.11-0.75, January mean 0.3232, agreeing with the 2.5 degree file's January 0.3259. **CORRECTION to this session's first reading**: the values are stored COLUMN-MAJOR, one whole grid at a time, as Eigen serialises a matrix. The first probe assumed row-major and reported 0.391 and 0.657, numbers that survived into this record for an hour. Three things settle it: the two files agree only under column-major; the seasonal phase is right only under column-major (maximum in December and January, minimum in August, which is northern snow); and the corrected means sit much closer to Knocke's own a0 = 0.34 and e0 = 0.68 than the wrong ones did. The values are Knocke's own
-quantities -- area-weighted global means **0.319** reflectivity and **0.698** emissivity against Knocke's
-a0 = 0.34 and e0 = 0.68 -- so this is the same model with a measured 2.5 degree monthly map in
-place of a two-term Legendre fit to Nimbus-7 from 1988. **It is NOT SYN1deg and O-3 stays open**:
+**WP-E2 `env.earthRadiance` gains the gridded CERES climatology.** **The better file is the one the owner pointed at**: `earthRadiationPressure/CERES_SYN1deg_{albedo,longwaveFlux}_climatology.dat`, 1 degree rather than 2.5. Both are `griddedDataTimeSeries`, decoded from the bytes: ellipsoid, 360 longitudes (centres +-179.5), 180 geodetic latitudes, 180 row radii, 64800 solid angles, then **2413 time NODES** (16 bytes each: a double fraction and an int64 MJD, spacings 28-31 days, MJD 15020..88434 = 1900-01 to 2101-01) bounding **2412 monthly grids** of 64800 float64. Nodes minus one is exactly the grid count, which is what a piecewise-constant monthly mean requires. Albedo lands at 0.11-0.75, **December 2019** area-weighted mean 0.3232 against the 2.5 degree file's December 0.3286 and January 0.3259. **CORRECTION to this session's first reading**: the values are stored COLUMN-MAJOR, one whole grid at a time, as Eigen serialises a matrix. The first probe assumed row-major and reported 0.391 and 0.657, numbers that survived into this record for an hour. Three things settle it: the two files agree only under column-major; the seasonal phase is right only under column-major (maximum in December and January, minimum in August, which is northern snow); and the corrected means sit much closer to Knocke's own a0 = 0.34 and e0 = 0.68 than the wrong ones did. **CORRECTION 2026-09-17, and it changes the design: the two file pairs do not carry the same
+physical quantity, and this block had merged them.** Measured through `io.importGroopsGrid`:
+
+| file pair | container | resolution | first field | second field |
+|---|---|---|---|---|
+| `CERES_SYN1deg_{albedo,longwaveFlux}_climatology.dat` | `griddedDataTimeSeries`, 2412 monthly grids 1900-2101 | 1 degree | albedo, 0.11-0.75, Dec 2019 area-weighted **0.3232** | longwave **FLUX, W m^-2**, 145-303, Dec 2019 area-weighted **235.66** |
+| `earth_ceres_{reflectivity,emissivity}_grid2.5.dat` | `griddedData`, 12 monthly columns | 2.5 degree | reflectivity, monthly 0.3095-0.3286, annual **0.319** | emissivity, monthly 0.6883-0.7113, annual **0.698** |
+
+So **only the 2.5 degree pair holds Knocke's own dimensionless quantities**, and it is that pair whose
+annual means are 0.319 and 0.698 against Knocke's a0 = 0.34 and e0 = 0.68. The 1 degree pair's second
+file is an OUTGOING LONGWAVE FLUX: 235.66 W m^-2 is a global OLR, not an emissivity, and feeding it to
+the emissivity route would be wrong by a factor of ~340. This block previously attributed 0.698 to the
+1 degree pair.
+
+The seasonal phase that settles column-major survives the correction and is now measured on the pair
+that actually carries it: 2.5 degree reflectivity peaks in December and January (0.3286, 0.3259) and
+bottoms in August and September (0.3098, 0.3095), which is northern snow; emissivity peaks in July
+(0.7113) and bottoms in December (0.6883), which is the northern summer surface. **It is NOT SYN1deg and O-3 stays open**:
 there is no diurnal cycle in a monthly climatology. What it adds beyond fidelity is that GROOPS
 uses these very grids, so a future comparison against it (O-19) becomes apples to apples.
+
+**SCOPE FROZEN 2026-09-17, after the corrections above.** `env.earthRadiance` gains the backend
+`"ceresClimatology"`, fed the **1 degree pair**, because it is four times the resolution AND because a
+measured outgoing flux is strictly better than an emissivity multiplied by a mean insolation. It
+therefore joins the EXISTING measured-exitance route: `.albedo` from the first file and
+`.exitanceLw_W_m2` from the second, `.emissivity` left empty, and `env.radiationSources` needs no
+change at all -- it already branches on whether `exitanceLw_W_m2` is empty.
+
+- **The reference level is MEASURED, not declared.** The file carries one radius per latitude row, and
+  those radii are the WGS84 ellipsoid radius at the row's geodetic latitude **plus 30 km**, to 0.02 m
+  over all 180 rows. So GROOPS places these fluxes at a 30 km TOA level, and the backend reads that
+  height out of the file rather than carrying a constant. It also confirms, rather than assumes, that
+  the file's latitudes are geodetic -- the reader had said so on inference.
+- **The latitude spacing is not exactly 1 degree** (centres 89.4966, 88.4899, ...), so nothing may
+  compute a latitude index arithmetically; the axes are the file's own.
+- **Time is PIECEWISE CONSTANT**, not interpolated: 2413 nodes bound 2412 grids and the container is
+  defined that way. The existing `ceres` backend interpolates linearly between monthly nodes; this one
+  must not, and a test asserts the difference rather than trusting the comment.
+- **The native path REFUSES it.** `app.DynamicsSource` builds tables once per run and a 64800-cell
+  monthly climatology is not table material; refusing is R4 and is tested, where a silent fallback to
+  Knocke would be the worst outcome available. Recorded as an obligation rather than a silence.
+- Tests write their own GROOPS fixture, as WP-E1's do, because the real grids are 1.25 GB and live in
+  DATAPOOL; the gate must not depend on a file the runner may not hold.
+
+**WP-E2 DELIVERED 2026-09-17.** `erp.backend = "ceresClimatology"` evaluates the 1 degree GROOPS
+CERES monthly climatology on the cap tiles. Predicted 379 and ran 379 GREEN on Tier A.
+
+**Insisting the reference level be MEASURED is what caught a wrong latitude convention, and that is
+the finding.** The design said the backend must read its TOA height out of the file rather than
+carry a constant. Comparing the file's 180 per-row radii against the WGS84 ellipsoid radius at the
+stored latitude read as GEODETIC spreads by **71.6 m**; read as GEOCENTRIC it collapses to **0.168
+m** about exactly 30000.1 m. Two independent checks agree: atan((1 - e^2) tan(89.5 deg)) = 89.49664,
+which is the file's first centre to 1e-7 deg, and the spacing then runs 0.9933 to 1.0067 instead of
+being uniform. **The grid is laid out uniformly in GEODETIC latitude and the file stores the
+GEOCENTRIC latitude of those same points**, and `io.importGroopsGrid` had documented them as
+geodetic since WP-E1. A consumer that converts before the lookup -- which is exactly what the
+`ceres` backend correctly does for ITS product -- misplaces every tile by up to 0.19 deg, a fifth of
+a cell. Writing `R = ell.a + 30e3` from the record would have shipped it invisibly.
+
+**Three further corrections to this record's own reading, all committed before any code**: the 1
+degree pair's second file is an outgoing longwave FLUX (145-303 W m^-2, December 2019 area-weighted
+235.66), not an emissivity -- the 0.319 and 0.698 belong to the 2.5 degree reflectivity/emissivity
+pair, and routing a flux through the emissivity branch would have been wrong by ~340x; a grid was
+labelled January when the seek for [58849 58850] returns grids 1440 and 1441 and grid 1440 spans
+2019-12-01 to 2020-01-01; and the longitude axis carries SINGLE-PRECISION jitter (1.37e-05 deg
+between neighbouring gaps, first centre -179.499994, 3.2e-08 relative), so it is uniform in intent
+and not in its bytes. It is therefore indexed with the AVERAGE spacing, so the jitter cannot
+accumulate across 360 cells, and its uniformity is asserted at 1e-3 rather than at float noise.
+
+**A contract fix in `io.importGroopsGrid`, found by using it.** After a `TimeRange` seek `.mjd` kept
+the file's whole node list beside a seeked subset of `.values` -- 2413 nodes beside 2 grids -- so the
+struct could not say which months it held and the invariant its own reference test asserts (nodes
+are one more than grids) was false for every seek. `.mjd` is now trimmed to the nodes bounding the
+grids returned, and the file's span moved to `aux.mjdFile`, where it is a fact about the FILE rather
+than about these values. **R2: metadata travels with the data it describes, and the way to find out
+that it does not is to consume it.**
+
+**A shape defect that existed only at K = 1.** The latitude weight indexes the axis, `la(i0)`, and
+for a VECTOR source MATLAB returns the SOURCE's orientation: `la` is a row, `i0` is MxK, so `la(i0)`
+came back 1x(M*K) and subtracting an MxK latitude broadcast to (M*K)x(M*K). At K = 3 the shapes
+still disagreed and the error surfaced; at K = 1 it produced a 72x72 array where 72x1 was meant --
+the right size in one dimension. The batched path was bitwise unchanged by the fix (difference
+exactly 0), so **the whole defect lived in the single-epoch call, which is the one an integrator
+makes**. This is the mirror of the pitfall this project already records about batch size: there the
+warning is not to claim bitwise ACROSS batch sizes, here it is that a shape can be wrong at exactly
+one of them. The vectorization category is what caught it, on its first run.
+
+**What it does NOT add.** It is a monthly climatology: the file is named SYN1deg but a monthly mean
+has no diurnal cycle, and O-3 (the 3-hourly product) stays open and is a different thing. The native
+path REFUSES it (O-44) rather than letting `find()` return empty and the enum silently become 0,
+which is `none` -- a Model that computes Earth radiation would have become one that does not, on the
+native path only.
 
 **WP-E3 SESAM** (`drag.accommodation = "sesam"`), from [P13]. O-16 closes or the record says
 exactly which constant is still missing.
@@ -1018,6 +1104,7 @@ does not vendor what it cannot redistribute (the O-34 lesson). Recorded as O-41 
 | O-41 | **CLOSED 2026-09-17 the same day it opened: the data is public and is now FETCHED, not vendored.** The owner named the source -- GROOPS publishes its whole data pool at `https://ftp.tugraz.at/pub/ITSG/groops/data/` -- so the redistribution question never had to be answered: nothing is committed. `setupNonGravForces` gains `'FetchGroops'` (default **never**, because two of the files are 1.25 GB EACH) and `'DataPool'`, and writes into `<DATAPOOL>/EarthRadiationPressure`. The pool is NAMED, never guessed: without the DATAPOOL environment variable the fetch reports and does nothing, because choosing a directory for 2.5 GB on a user's behalf is not a service (R5). No SHA-256 pin, deliberately: the publisher states it does not commit to keeping the files updated, so a digest measured once here would turn their next revision into a failure rather than a fact -- what is checked is the GROOPS magic and type string, read from the first bytes | closed | — | — |
 | O-42 | **RULED 2026-09-17 and mostly discharged: `precise` takes the fitted alpha = 0.85 of [M21], the adsorption models are opt-ins, and the citation is fixed in both kernel units.** The investigation that led there is in Part G, LP-E, and its conclusion was that the models are NOT defective: at CHAMP's altitude and solar conditions `pilinski2010` returns 0.86-0.95 against the 0.85-0.93 [M21] reports for SESAM there, while the same code returns 0.11-0.17 at 520 km in deep solar minimum and 0.63-0.83 at F10.7 = 180. **What remains open is the narrower half the ruling did not cover**: `kernel.accommodation` computes `info.insideFit` -- whether the returned alpha falls inside the 0.85-1.00 its constants were fitted over -- and no caller has ever read it, so a user who opts into `walker2014` at GRACE-FO altitude gets a number five times below every published fit with no indication at all. Under R4 that is a silent degradation and the instrument to end it already exists | open | owner | rule on whether a computed accommodation outside its fitted range warns, refuses, or only reports through `info`; the preset and citation halves are closed |
 | O-43 | **Two defects in the local gate rehearsal, neither in the toolbox.** (a) `ciGate`'s `DependencyRoot` defaults to the parent folder, so a bare `matlab -batch ciGate` installs from the SIBLING clones -- including the `referenceSystem` checkout another session keeps on `fix/reviewFindings` -- and reaches its dependencies through `run(f)`, which cannot pass the `'Save', false` that `setupReferenceSystem` accepts. Every rehearsal therefore calls `savepath`, and successive rehearsals churn the saved path between the sibling clones and the scratchpad clones; a scratchpad path that is later deleted stays saved. Harmless on a disposable CI runner, a side effect nobody asked for on a developer host. The fix must not make the rehearsal and the runner differ -- that is what makes it a rehearsal -- and `'Save', false` is right for both, since CI never benefits from a saved path either. (b) **Upstream**: `setupReferenceSystem` reads its leap-second table through the MEX gateway before it decides to relink it, so on Windows the DLL is already mapped and the relink always fails; it then warns `mexBuildFailed` whether the binary is stale or merely locked-and-current. That warning fired in a 374/374 GREEN run on 2026-09-17, which is why the obvious hardening in `ciGate` (promoting it to an error) was written and then NOT shipped -- it would red-gate a healthy host. A consumer cannot make the distinction; only the side that knows the source hash can | open | claude | (a) give `ciGate` an explicit dependency setup call passing `'Save', false`, and fault-inject on `pathdef.m`'s mtime across a rehearsal; (b) file upstream that `mexBuildFailed` must distinguish a stale binary from a locked current one, then reconsider the gate check |
+| O-44 | **`erp.backend = "ceresClimatology"` has no native evaluator and `app.DynamicsSource` REFUSES it.** Added with the backend on 2026-09-17 (WP-E2). The native path builds its tables once per run and a 64800-cell monthly grid is not table material, so the C was not extended; what matters is that the refusal is explicit. `DynamicsSource` maps the option name to an enum with `find(...)`, which returns EMPTY for a name the C does not know, and the packed value would then silently become 0 -- `none`. A Model that computes Earth radiation would have become one that does not, on the native path only, with nothing to say so, and the parity test cannot catch what it cannot construct. The refusal raises `NonGravForces:DynamicsSource:unsupportedOption` AT CONSTRUCTION and is tested. It was first written into the table-packing path, where it fired only after `prepare()`; the contract test expecting it at construction reported "nothing was thrown", which is the project's own rule that a refusal test which does not refuse is an untested guard -- except here the guard existed and the test was still right, because an option this evaluator cannot serve should cost the caller nothing to discover | open | claude | either port the bilinear lookup and a month's two grids into the rhs tables, or rule that an integrator uses `ceres` and this backend stays a post-processing one; the second is defensible and is what ships today |
 | O-39 | **CLOSED 2026-09-16, the same day it opened: the owner widened the secret's repository access and the runner checks odeSuite out.** The wall had been hiding two real defects, both invisible on this host and both fixed in the same round: (i) `buildMex`'s walk to odeSuite's `csrc` overshot by one directory, and since CI sets no `NGF_GJTOOLBOX` the `rhs` target would have reported unbuildable and `ciGate` would have gone red blaming an absent gjToolbox that was sitting right beside it; (ii) `ciGate` never built gjToolbox's own native stepping kernel, which is not committed, which a fresh checkout therefore lacks, and which `tNgfIntegration` propagates through. Each was masked by something this host had and the runner does not — an environment variable and a hand-built MEX. **The access wall was worth hitting: it is the only reason either defect was found before a release.** Original entry: **an ACCESS fact, measured twice, not a guess.** Since LP-C the `matlab` job checks the sibling out, because `app.DynamicsSource` subclasses `gjToolbox.DynamicsSource` and cannot load without it. `REFERENCE_READ_TOKEN` syncs `referenceSystem` and `gracefoReading` in that same job, seconds earlier, and then: **404** at the REST call that resolves the default branch (Metadata:read), and — with `ref: main` given so that call is skipped — **403** on the git fetch itself (Contents:read). Both permissions are refused, so the secret's repository scope does not include odeSuite. **The fix is one setting and it is the owner's**: add `astrobayer/odeSuite` to that organisation secret's repository access. The alternative, `continue-on-error` on the checkout, is refused here: the job would then run without gjToolbox and report green about a gate that never loaded the unit it exists to cover. Until then LP-C is ☑ on Tier A and unseen by the runner | closed | owner | — |
 | O-38 | **CLOSED 2026-09-16 by removing the second authority, not by rebuilding it.** The investigation found the obligation had understated the problem: the committed PDF was the one from the initial commit, its title page said **version 0.1.0** three weeks and nine minor versions later, and the `.tex` it came from carried **eight statements the shipped toolbox contradicts** — `sesam`/`langmuir` accommodation (never implemented, O-16), DTM2020 and JB2008 as density backends (removed in WP-C2), `erp.anisotropy=adm` (removed, F4), an icosphere LUT (a cube map since WP-C3), complex-step verification (measured impossible and removed), and `lsqvce` as the estimator (dropped 2026-09-09). Rebuilding the PDF would have rendered every one of them faithfully. **The fix is the mechanism, not the file:** (i) `tools/buildDocs.py` generates `doc/src/generated.tex` — the version, the date and every enumerated option list, the last read from `Options.validateValue`'s own `sets` struct — and the document `\input`s it, so it cannot print a version or offer an option the toolbox would refuse; (ii) `auditPackage.py` refuses a stale `generated.tex` by CONTENT, refuses a committed PDF under `doc/`, and refuses a version literal in the `.tex`; (iii) a new CI job `theory` compiles the document on every run with `-halt-on-error`, fails on an undefined reference or control sequence (LaTeX only warns and still writes a PDF), and uploads the result as the `theoryDocument` artefact. The eight stale statements are corrected and the document gained the section it most lacked, `sec:flow`, on why occlusion is not facing and a gas is not a beam. Original entry: the theory PDF is one revision behind its own source; this host has no LaTeX and no instrument inspects the PDF | closed | — | — |
 | O-11 | **CLOSED 2026-09-09 (WP-21).** `tools/buildDocs.py` renders all seven pages and `helptoc.xml`, each derivable fact from its single authority: the catalogue for the reference, the sensor table and the delivered/stub counts; `fail.m`'s help block for the mnemonic taxonomy; `toolboxVersion.m` for every footer. `auditPackage.py` refuses a stale page by CONTENT, and was fault-injected to prove it. The obligation had already come due: `Sensors.html` credited `Electrostatic` with a "CRN filter" — the one thing that class explicitly does NOT build — and listed all three sensors as future work months after two had shipped. A page nobody generates is a page that lies eventually | closed | — | — |

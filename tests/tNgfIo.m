@@ -1104,6 +1104,18 @@ classdef tNgfIo < NgfTestCase
             [two, aux2] = NonGravForces.io.importGroopsGrid(f, 'TimeRange', [58035 58065]);
             tc.verifyEqual(aux2.gridsRead, [2 3]);
             tc.verifyEqual(two.values, all3.values(:, :, 2:3));
+            % .mjd IS TRIMMED TO THE GRIDS RETURNED, so a seeked struct says which months it holds.
+            % It used to carry the file's whole node list beside a subset of values, and
+            % env.earthRadiance's ceresClimatology backend could not tell one grid from another
+            % (2413 nodes beside 2 grids, 2026-09-17). The invariant the reference test asserts --
+            % nodes are one more than grids -- now holds after a seek too, which is the point.
+            tc.verifyEqual(one.mjd, all3.mjd(3:4), 'the nodes bounding the one grid returned');
+            tc.verifyEqual(two.mjd, all3.mjd(2:4));
+            tc.verifyEqual(numel(one.mjd), size(one.values, 3) + 1);
+            tc.verifyEqual(numel(two.mjd), size(two.values, 3) + 1);
+            % and the FILE's own span stays reportable, as a fact about the file rather than these values
+            tc.verifyEqual(aux.mjdFile, all3.mjd([1 end]));
+            tc.verifyEqual(aux2.mjdFile, all3.mjd([1 end]));
         end
     end
     methods (Test, TestTags = {'robustness'})

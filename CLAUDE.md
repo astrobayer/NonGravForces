@@ -353,7 +353,7 @@ preset. What a later session most needs to know:
   under `tests/fixtures/groops/` and committed; neither CI nor the host needs a
   GROOPS installation.
 
-**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-43 with an owner
+**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-44 with an owner
 and a re-entry condition each. This file deliberately does NOT list them: the copy that
 used to live here had drifted to O-15 of 21 and showed two closed items as open, and no
 check compared the two (R1). Read Part H.
@@ -509,6 +509,12 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   `referenceSystem.angularVelocityFromRotationRate(R, Rdot, 'Resolution', "reference")` returns its
   NEGATIVE (ratio -1.0, measured). Reading the skew entries off `R' Rdot` without projecting the
   symmetric part out leaves the differencing error in (6e-7 relative).
+- **A rehearsal that runs FEWER checks than the runner is not a rehearsal either.** `ciGate` does
+  not run `codeIssues`; the CI `matlab` job runs it as a separate step BEFORE `ciGate`, so a local
+  gate that only calls `ciGate` can be 379/379 green and still redden CI. #46 did, on one INUSD
+  warning, after an argument stopped being used when a geodetic conversion was removed. Run
+  `codeIssues(fullfile(pwd, "+NonGravForces"))` before believing a local gate. This is the mirror
+  of the entry below, which is about giving the local run MORE than the runner gets.
 - **A rehearsal that gives the local run a hint CI does not get is not a rehearsal.** `buildMex`'s
   walk to odeSuite's `csrc` overshot by one directory (`fileparts` x3 already reaches the repository
   root; the extra `'..'` left it). Four green gates in a row said nothing, because every local script
