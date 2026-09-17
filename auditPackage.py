@@ -317,6 +317,37 @@ try:
 except OSError as exc:
     note(f"check 10 could not read the native setup sources: {exc}")
 
+# 11. EVERY VERSION STRING AND TEST COUNT IN THE README, not only the ones check 5 looks at.
+#     Check 5 compares the README's FIRST LINE with toolboxVersion and the unit count with the
+#     catalogue, and stopped there. The status paragraph carried a SECOND version string and a test
+#     count -- "LP-C is complete: 365/365 green ... version 0.10.0" -- which survived LP-D, LP-E and
+#     two version bumps, because the instrument that read the first line had never been pointed at
+#     the rest of the file. Found 2026-09-17 while cutting the release it describes.
+#     The rule that produced it is this level's own: A FACT WRITTEN DOWN TWICE AND COMPARED NEVER.
+#     So every MAJOR.MINOR.PATCH in the README must be the current version, and every "N/M green"
+#     must match what tests/last_run.txt actually recorded.
+readme = os.path.join(ROOT, "README.md")
+if os.path.isfile(readme):
+    body = open(readme, encoding="utf-8").read()
+    #     A line that deliberately QUOTES a historical version -- the PDF that said 0.1.0 for
+    #     three weeks, say -- carries versionScan:allow, so every exception is visible in the
+    #     diff that introduced it. Same convention as check 9's toolboxScan:allow, and for the
+    #     same reason: a check people learn to work around is worse than no check.
+    live = "\n".join(ln for ln in body.splitlines() if "versionScan:allow" not in ln)
+    stale = sorted({v for v in re.findall(r"\b\d+\.\d+\.\d+\b", live) if v != version})
+    if stale:
+        note("README.md names version(s) %s but the toolbox is %s -> one authority per fact; "
+             "toolboxVersion.m is it" % (", ".join(stale), version))
+    run = os.path.join(ROOT, "tests", "last_run.txt")
+    if os.path.isfile(run):
+        head = open(run, encoding="utf-8").read(400)
+        m = re.search(r"tests\s+(\d+)\s+passed\s+(\d+)", head)
+        for claimed in re.findall(r"(\d+)\s*/\s*(\d+)\s+green", body, re.I):
+            if m and (claimed[0] != m.group(2) or claimed[1] != m.group(1)):
+                note("README.md claims %s/%s green but tests/last_run.txt recorded %s passed of %s "
+                     "-> quote the run, or re-run before quoting"
+                     % (claimed[0], claimed[1], m.group(2), m.group(1)))
+
 if findings:
     print(f"auditPackage: {len(findings)} finding(s)")
     for f in findings:
