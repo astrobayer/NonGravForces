@@ -106,6 +106,15 @@ req = info.dependencies([info.dependencies.required]);
 if ~all([req.present])
     error("NonGravForces:ciGate:depMissing", "a required dependency did not answer after its setup -> read the table above");
 end
+% AND THE MINIMUM IS A VERDICT HERE. dependencyReport measures .belowMinimum and never
+% refuses (R5); the gate is where a report becomes a judgement, as it is for buildMex and for
+% the fetches above. The column was printed and read by nothing from 2026-08-27 to
+% 2026-09-17, which is exactly as much protection as not having it (O-25).
+old = info.dependencies([info.dependencies.belowMinimum]);
+if ~isempty(old)
+    error("NonGravForces:ciGate:depMissing", "%s -> install at least the declared minimum", ...
+        strjoin(compose("%s %s is below the declared minimum %s", [old.name], [old.version], [old.minimum]), "; "));
+end
 r = runNgfTests('ExcludeSlow', options.ExcludeSlow, 'Strict', false);
 reasons = strings(0, 1);
 if r.failed > 0,     reasons(end+1) = sprintf("%d failed", r.failed); end

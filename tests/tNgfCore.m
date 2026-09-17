@@ -97,6 +97,19 @@ classdef tNgfCore < NgfTestCase
                 'a dependency whose entry point resolves must be reported present: a probe that throws is not evidence of absence');
             tc.verifyTrue(all(strlength([d(logical([d.present])).version]) > 0), ...
                 'a present dependency must report a version, or the probe answered without measuring anything');
+            % O-25: the minimum is COMPARED since 2026-09-17, and the comparison reports whether it
+            % could be made at all. MICE answers CSPICE_N0067, which no dotted order can rank, so a
+            % version nobody can order must never be called too old -- that is the branch that would
+            % otherwise turn an unrankable string into a false verdict.
+            tc.verifyTrue(all(islogical([d.comparable])) && all(islogical([d.belowMinimum])));
+            mice = d(strcmp([d.name], "mice"));
+            tc.verifyFalse(mice.comparable, 'CSPICE_N0067 is not a dotted version and must not be ranked');
+            tc.verifyFalse(mice.belowMinimum, 'an unrankable version must never be reported below its minimum');
+            numeric = d(~strcmp([d.name], "mice") & [d.present]);
+            tc.verifyTrue(all([numeric.comparable]), 'the three semantic versions must be comparable with their minimums');
+            tc.verifyFalse(any([d.belowMinimum]), 'the installed dependencies satisfy their declared minimums');
+            % Nothing absent may claim a comparison: a probe that failed measured nothing.
+            tc.verifyFalse(any([d(~[d.present]).comparable]), 'an absent dependency cannot have been compared');
         end
     end
     methods (Test, TestTags = {'reference'})
