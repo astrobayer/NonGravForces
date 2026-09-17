@@ -980,6 +980,204 @@ classdef tNgfIo < NgfTestCase
             tc.verifyBoundAndRecord("spaceWeather.query(86400) / ismember time ratio", q, 200, "-", "measured 65");
         end
     end
+
+    % ============================================== io.importGroopsGrid (LP-E WP-E1)
+    methods (Static)
+        function f = writeGroopsGrid(folder, name, type, lonDeg, latDeg, values, mjd)
+            %WRITEGROOPSGRID Write a GROOPS binary file in the decoded layout, for the tests.
+            %   THE TESTS WRITE THEIR OWN FIXTURE because the real grids are 1.25 GB and live in
+            %   DATAPOOL. A round trip through this writer exercises exactly what could be
+            %   misdecoded: the length-prefixed header, the padding, the count-prefixed vectors,
+            %   the time nodes and the column-major value block.
+            f = fullfile(folder, name);
+            fid = fopen(f, 'w', 'l');
+            closer = onCleanup(@() fclose(fid));
+            fwrite(fid, 'B', 'char');
+            for str = [string(type), "20200123"]
+                fwrite(fid, strlength(str), 'uint64');
+                fwrite(fid, char(str), 'char');
+            end
+            fwrite(fid, repmat(' ', 1, 4 + 2 * (type == "griddedDataTimeSeries")), 'char');
+            isSeries = type == "griddedDataTimeSeries";
+            if isSeries
+                fwrite(fid, [0 numel(mjd) 1 1], 'uint64');
+            else
+                fwrite(fid, 1, 'uint64');
+            end
+            fwrite(fid, [6378137.0 6356752.314140], 'double');
+            nLon = numel(lonDeg); nLat = numel(latDeg);
+            % EXACT band solid angle, not a cosine times a width: the reference test asserts the
+            % sum is 4 pi, and a first-order area would make the READER look wrong for a fault
+            % that was the writer's (measured 2.6e-2 relative, 2026-09-17).
+            dPhi = deg2rad(180 / nLat); dLam = 2 * pi / nLon;
+            phi = deg2rad(latDeg(:));
+            area = repmat(dLam * (sin(phi + dPhi / 2) - sin(phi - dPhi / 2)), 1, nLon);
+            for v = {deg2rad(lonDeg(:)), deg2rad(latDeg(:)), 6378137 + zeros(nLat, 1), reshape(area', [], 1)}
+                fwrite(fid, numel(v{1}), 'uint64');
+                fwrite(fid, v{1}, 'double');
+            end
+            fwrite(fid, 1, 'uint64'); fwrite(fid, 1, 'double');
+            if isSeries
+                for k = 1:numel(mjd)
+                    fwrite(fid, mod(mjd(k), 1), 'double');
+                    fwrite(fid, floor(mjd(k)), 'int64');
+                end
+                fwrite(fid, 0, 'uint64');
+            else
+                fwrite(fid, size(values, 3), 'uint64');
+            end
+            for k = 1:size(values, 3)                 % column-major: one whole grid at a time
+                g = values(:, :, k)';                 % longitude varies fastest
+                fwrite(fid, g(:), 'double');
+            end
+        end
+        function [f, vals] = groopsFixture(folder, name, type)
+            %GROOPSFIXTURE A 8 x 4 grid with values that are their own index, so a transposed or
+            % wrongly ordered read is visible in the number and not only in a statistic.
+            lon = -157.5:45:157.5; lat = 67.5:-45:-67.5;
+            n = numel(lat) * numel(lon);
+            nk = 3;
+            vals = reshape(1:(n * nk), numel(lon), numel(lat), nk);
+            vals = permute(vals, [2 1 3]);
+            mjd = [];
+            if type == "griddedDataTimeSeries", mjd = 58000 + (0:nk) * 30; end
+            f = tNgfIo.writeGroopsGrid(folder, name, type, lon, lat, vals, mjd);
+        end
+    end
+    methods (Test, TestTags = {'contract'})
+        function importGroopsGridContract(tc)
+            d = tc.tmp;
+            [f, want] = tNgfIo.groopsFixture(d, 'g.dat', "griddedData");
+            [g, aux] = NonGravForces.io.importGroopsGrid(f);
+            tc.verifyEqual(g.type, "griddedData"); tc.verifyEqual(g.version, "20200123");
+            tc.verifyFalse(g.isTimeSeries); tc.verifyEmpty(g.mjd);
+            tc.verifySize(g.values, [4 8 3]); tc.verifySize(g.area_sr, [4 8]);
+            tc.verifyEqual(numel(g.lon_deg), 8); tc.verifyEqual(numel(g.lat_deg), 4);
+            tc.verifyEqual(g.values, want, 'the values must come back exactly as written, in the same order');
+            tc.verifyEqual(aux.pointCount, 32); tc.verifyEqual(aux.gridCount, 3);
+            tc.verifyEqual(aux.ellipsoid.a, 6378137.0);
+            tc.verifyEqual(aux.provenance.unit, "importGroopsGrid");
+            [s, sx] = NonGravForces.io.importGroopsGrid(tNgfIo.groopsFixture(d, 's.dat', "griddedDataTimeSeries"));
+            tc.verifyTrue(s.isTimeSeries);
+            tc.verifyEqual(numel(s.mjd), 4, 'a series carries one more node than it has grids');
+            tc.verifyEqual(sx.gridCount, 3);
+            tc.verifyEqual(s.mjd, 58000 + (0:3) * 30);
+        end
+    end
+    methods (Test, TestTags = {'reference'})
+        function importGroopsGridReference(tc)
+            % The oracle is the format itself, asserted by the three facts that make a misreading
+            % visible; each is checked on a file whose contents are known independently.
+            d = tc.tmp;
+            [f, want] = tNgfIo.groopsFixture(d, 'r.dat', "griddedDataTimeSeries");
+            [g, aux] = NonGravForces.io.importGroopsGrid(f);
+            tc.verifyBoundAndRecord("GROOPS grid: solid angles sum to 4 pi", ...
+                abs(aux.areaSum_sr / (4 * pi) - 1), 1e-12, "-", "the writer lays a cosine-weighted grid on the sphere; the reader must not rescale it");
+            tc.verifyEqual(numel(g.mjd) - 1, aux.gridCount, 'nodes minus one is the grid count');
+            tc.verifyEqual(g.values, want, 'column-major: one whole grid at a time, longitude fastest');
+            % Latitude decreases and longitude increases, as both real products do.
+            tc.verifyTrue(all(diff(g.lat_deg) < 0) && all(diff(g.lon_deg) > 0));
+        end
+    end
+    methods (Test, TestTags = {'precision'})
+        function importGroopsGridPrecision(tc)
+            % float64 in, float64 out: a read that rescales or single-casts shows here and nowhere else.
+            d = tc.tmp;
+            lon = -135:90:135; lat = 45:-90:-45;
+            v = zeros(2, 4); v(:) = [pi; exp(1); 1/3; 1e-300; 1e300; -pi; realmin; 0.1];
+            f = tNgfIo.writeGroopsGrid(d, 'p.dat', "griddedData", lon, lat, v, []);
+            g = NonGravForces.io.importGroopsGrid(f);
+            tc.verifyBoundAndRecord("GROOPS grid values survive the round trip", ...
+                max(abs(g.values(:) - v(:))), 0, "-", "float64 written and read unchanged: bitwise or the reader is lossy");
+        end
+    end
+    methods (Test, TestTags = {'vectorization'})
+        function importGroopsGridVectorization(tc)
+            % Reading a subrange must give exactly what reading everything gives for those grids:
+            % the seek arithmetic is the only difference and it must change no number.
+            d = tc.tmp;
+            f = tNgfIo.groopsFixture(d, 'v.dat', "griddedDataTimeSeries");
+            all3 = NonGravForces.io.importGroopsGrid(f);
+            [one, aux] = NonGravForces.io.importGroopsGrid(f, 'TimeRange', [58061 58062]);
+            tc.verifyEqual(aux.gridsRead, 3, 'MJD 58061 falls in the third month');
+            tc.verifyEqual(one.values, all3.values(:, :, 3), 'a seeked grid equals the same grid read in bulk');
+            [two, aux2] = NonGravForces.io.importGroopsGrid(f, 'TimeRange', [58035 58065]);
+            tc.verifyEqual(aux2.gridsRead, [2 3]);
+            tc.verifyEqual(two.values, all3.values(:, :, 2:3));
+        end
+    end
+    methods (Test, TestTags = {'robustness'})
+        function importGroopsGridRobustness(tc)
+            d = tc.tmp;
+            f = tNgfIo.groopsFixture(d, 'x.dat', "griddedData");
+            tc.verifyErrorId(@() NonGravForces.io.importGroopsGrid(fullfile(d, 'absent.dat')), 'NonGravForces:importGroopsGrid:inputFile');
+            % An HTML error page saved as .dat is the failure the magic check exists for.
+            html = fullfile(d, 'html.dat');
+            fid = fopen(html, 'w'); fwrite(fid, '<!DOCTYPE html><html>404</html>', 'char'); fclose(fid);
+            tc.verifyErrorId(@() NonGravForces.io.importGroopsGrid(html), 'NonGravForces:importGroopsGrid:dataFormat');
+            % A truncated file: the payload no longer fills it exactly.
+            cut = fullfile(d, 'cut.dat');
+            % BYTES, not text. fileread decodes, and a decoded binary is corrupted in ways that have
+            % nothing to do with the truncation this means to test.
+            fi = fopen(f, 'r'); b = fread(fi, inf, '*uint8'); fclose(fi);
+            fo = fopen(cut, 'w'); fwrite(fo, b(1:end-12), 'uint8'); fclose(fo);
+            tc.verifyErrorId(@() NonGravForces.io.importGroopsGrid(cut), 'NonGravForces:importGroopsGrid:dataFormat');
+            % TimeRange on a file with no time, and a range outside the series.
+            tc.verifyErrorId(@() NonGravForces.io.importGroopsGrid(f, 'TimeRange', [1 2]), 'NonGravForces:importGroopsGrid:inputRange');
+            s = tNgfIo.groopsFixture(d, 'y.dat', "griddedDataTimeSeries");
+            tc.verifyErrorId(@() NonGravForces.io.importGroopsGrid(s, 'TimeRange', [1 2]), 'NonGravForces:importGroopsGrid:inputRange');
+            tc.verifyErrorId(@() NonGravForces.io.importGroopsGrid(s, 'TimeRange', [58100 58000]), 'NonGravForces:importGroopsGrid:inputRange');
+            tc.verifyErrorId(@() NonGravForces.io.importGroopsGrid(s, 'TimeRange', 58000), 'NonGravForces:importGroopsGrid:inputRange');
+            % An unknown GROOPS type is refused BY NAME rather than misread.
+            other = fullfile(d, 'o.dat');
+            fid = fopen(other, 'w', 'l');
+            fwrite(fid, 'B', 'char'); fwrite(fid, 10, 'uint64'); fwrite(fid, 'instrument', 'char');
+            fwrite(fid, 8, 'uint64'); fwrite(fid, '20200123', 'char'); fclose(fid);
+            tc.verifyErrorId(@() NonGravForces.io.importGroopsGrid(other), 'NonGravForces:importGroopsGrid:unsupportedType');
+        end
+    end
+    methods (Test, TestTags = {'metamorphic'})
+        function importGroopsGridMetamorphic(tc)
+            % Writing what was read must reproduce the file: the layout is then self-consistent,
+            % which no single-direction test can establish.
+            d = tc.tmp;
+            f = tNgfIo.groopsFixture(d, 'm1.dat', "griddedDataTimeSeries");
+            g = NonGravForces.io.importGroopsGrid(f);
+            again = tNgfIo.writeGroopsGrid(d, 'm2.dat', "griddedDataTimeSeries", ...
+                g.lon_deg, g.lat_deg, g.values, g.mjd);
+            h = NonGravForces.io.importGroopsGrid(again);
+            tc.verifyEqual(h.values, g.values); tc.verifyEqual(h.mjd, g.mjd);
+            tc.verifyEqual(h.lon_deg, g.lon_deg); tc.verifyEqual(h.lat_deg, g.lat_deg);
+            tc.verifyBoundAndRecord("GROOPS grid: read-write-read is a fixed point", ...
+                max(abs(h.values(:) - g.values(:))), 0, "-", "bitwise; the two files describe the same grid");
+        end
+    end
+    methods (Test, TestTags = {'speed'})
+        function importGroopsGridSpeed(tc)
+            % SEEKING IS THE POINT. One month of a many-month series must not cost what the whole
+            % series costs, or a 1.25 GB file is unusable for a one-day arc.
+            d = tc.tmp;
+            % Big enough that the VALUES dominate: 180 x 90 x 60 grids is 7.8 MB, against 130 kB
+            % for one grid. At the first attempt the fixture was so small that the header decided the
+            % time and the ratio measured noise (2.4, meaninglessly).
+            lon = -178:2:180; lat = 89:-2:-89;
+            nk = 60;
+            v = rand(numel(lat), numel(lon), nk);
+            big = tNgfIo.writeGroopsGrid(d, 'spBig.dat', "griddedDataTimeSeries", lon, lat, v, 58000 + (0:nk) * 30);
+            small = tNgfIo.writeGroopsGrid(d, 'spSmall.dat', "griddedDataTimeSeries", lon, lat, v(:, :, 1:2), 58000 + (0:2) * 30);
+            cleanupBig = onCleanup(@() delete(big, small));
+            one = @(f) NonGravForces.io.importGroopsGrid(f, 'TimeRange', [58000 58001]);
+            one(big); one(small);
+            tBig = zeros(1, 5); tSmall = zeros(1, 5);
+            for k = 1:5
+                t0 = tic; one(big);   tBig(k) = toc(t0);
+                t0 = tic; one(small); tSmall(k) = toc(t0);
+            end
+            tc.verifyBoundAndRecord("GROOPS grid: one grid of 60 / one grid of 2", median(tBig) / median(tSmall), 3, "-", ...
+                "seeking means the cost of one grid does not grow with the file: 30x the payload must not cost 30x. A reader that ignored TimeRange would land near 30");
+        end
+    end
+
 end
 
 % ------------------------------------------------------------------------- local helpers

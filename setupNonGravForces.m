@@ -23,7 +23,8 @@ function info = setupNonGravForces(options)
 %                           two DWM/QD data files NRL's server refuses (HTTP 403, 2026-09-15)
 %                           from the pyHWM14 repository at a pinned commit, where the model's
 %                           own check output, reproduced exactly, is what vouches for them
-%     data ('FetchData'), the DE440 ephemeris ('FetchKernels')
+%     data ('FetchData'), the DE440 ephemeris ('FetchKernels'), the GROOPS Earth-radiation
+%     grids ('FetchGroops', into DATAPOOL)
 %       finals2000A.all     IERS Earth orientation, into data/eop
 %       SW-All.csv          CelesTrak space weather, into data/spaceweather
 %       igrf14coeffs.txt    IAGA V-MOD IGRF-14 coefficients, into data/igrf
@@ -64,6 +65,14 @@ function info = setupNonGravForces(options)
 %   FetchMsis  1x1   string   -      "ifMissing" (default) fetches the model sources only when absent;
 %                                    "never" leaves the network alone; "force" fetches again.
 %   FetchData  1x1   string   -      The same three settings for the data files.
+%   FetchGroops 1x1 string    -      The same three settings for the GROOPS Earth-radiation data,
+%                                    DEFAULT "never": the two CERES SYN1deg climatologies are
+%                                    1.25 GB EACH, so they are never pulled unasked. They are not
+%                                    committed either (O-41); they live in DATAPOOL.
+%   DataPool   1x1   string   -      Root of the GROOPS-style data pool. Default: the DATAPOOL
+%                                    environment variable. It is NOT guessed: a 2.5 GB download
+%                                    into a directory nobody named is not a service (R5). The
+%                                    files go into <DataPool>/EarthRadiationPressure.
 %   FetchKernels 1x1 string   -      The same three settings for the DE440 ephemeris. It is SEPARATE
 %                                    from FetchData on purpose: ciGate passes FetchData "never" so
 %                                    that the gate does not test the network for OBSERVATIONS, which
@@ -98,6 +107,8 @@ arguments
     options.FetchMsis (1,1) string {mustBeMember(options.FetchMsis, ["ifMissing","never","force"])} = "ifMissing"
     options.FetchData (1,1) string {mustBeMember(options.FetchData, ["ifMissing","never","force"])} = "ifMissing"
     options.FetchKernels (1,1) string {mustBeMember(options.FetchKernels, ["ifMissing","never","force"])} = "ifMissing"
+    options.FetchGroops (1,1) string {mustBeMember(options.FetchGroops, ["ifMissing","never","force"])} = "never"
+    options.DataPool (1,1) string = string(getenv('DATAPOOL'))
 end
 % THE PINS AND URLS LIVE HERE AND NOWHERE ELSE (rule R1). Moving a pin is an act with a run behind it.
 % NRLMSISE-00: bc9a2fe is "gtd7: fix output at 32.5 km" (Argon densities and a memory corruption fixed
@@ -144,6 +155,14 @@ CERES_SHA256 = ["6869b2207d86ec6581a6518f63b65f41fc209dda4ea5e64afbf6f3b6d47ea59
 % can find: MATLAB's own java digest, Python's hashlib and the CI runner all say c1c7feea... for
 % the bytes on disk. Taking a number from the tool whose work you are checking is not a check
 % (upstream finding, HANDOVER O-40).
+% GROOPS publishes its data pool openly at TU Graz (owner, 2026-09-17), which is what closes the
+% redistribution question these files raised: they are FETCHED, not vendored. The two SYN1deg
+% climatologies are 1.25 GB each and live in DATAPOOL, never in this repository.
+GROOPS_BASE = "https://ftp.tugraz.at/pub/ITSG/groops/data";
+GROOPS_FILES = struct( ...
+    'name', {"CERES_SYN1deg_albedo_climatology.dat", "CERES_SYN1deg_longwaveFlux_climatology.dat", ...
+             "earth_ceres_reflectivity_grid2.5.dat", "earth_ceres_emissivity_grid2.5.dat"}, ...
+    'folder', {"earthRadiationPressure", "earthRadiationPressure", "albedo", "albedo"});
 DE440_FILE = "de440s.bsp";
 DE440_SHA256 = "c1c7feeab882263fc493a9d5a5b2ddd71b54826cdf65d8d17a76126b260a49f2";
 root = fileparts(mfilename('fullpath'));
@@ -166,6 +185,8 @@ info.sources = [struct('name', "nrlmsise00", 'action', info.msis.action, 'dir', 
 info.data = localFetchData(root, EOP_URL, SW_URL, IGRF_URL, L1B_BASE, L1B_DAY, L1B_MEMBERS, options.FetchData);
 info.data.items = [info.data.items, localFetchCeres(root, CERES_BASE, CERES_FILES, CERES_SHA256, options.FetchData)];
 info.data.items = [info.data.items, localFetchKernel(root, DE440_FILE, DE440_SHA256, options.FetchKernels)];
+info.dataPool = options.DataPool;
+info.data.items = [info.data.items, localFetchGroops(options.DataPool, GROOPS_BASE, GROOPS_FILES, options.FetchGroops)];
 info.mex = NonGravForces.buildMex('Check', true);      % 1xT: one element per target
 if options.Verbose
     for m = 1:numel(info.mex)
@@ -266,6 +287,82 @@ else
 end
 items(end+1) = rec;
 d = struct('items', items, 'mode', mode);
+end
+
+function items = localFetchGroops(pool, base, files, mode)
+%LOCALFETCHGROOPS The GROOPS Earth-radiation grids, into a dedicated DATAPOOL subfolder.
+%   THE POOL IS NAMED, NEVER GUESSED. Without DATAPOOL this reports and does nothing: choosing a
+%   directory for 2.5 GB on the user's behalf is not a service (R5), and the owner keeps the pool on
+%   both the bridge and the CI runner.
+%
+%   NO SHA-256 PIN. Every other fetch here is pinned, and these are not: the files are 1.25 GB, the
+%   publisher states plainly that it does not commit to keeping them updated, and a digest measured
+%   once here would turn their next revision into a failure rather than a fact. What IS checked is
+%   the GROOPS magic and type string, by reading the first bytes -- content, not a status code (F15).
+items = struct('name', {}, 'action', {}, 'file', {}, 'source', {});
+if strlength(pool) == 0
+    items(end+1) = struct('name', "groops", 'action', ...
+        "skipped: DATAPOOL is not set -> set the DATAPOOL environment variable or pass 'DataPool'", ...
+        'file', "", 'source', base);
+    return
+end
+for k = 1:numel(files)
+    folder = fullfile(pool, "EarthRadiationPressure");
+    dst = fullfile(folder, files(k).name);
+    url = base + "/" + files(k).folder + "/" + files(k).name;
+    rec = struct('name', "groops " + extractBefore(files(k).name + ".", "."), 'action', "present", ...
+        'file', string(dst), 'source', url);
+    present = isfile(dst);
+    if present && mode ~= "force"
+        if ~localGroopsMagic(dst)
+            rec.action = "failed: the file is not a GROOPS binary -> delete it and refetch";
+            rec.file = "";
+        end
+        items(end+1) = rec; %#ok<AGROW>
+        continue
+    end
+    if mode == "never"
+        rec.action = "missing (FetchGroops never)"; rec.file = "";
+        items(end+1) = rec; %#ok<AGROW>
+        continue
+    end
+    if ~isfolder(folder), mkdir(folder); end
+    tmp = [tempname '.dat'];
+    cleanup = onCleanup(@() localQuietDelete(tmp));
+    fprintf('setupNonGravForces: fetching %s from %s\n', files(k).name, url);
+    try
+        websave(tmp, char(url));
+        if localGroopsMagic(tmp)
+            movefile(tmp, dst, 'f');
+            rec.action = "fetched";
+        else
+            rec.action = "failed: the reply is not a GROOPS binary -> discarded";
+            rec.file = "";
+        end
+    catch err
+        rec.action = "failed: " + string(err.message);
+        rec.file = "";
+    end
+    if rec.action ~= "fetched"
+        fprintf('setupNonGravForces: %s -> fetch it by hand from %s\n', rec.action, url);
+    end
+    items(end+1) = rec; %#ok<AGROW>
+    clear cleanup
+end
+end
+
+function tf = localGroopsMagic(file)
+%LOCALGROOPSMAGIC The first bytes are 'B' plus a length-prefixed type name starting "gridded".
+%   A status code is not a file (CLAUDE.md), and an HTML error page saved as .dat is exactly the
+%   failure this catches.
+tf = false;
+fid = fopen(file, 'r');
+if fid < 0, return; end
+closer = onCleanup(@() fclose(fid));
+if fread(fid, 1, '*char') ~= 'B', return; end
+n = fread(fid, 1, 'uint64');
+if isempty(n) || n < 7 || n > 64, return; end
+tf = startsWith(string(fread(fid, n, '*char')'), "gridded");
 end
 
 function items = localFetchKernel(root, file, sha256, mode)
