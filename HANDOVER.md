@@ -659,12 +659,49 @@ latitudes in radians, 72 row radii, 10368 solid angles, and a 10368 x 12 value t
 say the reading is right rather than merely plausible: the solid angles sum to 12.566424 against
 4*pi = 12.566371, and the payload fills the file exactly.
 
-**WP-E2 `env.earthRadiance` gains the gridded CERES climatology.** **The better file is the one the owner pointed at**: `earthRadiationPressure/CERES_SYN1deg_{albedo,longwaveFlux}_climatology.dat`, 1 degree rather than 2.5. Both are `griddedDataTimeSeries`, decoded from the bytes: ellipsoid, 360 longitudes (centres +-179.5), 180 geodetic latitudes, 180 row radii, 64800 solid angles, then **2413 time NODES** (16 bytes each: a double fraction and an int64 MJD, spacings 28-31 days, MJD 15020..88434 = 1900-01 to 2101-01) bounding **2412 monthly grids** of 64800 float64. Nodes minus one is exactly the grid count, which is what a piecewise-constant monthly mean requires. Albedo lands at 0.11-0.75, January mean 0.3232, agreeing with the 2.5 degree file's January 0.3259. **CORRECTION to this session's first reading**: the values are stored COLUMN-MAJOR, one whole grid at a time, as Eigen serialises a matrix. The first probe assumed row-major and reported 0.391 and 0.657, numbers that survived into this record for an hour. Three things settle it: the two files agree only under column-major; the seasonal phase is right only under column-major (maximum in December and January, minimum in August, which is northern snow); and the corrected means sit much closer to Knocke's own a0 = 0.34 and e0 = 0.68 than the wrong ones did. The values are Knocke's own
-quantities -- area-weighted global means **0.319** reflectivity and **0.698** emissivity against Knocke's
-a0 = 0.34 and e0 = 0.68 -- so this is the same model with a measured 2.5 degree monthly map in
-place of a two-term Legendre fit to Nimbus-7 from 1988. **It is NOT SYN1deg and O-3 stays open**:
+**WP-E2 `env.earthRadiance` gains the gridded CERES climatology.** **The better file is the one the owner pointed at**: `earthRadiationPressure/CERES_SYN1deg_{albedo,longwaveFlux}_climatology.dat`, 1 degree rather than 2.5. Both are `griddedDataTimeSeries`, decoded from the bytes: ellipsoid, 360 longitudes (centres +-179.5), 180 geodetic latitudes, 180 row radii, 64800 solid angles, then **2413 time NODES** (16 bytes each: a double fraction and an int64 MJD, spacings 28-31 days, MJD 15020..88434 = 1900-01 to 2101-01) bounding **2412 monthly grids** of 64800 float64. Nodes minus one is exactly the grid count, which is what a piecewise-constant monthly mean requires. Albedo lands at 0.11-0.75, **December 2019** area-weighted mean 0.3232 against the 2.5 degree file's December 0.3286 and January 0.3259. **CORRECTION to this session's first reading**: the values are stored COLUMN-MAJOR, one whole grid at a time, as Eigen serialises a matrix. The first probe assumed row-major and reported 0.391 and 0.657, numbers that survived into this record for an hour. Three things settle it: the two files agree only under column-major; the seasonal phase is right only under column-major (maximum in December and January, minimum in August, which is northern snow); and the corrected means sit much closer to Knocke's own a0 = 0.34 and e0 = 0.68 than the wrong ones did. **CORRECTION 2026-09-17, and it changes the design: the two file pairs do not carry the same
+physical quantity, and this block had merged them.** Measured through `io.importGroopsGrid`:
+
+| file pair | container | resolution | first field | second field |
+|---|---|---|---|---|
+| `CERES_SYN1deg_{albedo,longwaveFlux}_climatology.dat` | `griddedDataTimeSeries`, 2412 monthly grids 1900-2101 | 1 degree | albedo, 0.11-0.75, Dec 2019 area-weighted **0.3232** | longwave **FLUX, W m^-2**, 145-303, Dec 2019 area-weighted **235.66** |
+| `earth_ceres_{reflectivity,emissivity}_grid2.5.dat` | `griddedData`, 12 monthly columns | 2.5 degree | reflectivity, monthly 0.3095-0.3286, annual **0.319** | emissivity, monthly 0.6883-0.7113, annual **0.698** |
+
+So **only the 2.5 degree pair holds Knocke's own dimensionless quantities**, and it is that pair whose
+annual means are 0.319 and 0.698 against Knocke's a0 = 0.34 and e0 = 0.68. The 1 degree pair's second
+file is an OUTGOING LONGWAVE FLUX: 235.66 W m^-2 is a global OLR, not an emissivity, and feeding it to
+the emissivity route would be wrong by a factor of ~340. This block previously attributed 0.698 to the
+1 degree pair.
+
+The seasonal phase that settles column-major survives the correction and is now measured on the pair
+that actually carries it: 2.5 degree reflectivity peaks in December and January (0.3286, 0.3259) and
+bottoms in August and September (0.3098, 0.3095), which is northern snow; emissivity peaks in July
+(0.7113) and bottoms in December (0.6883), which is the northern summer surface. **It is NOT SYN1deg and O-3 stays open**:
 there is no diurnal cycle in a monthly climatology. What it adds beyond fidelity is that GROOPS
 uses these very grids, so a future comparison against it (O-19) becomes apples to apples.
+
+**SCOPE FROZEN 2026-09-17, after the corrections above.** `env.earthRadiance` gains the backend
+`"ceresClimatology"`, fed the **1 degree pair**, because it is four times the resolution AND because a
+measured outgoing flux is strictly better than an emissivity multiplied by a mean insolation. It
+therefore joins the EXISTING measured-exitance route: `.albedo` from the first file and
+`.exitanceLw_W_m2` from the second, `.emissivity` left empty, and `env.radiationSources` needs no
+change at all -- it already branches on whether `exitanceLw_W_m2` is empty.
+
+- **The reference level is MEASURED, not declared.** The file carries one radius per latitude row, and
+  those radii are the WGS84 ellipsoid radius at the row's geodetic latitude **plus 30 km**, to 0.02 m
+  over all 180 rows. So GROOPS places these fluxes at a 30 km TOA level, and the backend reads that
+  height out of the file rather than carrying a constant. It also confirms, rather than assumes, that
+  the file's latitudes are geodetic -- the reader had said so on inference.
+- **The latitude spacing is not exactly 1 degree** (centres 89.4966, 88.4899, ...), so nothing may
+  compute a latitude index arithmetically; the axes are the file's own.
+- **Time is PIECEWISE CONSTANT**, not interpolated: 2413 nodes bound 2412 grids and the container is
+  defined that way. The existing `ceres` backend interpolates linearly between monthly nodes; this one
+  must not, and a test asserts the difference rather than trusting the comment.
+- **The native path REFUSES it.** `app.DynamicsSource` builds tables once per run and a 64800-cell
+  monthly climatology is not table material; refusing is R4 and is tested, where a silent fallback to
+  Knocke would be the worst outcome available. Recorded as an obligation rather than a silence.
+- Tests write their own GROOPS fixture, as WP-E1's do, because the real grids are 1.25 GB and live in
+  DATAPOOL; the gate must not depend on a file the runner may not hold.
 
 **WP-E3 SESAM** (`drag.accommodation = "sesam"`), from [P13]. O-16 closes or the record says
 exactly which constant is still missing.
