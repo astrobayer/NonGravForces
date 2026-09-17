@@ -289,6 +289,34 @@ for f in sorted(scan_files):
                  f"Toolbox -> constraint C2 allows base MATLAB and Parallel Computing only; "
                  f"write it out, or mark the line toolboxScan:allow if it only names the function")
 
+# 10. THE NATIVE SETUP IS ONE FACT IN THREE PLACES: the C struct `ngfRhsSetup` declares a field,
+#     app.DynamicsSource packs it into a MATLAB struct, and mex/ngfRhsGateway.c copies it across BY
+#     NAME. Nothing compared them until 2026-09-17, when `eV` and `torr` were added to the first two
+#     and not the third: they reached C as uninitialised memory, SESAM's Langmuir constant became
+#     garbage, and the native path evaluated a different model from the MATLAB one. The parity test
+#     caught it at 6.5e-02 against a 1e-13 bound, three minutes into a gate; this catches it in a
+#     second, which is the difference between a check and a post-mortem.
+#     Only the scalar constants are compared: they are the block that is declared as one comma list
+#     and is therefore the easy one to extend without noticing the gateway.
+try:
+    hdr = open(os.path.join(ROOT, "mex", "ngfRhs.h"), encoding="utf-8").read()
+    gw = open(os.path.join(ROOT, "mex", "ngfRhsGateway.c"), encoding="utf-8").read()
+    block = re.search(r"^\s*double cLight,([^;]*);", hdr, re.M)
+    if block is None:
+        note("mex/ngfRhs.h no longer declares the scalar constant block starting at cLight -> "
+             "check 10 cannot compare it with the gateway; re-point it")
+    else:
+        declared = ["cLight"] + [f.strip() for f in block.group(1).split(",") if f.strip()]
+        copied = set(re.findall(r'scalar\(st,\s*"(\w+)"\)', gw))
+        missing = [f for f in declared if f not in copied]
+        if missing:
+            note("mex/ngfRhsGateway.c never copies %s, which mex/ngfRhs.h declares -> the field "
+                 "reaches C as uninitialised memory and the native path silently evaluates "
+                 "something else; add scalar(st, \"<name>\") beside the others"
+                 % ", ".join(missing))
+except OSError as exc:
+    note(f"check 10 could not read the native setup sources: {exc}")
+
 if findings:
     print(f"auditPackage: {len(findings)} finding(s)")
     for f in findings:

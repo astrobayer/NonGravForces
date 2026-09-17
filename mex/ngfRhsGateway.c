@@ -131,6 +131,12 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         S.au = scalar(st, "au"); S.Rsun = scalar(st, "Rsun"); S.Rmoon = scalar(st, "Rmoon");
         S.aEarth = scalar(st, "aEarth"); S.bEarth = scalar(st, "bEarth"); S.fEarth = scalar(st, "fEarth");
         S.e2Earth = scalar(st, "e2Earth"); S.tsi = scalar(st, "tsi"); S.amu = scalar(st, "amu");
+        /* THE GATEWAY COPIES BY NAME, so a constant added to the C struct and to the MATLAB packing
+           is still absent here until this line names it. eV and torr arrived as uninitialised memory
+           on 2026-09-17 and sesam's Langmuir constant became garbage; the seventh parity
+           configuration caught it at 6.5e-02 against a 1e-13 bound, which is what that configuration
+           was added for one commit earlier. */
+        S.eV = scalar(st, "eV"); S.torr = scalar(st, "torr");
         sm = array(st, "speciesMass", NGF_SPECIES);
         for (i = 0; i < NGF_SPECIES; i++) { S.speciesMass[i] = sm[i]; }
         n = (int)scalar(st, "n"); S.n = n;

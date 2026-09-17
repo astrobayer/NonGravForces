@@ -124,8 +124,28 @@ classdef tNgfKernel < NgfTestCase
             tc.verifyEqual(aw.alpha, ones(1, 4)); tc.verifySize(aw.coverage, [1 4]); tc.verifySize(aw.alphaSubstrate, [1 4]);
             tc.verifySize(iw.pressureO_Pa, [1 4]); tc.verifySize(iw.meanMass_amu, [1 4]);
             f = @(varargin) NonGravForces.kernel.accommodation(varargin{:});
-            tc.verifyError(@() f("sesam", sp, T), 'MATLAB:validators:mustBeMember');
+            tc.verifyError(@() f("dria", sp, T), 'MATLAB:validators:mustBeMember');   % sesam became admissible in WP-E3
             tc.verifyErrorId(@() f("pilinski2010", sp8, T8, 'Alpha', 0.9), 'NonGravForces:accommodation:inputAlpha');
+            [asx, isx] = NonGravForces.kernel.accommodation("sesam", sp8, T8, 'RelativeSpeed_ms', 7600);
+            tc.verifyEqual(asx.model, "sesam");
+            tc.verifyEqual(asx.alpha, ones(1, numel(T8)), 'the adsorbate state accommodates fully, as in walker2014');
+            tc.verifySize(asx.coverage, [1 numel(T8)]); tc.verifySize(asx.alphaSubstrate, [1 numel(T8)]);
+            tc.verifyTrue(all(isfield(isx, ["pressureO_Pa" "meanMass_amu" "stickingCoefficient" "langmuir_invPa" "speedRatioO"])));
+            tc.verifyTrue(all(isx.stickingCoefficient >= 0 & isx.stickingCoefficient <= 1), 'a normalised fraction of a distribution');
+            % The ram pressure is NOT the thermodynamic one, and the contract says so out loud: this
+            % is the single assumption that would silently halve the model if it were ever confused.
+            tc.verifyGreaterThan(min(isx.pressureO_Pa ./ (sp8(2, :) .* NonGravForces.const().kB .* T8)), 50, ...
+                'sesam eq. (15) is a ram pressure; if this ever approaches n_O k T the model has been fed walker2014s');
+            tc.verifyErrorId(@() f("sesam", sp8, T8), 'NonGravForces:accommodation:inputSpeed');
+            tc.verifyErrorId(@() f("sesam", sp8, T8, 'RelativeSpeed_ms', -1), 'NonGravForces:accommodation:inputSpeed');
+            tc.verifyErrorId(@() f("sesam", sp8, T8, 'RelativeSpeed_ms', 0), 'NonGravForces:accommodation:inputSpeed');
+            tc.verifyErrorId(@() f("sesam", sp8, T8, 'RelativeSpeed_ms', NaN), 'NonGravForces:accommodation:inputSpeed');
+            tc.verifyErrorId(@() f("sesam", sp8, T8, 'RelativeSpeed_ms', [1 2]), 'NonGravForces:accommodation:inputSpeed');
+            tc.verifyErrorId(@() f("sesam", sp8, T8, 'RelativeSpeed_ms', 7600, 'SurfaceMass_amu', 65), 'NonGravForces:accommodation:inputSurfaceMass');
+            tc.verifyErrorId(@() f("sesam", sp8, T8, 'RelativeSpeed_ms', 7600, 'Alpha', 0.9), 'NonGravForces:accommodation:inputAlpha');
+            tc.verifyErrorId(@() f("walker2014", sp8, T8, 'SurfaceMass_amu', 65, 'RelativeSpeed_ms', 7600), 'NonGravForces:accommodation:inputSpeed');
+            tc.verifyErrorId(@() f("pilinski2010", sp8, T8, 'RelativeSpeed_ms', 7600), 'NonGravForces:accommodation:inputSpeed');
+            tc.verifyErrorId(@() f("sesam", -sp8, T8, 'RelativeSpeed_ms', 7600), 'NonGravForces:accommodation:inputRange');
             tc.verifyErrorId(@() f("walker2014", sp8, T8), 'NonGravForces:accommodation:inputSurfaceMass');
             tc.verifyErrorId(@() f("walker2014", sp8, T8, 'SurfaceMass_amu', -1), 'NonGravForces:accommodation:inputSurfaceMass');
             tc.verifyErrorId(@() f("pilinski2010", -sp8, T8), 'NonGravForces:accommodation:inputRange');
@@ -278,7 +298,7 @@ classdef tNgfKernel < NgfTestCase
             % (0.99999999965e-3 kg/mol) is the same as this toolbox's, so 1e-13 relative covers every column.
             T = readtable(fullfile(tc.root, 'tools', 'pyxcheck', 'accommodation_oracle.csv'));
             sp = [T.He T.O T.N2 T.O2 T.Ar T.H T.N T.Oanom]';
-            worst = 0;
+            worst = 0; worstS0 = 0; worstTh = 0;
             for i = 1:height(T)
                 a10 = NonGravForces.kernel.accommodation("pilinski2010", sp(:, i), T.T_K(i));
                 a11 = NonGravForces.kernel.accommodation("pilinski2011", sp(:, i), T.T_K(i));
@@ -286,8 +306,29 @@ classdef tNgfKernel < NgfTestCase
                 got = [a10.alpha, a11.alpha, aw.coverage, aw.alphaSubstrate, iw.pressureO_Pa, iw.meanMass_amu];
                 ref = [T.alpha_pilinski2010(i), T.alpha_pilinski2011(i), T.coverage_walker2014(i), T.alphaSubstrate_walker2014(i), T.PO_Pa(i), T.meanMass_amu(i)];
                 worst = max(worst, max(abs(got - ref) ./ abs(ref)));
+                % SESAM's pressure and substrate columns are closed forms on both sides, so they
+                % belong in the same bound as everything above.
+                [as_, is_] = NonGravForces.kernel.accommodation("sesam", sp(:, i), T.T_K(i), 'RelativeSpeed_ms', T.relativeSpeed_ms(i));
+                gotS = [is_.pressureO_Pa, as_.alphaSubstrate];
+                refS = [T.PO_sesam_Pa(i), T.alphaSubstrate_sesam(i)];
+                worst = max(worst, max(abs(gotS - refS) ./ abs(refS)));
+                % ... but the sticking coefficient is NOT: the oracle INTEGRATES eq. (26a)
+                % numerically where this toolbox evaluates eq. (26b) in closed form, so agreement
+                % here is evidence that the closed form IS the integral it claims to be, which is
+                % the only claim worth making about a transcription from a scanned paper.
+                worstS0 = max(worstS0, abs(is_.stickingCoefficient - T.sticking_sesam(i)));
+                worstTh = max(worstTh, abs(as_.coverage - T.coverage_sesam(i)));
             end
-            tc.verifyBoundAndRecord("accommodation vs the independent formula oracle (12 cases, 6 columns)", worst, 1e-13, "-", "closed forms evaluated twice; rounding only");
+            tc.verifyBoundAndRecord("accommodation vs the independent formula oracle (12 cases, 8 columns)", worst, 1e-13, "-", "closed forms evaluated twice; rounding only");
+            tc.verifyBoundAndRecord("SESAM sticking coefficient: closed form (26b) against quadrature of its definition (26a)", worstS0, 1e-9, "-", ...
+                "composite Simpson on 20000 panels of a Gaussian times a linear factor; the quadrature error dominates and is O(h^4), not the closed form's rounding");
+            tc.verifyBoundAndRecord("SESAM coverage from the quadrature sticking coefficient", worstTh, 1e-9, "-", ...
+                "the isotherm has |dtheta/d(K P)| <= 1, so it inherits the bound above and cannot amplify it");
+            % AND THE SWEEP MUST CROSS THE TRANSITION. SESAM exists to make adsorption fall with
+            % incident energy; a case set that sat at one speed would check a near-constant and
+            % would pass with the entire energy dependence deleted.
+            tc.verifyLessThan(min(T.sticking_sesam), 1e-3, 'the oracle cases must reach the regime where nothing sticks');
+            tc.verifyGreaterThan(max(T.sticking_sesam), 0.999, 'the oracle cases must reach the regime where everything sticks');
             % THE TWO FITS MUST NOT BE THE SAME NUMBER. A copy-paste that gave both options one constant would
             % pass every bound above, because each column would still match its own oracle entry only if the
             % oracle were wrong too. This pins the separation at the ratio the two K values imply.
@@ -432,6 +473,20 @@ classdef tNgfKernel < NgfTestCase
             n6 = sp([6 1 7 3 2 4], :); m6 = c.speciesMass([6 1 7 3 2 4])' / c.NA;
             mu = (sum(n6 .* m6, 1) ./ sum(n6, 1)) / (mO2 * c.amu);
             tc.verifyBoundAndRecord("walker2014 substrate coefficient 3 mu/(1+mu)^2", max(abs(aw.alphaSubstrate - 3 * mu ./ (1 + mu).^2)), 4 * eps, "-", "the same arithmetic in a different association");
+            % SESAM at the two limits eq. (26b) has closed forms for, which is the only place the
+            % sticking coefficient can be checked against a number rather than against a quadrature.
+            % Far below the binding energy every incident atom sticks (s_o -> 1); far above, none
+            % does (s_o -> 0). 5.7 eV is 262 km/s for an O atom, so the limits are reached with room
+            % to spare at 1 km/s and 400 km/s and the bound is the arithmetic, not the physics.
+            spS = zeros(8, 2); spS(2, :) = 1e14;
+            [~, iLo] = NonGravForces.kernel.accommodation("sesam", spS, T, 'RelativeSpeed_ms', 1e3);
+            [~, iHi] = NonGravForces.kernel.accommodation("sesam", spS, T, 'RelativeSpeed_ms', 4e5);
+            tc.verifyBoundAndRecord("SESAM sticking coefficient far below the binding energy", max(abs(iLo.stickingCoefficient - 1)), 1e-12, "-", "the whole Maxwellian lies below Eb; erfc of a large positive argument underflows to zero and the ratio is exactly 1");
+            tc.verifyBoundAndRecord("SESAM sticking coefficient far above the binding energy", max(iHi.stickingCoefficient), 1e-12, "-", "no part of the distribution reaches below Eb");
+            % and at those limits K_L collapses onto the two published constants of eq. (22)
+            c2 = tc.c;
+            tc.verifyBoundAndRecord("SESAM K_L at s_o = 1 is K_L,o + K_L,f", max(abs(iLo.langmuir_invPa - (5e6 + 3e4) / c2.torr) / ((5e6 + 3e4) / c2.torr)), 1e-12, "-", "eq. (22) with the sticking coefficient at its upper limit");
+            tc.verifyBoundAndRecord("SESAM K_L at s_o = 0 is K_L,f", max(abs(iHi.langmuir_invPa - 3e4 / c2.torr) / (3e4 / c2.torr)), 1e-12, "-", "eq. (22) with the sticking coefficient at its lower limit");
             tc.verifyLessThan(max(abs(aw.alphaSubstrate - 0.75)), 1e-3, 'mu within 1e-3 of 1: alpha_s at its maximum 3/4');
         end
         function dragPanelForceFlowPrecision(tc)
@@ -564,12 +619,20 @@ classdef tNgfKernel < NgfTestCase
             al = NonGravForces.kernel.accommodation("fixed", sp, T, 'Alpha', a);
             ap = NonGravForces.kernel.accommodation("pilinski2010", sp, T);
             aw = NonGravForces.kernel.accommodation("walker2014", sp, T, 'SurfaceMass_amu', 263.3223);
+            vs = 6000 + 400 * (1:5);                 % every epoch its own speed, or the sweep is a constant
+            as2 = NonGravForces.kernel.accommodation("sesam", sp, T, 'RelativeSpeed_ms', vs);
             for k = 1:5
                 tc.verifyEqual(al.alpha(k), NonGravForces.kernel.accommodation("fixed", sp(:, k), T(k), 'Alpha', a(k)).alpha);
                 tc.verifyEqual(ap.alpha(k), NonGravForces.kernel.accommodation("pilinski2010", sp(:, k), T(k)).alpha);
                 w1 = NonGravForces.kernel.accommodation("walker2014", sp(:, k), T(k), 'SurfaceMass_amu', 263.3223);
                 tc.verifyEqual([aw.coverage(k) aw.alphaSubstrate(k)], [w1.coverage w1.alphaSubstrate]);
+                s1 = NonGravForces.kernel.accommodation("sesam", sp(:, k), T(k), 'RelativeSpeed_ms', vs(k));
+                tc.verifyEqual([as2.coverage(k) as2.alphaSubstrate(k)], [s1.coverage s1.alphaSubstrate]);
             end
+            % a scalar speed must expand to the same thing as the vector that repeats it
+            tc.verifyEqual(NonGravForces.kernel.accommodation("sesam", sp, T, 'RelativeSpeed_ms', 7600), ...
+                           NonGravForces.kernel.accommodation("sesam", sp, T, 'RelativeSpeed_ms', 7600 * ones(1, 5)), ...
+                           'scalar and expanded RelativeSpeed_ms agree bitwise');
         end
         function dragPanelForceVectorization(tc)
             [rho, sp, T] = tc.gas(6); v = 7600 * [ones(1, 6); 0.01 * (1:6); -0.005 * (1:6)]; f = 0.5 + 0.5 * rand(tc.mm.n, 6);
@@ -648,6 +711,21 @@ classdef tNgfKernel < NgfTestCase
             aw = NonGravForces.kernel.accommodation("walker2014", zeros(8, 2), [900 900], 'SurfaceMass_amu', 65);
             tc.verifyEqual(aw.coverage, [0 0]); tc.verifyTrue(all(isfinite(aw.alphaSubstrate)));
             ae = NonGravForces.kernel.accommodation("walker2014", zeros(8, 0), zeros(1, 0), 'SurfaceMass_amu', 65); tc.verifySize(ae.coverage, [1 0]);
+            % SESAM in the same vacuum: no oxygen is no ram pressure, so no coverage, and the mean
+            % mass of an empty gas must not become a NaN that the isotherm would carry away.
+            asv = NonGravForces.kernel.accommodation("sesam", zeros(8, 2), [900 900], 'RelativeSpeed_ms', 7600);
+            tc.verifyEqual(asv.coverage, [0 0]); tc.verifyTrue(all(isfinite(asv.alphaSubstrate)));
+            ase = NonGravForces.kernel.accommodation("sesam", zeros(8, 0), zeros(1, 0), 'RelativeSpeed_ms', 7600); tc.verifySize(ase.coverage, [1 0]);
+            % The two ends of the speed range are where eq. (26b) as PRINTED overflows: at 400 km/s
+            % it needs exp(Eb/kT) ~ 1e36 against exp(-(Eb+Er)/kT) ~ 1e-5600. Everything must stay
+            % finite and in [0, 1] across five orders of magnitude of incident energy.
+            spv = zeros(8, 1); spv(2) = 1e15;
+            for v = [1e2 1e3 1e4 7.6e3 1e5 4e5]
+                [av, iv] = NonGravForces.kernel.accommodation("sesam", spv, 900, 'RelativeSpeed_ms', v);
+                tc.verifyTrue(isfinite(av.coverage) && av.coverage >= 0 && av.coverage <= 1, sprintf('coverage at %g m/s', v));
+                tc.verifyTrue(isfinite(iv.stickingCoefficient) && iv.stickingCoefficient >= 0 && iv.stickingCoefficient <= 1, sprintf('sticking at %g m/s', v));
+                tc.verifyTrue(isfinite(iv.pressureO_Pa) && iv.pressureO_Pa > 0, sprintf('ram pressure at %g m/s', v));
+            end
         end
         function dragPanelForceRobustness(tc)
             % a species column of zeros is skipped (no NaN from s = U/0), an exactly edge-on and an exactly head-on plate give finite forces
@@ -728,6 +806,25 @@ classdef tNgfKernel < NgfTestCase
             tc.verifyTrue(all(w2.coverage > w1.coverage), 'more atomic oxygen adsorbs more');
             wT = NonGravForces.kernel.accommodation("walker2014", sp8, 2 * T8, 'SurfaceMass_amu', 263.3223);
             tc.verifyEqual(wT.alphaSubstrate, w1.alphaSubstrate, 'the substrate coefficient does not see the temperature');
+            % SESAM: the property the model exists for is that adsorption FALLS with incident
+            % energy. Assert the monotonicity itself rather than a value, so it needs no tolerance.
+            v = 4000:500:12000;
+            s0 = zeros(1, numel(v));
+            for k = 1:numel(v)
+                [~, ik] = NonGravForces.kernel.accommodation("sesam", sp8(:, 1), T8(1), 'RelativeSpeed_ms', v(k));
+                s0(k) = ik.stickingCoefficient;
+            end
+            tc.verifyTrue(all(diff(s0) <= 0), 'the sticking coefficient must never rise with incident energy');
+            tc.verifyGreaterThan(s0(1) - s0(end), 0.9, 'and it must actually traverse the transition, not merely not rise');
+            % the ram pressure is exactly quadratic in the speed at fixed gas, once the speed ratio
+            % is held: doubling v at fixed T moves s too, so compare the RATIO to its closed form
+            [~, ia] = NonGravForces.kernel.accommodation("sesam", sp8, T8, 'RelativeSpeed_ms', 7600);
+            [~, ib] = NonGravForces.kernel.accommodation("sesam", sp8, T8, 'RelativeSpeed_ms', 2 * 7600);
+            tc.verifyEqual(ib.speedRatioO, 2 * ia.speedRatioO, 'the speed ratio is linear in the speed');
+            % and doubling n_O doubles the ram pressure exactly: it enters only through rho_O
+            sp2O = sp8; sp2O(2, :) = 2 * sp8(2, :);
+            [~, i2O] = NonGravForces.kernel.accommodation("sesam", sp2O, T8, 'RelativeSpeed_ms', 7600);
+            tc.verifyBoundAndRecord("SESAM ram pressure is exactly linear in n_O", max(abs(i2O.pressureO_Pa - 2 * ia.pressureO_Pa) ./ (2 * ia.pressureO_Pa)), 4 * eps, "-", "n_O enters eq. (15) only through rho_O; a power of two through one factor");
         end
         function dragPanelForceMetamorphic(tc)
             % density scaling by 2 doubles the force exactly; reversing v on the symmetric cube reverses the force; shadow 0 kills a plate

@@ -575,7 +575,7 @@ static void ngfFlowShadow(ngfRhsContext *c, const double *vB, double U, double T
 
 /* ========================================================================= accommodation */
 /* kernel.accommodation: alphaA (the adsorbate or the only state), coverage (-1: a single state), alphaS */
-static void ngfAccommodation(const ngfRhsContext *c, const double *sp, double T, double *alphaA, double *coverage, double *alphaS)
+static void ngfAccommodation(const ngfRhsContext *c, const double *sp, double T, double vr, double *alphaA, double *coverage, double *alphaS)
 {
     const ngfRhsSetup *S = &c->s;
     *coverage = -1.0;
@@ -590,18 +590,48 @@ static void ngfAccommodation(const ngfRhsContext *c, const double *sp, double T,
         double x = kL * sp[1] * T;
         *alphaA = x / (1.0 + x);
     } else {
+        /* walker2014 and sesam share the two-state mixture and the mole-weighted mean mass, and
+           differ in the pressure their Langmuir constant was fitted against and in Goodman's
+           coefficient. Same association order as the MATLAB, which is what makes the two agree to
+           rounding rather than to "about 1e-12". */
         static const int six[6] = {5, 0, 6, 2, 1, 3};          /* H He N N2 O O2, 0-based */
-        double PO = sp[1] * S->kB * T, num = 0.0, den = 0.0, mean, mu;
+        double PO, KL, gc, msAmu, num = 0.0, den = 0.0, mean, mu;
         int i;
-        *coverage = 1.44e6 * PO / (1.0 + 1.44e6 * PO);
+        if (S->accommodation == NGF_ACC_SESAM) {
+            /* [P13] eq. (15): a RAM pressure, 140x the n_O kB T that walker2014 uses, with the
+               free-molecular sphere coefficient whose re-emission term Appendix B removes. */
+            double mO = S->speciesMass[1];
+            double s2 = vr / sqrt(2.0 * S->kB * T / mO), ss = s2 * s2, s4 = ss * ss;
+            double cdIn = (2.0 * ss + 1.0) / (sqrt(NGF_PI) * ss * s2) * exp(-ss)
+                        + (4.0 * s4 + 4.0 * ss - 1.0) / (2.0 * s4) * erf(s2);
+            double Eb = 5.7 * S->eV, kT = S->kB * T, Er = 0.5 * mO * vr * vr;
+            /* eq. (26b), with the exponents combined analytically and erf(a)+erf(b) written as
+               erfc(-a)-erfc(b): as printed it needs exp(Eb/kT) ~ 1e36 against exp(-(Eb+Er)/kT)
+               ~ 1e-66, and the erf pair cancels to nothing once Er > Eb. */
+            double ra = sqrt(Eb) - sqrt(Er), aa = ra / sqrt(kT), bb = sqrt(Er / kT);
+            double g = sqrt(NGF_PI * kT * Er), s0;
+            s0 = (g * (erfc(-aa) - erfc(bb)) + kT * (exp(-Er / kT) - exp(-ra * ra / kT)))
+               / (g * (1.0 + erf(bb)) + kT * exp(-Er / kT));
+            if (!(s0 > 0.0)) { s0 = 0.0; } else if (s0 > 1.0) { s0 = 1.0; }
+            KL = s0 * (5e6 / S->torr) + 3e4 / S->torr;         /* eq. (22), Pa^-1 */
+            PO = 0.5 * (sp[1] * mO) * vr * vr * cdIn;
+            gc = 2.4;                                          /* eq. (19), SESAM's own */
+            msAmu = 65.0;                                      /* Table C1, fixed and not an option */
+        } else {
+            PO = sp[1] * S->kB * T;
+            KL = 1.44e6;
+            gc = 3.0;                                          /* Paul et al. 2022 eq. 13 */
+            msAmu = S->surfaceMassAmu;
+        }
+        *coverage = KL * PO / (1.0 + KL * PO);
         *alphaA = 1.0;
         for (i = 0; i < 6; i++) {
             num = num + sp[six[i]] * S->speciesMass[six[i]];
             den = den + sp[six[i]];
         }
         mean = num / ((den > NGF_REALMIN) ? den : NGF_REALMIN);
-        mu = mean / (S->surfaceMassAmu * S->amu);
-        *alphaS = 3.0 * mu / ((1.0 + mu) * (1.0 + mu));
+        mu = mean / (msAmu * S->amu);
+        *alphaS = gc * mu / ((1.0 + mu) * (1.0 + mu));
     }
 }
 
@@ -619,7 +649,7 @@ static int ngfDrag(ngfRhsContext *c, double rho, const double *sp, double T, con
         v[i] = vB[i] / U;
     }
     if (S->gsi != NGF_GSI_CONSTANT_CD) {
-        ngfAccommodation(c, sp, T, &alphaA, &coverage, &alphaS);
+        ngfAccommodation(c, sp, T, U, &alphaA, &coverage, &alphaS);
     }
     for (k = 0; k < N; k++) {
         const double *nk = S->normal + 3 * k;

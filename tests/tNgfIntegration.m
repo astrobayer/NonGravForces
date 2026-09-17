@@ -47,7 +47,7 @@ classdef tNgfIntegration < NgfTestCase
                 'Ceres', tc.cer, 'Ephemeris', tc.eph, 'Exponential', struct('rho0_kg_m3', 3e-12, 'h0_m', 450e3, 'H_m', 60e3));
         end
         function o = optionsFor(~, name)
-            %OPTIONSFOR The six configurations the parity is claimed over, INCLUDING the precise preset
+            %OPTIONSFOR The seven configurations the parity is claimed over, INCLUDING the precise preset
             % exactly as shipped: since 2026-09-16 the DE440 kernel is fetched at setup, so sun.source
             % rs.de440 is evaluated here rather than substituted away (HANDOVER O-7, O-15).
             switch name
@@ -61,6 +61,11 @@ classdef tNgfIntegration < NgfTestCase
                     % (2022)'s, the value the preset used to ship.
                     o = NonGravForces.Options("precise").set("drag.alpha", []) ...
                         .set("drag.accommodation", "walker2014").set("drag.surfaceMass_amu", 263.3223);
+                case "sesam"
+                    % WP-E3: accommodation enum value 4, and the ONLY model whose pressure needs the
+                    % flow. If the C read the thermodynamic pressure instead of eq. (15)'s ram
+                    % pressure both paths would still run and would differ by a factor of 140.
+                    o = NonGravForces.Options("precise").set("drag.alpha", []).set("drag.accommodation", "sesam");
                 case "hwm14"
                     % pilinski2010 rides along here because the C accommodation enum gained a value in
                     % LP-D WP-D1 and an enum that MATLAB and C number differently is invisible in every
@@ -137,7 +142,7 @@ classdef tNgfIntegration < NgfTestCase
     methods (Test, TestTags = {'reference'})
         function DynamicsSourceReference(tc)
             % Model.accel is the reference and the native evaluator is the port: at a table node the two
-            % are two implementations of the same expressions, and nothing else differs. Six
+            % are two implementations of the same expressions, and nothing else differs. Seven
             % configurations, chosen to reach every branch the native path serves: exponential density with
             % constantCd and no shadowing (fast); msis00, sentman, Knocke tiles, the cube-map shadow and the
             % steady thermal model (standard); msis21, CERES, SOLAARS-CF and a 32-cell table (precise);
@@ -145,7 +150,7 @@ classdef tNgfIntegration < NgfTestCase
             % only to reach the accommodation enum: MATLAB and C number it independently, so a value no
             % configuration selects would let both paths run and quietly evaluate different models.
             worstNode = 0; worstBetween = 0;
-            names = ["fast" "standard" "precise" "hwm14" "pilinski2011" "walker2014"];
+            names = ["fast" "standard" "precise" "hwm14" "pilinski2011" "walker2014" "sesam"];
             for name = names
                 [src, M] = tc.sourceFor(name);
                 for k = [121 151 181 241 301 361 391 421]
@@ -161,7 +166,7 @@ classdef tNgfIntegration < NgfTestCase
                 end
                 src.release();
             end
-            tc.verifyBoundAndRecord("native evaluator vs Model.accel at the table nodes (6 configurations)", worstNode, 1e-13, "-", ...
+            tc.verifyBoundAndRecord("native evaluator vs Model.accel at the table nodes (7 configurations)", worstNode, 1e-13, "-", ...
                 "accumulated rounding of two implementations of one expression set, written in the same association order where it decides the digits; measured 2.504e-14 on 2026-09-16");
             tc.verifyBoundAndRecord("native evaluator vs Model.accel between the table nodes (60 s tables)", worstBetween, 1e-9, "-", ...
                 "the cubic tables' interpolation error, not the model's: measured 8.124e-11 at 60 s spacing, and it falls as the fourth power of the step");

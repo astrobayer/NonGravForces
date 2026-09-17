@@ -521,6 +521,10 @@ classdef Model
                     acc = NonGravForces.kernel.accommodation(o.drag.accommodation, species, Tgas);
                 case "walker2014"
                     acc = NonGravForces.kernel.accommodation("walker2014", species, Tgas, 'SurfaceMass_amu', o.drag.surfaceMass_amu);
+                case "sesam"
+                    % SESAM's pressure is a RAM pressure, so it needs the flow. vrelBody is already
+                    % the gas-relative velocity (env.wind), which is exactly the V_r of its eq. (15).
+                    acc = NonGravForces.kernel.accommodation("sesam", species, Tgas, 'RelativeSpeed_ms', vecnorm(vrelBody, 2, 1));
             end
             extra = {};
             if o.drag.gsi == "maxwell", extra = {'SpecularFraction', o.drag.specularFraction}; end
@@ -679,6 +683,9 @@ if d.gsi ~= "constantCd"
     end
     if d.accommodation == "walker2014" && isempty(d.surfaceMass_amu)
         NonGravForces.fail("Model", "inputOptions", "drag.accommodation walker2014 needs drag.surfaceMass_amu -> the sources disagree (263.3223 amu Mehta et al. 2022, 65 amu Pilinski 2013); state which one you use");
+    end
+    if d.accommodation ~= "walker2014" && ~isempty(d.surfaceMass_amu)
+        NonGravForces.fail("Model", "inputOptions", "drag.surfaceMass_amu is read only by accommodation walker2014, and %s does not (sesam fixes 65 amu) -> set('drag.surfaceMass_amu', []) so the value is not silently ignored", d.accommodation);
     end
     if d.gsi == "maxwell" && isempty(d.specularFraction)
         NonGravForces.fail("Model", "inputOptions", "drag.gsi maxwell needs drag.specularFraction -> set('drag.specularFraction', 0.1), say");
