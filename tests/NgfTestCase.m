@@ -18,6 +18,19 @@ classdef NgfTestCase < matlab.unittest.TestCase
 %
 % KEYWORDS test base class categories record
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
+    methods (TestMethodSetup)
+        function hushExtrapolation(tc)
+            %HUSHEXTRAPOLATION Silence O-42's extrapolation warning for every test by default.
+            %   Most of this suite evaluates adsorption models at GRACE-FO densities on purpose,
+            %   three orders below where those isotherms were fitted, so after the warn ruling of
+            %   2026-09-17 they emitted about twenty-five copies of the very warning one test
+            %   asserts. A run log full of an EXPECTED warning is exactly where an unexpected one
+            %   hides, so it is off by default and `loud` turns it on where it is the subject.
+            st = warning('off', 'NonGravForces:accommodation:outsideFit');
+            tc.addTeardown(@() warning(st));
+        end
+    end
+
     methods
         function verifyErrorId(tc, fcn, identifier)
             %VERIFYERRORID fcn() must throw exactly IDENTIFIER (and must throw).
@@ -32,6 +45,18 @@ classdef NgfTestCase < matlab.unittest.TestCase
                 tc.verifyEqual(ME.identifier, char(identifier), ...
                     sprintf('wrong identifier: got %s, message: %s%s', ME.identifier, ME.message, where));
             end
+        end
+        function varargout = loud(~, fcn)
+            %LOUD Evaluate fcn with the accommodation extrapolation warning ENABLED for this call.
+            %   The suppression above is per test method, so the one test that asserts the warning
+            %   turns it back on here, which also makes the intent visible at the assertion.
+            %   RESTORED WHEN THIS FUNCTION RETURNS, not at teardown: with addTeardown the warning
+            %   stayed on for the REST of the calling test, and the three later calls in that same
+            %   method went on printing it -- the flood this helper exists to prevent, moved rather
+            %   than removed (measured 2026-09-17: 25 warnings became 3, not 0).
+            st = warning('on', 'NonGravForces:accommodation:outsideFit');
+            restore = onCleanup(@() warning(st));                                 %#ok<NASGU>
+            [varargout{1:nargout}] = fcn();
         end
         function rec = verifyBoundAndRecord(tc, name, measured, bound, units, note)
             %VERIFYBOUNDANDRECORD measured <= bound, and the number is recorded.

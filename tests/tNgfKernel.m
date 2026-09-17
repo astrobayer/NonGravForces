@@ -123,6 +123,32 @@ classdef tNgfKernel < NgfTestCase
             [aw, iw] = NonGravForces.kernel.accommodation("walker2014", sp8, T8, 'SurfaceMass_amu', 263.3223);
             tc.verifyEqual(aw.alpha, ones(1, 4)); tc.verifySize(aw.coverage, [1 4]); tc.verifySize(aw.alphaSubstrate, [1 4]);
             tc.verifySize(iw.pressureO_Pa, [1 4]); tc.verifySize(iw.meanMass_amu, [1 4]);
+            % O-42, owner ruling 2026-09-17: a computed model evaluated outside its fitted range
+            % WARNS. The flag had been computed since 2026-09-07 and read by nobody.
+            spLow = zeros(8, 2); spLow(2, :) = 1e12;            % P_O ~ 1e-8 Pa: GRACE-FO, far below the fit
+            tc.loud(@() tc.verifyWarning(@() NonGravForces.kernel.accommodation("walker2014", spLow, [900 900], 'SurfaceMass_amu', 65), ...
+                'NonGravForces:accommodation:outsideFit'));
+            tc.loud(@() tc.verifyWarning(@() NonGravForces.kernel.accommodation("pilinski2010", spLow, [900 900]), ...
+                'NonGravForces:accommodation:outsideFit'));
+            % AND IT MUST BE SILENT INSIDE THE FIT, or the warning says nothing by always speaking.
+            spHi = zeros(8, 2); spHi(2, :) = 1e16;              % P_O ~ 1e-4 Pa: inside walker2014's domain
+            tc.loud(@() tc.verifyWarningFree(@() NonGravForces.kernel.accommodation("walker2014", spHi, [900 900], 'SurfaceMass_amu', 65)));
+            tc.loud(@() tc.verifyWarningFree(@() NonGravForces.kernel.accommodation("pilinski2010", spHi, [900 900])));
+            % fixed states its value and sesam publishes no domain, so neither may warn at all
+            tc.loud(@() tc.verifyWarningFree(@() NonGravForces.kernel.accommodation("fixed", spLow, [900 900], 'Alpha', 0.85)));
+            tc.loud(@() tc.verifyWarningFree(@() NonGravForces.kernel.accommodation("sesam", spLow, [900 900], 'RelativeSpeed_ms', 7600)));
+            % every model reports the flag now, not only the two that had it
+            for nm = ["fixed" "pilinski2010" "pilinski2011" "walker2014" "sesam"]
+                extra = {};
+                switch nm
+                    case "fixed",      extra = {'Alpha', 0.85};
+                    case "walker2014", extra = {'SurfaceMass_amu', 65};
+                    case "sesam",      extra = {'RelativeSpeed_ms', 7600};
+                end
+                [~, iFit] = NonGravForces.kernel.accommodation(nm, spLow, [900 900], extra{:});
+                tc.verifyEqual(size(iFit.insideFit), [1 2], sprintf('%s reports insideFit', nm));
+                tc.verifyClass(iFit.insideFit, 'logical');
+            end
             f = @(varargin) NonGravForces.kernel.accommodation(varargin{:});
             tc.verifyError(@() f("dria", sp, T), 'MATLAB:validators:mustBeMember');   % sesam became admissible in WP-E3
             tc.verifyErrorId(@() f("pilinski2010", sp8, T8, 'Alpha', 0.9), 'NonGravForces:accommodation:inputAlpha');
