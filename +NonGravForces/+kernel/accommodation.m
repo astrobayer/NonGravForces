@@ -117,7 +117,11 @@ function [acc, info] = accommodation(model, species, T_K, options)
 %                                  states' forces rather than their coefficients, so this unit does
 %                                  not form it.
 %   info      1x1   struct  -      .K, .pressureO_Pa (walker2014, sesam), .meanMass_amu (walker2014,
-%                                  sesam), .insideFit (pilinski20xx: alpha within the fitted 0.85-1),
+%                                  sesam), .insideFit (1xK logical, EVERY model: whether each epoch
+%                                  lies inside the range the model was fitted over -- alpha in
+%                                  0.85-1.00 for pilinski20xx, P_O >= 1e-5 Pa for walker2014, true
+%                                  everywhere for fixed, which extrapolates nothing, and for sesam,
+%                                  whose source states no domain this project can transcribe),
 %                                  .stickingCoefficient .langmuir_invPa .speedRatioO (sesam), .provenance
 %
 % ACCURACY
@@ -142,6 +146,19 @@ function [acc, info] = accommodation(model, species, T_K, options)
 %   The substrate mass of walker2014 alone moves its effective coefficient by
 %   ~0.1 at GRACE-FO altitude near solar minimum (measured with the three values
 %   in circulation, 2026-09-15).
+%
+% WARNINGS
+%   NonGravForces:accommodation:outsideFit  a computed model was evaluated outside the range it was
+%       fitted in. Raised ONCE PER CALL, naming how many of the K epochs and which range; silence it
+%       with warning('off', 'NonGravForces:accommodation:outsideFit') when the extrapolation is
+%       intended. Owner ruling of 2026-09-17 (HANDOVER O-42): warn rather than refuse, because
+%       extrapolating a fitted model knowingly is legitimate and refusing would forbid it. THIS AND
+%       dependencyReport ARE THE ONLY UNITS THAT MAY WARN; a warning is not printing, since it
+%       carries an identifier and can be silenced.
+%       IT WILL FIRE ON GRACE-FO. At 520 km in solar minimum P_O is ~1.4e-8 Pa, three orders below
+%       walker2014's fitted domain, and the adsorption models return 0.11-0.17 where the fitted
+%       literature reports 0.82-0.93 (measured 2026-09-17). That is the extrapolation this warning
+%       exists to name, and it is why all three presets take a fixed alpha instead.
 %
 % ERRORS
 %   NonGravForces:accommodation:inputShape       species not 8xK or T_K not 1xK with the same K
@@ -215,6 +232,7 @@ switch model
             NonGravForces.fail(unit, "inputAlpha", "Alpha must lie in [0, 1] -> got %g", a(find(a < 0 | a > 1, 1)));
         end
         acc.alpha = a + zeros(1, K);
+        info.insideFit = true(1, K);            % a stated value extrapolates nothing
     case {"pilinski2010", "pilinski2011"}
         % ONE MODEL, TWO PUBLISHED FITS, and each option is named after the source that fits it.
         % Until 2026-09-16 the single option pilinski2010 carried the 2011 thesis's constant, so its
@@ -229,6 +247,7 @@ switch model
         x = KL * species(2, :) .* T_K;                      % n_O T in m^-3 K
         acc.alpha = x ./ (1 + x);
         info.insideFit = acc.alpha >= 0.85 & acc.alpha <= 1;
+        localWarnOutsideFit(model, info.insideFit, "the fitted alpha of 0.85 to 1.00, reached between 150 and 500 km");
     case "walker2014"
         localNoAlpha(unit, model, options.Alpha);
         ms = options.SurfaceMass_amu;
@@ -248,6 +267,12 @@ switch model
         acc.alphaSubstrate = 3 * mu ./ (1 + mu).^2;
         info.pressureO_Pa = PO;
         info.meanMass_amu = meanMass / c.amu;
+        % [W14a] fig. 17 fits theta well for P_O above ~1e-5 Pa (below ~300 km) and OVERESTIMATES
+        % it between 1e-6 and 1e-5; below that the isotherm is extrapolated. The domain is a
+        % pressure, not an alpha, so this model's insideFit is a statement about the environment it
+        % was handed and not about the number it returned.
+        info.insideFit = PO >= 1e-5;
+        localWarnOutsideFit(model, info.insideFit, "the atomic-oxygen partial pressure of 1e-5 Pa and above, which is below about 300 km");
     case "sesam"
         % Pilinski et al. (2013), the model O-16 has named since LP-5. It is the Langmuir isotherm
         % again, but with the adsorption constant itself a function of the INCIDENT KINETIC ENERGY,
@@ -307,10 +332,39 @@ switch model
         info.stickingCoefficient = s0;
         info.langmuir_invPa = KL;
         info.speedRatioO = sO;
+        % SESAM states no domain of validity this project can transcribe: [P13] fits its parameters
+        % over a set of objects and orbits rather than over a stated range of a variable, so there
+        % is nothing to compare an epoch against. insideFit is therefore TRUE everywhere and says
+        % so in the help, rather than being quietly absent or quietly invented.
+        info.insideFit = true(1, K);
 end
 if nargout > 1
     info.provenance = NonGravForces.provenance("kernel.accommodation", 'Options', struct('model', model, 'Alpha', options.Alpha, 'SurfaceMass_amu', options.SurfaceMass_amu, 'RelativeSpeed_ms', options.RelativeSpeed_ms));
 end
+end
+
+function localWarnOutsideFit(model, inside, domain)
+%LOCALWARNOUTSIDEFIT Warn once per call when a computed accommodation leaves the range it was fitted in.
+%   OWNER RULING 2026-09-17 (HANDOVER O-42): warn, rather than refuse or report only. The flag has
+%   been computed since 2026-09-07 and NO CALLER HAS EVER READ IT, so a user who selected an
+%   adsorption model at GRACE-FO altitude received a coefficient five times below every published
+%   fit with nothing to say so -- a silent degradation under R4, with the instrument to end it
+%   already present.
+%
+%   THIS IS THE SECOND UNIT IN THE TOOLBOX ALLOWED TO WARN, after dependencyReport, and it is a
+%   deliberate exception to "no printing from library code" (CLAUDE.md sect. 3): a warning is not
+%   printing -- it carries an identifier, the caller can silence it with warning('off', id), and it
+%   cannot be mistaken for a result. Refusing was the alternative and was rejected: extrapolating a
+%   fitted model is a legitimate thing to do knowingly, which is exactly what R5 asks for.
+%
+%   It fires ONCE PER CALL and not once per epoch: this unit is vectorised over K, so an arc of
+%   86400 seconds outside the fit is one warning naming how many epochs, not 86400 of them.
+if all(inside)
+    return
+end
+warning("NonGravForces:accommodation:outsideFit", ...
+    "accommodation %s: %d of %d epochs lie outside %s. The returned coefficient is an extrapolation of a fitted model -> read info.insideFit, choose a fixed alpha (March et al. 2021 recommend 0.85), or silence this with warning('off', 'NonGravForces:accommodation:outsideFit').", ...
+    model, nnz(~inside), numel(inside), domain);
 end
 
 function localNoAlpha(unit, model, a)
