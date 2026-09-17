@@ -264,7 +264,7 @@ switch backend
         elseif backend == "ceres"
             tiles = localCeres(unit, tiles, cer, nv.RotationItrsToGcrs, utc, ell, M, K);
         else
-            tiles = localClimatology(unit, tiles, clm, nv.RotationItrsToGcrs, utc, ell, M, K);
+            tiles = localClimatology(unit, tiles, clm, nv.RotationItrsToGcrs, utc, M, K);
         end
 end
 tiles.provenance = NonGravForces.provenance("env.earthRadiance", 'Options', struct('backend', backend, 'grid', grid));
@@ -392,8 +392,9 @@ end
 clm.referenceHeight_m = mean(h);
 end
 
-function tiles = localClimatology(unit, tiles, clm, R, utc, ell, M, K)
+function tiles = localClimatology(unit, tiles, clm, R, utc, M, K)
 %LOCALCLIMATOLOGY Interpolate the GROOPS monthly climatology at the tile centres.
+%   It takes no ellipsoid: the grid's axis is GEOCENTRIC, so the tile latitude needs no conversion.
 %   Bilinear in space exactly as the ceres backend, and PIECEWISE CONSTANT in time: the container
 %   bounds T grids by T+1 nodes and each grid IS the month's mean, so interpolating between two of
 %   them would invent a value the product does not carry.

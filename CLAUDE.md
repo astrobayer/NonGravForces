@@ -509,6 +509,12 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   `referenceSystem.angularVelocityFromRotationRate(R, Rdot, 'Resolution', "reference")` returns its
   NEGATIVE (ratio -1.0, measured). Reading the skew entries off `R' Rdot` without projecting the
   symmetric part out leaves the differencing error in (6e-7 relative).
+- **A rehearsal that runs FEWER checks than the runner is not a rehearsal either.** `ciGate` does
+  not run `codeIssues`; the CI `matlab` job runs it as a separate step BEFORE `ciGate`, so a local
+  gate that only calls `ciGate` can be 379/379 green and still redden CI. #46 did, on one INUSD
+  warning, after an argument stopped being used when a geodetic conversion was removed. Run
+  `codeIssues(fullfile(pwd, "+NonGravForces"))` before believing a local gate. This is the mirror
+  of the entry below, which is about giving the local run MORE than the runner gets.
 - **A rehearsal that gives the local run a hint CI does not get is not a rehearsal.** `buildMex`'s
   walk to odeSuite's `csrc` overshot by one directory (`fileparts` x3 already reaches the repository
   root; the extra `'..'` left it). Four green gates in a row said nothing, because every local script
