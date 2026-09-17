@@ -760,10 +760,55 @@ validity is ~0.5 % over the global parameter space. O-17 closes, and the same pa
 attribution of the adsorbate coverage law that `walker2014` currently credits to "JSR 51(5)" on
 Paul et al.'s authority rather than this project's reading.
 
-**WP-E5 O-6, the TRP oracle.** [H24] reports GRACE-FO thermal emission reproduced to RMS
-0.148 nm/s^2, and a cross-track residual of 4.22 nm/s^2 **using panel models and instantaneous
-thermal radiation** -- which is this toolbox's own configuration. That is both the oracle O-6 asks
-for and a published measure of what the modelling choice costs on this satellite.
+**WP-E5 DELIVERED 2026-09-17, and it begins by correcting this block's own reading of [H24].**
+Both figures this scope quoted were misread, and the misreading pointed the work package at the
+wrong claim.
+
+**The 4.22 nm/s^2 is case (a), which has NO THERMAL MODEL AT ALL.** [H24] Table 3 is a ladder of
+cross-track residual RMS by modelling choice, with the calibration parameters estimated from case
+(e) and held fixed across all of them so the steps isolate the radiation-pressure modelling:
+
+| case | thermal model | geometry | surface properties | RMS [nm/s^2] |
+|---|---|---|---|---|
+| (a) | **none** | panel | Level-1 Handbook | **4.22** |
+| (b) | **instantaneous reradiation** | panel | Level-1 Handbook | **3.04** |
+| (c) | thermal inertia | panel | Level-1 Handbook | 1.70 |
+| (d) | thermal inertia | ray-tracing | Siemes et al. (2023) | 0.88 |
+| (e) | thermal inertia | ray-tracing | fine-tuned | 0.55 |
+
+This toolbox's `thermal.model` none / steadyState / transient map onto (a) / (b) / (c), and its
+geometry and coefficients are panel and Handbook throughout. So **the configuration this block
+called "4.22" is case (b) at 3.04**, and (d) and (e) are out of reach because they need a ray-traced
+geometry this toolbox does not have.
+
+**And the 0.148 nm/s^2 is not an oracle for anything this toolbox computes.** It is the RMS
+difference between accelerations derived from MODELLED panel temperatures and from MEASURED
+thermistor temperatures, for the SOLAR ARRAYS only, at a fitted heat capacity C = 8200 J/K and
+conductivity k = 0.4 W/K. The paper bounds the reachable accuracy at ~0.6 nm/s^2 in the same
+section, because two thermistors on one array disagree by that much and the model assumes a uniform
+temperature per panel. **It measures their thermal model against their own thermistors, not thermal
+recoil against truth.**
+
+**So O-6 does not close, and the re-entry condition is now specific rather than hopeful.** [H24]
+publishes no per-axis TRP acceleration. What it does publish is better than nothing and is now
+gated:
+
+- **A magnitude check for THIS satellite.** The residual left by omitting a term bounds the size of
+  the term omitted, so case (a)'s 4.22 nm/s^2 is a GRACE-FO figure for the thermal recoil where
+  Siemes 2023's 6.4 nm/s^2 is GRACE-A 2008. Measured here on the reference arc: **cross-track RMS
+  5.263 nm/s^2**, which the two published figures BRACKET. `tNgfModel/modelReference` asserts both.
+- **What thermal inertia is worth.** (b) -> (c) buys 1.34 nm/s^2 of residual; the same switch moves
+  this toolbox's thermal acceleration by **0.950 nm/s^2** as a model difference. Those are different
+  quantities -- a residual reduction against a model change -- so the assertion is that the option
+  does something and that the something is the right order, not that the numbers match.
+  `tNgfModel/modelMetamorphic` asserts it, with a floor that a transient model agreeing with
+  steadyState to rounding would be a stub rather than a model.
+
+**A stale measurement fell out of the same test.** `modelReference`'s comment said "measured median
+7.9e-9 over this arc" while `tests/last_run.txt` had been recording 9.25e-10 for
+|median - 6.4e-9|, i.e. a median of 5.475e-9, ever since LP-C's flowShadow correction moved the
+thermal recoil by 1.77e-9. **A measurement copied into prose beside the instrument that records it
+is a second authority for one fact**, and this is the fourth instance this month.
 
 **WP-E3 and WP-E4 investigated 2026-09-17; NOTHING CHANGED, by owner ruling.** Reading both papers
 answered four questions and opened a bigger one.
@@ -1069,7 +1114,7 @@ does not vendor what it cannot redistribute (the O-34 lesson). Recorded as O-41 
 | O-3 | CERES SYN1deg variable names (B7) | open | owner supplies a file | before WP-27 |
 | O-4 | **CLOSED 2026-09-16 (LP-C WP-C9), by removal and not by an adapter.** odeSuite delivered `gjToolbox.DynamicsSource` and `csrc/gj_native.h` (ABI 1); `NonGravForces.app.DynamicsSource` subclasses it, and `Model.rhs` is deleted — a handle matching no signature the integrator takes was worse than no handle at all, and `tests/tNgfModel.m` now asserts the method does not come back. `Model` was not changed otherwise, as this row required. Issue #35 closes with it. Original entry (2026-09-08, narrowed by reading the repository instead of waiting for it): odeSuite was at L0 with no dynamics interface, its validator documented `@(t, r, v)` with numeric t, and `Model.rhs()` returned `@(epoch, r, v, q)`, which would have passed the validator's degraded branch and then been called with the wrong signature | closed | LP-C | — |
 | O-5 | `referenceSystem` MEX reported "present but not loadable" by its own setup on 2026-08-27; **2026-09-06: setup reports `mex current` (gateway built 2026-08-05, SOFA 20231011, OpenMP 32 threads), so it loads on the host**; open only for the CI runner. **The LP-6b re-entry is void: that MEX is not linked (B.1), so nothing in this toolbox depends on it loading.** Re-entered only if a C caller ever needs `rsApiRotation` | open | owner | if a C integrator is written |
-| O-6 | Exact TRP oracle: [S] Table 3 gives RMS per axis for GRACE-A 2008; a GRACE-FO 2020 oracle needs [V]'s 2025 update or ACT1B residual analysis | open | LP-5 | before WP-12 |
+| O-6 | **Exact TRP oracle. Narrowed 2026-09-17 (WP-E5), still open.** [S] Table 3 gives RMS per axis for GRACE-A 2008 and is gated. [H24] was expected to supply the GRACE-FO equivalent and does NOT: its 0.148 nm/s^2 is its own thermal model against its own thermistors on the solar arrays at a fitted (C, k), not thermal recoil against truth, and its Table 3 is a ladder of cross-track RESIDUALS by modelling choice rather than a TRP acceleration. Two checks were taken from it and are gated: case (a) omits thermal emission and leaves 4.22 nm/s^2, which bounds the magnitude of the omitted term for THIS satellite (measured here 5.263 nm/s^2 cross-track, bracketed by 4.22 GRACE-FO and 6.4 GRACE-A), and the (b)->(c) step of 1.34 nm/s^2 says what thermal inertia is worth (measured 0.950 nm/s^2 as a model difference). **What is still missing is a published per-axis TRP acceleration for GRACE-FO** | open | owner | [V]'s 2025 update, an ACT1B residual analysis, or any source that publishes the TRP acceleration itself rather than a residual after it |
 | O-7 | **CLOSED 2026-09-16 (LP-D WP-D4): the kernel is fetched at setup and the path is EVALUATED, not merely refused.** `setupNonGravForces` gains `'FetchKernels'` and pulls `de440s.bsp` (32.7 MB) through `referenceSystem.downloadKernels` - that function calls itself the single authority for where these files come from, so this toolbox repeats no URL and pins only the SHA-256 of what arrives (`addede59...164703`). It is a SEPARATE switch from `FetchData` on purpose: `ciGate` passes `FetchData "never"` so the gate does not test the network for OBSERVATIONS, and an ephemeris is model data like the MSIS and HWM14 sources. **The finding that made this worth doing was the process one, not the numbers**: `rs.de440` is the `precise` preset's OWN DEFAULT and no test had ever evaluated it - the only test naming it asserted its refusal, and the native-parity test substituted the analytic Sun. Now measured: DE440 against referenceSystem's analytic Sun is **0.0031 arcsec** in direction, 0.3 km in range, **4.0e-9 relative in solar radiation pressure** - three orders below the 1e-3 uncertainty of the solar constant itself, so the analytic Sun costs nothing an accelerometer could see, and `precise` now runs as shipped through the C evaluator too | closed | LP-D | — |
 | O-8 | **CLOSED 2026-09-09: `readMAG1B` is delivered.** The owner supplied the GFZ ISDC path, the 2020-01-01 archive was fetched, a 600-record excerpt was cut by the same recipe as the other fixtures, and the reader is written against a measured specification. Original entry: MAG1B is reachable and always was. The owner supplied the GFZ ISDC path after my probe went to the wrong host; the 2020-01-01 archive `setupNonGravForces` now fetches holds **65 files**, among them `MAG1B_2020-01-01_C_04.txt` — and also ACT1B, MAS1B, THR1B, TNK1B, IMU1B, AHK1B, KBR1B, GPS1B. There is an oracle for `readMAG1B` whenever someone writes it, and the same archive removes the data excuse from anything else that wanted a real L1B product. What remains is the work, not the obligation | closed | — | — |
 | O-9 | Dst and F30 are in none of the three space-weather sources in hand (CelesTrak SW-All; SET SOLFSMY, DTCFILE); DTM2020 (F30, Kp) and any Dst-driven model need another source | open | LP-3b | before WP-25 |
