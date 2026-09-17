@@ -135,8 +135,21 @@ classdef tNgfModel < NgfTestCase
             uc = -ic.vrel_body ./ vecnorm(ic.vrel_body);
             cc = sum(ic.drag .* uc, 1) ./ vecnorm(ic.drag);
             tc.verifyBoundAndRecord("constantCd drag direction vs -v_rel", max(abs(cc - 1)), 1e-14, "-", "constantCd resolves every windward plate along the stream by construction: no lift; measured 1e-16");
-            % The thermal recoil against the published GRACE magnitude.
-            tc.verifyBoundAndRecord("thermal recoil magnitude vs Siemes 2023 (6.4 nm/s^2)", abs(median(vecnorm(info.thermal)) - 6.4e-9), 4e-9, "m/s^2", "published cross-track RMS for GRACE; measured median 7.9e-9 over this arc");
+            % THE THERMAL RECOIL AGAINST TWO PUBLISHED FIGURES, FOR TWO DIFFERENT SATELLITES.
+            % The 7.9e-9 this comment claimed until 2026-09-17 was measured before LP-C's flowShadow
+            % correction moved the thermal recoil by 1.77e-9, and nothing compared the comment with
+            % the run: last_run.txt had been recording 9.25e-10 for |median - 6.4e-9|, i.e. a median
+            % of 5.475e-9, for as long as the sentence said 7.9e-9. A measurement copied into prose
+            % beside the instrument that records it is a second authority for one fact (R1).
+            tc.verifyBoundAndRecord("thermal recoil magnitude vs Siemes 2023 (6.4 nm/s^2)", abs(median(vecnorm(info.thermal)) - 6.4e-9), 4e-9, "m/s^2", "published cross-track RMS for GRACE-A 2008; measured median 5.475e-9 over this arc");
+            % [H24] Table 3 case (a) models GRACE-FO with panel geometry, Handbook coefficients and
+            % NO thermal emission, and is left with 4.22 nm/s^2 of cross-track residual. The residual
+            % left by omitting a term should be the SIZE of the term omitted, so that figure is a
+            % magnitude check on this toolbox's thermal recoil for THIS satellite, where Siemes is
+            % GRACE-A. The two bracket us: 4.22 (GRACE-FO, 2018-2023) < 5.26 (here) < 6.4 (GRACE-A,
+            % 2008). The bound is deliberately loose -- different spacecraft, epochs and coefficient
+            % sets -- and exists to catch a sign, a factor or a unit, not to claim agreement.
+            tc.verifyBoundAndRecord("thermal recoil cross-track RMS vs Hladczuk 2024 case (a) (4.22 nm/s^2)", abs(sqrt(mean(info.thermal(2, :).^2)) - 4.22e-9), 2.5e-9, "m/s^2", "the residual left by omitting thermal emission bounds its magnitude; measured 5.263e-9, between the GRACE-FO and GRACE-A published figures");
         end
     end
 
@@ -235,6 +248,22 @@ classdef tNgfModel < NgfTestCase
             [e, rr, vv] = tc.arc(4);
             [a, info] = tc.M.accel(e, rr, vv);
             o = tc.M.options;
+            % WHAT THERMAL INERTIA IS WORTH, against what [H24] measured it to be worth. Their
+            % Table 3 goes from instantaneous reradiation (b, 3.04 nm/s^2 residual) to thermal
+            % inertia (c, 1.70), so the step buys 1.34 nm/s^2 on GRACE-FO with everything else held.
+            % Ours is a MODEL difference where theirs is a RESIDUAL reduction, so the two are the
+            % same order rather than the same number, and the assertion is that the option does
+            % something and that the something is not enormous. A transient model that agreed with
+            % steadyState to rounding would be a stub, and one that moved the force by 10 nm/s^2
+            % would be wrong; both are excluded here.
+            [eL, rL, vL] = tc.arc(200);
+            Mtr = NonGravForces.Model(tc.macro, o.set("thermal.model", "transient"), ...
+                'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw);
+            [~, iSt] = tc.M.accel(eL, rL, vL);
+            [~, iTr] = Mtr.accel(eL, rL, vL);
+            step = sqrt(mean(sum((iTr.thermal - iSt.thermal).^2, 1)));
+            tc.verifyBoundAndRecord("thermal inertia vs instantaneous: the step it is worth", step, 4e-9, "m/s^2", "[H24] Table 3 (b)->(c) buys 1.34 nm/s^2 of residual on GRACE-FO; measured 0.950e-9 as a model difference, the same order");
+            tc.verifyGreaterThan(step, 1e-10, 'a transient model that matched steadyState would be a stub, not a model');
             % Doubling the drag scale doubles the drag and leaves the rest untouched.
             M2 = NonGravForces.Model(tc.macro, o.set("drag.cdScale", 2), 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw);
             [~, i2] = M2.accel(e, rr, vv);
