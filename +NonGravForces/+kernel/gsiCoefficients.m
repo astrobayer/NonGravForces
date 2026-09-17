@@ -141,7 +141,10 @@ function [Cp, Ctau, info] = gsiCoefficients(model, s, theta, alpha, Tw_K, Tinf_K
 %   Thermospheric density and wind determination from satellite dynamics,
 %   Ch. 3 (eqs 3.55-3.57). Koppenwallner G. (2008) Comment on special section:
 %   new perspectives on the satellite drag environments, JSR 45(6). Wöske F.
-%   (2019) PhD thesis, eq. 5.20. March et al. (2019) J. Space Weather Space Clim. 9, A36.
+%   (2019) PhD thesis, eq. 5.20. March G., van den IJssel J., Siemes C., Visser P.N.A.M.,
+%   Doornbos E.N., Pilinski M. (2021) J. Space Weather Space Clim. 11, 54,
+%   DOI 10.1051/swsc/2021035 (corrected 2026-09-17; this block cited "9, A36", which
+%   resolves to no paper, HANDOVER O-42).
 %
 % EXAMPLE
 %   [Cp, Ctau, info] = NonGravForces.kernel.gsiCoefficients("sentman", 8, 0, 1, 300, 1000);

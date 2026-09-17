@@ -18,7 +18,7 @@ classdef Options
 %     drag.density            exponential   msis00          msis21
 %     drag.wind               corotation    corotation      corotation (+hwm14 opt-in)
 %     drag.gsi                constantCd    sentman         sentman
-%     drag.accommodation      fixed 0.85    fixed 0.85      walker2014 (m_s 263.3223 amu)
+%     drag.accommodation      fixed 0.85    fixed 0.85      fixed 0.85 (March et al. 2021)
 %     srp.eclipse             conical       conical         solaarsCF
 %     erp.backend             none          knocke          ceres
 %     erp.grid                -             12x24           24x48
@@ -145,9 +145,14 @@ classdef Options
                     dens = "msis00"; gsi = "sentman"; acc = "fixed"; alpha = 0.85; ms = [];
                     ecl = "conical"; erpB = "knocke"; grid = [12 24]; th = "steadyState"; ss = "lut"; lutN = 16; sunS = "rs.analytic";
                 case "precise"
-                    % walker2014 with the substrate mass of Mehta et al. (2022) as printed in Paul et al. (2022, eq. 13):
-                    % the owner's choice among three values in circulation (HANDOVER Part I, 2026-09-15)
-                    dens = "msis21"; gsi = "sentman"; acc = "walker2014"; alpha = []; ms = 263.3223;
+                    % The FITTED constant of March et al. (2021), not a computed accommodation, by owner
+                    % ruling of 2026-09-17 (HANDOVER O-42). That paper is the state of the art for this
+                    % exact application and fits a constant per mission BECAUSE the in-situ composition a
+                    % computed model needs is not measured on these satellites; 0.85 is its recommendation
+                    % and supersedes Doornbos (2011)'s 0.93. The adsorption models remain available by
+                    % name -- and disagree with this by 17.5 % of the drag at 520 km in solar minimum,
+                    % which is measured, not feared (HANDOVER Part G, LP-E).
+                    dens = "msis21"; gsi = "sentman"; acc = "fixed"; alpha = 0.85; ms = [];
                     ecl = "solaarsCF"; erpB = "ceres"; grid = [24 48]; th = "steadyState"; ss = "lut"; lutN = 32; sunS = "rs.de440";
             end
             obj.drag     = struct('density', dens, 'wind', "corotation", 'gsi', gsi, ...

@@ -638,7 +638,16 @@ paper O-16 names. [W14a] Walker, Mehta & Koller, *Drag Coefficient Model Using t
 Cercignani-Lampis-Lord Gas-Surface Interaction Model*, JSR 51(5) 1544, DOI 10.2514/1.A32677 --
 the closed-form CLL paper O-17 names, and the companion to [W14b] already in hand. [H24] Hladczuk,
 van den IJssel, Kodikara, Siemes & Visser, *GRACE-FO radiation pressure modelling for accurate
-density and crosswind retrieval*, Adv. Space Res. 2024. All three are filed untracked in
+density and crosswind retrieval*, Adv. Space Res. 2024. **Added 2026-09-17, the three papers this
+project had been citing as one:** [M19a] March, Doornbos & Visser, *High-fidelity geometry models
+for improving the consistency of CHAMP, GRACE, GOCE and Swarm thermospheric density data sets*,
+Adv. Space Res. **63** 213-238, DOI 10.1016/j.asr.2018.07.009 -- GEOMETRY, not gas-surface
+interaction; [M19b] March, Visser, Doornbos & Siemes, *CHAMP and GOCE thermospheric wind
+characterization with improved gas-surface interactions modelling*, Adv. Space Res. **64**
+1225-1242, DOI 10.1016/j.asr.2019.06.023; [M21] March, van den IJssel, Siemes, Visser, Doornbos &
+Pilinski, *Gas-surface interactions modelling influence on satellite aerodynamics and thermosphere
+mass density*, J. Space Weather Space Clim. **11** 54, DOI 10.1051/swsc/2021035 -- the one the
+kernel's ACCURACY blocks mean and mis-cite (O-42). All are filed untracked in
 `doc/references/`. And `data/albedo/earth_ceres_{reflectivity,emissivity}_grid2.5.dat`, two GROOPS
 binary `griddedData` files.
 
@@ -669,6 +678,182 @@ Paul et al.'s authority rather than this project's reading.
 0.148 nm/s^2, and a cross-track residual of 4.22 nm/s^2 **using panel models and instantaneous
 thermal radiation** -- which is this toolbox's own configuration. That is both the oracle O-6 asks
 for and a published measure of what the modelling choice costs on this satellite.
+
+**WP-E3 and WP-E4 investigated 2026-09-17; NOTHING CHANGED, by owner ruling.** Reading both papers
+answered four questions and opened a bigger one.
+
+- **O-17 does not close.** [W14a]'s closed forms are for WHOLE BODIES -- sphere, cylinder, and a flat
+  plate **at normal incidence only**; it defers arbitrary orientation to Storch [14], which is not in
+  hand -- and its fitted parameters are both species- and geometry-specific (Tables 3 and 4). This
+  toolbox's kernel needs per-panel C_p and C_tau at arbitrary incidence, which no equation in that
+  paper provides. `drag.gsi = "cll"` stays refused.
+- **Three assumptions this project had flagged as unverified are now verified from the primary
+  source.** [W14a]'s nomenclature prints `K = Langmuir adsorbate constant, **Pa^-1**`, settling the
+  unit `kernel.accommodation` had taken on inference; its eq. (31) IS the coverage law, so the
+  attribution to JSR 51(5) *1544* was right and no longer rests on Paul et al.'s authority; and its
+  Table 6 gives **1.44E+06** for diffuse reflection with incomplete accommodation, which is the
+  model this toolbox pairs it with.
+- **One shipped constant is contradicted by BOTH primary sources.** [W14a] eq. (33) and [P13]
+  eq. (19) each give **alpha_s = 2.4 mu/(1+mu)^2**, citing Goodman; this toolbox ships **3.0** from
+  Paul et al. (2022) eq. 13, a secondary statement of Mehta et al. (2022). [P13] also uses
+  **m_s = 65 amu**, not the 263.3223 of the 2026-09-15 ruling.
+- **SESAM's sticking law is in hand after all** ([P13] eqs 17-22: K_L becomes a function of incident
+  kinetic energy through an initial sticking coefficient, with a binding energy near 5.7 eV), so
+  O-16 is implementable. But it addresses the HIGH-ENERGY eccentric-orbit regime, where adsorption
+  falls off; it would not raise the accommodation at GRACE-FO's circular 7.6 km/s.
+
+**THE FINDING THAT MATTERS, and it is structural rather than a constant.** Measured on the reference
+day (2020-01-01, 514-523 km, deep solar minimum, P_O = 1.0-2.0e-8 Pa, coverage theta = 0.014-0.028 --
+three orders of magnitude below the ~1e-5 Pa where [W14a] fig. 17 says its isotherm fits):
+
+| parameter set | alpha_s | effective alpha |
+|---|---|---|
+| [P13] SESAM's own: 2.4, m_s 65 | 0.272-0.343 | 0.282-0.361 |
+| [W14a] constant 2.4, Mehta mass 263.3223 | 0.083-0.112 | 0.095-0.137 |
+| Paul constant 3.0, Pilinski mass 65 | 0.340-0.428 | 0.349-0.444 |
+| **Paul 3.0 + Mehta 263.3223 -- what ships** | 0.103-0.140 | **0.116-0.164** |
+| fitted from orbit at 270-500 km (March et al. 2019, as this toolbox cites it) | | **0.82-0.93** |
+
+**No combination of the published constants reaches the fitted values.** The surface mass dominates
+-- 65 against 263.3223 amu moves alpha by a factor 2.6, where 2.4 against 3.0 moves it by 1.25 --
+and even the most generous pairing reaches 0.44. At this altitude theta is so small that all three
+models report essentially the CLEAN-SURFACE accommodation, and that is 0.3-0.4 at best. So the gap
+is not a constant anyone has mis-copied: either the fitted 0.82-0.93 do not transfer to 520 km in
+deep solar minimum, or the adsorption models mis-extrapolate far below their fitted pressure. **That
+question cannot be settled from the papers in hand**: March et al. (2019, JSWSC, open access) is a
+citation in this toolbox's own ACCURACY block and has not been read. Recorded as O-42.
+
+**O-42 INVESTIGATED 2026-09-17 with the three March papers in hand. STILL NOTHING CHANGED, by owner
+ruling. The implementation is NOT defective, and the question that remains is a design ruling, not a
+bug hunt.** The decisive measurement was to stop comparing our 520 km numbers against a figure fitted
+somewhere else, and instead evaluate OUR models at the conditions the literature actually fitted.
+[M21] reports that at CHAMP altitudes under low solar activity SESAM's accommodation "oscillates
+between the two fixed values of 0.85 and 0.93". Evaluated at 2008-01-01, equator, noon, F10.7 = 70,
+Ap = 4 (`msis00`, this toolbox's own units, no fitting of any kind):
+
+| altitude | P_O [Pa] | theta | `walker2014` | `pilinski2010` | `pilinski2011` |
+|---|---|---|---|---|---|
+| 300 km | 3.33e-06 | 0.827 | 0.857 | **0.948** | **0.923** |
+| 350 km | 1.15e-06 | 0.624 | 0.686 | **0.862** | 0.806 |
+| 400 km | 4.06e-07 | 0.369 | 0.468 | 0.688 | 0.595 |
+| 450 km | 1.46e-07 | 0.173 | 0.295 | 0.442 | 0.344 |
+| 500 km | 5.30e-08 | 0.071 | 0.194 | 0.223 | 0.160 |
+| 520 km | 3.55e-08 | 0.049 | 0.167 | 0.162 | 0.114 |
+
+**At CHAMP's altitude and CHAMP's solar conditions, `pilinski2010` gives 0.86-0.95 -- straddling the
+0.85-0.93 [M21] reports for SESAM there.** The same code, unchanged, gives 0.11-0.17 at GRACE-FO's
+520 km in deep solar minimum. So the factor of five is not a mis-copied constant and not a porting
+error: it is what the adsorption family PREDICTS, and the family reproduces the published range where
+the published range was measured. **The earlier framing of O-42 compared a 520 km deep-minimum
+prediction against a 300-400 km fitted constant and called the difference a defect. It is not.**
+
+Repeating the sweep at F10.7 = 180, Ap = 9 gives 0.63-0.83 at the SAME 520 km. So these models make a
+strong, falsifiable claim this project had not noticed it was shipping: **GRACE-FO's energy
+accommodation swings by a factor of five over the solar cycle**, from ~0.15 at minimum to ~0.8 at
+maximum, because the atomic-oxygen partial pressure that drives the Langmuir coverage does. A constant
+alpha cannot represent that, and 2020-01-01 -- the reference day this whole toolbox is validated on --
+sits at the extreme low end of it.
+
+**What the choice is worth, in the quantity the toolbox exists to produce.** Same `standard` preset,
+same day, same geometry, 30 epochs, only `drag.accommodation` differing:
+
+| accommodation | alpha | drag RMS [m/s^2] | vs fixed 0.85 |
+|---|---|---|---|
+| fixed 0.85 -- `standard` ships this, and [M21] recommends it | 0.850 | 6.8826e-09 | 1.0000 |
+| fixed 0.93 -- Doornbos 2011, superseded by [M21] | 0.930 | 6.6158e-09 | 0.9612 |
+| `walker2014` -- **`precise` ships this** | 0.116-0.164 | 8.0886e-09 | **1.1752** |
+| `pilinski2010` | 0.051-0.098 | 8.1882e-09 | 1.1897 |
+| `pilinski2011` | 0.034-0.067 | 8.2164e-09 | 1.1938 |
+
+**The `precise` preset therefore predicts 17.5 % more drag than `standard` on the reference day, and
+the entire difference is the accommodation coefficient.** Switching 0.85 to 0.93 moves it by 3.9 %.
+For accelerometer calibration this is not a refinement, it is the leading systematic: a 17.5 % drag
+error is absorbed by the estimated scale factor and propagates straight into any density inverted from
+it. Two presets of the same toolbox disagreeing by that much about the same day is a defensible
+scientific position ONLY if the toolbox says so out loud, which it does not.
+
+**So the physics is settled and the ruling is not.** The open question is no longer "is our
+accommodation wrong" but "which of two defensible things should `precise` mean": the state of the art
+for THIS application ([M21], fitting a constant per mission, because the composition data a computed
+model needs is not measured on these satellites), or the state of the art in gas-surface physics
+(computing alpha from the composition a density model supplies, which is what `precise` does, and
+which reproduces the literature where the literature was fitted). Both are honest. Recorded for the
+owner as O-42.
+
+**WP-E7: OWNER RULING 2026-09-17 -- `precise` takes the FITTED alpha = 0.85, and the adsorption models
+become opt-ins.** The owner chose the state of the art for THIS application over the state of the art
+in gas-surface physics, which is what [M21] itself does and for the reason it gives: the in-situ
+composition a computed model needs "is not measured by any of the above-mentioned satellites". All
+three presets now agree on accommodation, and the 17.5 % is no longer a difference between two presets
+of the same toolbox -- it is a difference between a preset and a named option, which is where a
+disagreement of that size belongs.
+
+What the ruling moved, and one thing it nearly broke:
+
+- `Options` `precise`: `accommodation` "walker2014" -> "fixed", `alpha` [] -> 0.85, `surfaceMass_amu`
+  263.3223 -> [] (a value left beside a model that does not read it is the contradiction `Model`
+  already refuses in the other direction).
+- **`tNgfIntegration` gained a SIXTH parity configuration, and this is the part worth reading.**
+  walker2014 is accommodation enum value 3 in the C evaluator, and it was reached by exactly one
+  configuration: the `precise` preset. Changing the preset would have dropped it from the parity claim
+  silently -- both paths would still run and would quietly evaluate different models, which is the
+  identical blindness the `hwm14` case was added to prevent in LP-D. **A preset is not a test, and a
+  branch covered only by a default is covered by nothing once the default moves.**
+- The citation is corrected in `kernel.accommodation` and `kernel.gsiCoefficients`: "J. Space Weather
+  Space Clim. 9, A36" resolved to no paper and is now [M21], JSWSC 11, 54, DOI 10.1051/swsc/2021035.
+- `Model`'s refusal message for a missing `surfaceMass_amu` pointed at "the precise preset sets
+  263.3223", which stopped being true in the same commit; it now names the disagreeing sources instead
+  of a preset. **An error message that cites a default is a copy of that default.**
+- The theory document's Energy accommodation section is rewritten around the measurement, and its
+  summary table said "SESAM in `precise`", which was never true -- SESAM has never been implemented.
+
+**Two more stale facts fell out of the same file, both four levels old, both because nothing compared
+them with anything.** The theory document said "51 units" (LP-5's count; there are 56) and listed
+`rhs` among `Model`'s methods (removed in LP-C). The count is now `\ngfunitcount`, generated by
+`tools/buildDocs.py` from `doc/functionlist.csv` and refused when stale, like every other derivable
+fact on that page. This is the fourth instance this month of the same defect and the second in the
+same document.
+
+**The rehearsal cost three runs, and none of the failures were in this repository.** Recorded
+because the misreading was reasonable each time and wrong each time.
+
+- Run 1 used `matlab -batch ciGate` with NO arguments. `DependencyRoot` defaults to the parent
+  folder, so it installed from the SIBLING clones -- including the `referenceSystem` checkout that
+  another session keeps on `fix/reviewFindings`, which this project is under standing instruction
+  never to use. Nothing tracked was touched (that clone is still clean and still on its branch), but
+  the run did `savepath`. Recorded as O-43.
+- Run 2 used the isolated root correctly and reported **93 failures across whole classes**. The
+  temptation was to read that as a regression from the preset change. It was not: run 1's MATLAB was
+  STILL ALIVE, because the launch used both the harness's background flag and a shell `&`, so the
+  "finished" notification described the shell exiting, not MATLAB. Two MATLABs then fought over one
+  mapped DLL. **A whole test class failing in setup is a configuration symptom, and the diagnosis
+  order -- configuration, then criterion, then code -- exists for exactly this.**
+- Run 3, with nothing else running, was **374 passed, 0 failed, 0 incomplete, 0 shortfalls**, which
+  was the prediction.
+
+**A check was written for this and deliberately NOT shipped.** The obvious fix looked like promoting
+`referenceSystem:setupReferenceSystem:mexBuildFailed` to an error inside `ciGate`, so the gate would
+refuse instead of measuring 374 things against a binary that might be stale. It was written, and then
+the green run disproved it: **that warning fires on this host every time, including in the run that
+went 374/374.** referenceSystem reads its leap-second table through the gateway before it decides to
+relink, so once the DLL is mapped the relink cannot succeed -- and when the binary already matches
+its sources (both clones carry source hash 109793179) the failed relink changes nothing. The warning
+therefore cannot distinguish "locked but current" from "stale", and promoting it would have turned a
+healthy tree red. **A check that cannot fail selectively is not a check, and this one was caught only
+because the green run happened to come first.** The discrimination has to live where the source hash
+is known, which is upstream; recorded against O-43.
+
+**And a methodological finding about this session's own instruments.** The first fault injection of
+the new macro reported the audit CLEAN, and the obvious reading was that the staleness check does not
+cover `generated.tex`. It does. The injection was a `sed` whose backslash never matched, so the file
+was never modified and the audit was correctly silent about a healthy tree. **A fault injection that
+does not inject proves nothing, and it fails in the direction that looks like a finding.** Assert that
+the corruption landed before believing the instrument's silence -- injected with Python and verified
+by reading the file back, the check fires on the first try.
+
+**And an instrument that already knew.** `kernel.accommodation` computes `info.insideFit` -- whether
+alpha falls in the 0.85-1.00 its constants were fitted over -- and NOTHING reads it; one test asserts
+its size. The toolbox has been able to say "this is an extrapolation" since 2026-09-07 and never has.
 
 **WP-E6 Records**, including the licensing question the grids raise: they are CERES-derived and
 CERES data is open, but these particular files come from a GROOPS distribution and this project
@@ -718,6 +903,8 @@ does not vendor what it cannot redistribute (the O-34 lesson). Recorded as O-41 
 | O-26 | **Largely discharged 2026-09-16, and what remains is recorded rather than fixed.** Tags now exist for `v0.1.0`, `v0.5.3`, `v0.6.0`, `v0.9.0` and `v0.10.0`. **Two things a later session must not be surprised by.** (i) `v.0.10.0` - with a stray dot - also exists, at the same commit `164ecdf`. It was a typo, and under the `~ALL` tag ruleset (deletion and non-fast-forward blocked, zero bypass actors) it cannot be removed: the one-way door this row warned about, walked through. It is harmless, points where `v0.10.0` points, and should simply be ignored. (ii) Only `v0.5.3` is ANNOTATED; the rest are lightweight, where `astrobayer/ci-actions/VERSIONING.md` asks for annotated tags plus a release. Those are immutable too, so the rule can only be honoured from the next tag onward. **And a sequencing lesson**: `v0.10.0` was cut at `164ecdf`, after which LP-D and the DE440 work merged WITHOUT a version bump, so `main` briefly served a changed `pilinski2010` constant under the same version string the tag names. Bumping to 0.11.0 closes that; the rule is that a tag marks a version and the next commit that changes behaviour opens the next one | open | owner | annotate from the next tag; cut it AFTER the bump, not before |
 | O-40 | **`referenceSystem.downloadKernels` reports a digest that does not describe the file it wrote.** Its help says `.Digest` is the "SHA-256, once on disk"; for `de440s.bsp` it returned `addede59...164703`, while MATLAB's own `java.security.MessageDigest` over the written file, Python's `hashlib`, and the CI runner's independent computation all return `c1c7feea...260a49f2` for 32 726 016 bytes. Its `Mode "verify"` over the same CacheDir reports `Bytes NaN, Digest ""`, so it does not re-find the file it placed there either. This toolbox no longer quotes that number: `setupNonGravForces` measures the digest itself (LP-D WP-D4). **The lesson is more general than the bug**: a pin taken from the tool whose work it is meant to check is not a check. Not yet filed upstream - the sibling clone is on another session's branch and this project has not read that function's internals | open | owner / referenceSystem | file an upstream issue with the three measurements |
 | O-41 | **CLOSED 2026-09-17 the same day it opened: the data is public and is now FETCHED, not vendored.** The owner named the source -- GROOPS publishes its whole data pool at `https://ftp.tugraz.at/pub/ITSG/groops/data/` -- so the redistribution question never had to be answered: nothing is committed. `setupNonGravForces` gains `'FetchGroops'` (default **never**, because two of the files are 1.25 GB EACH) and `'DataPool'`, and writes into `<DATAPOOL>/EarthRadiationPressure`. The pool is NAMED, never guessed: without the DATAPOOL environment variable the fetch reports and does nothing, because choosing a directory for 2.5 GB on a user's behalf is not a service (R5). No SHA-256 pin, deliberately: the publisher states it does not commit to keeping the files updated, so a digest measured once here would turn their next revision into a failure rather than a fact -- what is checked is the GROOPS magic and type string, read from the first bytes | closed | — | — |
+| O-42 | **RULED 2026-09-17 and mostly discharged: `precise` takes the fitted alpha = 0.85 of [M21], the adsorption models are opt-ins, and the citation is fixed in both kernel units.** The investigation that led there is in Part G, LP-E, and its conclusion was that the models are NOT defective: at CHAMP's altitude and solar conditions `pilinski2010` returns 0.86-0.95 against the 0.85-0.93 [M21] reports for SESAM there, while the same code returns 0.11-0.17 at 520 km in deep solar minimum and 0.63-0.83 at F10.7 = 180. **What remains open is the narrower half the ruling did not cover**: `kernel.accommodation` computes `info.insideFit` -- whether the returned alpha falls inside the 0.85-1.00 its constants were fitted over -- and no caller has ever read it, so a user who opts into `walker2014` at GRACE-FO altitude gets a number five times below every published fit with no indication at all. Under R4 that is a silent degradation and the instrument to end it already exists | open | owner | rule on whether a computed accommodation outside its fitted range warns, refuses, or only reports through `info`; the preset and citation halves are closed |
+| O-43 | **Two defects in the local gate rehearsal, neither in the toolbox.** (a) `ciGate`'s `DependencyRoot` defaults to the parent folder, so a bare `matlab -batch ciGate` installs from the SIBLING clones -- including the `referenceSystem` checkout another session keeps on `fix/reviewFindings` -- and reaches its dependencies through `run(f)`, which cannot pass the `'Save', false` that `setupReferenceSystem` accepts. Every rehearsal therefore calls `savepath`, and successive rehearsals churn the saved path between the sibling clones and the scratchpad clones; a scratchpad path that is later deleted stays saved. Harmless on a disposable CI runner, a side effect nobody asked for on a developer host. The fix must not make the rehearsal and the runner differ -- that is what makes it a rehearsal -- and `'Save', false` is right for both, since CI never benefits from a saved path either. (b) **Upstream**: `setupReferenceSystem` reads its leap-second table through the MEX gateway before it decides to relink it, so on Windows the DLL is already mapped and the relink always fails; it then warns `mexBuildFailed` whether the binary is stale or merely locked-and-current. That warning fired in a 374/374 GREEN run on 2026-09-17, which is why the obvious hardening in `ciGate` (promoting it to an error) was written and then NOT shipped -- it would red-gate a healthy host. A consumer cannot make the distinction; only the side that knows the source hash can | open | claude | (a) give `ciGate` an explicit dependency setup call passing `'Save', false`, and fault-inject on `pathdef.m`'s mtime across a rehearsal; (b) file upstream that `mexBuildFailed` must distinguish a stale binary from a locked current one, then reconsider the gate check |
 | O-39 | **CLOSED 2026-09-16, the same day it opened: the owner widened the secret's repository access and the runner checks odeSuite out.** The wall had been hiding two real defects, both invisible on this host and both fixed in the same round: (i) `buildMex`'s walk to odeSuite's `csrc` overshot by one directory, and since CI sets no `NGF_GJTOOLBOX` the `rhs` target would have reported unbuildable and `ciGate` would have gone red blaming an absent gjToolbox that was sitting right beside it; (ii) `ciGate` never built gjToolbox's own native stepping kernel, which is not committed, which a fresh checkout therefore lacks, and which `tNgfIntegration` propagates through. Each was masked by something this host had and the runner does not — an environment variable and a hand-built MEX. **The access wall was worth hitting: it is the only reason either defect was found before a release.** Original entry: **an ACCESS fact, measured twice, not a guess.** Since LP-C the `matlab` job checks the sibling out, because `app.DynamicsSource` subclasses `gjToolbox.DynamicsSource` and cannot load without it. `REFERENCE_READ_TOKEN` syncs `referenceSystem` and `gracefoReading` in that same job, seconds earlier, and then: **404** at the REST call that resolves the default branch (Metadata:read), and — with `ref: main` given so that call is skipped — **403** on the git fetch itself (Contents:read). Both permissions are refused, so the secret's repository scope does not include odeSuite. **The fix is one setting and it is the owner's**: add `astrobayer/odeSuite` to that organisation secret's repository access. The alternative, `continue-on-error` on the checkout, is refused here: the job would then run without gjToolbox and report green about a gate that never loaded the unit it exists to cover. Until then LP-C is ☑ on Tier A and unseen by the runner | closed | owner | — |
 | O-38 | **CLOSED 2026-09-16 by removing the second authority, not by rebuilding it.** The investigation found the obligation had understated the problem: the committed PDF was the one from the initial commit, its title page said **version 0.1.0** three weeks and nine minor versions later, and the `.tex` it came from carried **eight statements the shipped toolbox contradicts** — `sesam`/`langmuir` accommodation (never implemented, O-16), DTM2020 and JB2008 as density backends (removed in WP-C2), `erp.anisotropy=adm` (removed, F4), an icosphere LUT (a cube map since WP-C3), complex-step verification (measured impossible and removed), and `lsqvce` as the estimator (dropped 2026-09-09). Rebuilding the PDF would have rendered every one of them faithfully. **The fix is the mechanism, not the file:** (i) `tools/buildDocs.py` generates `doc/src/generated.tex` — the version, the date and every enumerated option list, the last read from `Options.validateValue`'s own `sets` struct — and the document `\input`s it, so it cannot print a version or offer an option the toolbox would refuse; (ii) `auditPackage.py` refuses a stale `generated.tex` by CONTENT, refuses a committed PDF under `doc/`, and refuses a version literal in the `.tex`; (iii) a new CI job `theory` compiles the document on every run with `-halt-on-error`, fails on an undefined reference or control sequence (LaTeX only warns and still writes a PDF), and uploads the result as the `theoryDocument` artefact. The eight stale statements are corrected and the document gained the section it most lacked, `sec:flow`, on why occlusion is not facing and a gas is not a beam. Original entry: the theory PDF is one revision behind its own source; this host has no LaTeX and no instrument inspects the PDF | closed | — | — |
 | O-11 | **CLOSED 2026-09-09 (WP-21).** `tools/buildDocs.py` renders all seven pages and `helptoc.xml`, each derivable fact from its single authority: the catalogue for the reference, the sensor table and the delivered/stub counts; `fail.m`'s help block for the mnemonic taxonomy; `toolboxVersion.m` for every footer. `auditPackage.py` refuses a stale page by CONTENT, and was fault-injected to prove it. The obligation had already come due: `Sensors.html` credited `Electrostatic` with a "CRN filter" — the one thing that class explicitly does NOT build — and listed all three sensors as future work months after two had shipped. A page nobody generates is a page that lies eventually | closed | — | — |
