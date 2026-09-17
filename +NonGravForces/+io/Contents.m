@@ -10,4 +10,5 @@
 %   massModel            - Spacecraft mass model: handbook constant or MAS1B-driven variable mass
 %   spaceWeather         - Space-weather provider with query(epoch): F10.7 F30 S/M/Y10.7 Ap Kp Dst
 %   importCERES          - CERES EBAF TOA monthly fluxes (obs4MIPs netCDF) as lat x lon x month grids
+%   importGroopsGrid     - GROOPS binary gridded data: grid, solid angles and values
 %   igrfCoefficients     - IGRF-14 coefficient loader with the model's own interpolation and SV rule
