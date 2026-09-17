@@ -233,7 +233,7 @@ dtm2020/jb2008 (LP-3b), and the furnished-kernel Sun path (O-15).
 
 **Done 2026-09-07: LP-4 (geom)** and solaarsCF (O-13 closed).
 
-**Done 2026-09-07: LP-5 (kernel + qc)** except `partials` (LP-6), SESAM (O-16),
+**Done 2026-09-07: LP-5 (kernel + qc)** except `partials` (LP-6), SESAM (O-16, **closed 2026-09-17 in LP-E WP-E3**),
 CLL/Schamberg (O-17); O-2 closed (unit normals). Upstream issues filed:
 referenceSystem#15 (O-10), gracefoReading#6 (O-12 — **fixed and closed upstream 2026-09-08**,
 gracefoReading 1.0.1; the `l1bLoad` split is gone).
@@ -339,7 +339,9 @@ preset. What a later session most needs to know:
   all its own tests and stay "complete"), and `CLAUDE.md`'s unit count was compared by nothing.
   Both now hold. **An instrument's silence is evidence only about what it inspects.**
 - Open after it: O-38 (the theory PDF is behind its `.tex`; no LaTeX on this host), O-3 (CERES
-  SYN1deg), O-16/O-17 (SESAM, CLL/Schamberg — no source in hand), O-19 (GROOPS), O-26 (tagging).
+  SYN1deg), O-17 (CLL/Schamberg — its closed forms are whole-body and normal-incidence only, so they
+  do not serve a per-panel kernel), O-19 (GROOPS), O-26 (tagging). **O-16 closed 2026-09-17**:
+  `drag.accommodation = "sesam"` ships on both the MATLAB and the C path.
   **Next is LP-R (release).**
 
 **LP-5x cross-validation** (owner rulings of 2026-08-27):

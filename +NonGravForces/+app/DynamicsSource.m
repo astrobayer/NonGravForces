@@ -473,7 +473,7 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
             s = struct();
             s.cLight = referenceSystem.iersConstants().speedOfLight; s.sigmaSB = c.sigmaSB; s.kB = c.kB;
             s.au = c.au; s.Rsun = c.Rsun; s.Rmoon = c.Rmoon;
-            s.aEarth = ell.a; s.bEarth = ell.b; s.fEarth = ell.f; s.e2Earth = ell.e2; s.tsi = o.srp.tsi; s.amu = c.amu;
+            s.aEarth = ell.a; s.bEarth = ell.b; s.fEarth = ell.f; s.e2Earth = ell.e2; s.tsi = o.srp.tsi; s.amu = c.amu; s.eV = c.eV; s.torr = c.torr;
             s.speciesMass = c.speciesMass(:)' / c.NA;
             s.n = M.macro.n;
             s.area = M.macro.A(:)'; s.normal = M.macro.N; s.centroid = M.macro.C;
@@ -486,7 +486,7 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
             s.gsi = double(find(["sentman","maxwell","constantCd"] == o.drag.gsi) - 1);
             s.cd = o.drag.cd; s.specular = localOrZero(o.drag.specularFraction); s.twK = o.drag.Tw_K;
             s.cdScale = o.drag.cdScale; s.crScale = o.srp.crScale;
-            s.accommodation = double(find(["fixed","pilinski2010","pilinski2011","walker2014"] == o.drag.accommodation) - 1);
+            s.accommodation = double(find(["fixed","pilinski2010","pilinski2011","walker2014","sesam"] == o.drag.accommodation) - 1);
             s.alphaFixed = localOrZero(o.drag.alpha); s.surfaceMassAmu = localOrZero(o.drag.surfaceMass_amu);
             s.density = double(find(["exponential","msis00","msis21"] == o.drag.density) - 1);
             s.expRho0 = 0; s.expH0 = 0; s.expH = 1;

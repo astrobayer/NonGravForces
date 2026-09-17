@@ -855,6 +855,119 @@ by reading the file back, the check fires on the first try.
 alpha falls in the 0.85-1.00 its constants were fitted over -- and NOTHING reads it; one test asserts
 its size. The toolbox has been able to say "this is an extrapolation" since 2026-09-07 and never has.
 
+**WP-E3 SCOPE, FROZEN 2026-09-17 before any code.** O-16 closes or this block says why not.
+
+**The fact that decides the whole work package, and that would have been silently wrong if assumed:**
+SESAM's P_O is NOT the thermodynamic partial pressure this toolbox already computes. [P13] eq. (15)
+and Appendix B define it as a RAM IMPACT pressure, `P_O = 1/2 rho_O V_r^2 C_D,in,O(s)`, where
+`C_D,in,O` is the free-molecular sphere drag coefficient with the re-emission term set to zero. At
+520 km that is 4.97e-06 Pa against 3.55e-08 Pa for `n_O kB T` -- a factor of 140. Feeding SESAM the
+pressure `walker2014` uses would have under-predicted its coverage by that factor and produced a
+plausible, wrong, silently low accommodation.
+
+**And the converse was checked before concluding anything about the models already shipping.**
+[W14a] fits its isotherm to the THERMODYNAMIC pressure: it states its models fit theta well "for P_O
+above ~1e-5 Pa (corresponding to altitudes below ~300 km)" and that "P_O is dependent on T_inf and
+n_O". This toolbox measures 3.33e-06 Pa at 300 km from `n_O kB T`, which matches that statement, and
+5e-04 Pa from the ram form, which does not. So `walker2014` and `pilinski2010/2011` are fed the
+pressure their constants were fitted against, and the two parameterisations differ by roughly the
+factor their constants differ by (K_L,o 5e6 torr^-1 = 3.75e4 Pa^-1 against Walker's 1.44e6 Pa^-1).
+**Neither model is defective; they are different parameterisations and each needs its own pressure.**
+
+The equations, all from [P13]: (17) theta = K_L P_O / (1 + K_L P_O); (18) alpha = (1 - theta) alpha_s
++ theta; (19) alpha_s = **2.4** mu/(1+mu)^2 -- note SESAM's own coefficient, not the 3.0 `walker2014`
+ships from Paul et al.; (20) mu = mbar/m_s; (22) K_L(E) = s_o(E, Eb, Ta) K_L,o + K_L,f; (26b) the
+closed-form initial sticking coefficient. Table C1: Eb = 5.7 eV, K_L,o = 5e6 torr^-1, K_L,f = 3e4
+torr^-1, m_s = 65 amu.
+
+**Two numerical rewrites are mandatory and are the reason this is not a transcription.** (26b) as
+printed evaluates `exp(Eb/kT)` and `exp(2 sqrt(Eb Er)/kT)`, which at GRACE-FO are 1e36 and 1e65,
+multiplied by an `exp(-(Eb+Er)/kT)` of 1e-66. Combining the exponents analytically first gives
+`exp(-Er/kT) - exp(-(sqrt(Eb) - sqrt(Er))^2/kT)`, both in [0, 1], with no large intermediate at all.
+Second, the printed `erf((sqrt(Eb)-sqrt(Er))/sqrt(kT)) + erf(sqrt(Er/kT))` cancels to nothing when
+the incident energy exceeds the binding energy; the identity `erf(a) + erf(b) = erfc(-a) - erfc(b)`
+removes the +-1 entirely. Both are the pitfalls this project already records for `1 + erf(x)`.
+
+**One transcription ambiguity, declared.** The OCR of eq. (15) reads `(4s^4 + 4s^2 + 1)/(2s^4)`; the
+classical Schaaf-Chambre free-molecular sphere coefficient is `(4s^4 + 4s^2 - 1)/(2s^4)`, and the
+paper's own derivation (Appendix B: the sphere coefficient with the re-emission term removed) is that
+classical result. The minus sign is implemented. At LEO s ~ 8 the two differ by 2/(2 s^4) = 2.4e-04
+relative, which is recorded here so the choice is visible rather than assumed.
+
+**Interface consequence.** SESAM needs the FLOW, not just the gas state, so `kernel.accommodation`
+gains `'RelativeSpeed_ms'` -- required by `sesam`, refused by every other model, exactly as `'Alpha'`
+is `fixed`-only and `'SurfaceMass_amu'` is `walker2014`-only. The C evaluator gains `NGF_ACC_SESAM`
+and `tNgfIntegration` a seventh configuration, because **a branch covered only by a default is
+covered by nothing**, and this one has no default at all.
+
+**Predicted at GRACE-FO (520 km, deep solar minimum) alpha ~ 0.46, and at CHAMP (300 km, low
+activity) alpha ~ 0.96**, computed by hand from the equations above before any code existed. If the
+implementation disagrees with those, the implementation is wrong, not the hand calculation.
+
+**WP-E3 DELIVERED 2026-09-17. O-16 CLOSES.** `drag.accommodation = "sesam"` evaluates on both
+paths, MATLAB and C, predicted 374 and ran 374 GREEN on Tier A.
+
+**Every number the scope block predicted by hand, before the code existed, was met.** The frozen
+prediction was alpha ~ 0.46 at 520 km in deep solar minimum and ~ 0.96 at CHAMP's 300 km under low
+activity. Measured: **0.408 and 0.962**. The pieces reconcile exactly where the hand calculation was
+careful -- ram pressure 4.968e-06 Pa against 4.97e-06 predicted, sticking coefficient 0.8383 against
+0.836, coverage 0.1359 against 0.136 -- and differ only where it was not: the hand value used a mean
+incident mass of 16 amu by eye, where the six-species mean at 520 km in deep minimum is 11.9 because
+hydrogen and helium dominate the COUNT there. **The prediction was wrong about the one quantity it
+guessed instead of computing, and right about all four it computed**, which is the outcome that
+tells you the implementation is sound rather than merely agreeable.
+
+**And an independent confirmation nobody arranged.** At 350 km under low activity this
+implementation returns **0.899**, and [M21] reports SESAM oscillating between 0.85 and 0.93 at CHAMP
+altitudes under exactly those conditions. That figure was read weeks before SESAM was implementable
+and is not a parameter of anything here.
+
+**The oracle integrates what the toolbox evaluates in closed form.** `accommodation_check.py`
+computes the sticking coefficient by composite Simpson over eq. (26a)'s DEFINING INTEGRAL, not by
+eq. (26b). So the reference test is not two transcriptions of one scanned formula agreeing with each
+other; it is evidence that the closed form IS the integral it claims to be -- the only claim worth
+making about a transcription from a scan. They agree to 1.221e-14, far inside the 1e-9 the test
+allows for the quadrature's own O(h^4) error. Independently, eq. (26b) was DERIVED from eq. (26a)
+by hand (substitute u = sqrt(E); the integrand becomes 2u exp(-(sqrt(Er) - u)^2/kT), elementary), and
+the derivation reproduces the implemented stabilised form term for term, including the sign of every
+erf. **The scan's ambiguity at eq. (15) is therefore the only transcription risk left**, it is
+declared in the help and the record, and it is worth 2.4e-04.
+
+**The case set sweeps 3 to 11.8 km/s on purpose, and a test asserts that it does.** SESAM's sticking
+coefficient is ~1 below 5 km/s and ~0 above 11; a twelve-case oracle that sat at 7.6 km/s would have
+checked a near-constant and would have passed with the model's entire energy dependence deleted. The
+reference test refuses a case set whose sticking never falls below 1e-3 or never rises above 0.999.
+**An oracle that does not traverse the behaviour is an oracle for a different model.**
+
+**The C moved in the same commit as the MATLAB, and the seventh parity configuration earned itself
+within the hour.** SESAM is accommodation enum value 4 and the only model that needs the FLOW, so
+`ngfAccommodation` had to take the relative speed it already held at the call site. The first gate
+came back RED at **6.5e-02 against a 1e-13 bound** -- not rounding, a different model. The cause:
+**`mex/ngfRhsGateway.c` copies the setup BY FIELD NAME**, and `eV` and `torr` had been added to the C
+struct and to `app.DynamicsSource`'s packing but not to the gateway that moves one into the other.
+They arrived as uninitialised memory, SESAM's Langmuir constant became garbage, and the native path
+evaluated something that was not SESAM. **A preset would not have caught this and neither would any
+test that ran only the MATLAB path**; the configuration added one commit earlier for precisely this
+reason is what turned it up.
+
+**That fact lives in three places, so `auditPackage.py` check 10 now compares them**: every scalar
+`mex/ngfRhs.h` declares in the constant block must be named in a `scalar(st, "...")` call in the
+gateway. Fault-injected by deleting the `torr` copy: it names the field and says the native path
+will silently evaluate something else. It turns a three-minute red gate into a one-second refusal,
+which is the difference between a check and a post-mortem.
+
+**And a stale refusal test, the same shape as the one in `tNgfCore`.** `tNgfKernel` asserted that
+"sesam" is rejected by `mustBeMember`, which was true until this commit. Both were repointed at a
+name that is still inadmissible. **A test that asserts a capability is absent has to be found when
+the capability arrives, and grep for the option name is the only thing that finds it.**
+
+**Measured bounds, all with room to spare.** Native vs MATLAB over seven configurations 2.504e-14
+(1e-13); the oracle's eight columns 3.799e-16 (1e-13); the closed form (26b) against quadrature of
+(26a) **1.221e-14** where the bound allowed 1e-9 for the quadrature's own O(h^4) error -- so the
+agreement is far better than the test demanded, which is what one expects when two routes compute
+the same mathematical object rather than the same code twice. The sticking coefficient hits its two
+analytic limits at 1.1e-16 and exactly 0, and K_L collapses onto K_L,o + K_L,f and onto K_L,f there.
+
 **WP-E6 Records**, including the licensing question the grids raise: they are CERES-derived and
 CERES data is open, but these particular files come from a GROOPS distribution and this project
 does not vendor what it cannot redistribute (the O-34 lesson). Recorded as O-41 for the owner.
@@ -879,7 +992,7 @@ does not vendor what it cannot redistribute (the O-34 lesson). Recorded as O-41 
 | O-14 | MEX build on the CI runner: `buildMex` locates the MinGW-w64 support package itself when `MW_MINGW64_LOC` is unset (measured 2026-09-07: the host had the package at `%ProgramData%\MATLAB\SupportPackages\R2026a\3P.instrset\mingw_w64.instrset` and MATLAB did not know); `ciGate` builds before the suite; a runner without the package turns the gate red by design. **Measured 2026-09-07: the first CI run of LP-3 (PR #11, run 34065197914) built the MEX and went green (11m35s)**: the runner has the package; kept as the rule, no longer open | closed | LP-3 | — |
 | O-15 | **CLOSED 2026-09-16 with O-7**: the kernel is available to the suite on every tier, `tNgfEnv/radiationSourcesDe440Reference` evaluates the furnished-kernel path against DE440 itself, and the `precise` parity configuration in `tNgfIntegration` no longer substitutes the analytic Sun. The path is ☑. **A second dependency came with it and is now declared rather than assumed**: NAIF MICE. It is not a repository anyone can check out - compiled MEX, managed centrally at most sites, which is why `referenceSystem` detects it and never adds it to the path - and it was reachable here only because it sits on this machine's saved pathdef. That is the same shape as the two defects of 2026-09-16 (an environment variable and a hand-built MEX the runner lacked), so `dependencyReport` lists it and `ciGate` REQUIRES it by name | closed | LP-D | — |
 | O-12 | **CLOSED 2026-09-08.** `gracefoReading` 1.0.1 (its PR #7, issue #6) makes `readL1bMulti` return the same clean empties `readL1b` returns for an all-excluding `TimeRange`, reporting it with `gracefoReading:readL1bMulti:noRecordsInRange`. `io/private/l1bLoad` now routes **every** read through `readL1bMulti`, one file or many; the split and the two hand-fabricated plural aux fields are gone, and `dataEmpty` is reachable for any number of files (`tNgfIo/readACC1BMultiEmptyRobustness`, the path that could not be tested before). The declared minimum moved to 1.0.1 | closed | — | — |
-| O-16 | SESAM accommodation (`drag.accommodation = "sesam"`): the Langmuir-isotherm constants (K in Pa^-1, alpha of the clean and the adsorbate-covered surface) are in Pilinski, Argrow & Palo 2010 (J. Spacecraft Rockets 47(6)) and Pilinski et al. 2013, neither in hand; open-access restatements (March et al. 2019 JSWSC; Bernstein & Pilinski 2022) were refused to the assistant (HTTP 403) on 2026-09-07. `accommodation` refuses sesam and langmuir with `notImplemented` until the owner supplies one of the papers; no constant is guessed (R3) | open | owner | before LP-6 precise preset |
+| O-16 | **CLOSED 2026-09-17 (WP-E3).** SESAM (Pilinski et al. 2013) is implemented as `drag.accommodation = "sesam"` on both the MATLAB and the C path, against an oracle that integrates eq. (26a) numerically rather than repeating eq. (26b). What is NOT implemented, deliberately: that paper's DSMC lookup tables and tumbling-sphere shape factor, which map alpha to a drag coefficient -- this toolbox has its own panel geometry and Sentman kernel and needs only alpha. The sticking law was thought to be missing until the paper was read on 2026-09-17; it is eqs (22) and (26b) | closed | LP-E | — |
 | O-17 | CLL (Cercignani-Lampis-Lord) and Schamberg gas-surface models: closed flat-plate forms (Walker, Mehta & Koller 2014; Schamberg 1959) and their oracles are not in hand; `gsiCoefficients` refuses them with `unsupportedModel` | open | owner | when a below-300-km use case appears |
 | O-18 | `qc.detectJumps` PELT loop costs ~0.12 ms per sample in MATLAB (measured 2026-09-07: 2.4 s for 20000 samples; inlining the segment cost changed nothing, the per-iteration interpreter overhead dominates), i.e. ~10 s per day at 1 Hz and the whole cost of `qc.screen`; candidate for the vectorised candidate bookkeeping or a C layer — note that the LP-6b C layer as delivered ports the FORCE kernel only and contains no qc, so it does nothing for this | open | LP-7+ | when a day-of-data screen exceeds 5 s end to end (with O-1) |
 | O-20 | `gsiCoefficients` evaluates the leeward moments by the direct erfc difference, which cancels: measured by the mirror's 80-digit reference, ~9e-12 relative at s = 15, theta = 112 deg (x = -5.7) against 2.9e-15 for the mirror's continued-fraction form. The affected coefficients are 1e-14 of the head-on value and carry no force, so nothing is changed in the frozen kernel; the mirror records the better-conditioned form (erfc continued fraction descended two levels, a Veltkamp/Dekker split of u^2, and exp(-u^2 + log f) instead of a product of a subnormal) if a future level needs it | open | LP-6b | if a leeward-dominated regime ever appears |

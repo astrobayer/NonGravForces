@@ -1,10 +1,11 @@
 function [acc, info] = accommodation(model, species, T_K, options)
-%ACCOMMODATION Energy accommodation of the gas-surface interaction per epoch: fixed, either Pilinski fit, or the Walker/Mehta adsorbate mixture.
+%ACCOMMODATION Energy accommodation of the gas-surface interaction per epoch: fixed, either Pilinski fit, the Walker/Mehta adsorbate mixture, or SESAM.
 %
 %   acc = NonGravForces.kernel.accommodation("fixed", species, T_K, 'Alpha', 0.85)
 %   acc = NonGravForces.kernel.accommodation("pilinski2010", species, T_K)
 %   acc = NonGravForces.kernel.accommodation("pilinski2011", species, T_K)
 %   acc = NonGravForces.kernel.accommodation("walker2014", species, T_K, 'SurfaceMass_amu', 263.3223)
+%   acc = NonGravForces.kernel.accommodation("sesam", species, T_K, 'RelativeSpeed_ms', 7600)
 %   [acc, info] = NonGravForces.kernel.accommodation(___)
 %
 %   Returns what kernel.dragPanelForce needs to form the re-emitted momentum:
@@ -62,13 +63,39 @@ function [acc, info] = accommodation(model, species, T_K, options)
 %                   2022), 65 amu (Pilinski 2011, Table 11.1); the owner chose the first
 %                   for the precise preset (HANDOVER Part I, 2026-09-15), and it is
 %                   required here, never defaulted.
-%   SESAM (Pilinski et al. 2013) is not implemented: its sticking law and shape
-%   factor are in no source in hand (HANDOVER O-16).
+%     sesam         SESAM (Pilinski, Argrow, Palo & Bowman 2013). The same Langmuir
+%                   mixture as walker2014, with two differences that matter more than
+%                   the shared algebra:
+%                     1. K_L IS A FUNCTION OF INCIDENT KINETIC ENERGY, not a constant:
+%                          K_L(E) = s_o(E, Eb, Ta) K_L,o + K_L,f          (eq. 22)
+%                        where s_o is the initial sticking coefficient, the fraction of
+%                        the incident Maxwellian whose ram energy falls below the binding
+%                        energy Eb (eq. 26b, closed form). A faster satellite therefore
+%                        adsorbs less in the same gas, which is the effect SESAM exists
+%                        to model and the reason it needs the FLOW and not only the gas.
+%                     2. P_O IS A RAM PRESSURE, NOT n_O k T (eq. 15, Appendix B):
+%                          P_O = 1/2 rho_O V_r^2 C_D,in,O(s)
+%                        with C_D,in,O the free-molecular sphere drag coefficient with
+%                        the re-emission term set to zero. At 520 km this is 140x the
+%                        n_O k T that walker2014's constant was fitted against, so the
+%                        two pressures are NOT interchangeable and neither are their
+%                        Langmuir constants (K_L,o = 5e6 torr^-1 = 3.75e4 Pa^-1 against
+%                        Walker's 1.44e6 Pa^-1). Feeding this model the other pressure
+%                        would under-predict its coverage by that factor, silently.
+%                   Table C1 parameters, all fixed and none of them options: Eb = 5.7 eV,
+%                   K_L,o = 5e6 torr^-1, K_L,f = 3e4 torr^-1, m_s = 65 amu. The substrate
+%                   coefficient is eq. (19), alpha_s = 2.4 mu/(1+mu)^2 -- SESAM'S OWN 2.4,
+%                   where walker2014 ships 3.0 from Paul et al. (2022); the two sources
+%                   disagree and each option follows its own (HANDOVER O-42).
+%                   NOT IMPLEMENTED FROM THAT PAPER: the DSMC lookup tables and the shape
+%                   factor for tumbling spheres, which map alpha to a drag coefficient.
+%                   This toolbox does not need them -- it has its own panel geometry and
+%                   Sentman kernel, and takes only alpha from SESAM (HANDOVER O-16).
 %
 % INPUT ARGUMENTS
 %   Name      Size  Type    Units  Description
 %   ----      ----  ----    -----  -----------
-%   model     1x1   string  -      "fixed" | "pilinski2010" | "pilinski2011" | "walker2014"
+%   model     1x1   string  -      "fixed" | "pilinski2010" | "pilinski2011" | "walker2014" | "sesam"
 %   species   8xK   double  1/m^3  Number densities in const.speciesName order (env.density)
 %   T_K       1xK   double  K      Gas kinetic temperature at the satellite (density's T(2,:))
 %
@@ -76,29 +103,51 @@ function [acc, info] = accommodation(model, species, T_K, options)
 %   Name              Size      Type    Units  Description
 %   ----              ----      ----    -----  -----------
 %   Alpha             1x1|1xK   double  -      Coefficient in [0, 1]; required by "fixed", refused by the others
-%   SurfaceMass_amu   1x1       double  amu    Surface lattice particle mass, > 0; required by "walker2014"
+%   SurfaceMass_amu   1x1       double  amu    Surface lattice particle mass, > 0; required by "walker2014", refused by "sesam" (which fixes 65)
+%   RelativeSpeed_ms  1x1|1xK   double  m/s    Satellite speed relative to the gas, > 0; required by "sesam", refused by the others
 %
 % OUTPUT ARGUMENTS
 %   Name      Size  Type    Units  Description
 %   ----      ----  ----    -----  -----------
-%   acc       1x1   struct  -      .model; .alpha 1xK (fixed, pilinski20xx; for walker2014 the
-%                                  adsorbate state's, 1); .coverage 1xK (walker2014: theta; [] for a
-%                                  single state); .alphaSubstrate 1xK (walker2014; [] otherwise)
-%   info      1x1   struct  -      .K, .pressureO_Pa (walker2014), .meanMass_amu (walker2014),
-%                                  .insideFit (pilinski20xx: alpha within the fitted 0.85-1), .provenance
+%   acc       1x1   struct  -      .model; .alpha 1xK (fixed, pilinski20xx; for walker2014 and sesam
+%                                  the adsorbate state's, 1); .coverage 1xK (walker2014, sesam: theta;
+%                                  [] for a single state); .alphaSubstrate 1xK (walker2014, sesam; []
+%                                  otherwise). The EFFECTIVE coefficient of a two-state surface is
+%                                  theta + (1 - theta) alphaSubstrate; the kernel mixes the two
+%                                  states' forces rather than their coefficients, so this unit does
+%                                  not form it.
+%   info      1x1   struct  -      .K, .pressureO_Pa (walker2014, sesam), .meanMass_amu (walker2014,
+%                                  sesam), .insideFit (pilinski20xx: alpha within the fitted 0.85-1),
+%                                  .stickingCoefficient .langmuir_invPa .speedRatioO (sesam), .provenance
 %
 % ACCURACY
-%   Exact evaluation of the published formulas. The model error is the
-%   gas-surface interaction itself: fitted accommodation spans 0.82-0.93 at
-%   270-500 km (March et al. 2019), i.e. 5-10 % in the drag coefficient, and the
-%   substrate mass of walker2014 alone moves the effective coefficient by ~0.1
-%   at GRACE-FO altitude near solar minimum (measured with the three values in
-%   circulation, 2026-09-15).
+%   Exact evaluation of the published formulas, and the model error is the
+%   gas-surface interaction itself. March et al. (2021) OPTIMISE A CONSTANT
+%   alpha per mission rather than computing one -- 0.85 (CHAMP) and 0.82 (GOCE),
+%   recommending 0.85 and superseding Doornbos (2011)'s 0.93 -- because the
+%   in-situ composition a computed model needs is not measured on those
+%   satellites. That is what all three presets use.
+%   THE COMPUTED MODELS ARE STRONGLY ALTITUDE- AND SOLAR-CYCLE DEPENDENT, and
+%   the spread between them is not small. Measured 2026-09-17 at the equator at
+%   noon, F10.7 = 70 (low) and 180 (high), Ap 4 and 9:
+%     300 km, low   pilinski2010 0.948   walker2014 0.857  (March 2021 reports
+%                   SESAM oscillating between 0.85 and 0.93 at these altitudes)
+%     520 km, low   pilinski2010 0.162   walker2014 0.167
+%     520 km, high  pilinski2010 0.830   walker2014 0.634
+%   So these models reproduce the published range where it was published, and
+%   predict a factor-of-five swing over the solar cycle at GRACE-FO's altitude.
+%   On the reference day (2020-01-01, deep minimum) walker2014 gives 17.5 % more
+%   drag than the fitted 0.85. Choosing between them is a statement about the
+%   surface, not a fidelity tier (HANDOVER O-42).
+%   The substrate mass of walker2014 alone moves its effective coefficient by
+%   ~0.1 at GRACE-FO altitude near solar minimum (measured with the three values
+%   in circulation, 2026-09-15).
 %
 % ERRORS
 %   NonGravForces:accommodation:inputShape       species not 8xK or T_K not 1xK with the same K
 %   NonGravForces:accommodation:inputAlpha       fixed without 'Alpha', Alpha outside [0, 1] or not 1x1/1xK, or Alpha given to another model
-%   NonGravForces:accommodation:inputSurfaceMass walker2014 without a positive 'SurfaceMass_amu'
+%   NonGravForces:accommodation:inputSurfaceMass walker2014 without a positive 'SurfaceMass_amu', or a mass given to sesam
+%   NonGravForces:accommodation:inputSpeed       sesam without a positive 'RelativeSpeed_ms', or a speed given to another model
 %   NonGravForces:accommodation:numericNaN       NaN/Inf in Alpha, species or T_K
 %   NonGravForces:accommodation:inputRange       a negative density or a non-positive temperature (models that read them)
 %
@@ -114,6 +163,12 @@ function [acc, info] = accommodation(model, species, T_K, options)
 %   aerodynamics and thermosphere mass density, J. Space Weather Space Clim. 11, 54,
 %   DOI 10.1051/swsc/2021035 -- the fitted alpha = 0.85 the presets use (corrected
 %   2026-09-17; this block cited "9, A36", which resolves to no paper, HANDOVER O-42).
+%   Pilinski M.D., Argrow B.M., Palo S.E., Bowman B.R. (2013) Semi-empirical satellite
+%   accommodation model for spherical and randomly tumbling objects, J. Spacecraft
+%   Rockets 50(3) 556-571, DOI 10.2514/1.A32348: eqs (15)-(22) and (26b), Table C1.
+%   Eq. (15)'s second bracket is transcribed as the classical Schaaf-Chambre sphere
+%   coefficient (4s^4 + 4s^2 - 1)/(2s^4), which is what Appendix B derives; the scan in
+%   hand reads +1 there. At LEO s ~ 8 the two differ by 2.4e-04 relative.
 %
 % EXAMPLE
 %   [~, sp, T] = NonGravForces.env.density("msis00", ep, lla, sw);
@@ -126,11 +181,12 @@ function [acc, info] = accommodation(model, species, T_K, options)
 % Created 2026-09-07 by Claude Fable 5.1 (Anthropic); pilinski2010 and walker2014 2026-09-15,
 % pilinski2011 and the 2010 constant from the paper itself 2026-09-16, by Claude Opus 5 (Anthropic).
 arguments
-    model (1,1) string {mustBeMember(model, ["fixed","pilinski2010","pilinski2011","walker2014"])}
+    model (1,1) string {mustBeMember(model, ["fixed","pilinski2010","pilinski2011","walker2014","sesam"])}
     species double
     T_K double
     options.Alpha double = []
     options.SurfaceMass_amu double = []
+    options.RelativeSpeed_ms double = []
 end
 unit = "accommodation";
 K = size(T_K, 2);
@@ -139,6 +195,9 @@ if ~(ismatrix(species) && size(species, 1) == 8 && size(species, 2) == K && isro
 end
 if any(~isfinite(species(:))) || any(~isfinite(T_K(:)))
     NonGravForces.fail(unit, "numericNaN", "species or T_K contain NaN/Inf -> screen the density output");
+end
+if model ~= "sesam" && ~isempty(options.RelativeSpeed_ms)
+    NonGravForces.fail(unit, "inputSpeed", "model %s does not read a relative speed -> remove 'RelativeSpeed_ms', or use model sesam whose pressure is a ram pressure", model);
 end
 c = NonGravForces.const();
 acc = struct('model', model, 'alpha', [], 'coverage', [], 'alphaSubstrate', []);
@@ -189,9 +248,68 @@ switch model
         acc.alphaSubstrate = 3 * mu ./ (1 + mu).^2;
         info.pressureO_Pa = PO;
         info.meanMass_amu = meanMass / c.amu;
+    case "sesam"
+        % Pilinski et al. (2013), the model O-16 has named since LP-5. It is the Langmuir isotherm
+        % again, but with the adsorption constant itself a function of the INCIDENT KINETIC ENERGY,
+        % so a fast satellite adsorbs less than a slow one in the same gas.
+        localNoAlpha(unit, model, options.Alpha);
+        if ~isempty(options.SurfaceMass_amu)
+            NonGravForces.fail(unit, "inputSurfaceMass", "sesam fixes its substrate mass at 65 amu (Pilinski et al. 2013 Table C1) -> remove 'SurfaceMass_amu', or use model walker2014 which takes one");
+        end
+        vr = options.RelativeSpeed_ms;
+        if isempty(vr) || ~(isscalar(vr) || isequal(size(vr), [1 K]))
+            NonGravForces.fail(unit, "inputSpeed", "sesam needs 'RelativeSpeed_ms' as a scalar or 1xK -> its pressure is a RAM pressure, so it needs the flow and not only the gas state");
+        end
+        if any(~isfinite(vr(:))) || any(vr(:) <= 0)
+            NonGravForces.fail(unit, "inputSpeed", "RelativeSpeed_ms must be finite and > 0 -> got %g", vr(find(~isfinite(vr) | vr <= 0, 1)));
+        end
+        localRange(unit, species, T_K);
+        vr = vr + zeros(1, K);
+        Eb = 5.7 * c.eV;                                    % J, adsorption energy, Table C1
+        KLo = 5e6 / c.torr;                                 % Pa^-1, initial Langmuir parameter, Table C1
+        KLf = 3e4 / c.torr;                                 % Pa^-1, final Langmuir parameter, Table C1
+        ms = 65;                                            % amu, average substrate mass, Table C1
+        mO = c.speciesMass(2) / c.NA;                       % kg per atom of atomic oxygen
+        kT = c.kB * T_K;                                    % J
+        Er = 0.5 * mO * vr.^2;                              % J, ram kinetic energy, eq. (15) text
+        % --- eq. (26b), the initial sticking coefficient, in the only form that survives LEO.
+        % As printed it evaluates exp(Eb/kT) ~ 1e36 and exp(2 sqrt(Eb Er)/kT) ~ 1e65 against an
+        % exp(-(Eb+Er)/kT) ~ 1e-66. Combining the exponents first gives two terms in [0, 1]:
+        %   exp(-(Eb+Er)/kT) exp(Eb/kT)            = exp(-Er/kT)
+        %   exp(-(Eb+Er)/kT) exp(2 sqrt(Eb Er)/kT) = exp(-(sqrt(Eb) - sqrt(Er))^2/kT)
+        % and the printed erf(a) + erf(b) cancels to nothing once Er > Eb, so it is written with the
+        % identity erf(a) + erf(b) = erfc(-a) - erfc(b), which carries no +-1 at all.
+        a = (sqrt(Eb) - sqrt(Er)) ./ sqrt(kT);
+        b = sqrt(Er ./ kT);
+        g = sqrt(pi * kT .* Er);
+        num = g .* (erfc(-a) - erfc(b)) + kT .* (exp(-Er ./ kT) - exp(-(sqrt(Eb) - sqrt(Er)).^2 ./ kT));
+        den = g .* (1 + erf(b)) + kT .* exp(-Er ./ kT);
+        s0 = min(max(num ./ den, 0), 1);                    % a normalised fraction by construction
+        KL = s0 * KLo + KLf;                                % eq. (22), Pa^-1
+        % --- eq. (15), and this is the fact that makes sesam a different model and not a constant
+        % swap: its pressure is a RAM pressure, 140x the n_O kB T that walker2014's constant was
+        % fitted against (HANDOVER Part G, LP-E, WP-E3 scope).
+        sO = vr ./ sqrt(2 * c.kB * T_K / mO);               % atomic-oxygen speed ratio
+        cdIn = (2 * sO.^2 + 1) ./ (sqrt(pi) * sO.^3) .* exp(-sO.^2) ...
+             + (4 * sO.^4 + 4 * sO.^2 - 1) ./ (2 * sO.^4) .* erf(sO);   % sphere, re-emission removed
+        rhoO = species(2, :) * mO;                          % kg m^-3
+        PO = 0.5 * rhoO .* vr.^2 .* cdIn;                   % Pa
+        acc.coverage = KL .* PO ./ (1 + KL .* PO);          % eq. (17)
+        acc.alpha = ones(1, K);                             % eq. (18): the adsorbate state accommodates fully
+        six = [6 1 7 3 2 4];                                % H He N N2 O O2, eq. (16)
+        m6 = c.speciesMass(six)' / c.NA;
+        n6 = species(six, :);
+        meanMass = sum(n6 .* m6, 1) ./ max(sum(n6, 1), realmin);
+        mu = meanMass / (ms * c.amu);                       % eq. (20)
+        acc.alphaSubstrate = 2.4 * mu ./ (1 + mu).^2;       % eq. (19) -- SESAM's own 2.4, not Paul's 3.0
+        info.pressureO_Pa = PO;
+        info.meanMass_amu = meanMass / c.amu;
+        info.stickingCoefficient = s0;
+        info.langmuir_invPa = KL;
+        info.speedRatioO = sO;
 end
 if nargout > 1
-    info.provenance = NonGravForces.provenance("kernel.accommodation", 'Options', struct('model', model, 'Alpha', options.Alpha, 'SurfaceMass_amu', options.SurfaceMass_amu));
+    info.provenance = NonGravForces.provenance("kernel.accommodation", 'Options', struct('model', model, 'Alpha', options.Alpha, 'SurfaceMass_amu', options.SurfaceMass_amu, 'RelativeSpeed_ms', options.RelativeSpeed_ms));
 end
 end
 

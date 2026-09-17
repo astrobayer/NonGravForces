@@ -27,6 +27,9 @@ function c = const()
 %   c.NA              1x1   double  1/mol     Avogadro, exact.
 %   c.Rgas            1x1   double  J/mol/K   Molar gas constant, exact.
 %   c.amu             1x1   double  kg        Atomic mass unit, CODATA 2018.
+%   c.eV              1x1   double  J         Electron volt, exact (SI 2019).
+%   c.torr            1x1   double  Pa        Torr, exact (101325/760); SESAM's Langmuir
+%                                             parameters are published in torr^-1.
 %   c.speciesName     1x8   string  -         He O N2 O2 Ar H N O_anomalous
 %   c.speciesMass     1x8   double  kg/mol    Molar masses of the MSIS species
 %   c.lambertDiffuse  1x1   double  -         2/3, Lambertian recoil factor
@@ -61,6 +64,8 @@ c.kB      = 1.380649e-23;
 c.NA      = 6.02214076e23;
 c.Rgas    = 8.31446261815324;
 c.amu     = 1.66053906660e-27;
+c.eV      = 1.602176634e-19;         % exact since the 2019 SI redefinition of the coulomb
+c.torr    = 101325 / 760;            % exact by definition of the standard atmosphere
 c.speciesName = ["He","O","N2","O2","Ar","H","N","O_anomalous"];
 c.speciesMass = [4.002602, 15.9994, 28.0134, 31.9988, 39.948, 1.00794, 14.0067, 15.9994] * 1e-3;
 c.lambertDiffuse = 2/3;
