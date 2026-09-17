@@ -1,5 +1,5 @@
 % APP  NonGravForces.app - L8 layer.
-% Version 0.11.0  16-Sep-2026
+% Version 0.12.0  17-Sep-2026
 %
 %   DynamicsSource       - The acceleration as gjToolbox's integrator interface (native C entry)
 %   calibrate            - Accelerometer calibration: bias basis + 3x3 scale + jumps by separable weighted least squares

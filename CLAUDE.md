@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-16 (LP-C delivered) by Claude Opus 5. Toolbox version 0.11.0.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-17 (LP-E delivered) by Claude Opus 5. Toolbox version 0.12.0.
 
 ---
 
@@ -165,7 +165,34 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-09-16, after LP-C)
+## 5. Current status (2026-09-17, after LP-E)
+
+- **379/379 GREEN on Tier A** (2026-09-17, LP-E complete, R2026a Update 4): `matlab -batch ciGate`
+  over an isolated dependency root, predicted 379, 0 failed, 0 incomplete, 0 category shortfalls,
+  Code Analyzer clean on `+NonGravForces`, `auditPackage.py` clean (56 units, 56 catalogue rows,
+  version 0.12.0). Rounds through the level: 374 (WP-E1, E3, E7), 379 (E2), 379 (E5, E6).
+- **LP-E closed five obligations and opened two.** O-16 (SESAM) closed by implementing it; O-41
+  (the GROOPS licensing question) closed the day it opened, because the data is public and is
+  fetched rather than vendored; O-42 closed in two halves, the preset by owner ruling and the
+  extrapolation warning by a second; O-38 and O-39 earlier. Opened: O-43 (the local rehearsal
+  rewrites the developer's MATLAB path) and O-44 (`ceresClimatology` has no native evaluator and
+  is refused at construction).
+- **What LP-E added to the physics**: `io.importGroopsGrid` (both GROOPS containers, decoded from
+  the bytes); `erp.backend = "ceresClimatology"`, the 1 degree CERES monthly climatology on the cap
+  tiles; `drag.accommodation = "sesam"`, on both the MATLAB and the C path; and a warning when a
+  computed accommodation leaves the range it was fitted in. `drag.gsi = "cll"` stays refused: O-17
+  does not close, because [W14a]'s closed forms are whole-body and normal-incidence only and this
+  kernel needs per-panel coefficients at arbitrary incidence.
+- **THE PATTERN THIS LEVEL FOUND, and the reason to read Part G before writing anything**: seven
+  defects were the same shape -- **a fact recorded in one place and compared with nothing**.
+  `CLAUDE.md`'s unit count; the theory document's "51 units" and its `Model.rhs`; a data fetch
+  printing `failed` three lines above `GATE TRUE`; the dependency minimum; the citation
+  "JSWSC 9, A36", which resolves to no paper; `modelReference`'s "measured median 7.9e-9" beside a
+  run file recording 5.475e-9; and `info.insideFit`, computed since 2026-09-07 and read by nobody.
+  Each now has a mechanical check or a caller. **When looking for the next defect, look for a
+  number that is written down twice and compared never.**
+
+## 5. Superseded status (2026-09-16, after LP-C)
 
 - **365/365 GREEN ON BOTH TIERS** (2026-09-16, LP-C complete, R2026a Update 4): on Tier A by
   `matlab -batch ciGate` over an isolated dependency root, and **on the CI runner** (run
@@ -342,7 +369,33 @@ preset. What a later session most needs to know:
   SYN1deg), O-17 (CLL/Schamberg — its closed forms are whole-body and normal-incidence only, so they
   do not serve a per-panel kernel), O-19 (GROOPS), O-26 (tagging). **O-16 closed 2026-09-17**:
   `drag.accommodation = "sesam"` ships on both the MATLAB and the C path.
-  **Next is LP-R (release).**
+
+**Done 2026-09-17: LP-E (sources), seven work packages, 379/379 on Tier A.** It took the gas-surface
+and Earth-radiation models to their primary sources, which mostly meant correcting what this
+repository had written down about them.
+- **`io.importGroopsGrid`** reads both GROOPS containers, decoded from the bytes with no spec in
+  hand. Its latitudes are **GEOCENTRIC**, and its help said geodetic until the `ceresClimatology`
+  backend measured the file's own radii and found 0.168 m of spread against geocentric and 71.6 m
+  against geodetic. A consumer that converts before the lookup misplaces every tile by 0.19 deg.
+- **`erp.backend = "ceresClimatology"`**: the 1 degree CERES monthly climatology, measured exitance
+  rather than an emissivity, piecewise constant in time. Refused at construction on the native path
+  (O-44) rather than letting `find()` return empty and pack `none`.
+- **`drag.accommodation = "sesam"`** closes O-16, on both paths, against an oracle that INTEGRATES
+  eq. (26a) where the toolbox evaluates the closed form (26b). SESAM's pressure is a RAM pressure,
+  140x the `n_O kB T` its neighbours use; feeding it theirs would have been silently wrong.
+- **O-42 closed in two owner rulings**: all three presets take March et al. (2021)'s fitted
+  alpha = 0.85, and a computed accommodation outside its fitted range now WARNS. It fires on
+  GRACE-FO, which is the point -- the adsorption models give 0.11-0.17 at 520 km where the fitted
+  literature reports 0.82-0.93, and they reproduce 0.86-0.95 at CHAMP's altitude, where the
+  literature was fitted. The models are right; the extrapolation is what needed saying.
+- **O-17 does NOT close**: [W14a]'s closed forms are whole-body and normal-incidence only.
+- **O-6 narrows and stays open.** [H24] and [V] were both expected to supply a TRP oracle and
+  neither does; what they gave instead is a magnitude check this toolbox passes (5.263 nm/s^2
+  cross-track, between 4.22 for GRACE-FO and 6.4 for GRACE-A) and a published DISAGREEMENT about
+  whether instantaneous reradiation helps at all (HANDOVER Part G). GROOPS `SimulateAccelerometer`
+  is the standing ask.
+- **The pattern**: seven defects of one shape, a fact written down twice and compared never. See
+  section 5. **Next is LP-R (release).**
 
 **LP-5x cross-validation** (owner rulings of 2026-08-27):
 - WP-33: standard-library mirror of the **kernel layer only** under

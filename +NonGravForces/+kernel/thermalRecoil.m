@@ -35,7 +35,26 @@ function [F, info] = thermalRecoil(macro, T_K)
 %   between plates) and the Lambertian assumption; for GRACE, TRP is the
 %   second-largest radiation term (Wöske et al. 2019; Vielberg & Kusche 2020;
 %   Siemes et al. 2023: 6.4 nm/s^2 cross-track RMS), so the temperature error
-%   dominates, not this formula.
+%   dominates, not this formula. Measured here on GRACE-FO 2020-01-01: 5.263
+%   nm/s^2 cross-track RMS, between Hladczuk et al. (2024)'s 4.22 for GRACE-FO
+%   and Siemes' 6.4 for GRACE-A.
+%
+%   THE LITERATURE DISAGREES ABOUT WHETHER MODELLING THIS INSTANTANEOUSLY HELPS,
+%   and this block cited only the agreeing side until 2026-09-17.
+%     Hladczuk et al. (2024), GRACE-FO, Table 3: adding instantaneous reradiation
+%       to a panel model takes the cross-track residual from 4.22 to 3.04 nm/s^2,
+%       and thermal inertia takes it further to 1.70. Modelling it helps.
+%     Vielberg & Kusche (2020), GRACE-A, one year from 2010: instantaneous thermal
+%       reradiation fits "more than 39% worse" to calibrated cross-track
+%       accelerations than the standard model, and the conclusions state it "did
+%       not lead to improvements". Modelling it hurts.
+%   The presets follow the first, for reasons that are about the evidence and not
+%   about preference: it is the right satellite, it is four years later, and its
+%   whole Section 3 is devoted to repairing the cross-track calibration that
+%   Vielberg & Kusche name as a possible cause of their own result (they also
+%   name neglected horizontal winds in the drag model, which this toolbox models
+%   through env.wind). A user who wants the other position sets thermal.model
+%   "none". It is a genuine open question in the field, not a settled one.
 %
 % ERRORS
 %   NonGravForces:thermalRecoil:inputMacro   macro is not a MacroModel
