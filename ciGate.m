@@ -25,6 +25,11 @@ function ciGate(options)
 %   NonGravForces:ciGate:red          the gate is not GREEN; message lists why
 %   NonGravForces:buildMex:*          no compiler / missing sources (O-14)
 %
+% WARNINGS
+%   NonGravForces:ciGate:pathNotRestored  a dependency setup rewrote the saved MATLAB path and this
+%       gate could not put it back. The run is still valid -- the code was measured -- but the
+%       machine's saved path is not what it was (O-43).
+%
 % KEYWORDS ci gate
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
 arguments
@@ -38,6 +43,22 @@ here = fileparts(mfilename('fullpath'));
 % app.DynamicsSource and the whole native evaluator unrun and still report GREEN.
 deps = ["referenceSystem/setupReferenceSystem.m", "gracefoReading/setupGraceFOReading.m", ...
         "odeSuite/gjToolboxSetup.m"];
+% THE GATE LEAVES THE MACHINE AS IT FOUND IT (O-43). Dependency setups call `savepath`, so running
+% this gate REWROTE the developer's saved MATLAB path -- on 2026-09-17 a bare run replaced the saved
+% referenceSystem entry with a scratchpad clone that a later session would delete. The saved path is
+% snapshotted here and restored below: the SESSION path keeps everything the suite needs, and the
+% machine keeps what it had. On the CI runner the workspace is disposable and this is a no-op, so
+% the rehearsal and the runner still execute the same code, which is what makes it a rehearsal.
+%
+% This is NOT the fix O-43's re-entry condition imagined ("pass 'Save', false where the dependency
+% supports it"): `setupGraceFOReading()` takes NO arguments and calls `savepath` unconditionally, so
+% a per-dependency opt-out could never have covered all three. Restoring the file covers every
+% setup, including one that cannot be told, and couples this gate to none of their signatures.
+pathdefFile = which('pathdef.m');
+pathdefBefore = '';
+if ~isempty(pathdefFile) && isfile(pathdefFile)
+    pathdefBefore = fileread(pathdefFile);
+end
 for k = 1:numel(deps)
     f = fullfile(options.DependencyRoot, deps(k));
     if ~isfile(f)
@@ -46,6 +67,22 @@ for k = 1:numel(deps)
     run(f);
 end
 cd(here);
+if ~isempty(pathdefBefore)
+    try
+        if ~isequal(fileread(pathdefFile), pathdefBefore)
+            fid = fopen(pathdefFile, 'w');
+            closer = onCleanup(@() fclose(fid));
+            fwrite(fid, pathdefBefore, 'char');
+            clear closer
+            fprintf("ciGate: restored the saved MATLAB path, which a dependency setup rewrote\n");
+        end
+    catch err
+        % Reporting beats failing: a gate that cannot restore a path has still measured the code,
+        % and the developer needs to know rather than to lose the run.
+        warning("NonGravForces:ciGate:pathNotRestored", ...
+            "a dependency setup rewrote the saved MATLAB path and it could not be restored (%s) -> check `pathdef.m` and re-save the path you want", err.message);
+    end
+end
 % MICE, for the same reason and with the same rule as gjToolbox: optional for the toolbox,
 % required by the gate. tNgfEnv and tNgfIntegration evaluate sun.source rs.de440, which is the
 % precise preset's OWN DEFAULT, and it cannot be evaluated without NAIF's toolkit. It is reached
