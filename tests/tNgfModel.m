@@ -303,12 +303,13 @@ classdef tNgfModel < NgfTestCase
     methods (Test, TestTags = {'speed'})
         function modelSpeed(tc)
             % The fast preset exists to be fast: no self-shadowing, no Earth radiation, no thermal model. Until LP-C it was
-            % 45x the cheaper (2 against 89 ms per epoch); with the O(1) cube map, flow shadowing and provenance on demand
-            % the standard preset costs 1.2 ms per epoch on the host (2026-09-15, 100 epochs) and the fast one 0.3 ms, a ratio
+            % 45x the cheaper (2 against 89 ms per epoch, both superseded); with the O(1) cube map, flow shadowing and
+            % provenance on demand the standard preset cost 1.2 ms per epoch on the host (2026-09-15, 100 epochs; superseded
+            % by tools/benchmark_reference.csv, 0.798 ms on 2026-09-18) and the fast one 0.3 ms, a ratio
             % of 0.25. The fast preset must still be the cheaper one by a clear margin: budget 3x the measured ratio.
             [e, rr, vv] = tc.arc(40);
             ratio = tc.speedRatio(@() tc.Mfast.accel(e, rr, vv), @() tc.M.accel(e, rr, vv));
-            tc.verifyBoundAndRecord("fast preset vs standard preset, same arc (40 epochs)", ratio, 0.75, "-", "measured 0.25 on 2026-09-15 (it was 0.02 while the standard preset cost 88 ms per epoch)");
+            tc.verifyBoundAndRecord("fast preset vs standard preset, same arc (40 epochs)", ratio, 0.75, "-", "measured 0.25 on 2026-09-15 (it was 0.02 before WP-C3; that 88 ms of HANDOVER O-29 was per-call overhead, not physics)");
         end
     end
 end

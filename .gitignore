@@ -36,6 +36,10 @@ __pycache__/
 # Third-party papers and theses read while building the toolbox (80 MB, copyrighted,
 # not redistributable). Kept locally, never committed; the toolbox cites them by DOI.
 doc/references/
+# The APPEND-ONLY host log of tools/benchmark.m: every run on this machine, which nobody wants in a
+# diff. Its sibling tools/benchmark_reference.csv is deliberately NOT ignored -- that one is
+# overwritten rather than appended and is the authority auditPackage.py check 13 compares every
+# per-epoch figure in the repository against, so it has to exist in a fresh clone and on CI.
 tools/benchmark_last.txt
 
 # Full products fetched by setupNonGravForces('FetchData', ...): never committed. The committed

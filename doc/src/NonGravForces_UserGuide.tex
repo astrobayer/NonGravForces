@@ -782,11 +782,53 @@ the \SI{4.22}{} that Hładczuk et al.\ leave when they omit the term and the \SI
 (2023) publish for GRACE-A.
 
 \section{Cost}
-\texttt{Model.accel} costs \textbf{\SI{88}{\milli\second} per epoch} in the \texttt{standard} preset,
-which is \SI{2.1}{\hour} for a day at \SI{1}{\hertz}. It is dominated by \texttt{geom.selfShadow}
-interpolating 577 source directions per epoch. The \texttt{fast} preset is \SI{2}{\milli\second}.
-This is accepted as a stated cost rather than a defect; if you need a full day at full rate, use
-\texttt{Model.series} with \texttt{parfor}, or the native path of Chapter~\ref{ch:integrator}.
+\textbf{The cost per epoch depends on how many epochs you ask for in one call, far more than on which
+preset you choose}, and that is the most useful thing to know about this toolbox's performance.
+Measured by \texttt{tools/benchmark.m} on 2026-09-18 (v0.12.0, R2026a, median of five after five
+warm-up calls); the table it writes is committed at \texttt{tools/benchmark\_reference.csv}, and the
+audit checks every figure below against it.
+
+\begin{table}[h]\centering\footnotesize
+\begin{tabular}{@{}lrrr@{}}\toprule
+ & \multicolumn{3}{c}{ms per epoch, for a call of $K$ epochs}\\\cmidrule(l){2-4}
+path & $K=1$ & $K=10$ & $K=100$\\\midrule
+\texttt{Model.accel}, \texttt{standard} & 15.9 & 2.99 & 0.798\\
+\texttt{Model.accel}, \texttt{fast} & 4.00 & 0.695 & 0.076\\
+\texttt{Model.budget}, \texttt{fast} & 4.30 & 0.762 & 0.084\\
+\texttt{app.forceBudget}, \texttt{fast} & 5.50 & 0.826 & 0.094\\\midrule
+\multicolumn{4}{@{}l}{\emph{pointwise by construction --- these take one state and do not batch:}}\\
+\texttt{kernel.singleEpoch} (compiled) & \multicolumn{3}{r}{0.456}\\
+\texttt{app.DynamicsSource.accel} (native) & \multicolumn{3}{r}{0.544}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent \texttt{Model.series} over the 600-epoch fixture measures \SI{0.886}{\milli\second} per
+epoch, so \textbf{a day at \SI{1}{\hertz} costs about 1 minute 16 seconds}.
+
+Every path in that table gets dramatically cheaper per epoch between $K=1$ and $K=100$ ---
+$20\times$ for \texttt{standard}, and $50$ to $60\times$ for the \texttt{fast} rows, whose
+per-epoch work is smaller and so amortises further --- and the reason is a large fixed cost per
+\emph{call}. Fitting $\text{cost}(K)=a+bK$ to the
+\texttt{standard} rows gives $a\approx\SI{15.2}{\milli\second}$ of setup and
+$b\approx\SI{0.65}{\milli\second}$ of actual per-epoch work; for \texttt{fast},
+$a\approx\SI{4.0}{\milli\second}$ and $b\approx\SI{0.037}{\milli\second}$. \textbf{Asking for one
+epoch buys you almost entirely setup.} The presets separate by about $4\times$ at $K=1$ and
+$10.5\times$ at $K=100$, and on the marginal cost --- the number that describes the physics rather
+than the call --- by $17.6\times$, which is where self-shadowing, Earth radiation and the thermal
+model actually show up.
+
+\textbf{So: pass many epochs at once, or use \texttt{Model.series}.} For the one caller that cannot
+batch by nature --- an integrator's right-hand side, which asks for one state at a time --- the
+native evaluator of Chapter~\ref{ch:integrator} answers in \SI{0.544}{\milli\second}, which is
+\num{29} times cheaper than \texttt{Model.accel} at $K=1$ and is the whole reason that path exists.
+
+\begin{quote}\footnotesize
+This section read \SI{88}{\milli\second} per epoch and \SI{2.1}{\hour} for a day until 2026-09-18. It
+was written in good faith from an obligation record that had been superseded two days earlier and
+never closed. It is left mentioned rather than silently replaced, because a reader who saw the old
+figure elsewhere deserves to know which number this project stands behind.
+\end{quote}
 
 \section{What is not modelled at all}
 \begin{itemize}[leftmargin=1.4em]

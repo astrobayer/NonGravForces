@@ -384,6 +384,76 @@ for _mod in ("audit_args", "audit_class", "audit_options"):
     except Exception as _exc:                      # a broken auditor is a finding, not a crash
         note(f"tools/{_mod}.py could not run: {_exc}")
 
+# 13. EVERY PER-EPOCH COST QUOTED ANYWHERE IS A COST SOMETHING MEASURED.
+#     O-29 recorded 88 ms per epoch on 2026-09-08. WP-C3 fixed it to 1.21 ms on 2026-09-16 and
+#     recorded that too, 772 lines away in the same file, and nobody closed the obligation row. The
+#     row therefore went on instructing readers to repeat 88 ms, and four more files plus one
+#     shipped PDF chapter did -- while tests/tNgfModel.m had held the correct value, in an executed
+#     test, for three days. Checking that a fact appears ONCE would not have caught this: the second
+#     copy was an obligation to change the first.
+#     So this compares the numbers themselves. Every "<x> ms per epoch" or "<x> ms each" claim in the
+#     repository must be within 25 % of some perEpoch_ms in tools/benchmark_reference.csv, which
+#     tools/benchmark.m writes and which is the single authority for this fact.
+#     THE EXEMPTION IS DELIBERATELY NOT "the line carries a date". The original O-29 row read
+#     "88 ms per epoch in the standard preset (measured 2026-09-08)" -- it WAS dated, and it
+#     propagated into six files anyway, because a date says when a number was taken and not whether
+#     it is still true. A check that exempted dated lines would not have caught the defect it exists
+#     for. The exemption is instead an explicit statement, on the same line, that the figure is no
+#     longer current: this project keeps wrong numbers on purpose, as warnings, and that is the only
+#     reason to carry one.
+#     WHAT IT DOES NOT CHECK: whether benchmark_reference.csv is itself current, nor that it was
+#     measured well. Its header carries a date and the code moves; and on 2026-09-18 the first run
+#     of the repaired instrument was still wrong, because one warm-up call is not warm (D.9).
+#     Re-run tools/benchmark.m when a number here is meant to carry weight.
+#     THE AUTHORITY IS tools/benchmark_reference.csv, WHICH IS COMMITTED -- not benchmark_last.txt,
+#     which .gitignore excludes. That distinction is the whole check: the ignored log exists only on
+#     the machine that wrote it, so on the CI audit job and in every fresh clone it is absent, and a
+#     check whose authority is missing everywhere but one laptop protects nothing. (Caught before
+#     this check was ever pushed, by asking what the runner does not have that this host does.)
+BENCH = os.path.join(ROOT, "tools", "benchmark_reference.csv")
+if not os.path.isfile(BENCH):
+    note("tools/benchmark_reference.csv is missing -> run tools/benchmark.m and commit it; it is "
+         "the authority for the per-epoch costs this repository quotes")
+else:
+    measured = []
+    for line in open(BENCH, encoding="utf-8"):
+        if line.startswith("#") or line.startswith("path,"):
+            continue
+        cells = line.rsplit(",", 3)
+        if len(cells) == 4 and cells[3].strip() not in ("", "NaN"):
+            try:
+                measured.append(float(cells[3]))
+            except ValueError:
+                pass
+    if not measured:
+        note("tools/benchmark_reference.csv holds no perEpoch_ms value -> it measured nothing")
+    # A CLOSED set, every member of which ASSERTS that the number is not current. The marker must
+    # sit on the line itself, so that deleting the number and leaving the excuse behind is not
+    # possible. "measured on <date>" is deliberately not a member: see the note above.
+    HISTORY = re.compile(r"superseded|stale|no longer|not current|wrong by|was wrong", re.I)
+    CLAIM = re.compile(r"([\d.]+)\s*(?:ms|\\milli\\second\})\s*(?:per epoch|each|/epoch)", re.I)
+    for dirpath, dirnames, filenames in os.walk(ROOT):
+        dirnames[:] = [d for d in dirnames if d not in (".git", "html", "helpsearch-v4_en")]
+        for fn in filenames:
+            if not fn.endswith((".m", ".md", ".tex", ".c", ".h")):
+                continue
+            fp = os.path.join(dirpath, fn)
+            rel = os.path.relpath(fp, ROOT).replace("\\", "/")
+            try:
+                lines = open(fp, encoding="utf-8").read().splitlines()
+            except (UnicodeDecodeError, OSError):
+                continue
+            for i, line in enumerate(lines, 1):
+                if HISTORY.search(line):
+                    continue
+                for hit in CLAIM.finditer(line):
+                    val = float(hit.group(1))
+                    if not any(abs(val - mv) <= 0.25 * max(mv, 1e-9) for mv in measured):
+                        note("%s:%d quotes %g ms per epoch, which no row of "
+                             "tools/benchmark_reference.csv measured (%s) -> re-run tools/benchmark.m "
+                             "and quote it, or mark the line as superseded history"
+                             % (rel, i, val, ", ".join("%g" % mv for mv in sorted(set(measured)))))
+
 if findings:
     print(f"auditPackage: {len(findings)} finding(s)")
     for f in findings:

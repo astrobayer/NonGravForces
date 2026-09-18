@@ -8,10 +8,14 @@ classdef tNgfApp < NgfTestCase
 %   arithmetic those parts add, which is a sum of squares and nothing more.
 %
 %   The arc is the real 2020-01-01 GRACE-C fixture, and the fast preset is used
-%   wherever the test does not need the standard one: Model.accel costs 88 ms per
-%   epoch in the standard preset and 2 ms in the fast (HANDOVER O-29), so a
-%   200-epoch standard budget would be 18 s of gate time for nothing the fast
-%   preset does not show.
+%   wherever the test does not need the standard one, which is still the right
+%   choice but NOT for the reason given here until 2026-09-18. That reason was
+%   "88 ms per epoch in the standard preset" (superseded, and already stale when it
+%   was written here) "so a 200-epoch standard budget would be 18 s of gate time":
+%   see HANDOVER O-29, closed. The 18 s is really 0.17 s. The fast preset is used because this
+%   class tests CHUNKING AND REDUCTION, which are indifferent to the physics
+%   underneath them, and a test should exercise the cheapest input that can still
+%   fail for the reason it is looking for.
 %
 % Created 2026-09-08 by Claude Opus 5 (Anthropic).
     properties

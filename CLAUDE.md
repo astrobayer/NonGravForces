@@ -329,7 +329,11 @@ build, and called all three sensors future work months after two shipped.
 folder): a demo nobody executes rots the same way that page did. Completion is asserted, not the
 numbers — those are already bounded by the tests of the units the demo calls.
 `tools/benchmark.m` regenerates the per-epoch costs (including O-29's 88 ms, which had been
-measured once by hand and repeated ever since) and is deliberately NOT gated; `tools/packageToolbox.m`
+measured once by hand and repeated ever since -- **and which was wrong: WP-C3 had already fixed it
+to 1.21 ms on 2026-09-16 and nobody closed the row. Measured 2026-09-18, standard preset: 15.9 ms
+per epoch at K=1, 0.798 at K=100, and a day at 1 Hz in 1 min 16 s via `Model.series`. O-29 and O-31
+are closed; the table is committed at `tools/benchmark_reference.csv` and audit check 13 compares
+every quoted figure against it**) and is deliberately NOT gated; `tools/packageToolbox.m`
 builds the `.mltbx` from a programmatic options object and commits no `.prj`. Both live in `tools/`:
 a development instrument is not part of the scientific surface. **O-35 answered** (2026-09-09): data is optionally downloaded during setup (`'FetchData'`, the same
 three settings as `'FetchMsis'`) and otherwise the user supplies it. IERS, CelesTrak **and GRACE-FO
@@ -338,8 +342,11 @@ guessed two wrong hosts and concluded it needed a login. **Two failed guesses at
 finding.** The 2020-01-01 archive holds all 65 products, including MAG1B and ACT1B, which unblocks
 O-8. `.mltbx` packaging is deprecated (O-36): publication is via git only. The four remaining stubs are blocked on data the project does not hold, so
 they are not level debt. **Next is LP-R (release).** Two owner rulings of 2026-09-09 shape it: the
-toolbox is **MIT** (`LICENSE`), and **O-29 is accepted** — 88 ms per epoch in the standard preset
-ships as a stated cost, not a blocker. **O-34 is closed** (2026-09-09): NRLMSISE-00 is no longer in this repository. `setupNonGravForces` clones it at
+toolbox is **MIT** (`LICENSE`), and **O-29 was accepted** — 88 ms per epoch (superseded; see below)
+in the standard preset shipped as a stated cost, not a blocker. That acceptance is moot: WP-C3 fixed
+the cost on 2026-09-16 and the row went unclosed until 2026-09-18. **The standard preset costs
+0.798 ms per epoch at K=100 and 15.9 ms at K=1**, the difference being a ~15 ms fixed cost per CALL;
+`tools/benchmark_reference.csv` is the authority for that. **O-34 is closed** (2026-09-09): NRLMSISE-00 is no longer in this repository. `setupNonGravForces` clones it at
 the pinned commit `bc9a2fe` when it is missing and owns the URL and the pin; `buildMex` resolves
 `'MsisSource'` → `NGF_NRLMSISE00` → `mex/nrlmsise00` and REFUSES rather than fetching. **An
 installer may reach the network, a build step may not.** The self-hosted Windows runner has no
@@ -599,3 +606,24 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   rule. Assert the ratio; record the absolute with a ceiling an order of magnitude above it.
 - **When the MCP bridge is down, CI is still a MATLAB tier**: push the branch, let the `matlab`
   job run `ciGate`, read `tests/last_run.txt` from the run artefact. That is how LP-6b was verified.
+- **ONE WARM-UP CALL IS NOT WARM.** `tools/benchmark.m` warmed once before timing, and on 2026-09-18
+  that cost a factor of 5.7 on `kernel.singleEpoch` (2.44 ms against a settled 0.456) and 7.8 on the
+  fast preset at K=1 (31.9 against 4.00). The evidence had been visible for an hour without being
+  read: three consecutive invocations in one MATLAB process, the first reporting the high value and
+  the next two agreeing on the low one. It warms five times now. **An argument had already been
+  built on the artefact and had to be withdrawn** — that the presets differ by 4 % at K=1, when they
+  differ by 4.0x — which is the real cost of a bad measurement: not the wrong digit, the conclusion
+  drawn from it and written somewhere else.
+- **A per-epoch cost is mostly a property of the BATCH, not of the toolbox**, so never quote one
+  without K. `Model.accel` in the standard preset costs 15.9 ms at K=1 and 0.798 ms at K=100,
+  because one call pays ~15.2 ms of setup before any per-epoch work (fast: 4.0 ms and 0.037). A day
+  at 1 Hz through `Model.series` is 1 min 16 s. The authority is `tools/benchmark_reference.csv`,
+  which `tools/benchmark.m` writes and `auditPackage.py` check 13 compares every quoted figure
+  against; `tools/benchmark_last.txt` is the gitignored host log and is NOT the authority, because a
+  check whose authority is absent in a fresh clone protects nothing.
+- **An OPEN obligation row is a standing instruction to repeat what it says.** O-29 was discharged by
+  WP-C3 on 2026-09-16 and left open; over the next two days its stale 88 ms was copied into four more
+  files and one shipped PDF chapter, while the correct value sat in an executed test. **Closing a row
+  is part of discharging it**, and a work package that fixes a number must be the thing that deletes
+  the old one. Checking that a fact appears once does not catch this: the second copy was an
+  obligation to change the first.
