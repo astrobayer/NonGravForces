@@ -403,8 +403,13 @@ is how you find \emph{where} two implementations differ rather than only that th
  integrator calls the right-hand side non-monotonically and repeatedly at one $t$. There is no
  correct answer, so there is no answer.
 \item \texttt{geom.selfShadow = "raycast"} --- a ray cast per direction is not an inner loop.
-\item \texttt{erp.backend = "ceresClimatology"} --- it reads a 64\,800-cell monthly grid, which is
- not table material.
+\item \texttt{erp.backend = "ceresClimatology"} --- not for want of memory: the native path already
+ carries three EBAF grids of that size for \texttt{erp.backend = "ceres"}. It is refused because it
+ would buy no physics. EBAF is also $180\times360$ at one degree and also a measured exitance, so
+ over an integration span the two differ in source and reference level rather than in what they can
+ express; what the climatology uniquely offers is an epoch range of 1900--2101 and provenance shared
+ with GROOPS, and both are post-processing concerns. Use \texttt{ceres} for an integrated arc, or
+ \texttt{knocke} if you do not hold the months.
 \item An attitude provider built with \texttt{"squad"} --- the native evaluator interpolates by
  slerp.
 \end{itemize}
