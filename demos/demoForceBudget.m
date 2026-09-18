@@ -30,7 +30,10 @@ fastModel = NonGravForces.Model(macro, NonGravForces.Options("fast"), ...
 standardModel = NonGravForces.Model(macro, NonGravForces.Options("standard"), ...
     'Attitude', att, 'Eop', eop, 'SpaceWeather', sw);
 
-% Ten epochs, because the standard preset costs 88 ms each (HANDOVER O-29) and a
+% Ten epochs, because a budget is a statement about SHARES and ten of them make the point. (The
+% reason this comment gave until 2026-09-18 -- "the standard preset costs 88 ms each" -- was stale
+% by a wide margin: WP-C3 fixed that on 2026-09-16 and HANDOVER O-29 was not closed until the figure
+% had propagated into four more files. It costs 0.798 ms per epoch at K=100.) A
 % demo should finish while you are still looking at it.
 n = 10;
 epArc = referenceSystem.daySecondToEpoch([ep.day(1:n) ep.sec(1:n)], ep.scale);

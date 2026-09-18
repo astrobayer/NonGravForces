@@ -461,12 +461,17 @@ classdef tNgfMex < NgfTestCase
     methods (Test, TestTags = {'speed'})
         function singleEpochSpeed(tc)
             % WHAT THIS MEASURES AND WHY. HANDOVER D.6 justifies the compiled path with a MATLAB
-            % call overhead of 5-15 microseconds, but LP-6's own measurement (O-29) puts Model.accel
-            % at 88 ms per epoch in the standard preset and 2 ms in the fast one, where 15 us is
-            % 0.02 % and 0.75 %. The premise therefore needs a number, and this is it: the ratio of
-            % the compiled single-epoch kernel to the MATLAB kernel chain that computes exactly the
-            % same three effects. Nothing here claims anything about Model.accel, whose cost is
-            % dominated by geom.selfShadow and not by this kernel.
+            % call overhead of 5-15 microseconds, and LP-6's own measurement contradicted it. The
+            % figures that comment quoted (88 ms standard, 2 ms fast) are superseded -- WP-C3 took
+            % the standard preset to 0.798 ms per epoch at K=100, and most of what the 88 ms
+            % recorded turned out to BE per-call overhead rather than model work (O-29, closed
+            % 2026-09-18: one Model.accel call costs ~15 ms of setup in the standard preset before
+            % it does any per-epoch work, so D.6's 15 us was wrong by three orders of magnitude in
+            % the same direction its author feared). The premise needs a number either way, and
+            % this is it: the ratio of the compiled single-epoch kernel to the MATLAB kernel chain
+            % that computes exactly the same three effects. Nothing here claims anything about
+            % Model.accel, whose MARGINAL cost is dominated by geom.selfShadow and not by this
+            % kernel.
             [gas, src, Tp] = tc.scene(0);
             args = {'Model', "sentman", 'Alpha', 0.85, 'Tw_K', 300};
             reps = 200;
