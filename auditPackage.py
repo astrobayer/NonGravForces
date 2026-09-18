@@ -415,10 +415,13 @@ if not os.path.isfile(BENCH):
     note("tools/benchmark_reference.csv is missing -> run tools/benchmark.m and commit it; it is "
          "the authority for the per-epoch costs this repository quotes")
 else:
+    bench_text = open(BENCH, encoding="utf-8").read()
     measured = []
-    for line in open(BENCH, encoding="utf-8"):
+    for line in bench_text.splitlines():
         if line.startswith("#") or line.startswith("path,"):
             continue
+        # rsplit from the RIGHT: the path column legitimately contains commas
+        # ("Model.accel, fast preset"), and only the three numeric columns are fixed.
         cells = line.rsplit(",", 3)
         if len(cells) == 4 and cells[3].strip() not in ("", "NaN"):
             try:
@@ -427,13 +430,32 @@ else:
                 pass
     if not measured:
         note("tools/benchmark_reference.csv holds no perEpoch_ms value -> it measured nothing")
+    # AND THE AUTHORITY ITSELF MUST DESCRIBE THIS CODE. Its header records the toolbox version it
+    # was measured against; comparing that with toolboxVersion.m is the difference between "these
+    # numbers agree with a table" and "these numbers agree with a table that describes the current
+    # toolbox". Without it an arbitrarily old measurement licenses any prose within 25 %, which is
+    # O-29's own defect moved one level up: metadata present, read by nobody.
+    stamp = re.search(r"^#\s*generated\s+(\S+\s+\S+)\s+toolbox\s+(\S+)", bench_text, re.M)
+    if not stamp:
+        note("tools/benchmark_reference.csv has no '# generated ... toolbox <version>' header -> "
+             "re-run tools/benchmark.m; the header is what dates the numbers")
+    elif version and stamp.group(2) != version:
+        note("tools/benchmark_reference.csv was measured against toolbox %s but this tree is %s "
+             "-> re-run tools/benchmark.m and commit it, or the per-epoch figures it licenses "
+             "describe code that has moved" % (stamp.group(2), version))
     # A CLOSED set, every member of which ASSERTS that the number is not current. The marker must
     # sit on the line itself, so that deleting the number and leaving the excuse behind is not
     # possible. "measured on <date>" is deliberately not a member: see the note above.
     HISTORY = re.compile(r"superseded|stale|no longer|not current|wrong by|was wrong", re.I)
     CLAIM = re.compile(r"([\d.]+)\s*(?:ms|\\milli\\second\})\s*(?:per epoch|each|/epoch)", re.I)
     for dirpath, dirnames, filenames in os.walk(ROOT):
-        dirnames[:] = [d for d in dirnames if d not in (".git", "html", "helpsearch-v4_en")]
+        # Vendored third-party trees are EXCLUDED. setupNonGravForces clones NRLMSISE-00 and
+        # HWM14 into mex/, and a "3 ms per epoch" in someone else's comment would be a finding
+        # with no honest fix available: editing upstream source, or marking it superseded.
+        # This check governs what this repository asserts, not what it fetched.
+        dirnames[:] = [d for d in dirnames
+                       if d not in (".git", "html", "helpsearch-v4_en",
+                                    "nrlmsise00", "hwm14", "msis21", "node_modules")]
         for fn in filenames:
             if not fn.endswith((".m", ".md", ".tex", ".c", ".h")):
                 continue
@@ -447,7 +469,10 @@ else:
                 if HISTORY.search(line):
                     continue
                 for hit in CLAIM.finditer(line):
-                    val = float(hit.group(1))
+                    try:
+                        val = float(hit.group(1))
+                    except ValueError:
+                        continue          # "1.2.3 ms per epoch", "... ms per epoch": not a claim
                     if not any(abs(val - mv) <= 0.25 * max(mv, 1e-9) for mv in measured):
                         note("%s:%d quotes %g ms per epoch, which no row of "
                              "tools/benchmark_reference.csv measured (%s) -> re-run tools/benchmark.m "

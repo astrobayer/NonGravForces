@@ -11,7 +11,7 @@ run('../referenceSystem/setupReferenceSystem.m'); run('../gracefoReading/setupGr
 run('../odeSuite/gjToolboxSetup.m')      % optional for the toolbox, required by ciGate
 setupNonGravForces; runNgfTests
 ```
-Status: 56 catalogued units, all delivered and verified in MATLAB, no stubs left (`auditPackage.py` compares this number with `doc/functionlist.csv`). **LP-E is complete**: 379/379 green, version 0.12.0. Next is LP-R, the release level.
+Status: 56 catalogued units, all delivered and verified in MATLAB, no stubs left (`auditPackage.py` compares this number with `doc/functionlist.csv`). **LP-E is complete**: version 0.12.0, and **381/381 green** on the LP-R work that follows it. Next is LP-R, the release level.
 
 Licensed MIT (see `LICENSE`). The NRLMSISE-00 C source is **not** in this repository — it carries no redistribution grant, so it is fetched from its maintainer instead:
 

@@ -57,11 +57,12 @@ function T = benchmark(options)
 %   Repeats  1x1   double   -      Timed repetitions, >= 1; default 3. The median is reported,
 %                                  because one scheduling hiccup should not become a published
 %                                  figure. Five warm-up calls precede them: ONE IS NOT WARM, and
-%                                  on 2026-09-18 the difference was a factor of 5.7 on
+%                                  on 2026-09-18 the difference was a factor of 5.4 on
 %                                  kernel.singleEpoch and 7.8 on the fast preset at K=1
-%   Write    1x1   logical  -      Write tools/benchmark_last.txt (appended, gitignored) and
-%                                  tools/benchmark_reference.csv (overwritten, committed;
-%                                  default true)
+%   Write    1x1   logical  -      Default true. Write both output files: tools/benchmark_last.txt
+%                                  (appended, gitignored) and tools/benchmark_reference.csv
+%                                  (overwritten, committed). Pass false to measure without
+%                                  touching the committed authority
 %
 % OUTPUT ARGUMENTS
 %   Name  Size  Type   Units  Description
@@ -70,7 +71,9 @@ function T = benchmark(options)
 %                            time), .perEpoch_ms, .note
 %
 % ERRORS
-%   NonGravForces:benchmark:inputRange   Epochs or Repeats below 1
+%   NonGravForces:benchmark:inputRange   Epochs or Repeats below 1, or an Epochs larger than the
+%                                        committed arc has states to time (the message counts them;
+%                                        writing the count here would be a second authority)
 %   NonGravForces:benchmark:dataMissing  a sample file this needs is not in data/
 %
 % EXAMPLE
@@ -114,6 +117,17 @@ eop = referenceSystem.readEop(need{1});
 sw = NonGravForces.io.spaceWeather(need{2});
 [ep, r, v] = NonGravForces.io.readGNV1B(need{3}, 'Eop', eop);
 [epAtt, qq] = NonGravForces.io.readSCA1B(need{4});
+
+% The arc is a committed 600-record excerpt, so a batch size larger than it has no states to
+% time. Refused HERE, by name, rather than left to ep.day(1:n) -- which raises MATLAB's
+% "Index exceeds the number of array elements", a message that names neither the fixture nor the
+% limit and comes from no unit the caller can look up (P10, and the mnemonic taxonomy of
+% CLAUDE.md section 3). The pre-2026-09-18 code knew about this bound and merely clamped with
+% min(n, numel(ep.sec)) in a line that has since been deleted, which is a silent answer to a
+% question the caller got wrong.
+if any(nList > numel(ep.sec))
+    NonGravForces.fail(unit, "inputRange", "'Epochs' asks for up to %d epochs and the committed arc holds %d -> lower 'Epochs', or point the benchmark at a longer GNV1B product", max(nList), numel(ep.sec));
+end
 att = NonGravForces.geom.AttitudeProvider(epAtt, qq);
 macro = NonGravForces.geom.graceFO("C");
 expo = struct('rho0_kg_m3', 3e-12, 'h0_m', 450e3, 'H_m', 60e3);
@@ -178,7 +192,7 @@ else
     try
         ngfSrc = NonGravForces.app.DynamicsSource(stdModel, 'Epoch', tai, 'Margin_s', 120, 'TableStep_s', 60);
         ngfSrc = ngfSrc.prepare(struct('Span', tSpan, 'StencilSpan', tSpan, 'MaxColumns', 1));
-        rNat = r(:, 1); vNat = v(:, 1); tNat = mean(tSpan);
+        rNat = r(:, 1); vNat = v(:, 1); tNat = tMid;
         pointwise(end+1, :) = {"app.DynamicsSource.accel (native)", @() ngfSrc.accel(tNat, rNat, vNat), ...
             "the whole standard-preset chain for one state in C, over tables built once in prepare()"};
     catch err
@@ -189,7 +203,11 @@ else
 end
 cleanupSrc = onCleanup(@() localRelease(ngfSrc));
 
-paths = strings(0, 1); nEp = zeros(0, 1); secs = zeros(0, 1); per = zeros(0, 1); notes = strings(0, 1);
+nBatched = 4;                                   % the rows of `batched` below, per batch size
+nRow = numel(nList) * nBatched + size(pointwise, 1);
+paths = strings(nRow, 1); nEp = zeros(nRow, 1);
+secs = zeros(nRow, 1); per = zeros(nRow, 1); notes = strings(nRow, 1);
+row = 0;
 for n = nList
     epArc = referenceSystem.daySecondToEpoch([ep.day(1:n) ep.sec(1:n)], ep.scale);
     rArc = r(:, 1:n); vArc = v(:, 1:n); qArc = att.at(epArc);
@@ -198,16 +216,17 @@ for n = nList
         "Model.accel, standard preset",  @() stdModel.accel(epArc, rArc, vArc, qArc),                        "the figure HANDOVER O-29 quoted; selfShadow dominates the MARGINAL cost, not the K=1 cost"; ...
         "Model.budget, fast preset",     @() fastModel.budget(epArc, rArc, vArc, qArc),                      "one accel plus a reduction"; ...
         "app.forceBudget, fast, 1 chunk",@() NonGravForces.app.forceBudget(fastModel, epArc, rArc, vArc, []), "the chunked reduction over the same accel"};
-    for c = 1:size(batched, 1)
-        [s, p] = localTime(batched{c, 2}, n, reps);
-        paths(end+1, 1) = batched{c, 1}; nEp(end+1, 1) = n; %#ok<AGROW>
-        secs(end+1, 1) = s; per(end+1, 1) = p; notes(end+1, 1) = batched{c, 3}; %#ok<AGROW>
+    assert(size(batched, 1) == nBatched);       % the preallocation above counts these rows
+    for c = 1:nBatched
+        row = row + 1;
+        [secs(row), per(row)] = localTime(batched{c, 2}, n, reps);
+        paths(row) = batched{c, 1}; nEp(row) = n; notes(row) = batched{c, 3};
     end
 end
 for c = 1:size(pointwise, 1)
-    [s, p] = localTime(pointwise{c, 2}, 1, reps);
-    paths(end+1, 1) = pointwise{c, 1}; nEp(end+1, 1) = 1; %#ok<AGROW>
-    secs(end+1, 1) = s; per(end+1, 1) = p; notes(end+1, 1) = pointwise{c, 3}; %#ok<AGROW>
+    row = row + 1;
+    [secs(row), per(row)] = localTime(pointwise{c, 2}, 1, reps);
+    paths(row) = pointwise{c, 1}; nEp(row) = 1; notes(row) = pointwise{c, 3};
 end
 T = table(paths, nEp, secs, per, notes, 'VariableNames', {'path', 'epochs', 'seconds', 'perEpoch_ms', 'note'});
 T.Properties.VariableUnits = ["", "", "s", "ms", ""];
@@ -215,24 +234,30 @@ T.Properties.Description = sprintf('NonGravForces %s benchmark, epochs [%s], med
     NonGravForces.toolboxVersion('string'), num2str(nList), reps, version('-release'));
 
 if options.Write
-    localAppendLog(fullfile(root, 'tools', 'benchmark_last.txt'), T, reps, unit);   % ignored
+    % THE COMMITTED AUTHORITY IS WRITTEN FIRST. The other file is the gitignored host log, and
+    % writing it first meant an editor holding it open could abort the run before the file the
+    % audit actually depends on was refreshed -- the artefact nothing depends on deciding the fate
+    % of the one everything does.
     localWriteReference(fullfile(root, 'tools', 'benchmark_reference.csv'), T, reps, unit);
+    localAppendLog(fullfile(root, 'tools', 'benchmark_last.txt'), T, reps, unit);   % ignored
 end
 end
 
 function [sec, perEpoch_ms] = localTime(fcn, n, reps)
-%LOCALTIME Median wall time of reps calls, after one warm-up, and the per-epoch cost it implies.
+%LOCALTIME Median wall time of reps calls, after five warm-ups, and the per-epoch cost it implies.
 %   A path this host cannot measure is reported as NaN, never silently omitted.
 if isempty(fcn)
     sec = NaN; perEpoch_ms = NaN;
     return
 end
 % FIVE warm-up calls, not one. One is not warm, and the difference is not small: measured
-% 2026-09-18, kernel.singleEpoch reads 2.44 ms after a single warm-up and 0.43 ms once it has
-% settled, and app.DynamicsSource.accel 0.72 against 0.50 -- factors of 5.7 and 1.4 of pure
-% measurement artefact. The evidence was sitting in three consecutive invocations inside one
-% MATLAB process: the first reported the high value and the second and third agreed on the low
-% one, which is what a JIT reaching steady state looks like and not what the code costs.
+% 2026-09-18, kernel.singleEpoch read 2.44 ms after a single warm-up against the 0.456 ms in
+% tools/benchmark_reference.csv, and app.DynamicsSource.accel 0.72 against 0.544 -- factors of
+% 5.4 and 1.3 of pure measurement artefact. (Take the settled figures from that file and not
+% from here; this comment is the explanation, the CSV is the authority.) The evidence was
+% sitting in three consecutive invocations inside one MATLAB process: the first reported the
+% high value and the second and third agreed on the low one, which is what a JIT reaching
+% steady state looks like and not what the code costs.
 for w = 1:5
     fcn();
 end
