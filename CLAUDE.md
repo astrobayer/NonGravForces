@@ -606,3 +606,24 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   rule. Assert the ratio; record the absolute with a ceiling an order of magnitude above it.
 - **When the MCP bridge is down, CI is still a MATLAB tier**: push the branch, let the `matlab`
   job run `ciGate`, read `tests/last_run.txt` from the run artefact. That is how LP-6b was verified.
+- **ONE WARM-UP CALL IS NOT WARM.** `tools/benchmark.m` warmed once before timing, and on 2026-09-18
+  that cost a factor of 5.7 on `kernel.singleEpoch` (2.44 ms against a settled 0.456) and 7.8 on the
+  fast preset at K=1 (31.9 against 4.00). The evidence had been visible for an hour without being
+  read: three consecutive invocations in one MATLAB process, the first reporting the high value and
+  the next two agreeing on the low one. It warms five times now. **An argument had already been
+  built on the artefact and had to be withdrawn** — that the presets differ by 4 % at K=1, when they
+  differ by 4.0x — which is the real cost of a bad measurement: not the wrong digit, the conclusion
+  drawn from it and written somewhere else.
+- **A per-epoch cost is mostly a property of the BATCH, not of the toolbox**, so never quote one
+  without K. `Model.accel` in the standard preset costs 15.9 ms at K=1 and 0.798 ms at K=100,
+  because one call pays ~15.2 ms of setup before any per-epoch work (fast: 4.0 ms and 0.037). A day
+  at 1 Hz through `Model.series` is 1 min 16 s. The authority is `tools/benchmark_reference.csv`,
+  which `tools/benchmark.m` writes and `auditPackage.py` check 13 compares every quoted figure
+  against; `tools/benchmark_last.txt` is the gitignored host log and is NOT the authority, because a
+  check whose authority is absent in a fresh clone protects nothing.
+- **An OPEN obligation row is a standing instruction to repeat what it says.** O-29 was discharged by
+  WP-C3 on 2026-09-16 and left open; over the next two days its stale 88 ms was copied into four more
+  files and one shipped PDF chapter, while the correct value sat in an executed test. **Closing a row
+  is part of discharging it**, and a work package that fixes a number must be the thing that deletes
+  the old one. Checking that a fact appears once does not catch this: the second copy was an
+  obligation to change the first.
