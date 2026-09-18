@@ -163,8 +163,19 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
             % the packing path, where it fired only after prepare() and a contract test that
             % expected it at construction reported "nothing was thrown" -- the guard existed and
             % the test was still right to fail (HANDOVER O-44).
+            %
+            % THE REASON THIS ROW USED TO GIVE WAS FALSE, and it is worth not repeating: it said a
+            % 64800-cell grid "is not table material". The native path ALREADY carries three EBAF
+            % grids of exactly that size, plus their axes and month nodes, for erp.backend ceres --
+            % 3.1 MB against the 2.1 MB this backend would need. Memory was never the obstacle.
+            % The real reason is that it would buy no physics: EBAF is also 180x360 at one degree
+            % and also a measured exitance, so over an integration span the two differ in their
+            % SOURCE and their reference level, not in what they can express. What ceresClimatology
+            % uniquely offers is an epoch range of 1900-2101 and provenance shared with GROOPS, and
+            % both are post-processing concerns. An integrator uses ceres where the months are in
+            % hand and knocke where they are not (measured 2026-09-18).
             if o.erp.backend == "ceresClimatology"
-                NonGravForces.fail(unit, "unsupportedOption", "erp.backend ceresClimatology has no native evaluator: it reads a 64800-cell monthly grid, which is not table material for an integrator's inner loop -> use it through Model.accel or series, or choose erp.backend ceres for the integrated path");
+                NonGravForces.fail(unit, "unsupportedOption", "erp.backend ceresClimatology has no native evaluator, by design: erp.backend ceres is the same 1-degree measured field and the native path serves it -> use ceres for an integrated arc, knocke if you do not hold the months, or ceresClimatology through Model.accel or series");
             end
             if any(~ismember(nv.Parameters, ["cdScale", "crScale"]))
                 NonGravForces.fail(unit, "inputModel", "'Parameters' may name cdScale and crScale -> got %s", strjoin(nv.Parameters, ", "));
