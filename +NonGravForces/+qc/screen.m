@@ -34,7 +34,11 @@ function [mask, events, info] = screen(y_meas, y_model, epoch, options)
 % NAME-VALUE ARGUMENTS
 %   Name              Size     Type    Units    Description
 %   ----              ----     ----    -----    -----------
-%   Bias, Scale, Whitening, Window     as qc.residuals (defaults: 0, I, "none")
+%   Bias              1xM|KxM  double  units    Preliminary bias, default zeros (as qc.residuals)
+%   Scale             1xM|MxM  double  -        Preliminary scale, diagonal as 1xM or full MxM,
+%                                               default identity (as qc.residuals)
+%   Whitening         1x1      string  -        "none" (default) | "difference" | "highpass"
+%   Window            1x1      double  samples  Odd length >= 3, required by "highpass"
 %   HampelWindow      1x1      double  samples  default 61
 %   HampelThreshold   1x1      double  sigma    default 4
 %   Response          Lx1      double  any      Pulse template for detectImpulses; default [] = impulse step skipped

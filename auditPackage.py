@@ -11,11 +11,14 @@ Mechanisms, not reminders (HANDOVER P-5). Each check names the rule it enforces.
   5. Every copy of the version string (Contents.m "Version" lines, README.md
      first line, doc/html footers) equals the one composed from the numeric
      fields of toolboxVersion.m (R1, decision 2026-09-06).
-  6. EVERY page of doc/html equals what tools/buildDocs.py renders from the
-     sources that own the facts: staleness by content, not by stamp (O-11).
+  6. EVERY page of doc/html, doc/src/generated.tex and doc/src/api_generated.tex
+     equal what tools/buildDocs.py renders from the sources that own the facts:
+     staleness by content, not by stamp (O-11).
 """
 import hashlib
 import csv, glob, os, re, sys
+# the argument/option auditors of check 12 live in tools/, so that folder must be importable
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tools'))
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 PKG = os.path.join(ROOT, "+NonGravForces")
@@ -152,6 +155,14 @@ try:
     cur = open(buildDocs.TEX_GENERATED, encoding="utf-8").read() if os.path.isfile(buildDocs.TEX_GENERATED) else ""
     if cur != gen:
         note("doc/src/generated.tex is stale -> python tools/buildDocs.py")
+    # The API chapter is the same mechanism pointed at a bigger fact: every signature, argument
+    # table and error identifier in the user guide comes from the catalogue and the help blocks,
+    # so a renamed argument or a new option makes THIS file stale and reddens the audit. An API
+    # reference maintained by hand is the documentation defect O-11 was, at 56 units instead of 6.
+    api = buildDocs.render_api_tex()
+    cur = open(buildDocs.TEX_API, encoding="utf-8").read() if os.path.isfile(buildDocs.TEX_API) else ""
+    if cur != api:
+        note("doc/src/api_generated.tex is stale -> python tools/buildDocs.py")
 except Exception as exc:                      # a broken generator must be a finding, not a crash
     note(f"tools/buildDocs.py could not render the documentation: {exc}")
 
@@ -347,6 +358,31 @@ if os.path.isfile(readme):
                 note("README.md claims %s/%s green but tests/last_run.txt recorded %s passed of %s "
                      "-> quote the run, or re-run before quoting"
                      % (claimed[0], claimed[1], m.group(2), m.group(1)))
+
+# 12. EVERY DECLARED ARGUMENT IS A DOCUMENTED ARGUMENT, and every option value is explained.
+#     Check 2 verifies the INPUT/NAME-VALUE/OUTPUT sections EXIST; it never compared them with what
+#     the functions actually take. Run 2026-09-18, that comparison found: four PUBLIC METHODS named
+#     nowhere in their class help (Options.toStruct, DynamicsSource.diagnostics and epochAt,
+#     MacroModel.silhouetteDefect); three MacroModel name-value arguments whose PROPERTIES were
+#     documented while the way to SET them was not; seven Model method name-values a caller can pass
+#     and the single point of access described nowhere (torque/evaluate B_body and Dipole_Am2,
+#     evaluate T0_K, series Quantities, partials Method); and four qc.screen options carrying no
+#     size, type or units. The same shape as everything else this level found.
+#     The three auditors live in tools/ and run standalone; this runs them so CI reads them.
+for _mod in ("audit_args", "audit_class", "audit_options"):
+    try:
+        _m = __import__(_mod)
+        import io as _io
+        import contextlib as _ctx
+        _buf = _io.StringIO()
+        with _ctx.redirect_stdout(_buf):
+            _rc = _m.main()
+        if _rc:
+            for _line in _buf.getvalue().splitlines():
+                if _line.strip() and not _line.startswith(("0 finding", "\n")) and "finding(s) over" not in _line:
+                    note(f"{_mod}: {_line.strip()}")
+    except Exception as _exc:                      # a broken auditor is a finding, not a crash
+        note(f"tools/{_mod}.py could not run: {_exc}")
 
 if findings:
     print(f"auditPackage: {len(findings)} finding(s)")

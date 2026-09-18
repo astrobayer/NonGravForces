@@ -81,6 +81,20 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
 %   (2.5e-14 and 8.1e-11 relative at a 60 s table step, measured 2026-09-16).
 %   The time tables are exact at their nodes by construction.
 %
+% METHODS BEYOND THE gjToolbox INTERFACE
+%   d  = diagnostics(obj, t, r, v)  What the NATIVE evaluator computed on the way to one
+%                                   acceleration: .drag .radiation .thermal (3x1 each, m/s^2),
+%                                   .rho, .species (8x1), .Tgas_K, .vrel_body (3x1), .lla (3x1),
+%                                   .nu, .mass_kg, .rotationBodyToGcrs (3x3). It exists to pin
+%                                   WHERE the native path and Model.accel differ rather than only
+%                                   that they do, which is what the parity tests need when a bound
+%                                   moves. Requires 'Native', true and a prepared source; raises
+%                                   inputModel otherwise.
+%   ep = epochAt(obj, t, m)         The referenceSystem epoch (TAI) of the integrator offsets t,
+%                                   repeated m times, so a caller can label a propagated arc with
+%                                   the same time scale the tables were built on. t is seconds
+%                                   from the source's 'Epoch'.
+%
 % ERRORS
 %   NonGravForces:DynamicsSource:inputModel     model is not a NonGravForces.Model, or its options
 %                                               cannot be served (transient thermal, raycast, squad)

@@ -1177,6 +1177,82 @@ does not vendor what it cannot redistribute (the O-34 lesson). Recorded as O-41 
 
 ---
 
+### LP-D2 — The documentation audit and the user guide (2026-09-18)
+
+**THE AUDIT ANSWERED TWO OF THE OWNER'S THREE QUESTIONS WITH "NO".** `auditPackage` check 2 had
+verified that the INPUT/NAME-VALUE/OUTPUT sections EXIST; nothing had ever compared them with what
+the functions take. Three auditors now do (`tools/audit_args.py`, `audit_class.py`,
+`audit_options.py`, run by check 12). What they found on their first honest run:
+
+- **Seven name-value arguments of `Model`** -- the toolbox's single point of access -- that a caller
+  can pass, that the code validates, and that the class help named nowhere: `B_body` and
+  `Dipole_Am2` on both `torque` and `evaluate`, `T0_K` on `evaluate`, `Quantities` on `series`,
+  `Method` on `partials`. The first two are the magnetic-torque inputs and are needed TOGETHER or
+  not at all; one alone leaves the term out silently, which is now written down.
+- **Four public methods documented nowhere**: `Options.toStruct`, `DynamicsSource.diagnostics`,
+  `DynamicsSource.epochAt`, `MacroModel.silhouetteDefect`.
+- **Three `MacroModel` name-value arguments** whose PROPERTIES were documented while the way to SET
+  them was not -- `CentreOfMass`, `ProofMassOffset`, `Reference`. The property list said what the
+  field held; nothing said how to fill it, and the names differ in case from the properties.
+- **Four `qc.screen` options** delegated to `qc.residuals` on one line, carrying no size, type or
+  units.
+
+Every admissible OPTION VALUE was already described, in both `Options` and its consuming unit; that
+third question answers yes.
+
+**THE AUDITORS WERE WRONG BEFORE THEY WERE RIGHT, AND THAT IS THE PART TO READ.** The first run
+reported nine findings of which eight were the parser's fault: it assumed two spaces after a name
+where many rows use one, it treated the token `Name` as a header when `geom.boxWing` has a real
+option called `Name`, it read prose inside a table ("All arrays must be compatible...") as a row,
+and a later fix let a row beginning with a capital (`F`, `T`, `GM`) end the section it was inside,
+which took the count to 23. **A checker that reports what is already there teaches people to ignore
+it**, which is this project's own rule about check 9. Each false positive is now a comment in the
+parser, and the auditors run clean.
+
+**THE USER GUIDE.** `doc/src/NonGravForces_UserGuide.tex`, ten chapters: introduction, installation,
+theory and implementation, using the toolbox, a step-by-step GRACE-type chain, the integrator
+interface, worked examples, limitations, the complete API and the references. CI builds it and
+uploads it as the `userGuide` artefact, three passes because the API appendix moves the page
+numbers.
+
+- **The theory is not duplicated.** `theory_body.tex` and `references.tex` were SPLIT out of the
+  theory document and are `\input` by both, so the two PDFs render the same words and cannot drift.
+  The split was verified to be a move: the concatenation equals the original, line for line.
+- **The API appendix is GENERATED** by `tools/buildDocs.py` from `doc/functionlist.csv` and the help
+  blocks -- 56 of 56 units, 4130 lines, 148 tables, 444 argument rows -- and `auditPackage` refuses
+  a stale one by content, exactly as it does `generated.tex`. A hand-written API chapter is stale
+  the day it ships, which is the defect this level spent a week finding in other forms.
+- **Every printed output was produced by running the code**, not composed. The four demos and the
+  walkthrough were executed and their diaries pasted in.
+
+**WRITING THE WALKTHROUGH FOUND TWO DEFECTS IN ITS OWN DRAFT CODE**, which is the argument for
+running a guide's examples rather than writing them: `info.Tgas_K` does not exist, and
+`app.calibrate` takes `'Bias'` and `'Scale'`, not `'Parameters'`. Shipping those untested in a
+beginner's guide is exactly the rot this project records for documentation nobody executes.
+
+**AND IT TURNED UP TWO THINGS WORTH TEACHING RATHER THAN HIDING.** The GRACE-FO panel model's
+silhouette defect is **0.14 m^2, not zero** -- it is an open box-wing, not a closed body, and the
+first draft's label "(0 for a closed body)" would have read as a failure. And calibrating on the
+200-second excerpt returns scale factors of **0.16, 0.70, 0.85** with condition numbers 57, 46 and
+7: badly determined, because a scale factor is set by the SPREAD of the modelled signal over the
+arc and 200 seconds of a 90-minute orbit carries none. The guide prints that beside the synthetic
+demo which recovers a planted scale to 4e-16, because the contrast is the lesson: the estimator is
+right and the arc is too short.
+
+**THE REFERENCES WERE INCOMPLETE IN A WAY THAT MATTERED.** Four sources the toolbox cites IN ITS OWN
+HELP were absent from the list: March et al.\ (2021), whose fitted alpha every preset now uses;
+Walker, Mehta & Koller (2014), whose coverage law `walker2014` implements and whose whole-body
+closed forms are the reason `cll` is refused; Paul et al.\ (2022); and Hladczuk et al.\ (2024),
+which supplies the 4.22 and 3.04 nm/s^2 of the limitations chapter. Six further entries lacked
+volume, pages or DOI. Every correction comes from the paper in hand, read in these sessions, not
+from memory of it.
+
+**What this host could NOT do**: compile. There is no LaTeX engine here (O-38), so the documents are
+checked structurally -- environments balanced, `\input` targets present, no unsubstituted
+placeholder, no unescaped underscore outside math -- and CI is the compiler. That checker also had
+to be corrected: stripping only `$...$` reported 24 underscores, every one inside an `equation` or
+`align` block of a document CI already builds.
+
 ## Part H — Obligations and open items
 
 | # | Item | Status | Owner | Re-entry |

@@ -5,6 +5,17 @@ classdef Options
 %   opt = NonGravForces.Options("precise")
 %   opt = NonGravForces.Options("fast", "drag.density", "msis00")
 %   opt = opt.set("srp.tsi", 1367)                    % legacy TSI, explicit
+%   s   = opt.toStruct()                              % plain struct, for hashing/display
+%
+% METHODS
+%   opt = set(obj, name, value, ...)   A COPY with the dotted fields replaced; this is a value
+%                                      class, so the original is unchanged. Unknown names error.
+%   s   = toStruct(obj)                The same option set as a plain struct, with one field per
+%                                      family (.preset .drag .srp .erp .thermal .torques .geom
+%                                      .sun .series .partials). It exists so that provenance can
+%                                      HASH an option set and so that display is readable; it is
+%                                      not a second way to configure anything, and nothing reads
+%                                      it back.
 %
 %   Configure once, evaluate many (principle P5). Every field is validated
 %   at construction; an unknown field name errors, and EVERY ADMISSIBLE VALUE

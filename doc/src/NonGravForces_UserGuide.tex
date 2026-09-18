@@ -1,0 +1,820 @@
+\documentclass[11pt,a4paper]{report}
+\usepackage[T1]{fontenc}\usepackage[utf8]{inputenc}
+\usepackage[margin=2.3cm]{geometry}
+\usepackage{amsmath,amssymb,bm,booktabs,longtable,array,siunitx,xcolor,listings,enumitem}
+\usepackage[hidelinks]{hyperref}
+% Version, date and every enumerated option list come from tools/buildDocs.py, which reads
+% toolboxVersion.m and Options.validateValue; the complete API comes from the same generator,
+% reading doc/functionlist.csv and the help blocks. auditPackage.py refuses either file when it is
+% stale, BY CONTENT, so this document cannot state a version, an option or a signature that the
+% toolbox would not honour.
+\input{generated}
+\sisetup{per-mode=symbol,detect-all}
+\lstset{basicstyle=\ttfamily\small,columns=fullflexible,frame=single,breaklines=true,
+        keepspaces=true,backgroundcolor=\color{gray!8},showstringspaces=false}
+\newcommand{\vv}[1]{\bm{#1}}
+\newcommand{\ngf}{\texttt{NonGravForces}}
+
+\title{\ngf: User Guide\\[6pt]
+\large Non-gravitational forces and torques on LEO satellites\\[4pt]
+\normalsize Theory, installation, processing, the integrator interface, and the complete API\\[2pt]
+\normalsize Version \ngfversion\ (concept~3)}
+\author{Prepared by Claude Opus 5 (Anthropic) for Matthias Weigelt}
+\date{\ngfdate \quad\textperiodcentered\quad MATLAB R2026a Update 4}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\ngf\ computes the non-gravitational acceleration, the surface and body torques, and their partial
+derivatives for a spacecraft described by a panel model: atmospheric drag and lift, solar radiation
+pressure, Earth albedo and infrared, and thermal re-radiation. Its reference case is GRACE-FO
+accelerometer processing at the \SI{e-10}{\metre\per\second\squared} level.
+
+This guide is written for someone who has not used the toolbox before. It installs it from nothing,
+explains the physics it implements and the approximations it makes, walks through a GRACE-type
+processing chain step by step, shows how to drive an orbit integrator through the compiled
+interface, and gives worked examples with the output they actually produce on the reference day.
+It ends with what the toolbox cannot do --- stated plainly, because a limitation discovered by a
+user is a defect and a limitation written down is a specification --- and with the complete API,
+which is generated from the code so that it cannot drift from it.
+\end{abstract}
+
+\tableofcontents
+\clearpage
+
+%=======================================================================================
+\chapter{Introduction}
+
+\section{What this toolbox is}
+\ngf\ computes the non-gravitational acceleration $\vv a_{ng}$, the torques $\vv\tau$, and their
+partials, given a spacecraft's state, attitude and environment. One rule governs every other:
+
+\begin{quote}
+\textbf{\ngf\ computes forces and torques and nothing else.}
+\end{quote}
+
+There is no gravity field in it, no equations of motion, no integrator and no least-squares
+machinery beyond the one linear calibration problem that separates by axis. Everything else is
+delegated to a named dependency, by qualified call, never copied or wrapped:
+
+\begin{table}[h]\centering\footnotesize
+\begin{tabular}{@{}lp{9.6cm}@{}}\toprule
+Toolbox & What it owns\\\midrule
+\texttt{referenceSystem} & Time scales, Earth orientation, ITRS$\leftrightarrow$GCRS with
+ derivatives, geodesy, quaternions, attitude interpolation, Sun and Moon states\\
+\texttt{gracefoReading} & Level-1B ASCII reading, quality flags, GROOPS instrument export\\
+\texttt{gjToolbox} (odeSuite) & Gauss--Jackson integration. Optional for the toolbox, required by
+ the gate: \texttt{app.DynamicsSource} implements that toolbox's frozen dynamics interface\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent This partition is the single most important design decision in the project. It is what
+makes the toolbox smaller than either of its two rejected predecessors while covering more physics.
+
+\section{The layer map}
+Nine layers; a layer calls only lower layers plus the dependencies.
+
+\begin{lstlisting}
+L8 app      calibrate, forceBudget, densityInversion, DynamicsSource (integrator entry, native C)
+L7 qc       residuals, hampel, detectImpulses, detectJumps, eventTable, screen
+L6 sensor   Sensor (abstract), Electrostatic, AtomInterferometer, DragFree
+L5 Model    accel | torque | series | partials | budget      <- single point of access
+L4 kernel   gsiCoefficients, accommodation, dragPanelForce, radiationPanelForce,
+            thermalRecoil, assemble, bodyTorques, partials, singleEpoch (C/MEX)
+L3 geom     MacroModel, graceFO, boxWing, selfShadow, flowShadow, thermalState,
+            AttitudeProvider, checkAttitudeSense
+L2 env      density, wind, eclipseFactor, earthRadiance, magneticField, radiationSources
+L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
+            importCERES, importGroopsGrid, igrfCoefficients
+L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options, buildMex
+\end{lstlisting}
+
+\noindent \ngfunitcount{} public units are catalogued in \texttt{doc/functionlist.csv}, which is the
+authority: continuous integration checks it against the files on disk in both directions.
+
+\section{Design principles a user will notice}
+Most of the architecture is invisible from outside. Four decisions are not.
+
+\begin{description}[leftmargin=1.4em,style=nextline]
+\item[Configure once, evaluate many.] \texttt{Options} and \texttt{Model} are built once and then
+ evaluated over many epochs. Everything is vectorised over epochs; a $3\times K$ array is the
+ normal shape of a result.
+\item[Sources, not effects.] \texttt{env} produces a list of radiation sources (Sun, Earth tiles)
+ and a gas state; the kernel does not know which effect it is computing. Albedo and sunlight go
+ through the same panel code with different fluxes, which is why they cannot disagree.
+\item[Never degrade silently.] There is no fallback between fidelity tiers. An unknown option field
+ is an error; a missing optional dependency is an error at the point of use, naming its setup
+ function; a model evaluated outside the range it was fitted in warns and says by how much. A
+ \texttt{NaN} where an error belonged is the worst outcome available and is treated as a defect.
+\item[One raise point.] Every error is built by \texttt{NonGravForces.fail}, so every identifier has
+ the form \texttt{NonGravForces:<unit>:<mnemonic>} and every message ends with what the caller
+ should change, after ``\texttt{ -> }''.
+\end{description}
+
+%=======================================================================================
+\chapter{Installation}
+\label{ch:install}
+
+\section{What you need first}
+\begin{itemize}[leftmargin=1.4em]
+\item \textbf{MATLAB R2026a} or newer. The toolbox uses \emph{base MATLAB and the Parallel Computing
+ Toolbox only}. It deliberately calls nothing from Signal Processing, Statistics, Optimization,
+ Curve Fitting, Symbolic, Aerospace or Mapping --- not in code and not in an example, because an
+ example that needs a product the toolbox refuses to need has misled the reader who copied it.
+ Continuous integration scans for this.
+\item \textbf{A C compiler}, for the compiled density and kernel paths. On Windows this is the
+ MinGW-w64 support package. MATLAB routinely forgets where it is; \texttt{NonGravForces.buildMex}
+ locates it itself and runs \texttt{mex -setup C} for the session, so you should not have to.
+\item \textbf{Git}, and roughly \SI{1}{\giga\byte} of disk if you fetch the optional data.
+\end{itemize}
+
+\noindent You do \emph{not} need \LaTeX, GROOPS, or any of the third-party atmosphere models: the
+last are fetched from their maintainers at pinned versions when you ask for them.
+
+\section{Getting the code}
+Clone the toolbox and its two mandatory dependencies \emph{as siblings}, in one directory:
+
+\begin{lstlisting}[language=bash]
+cd ~/MATLAB
+git clone https://github.com/astrobayer/NonGravForces.git
+git clone https://github.com/astrobayer/referenceSystem.git
+git clone https://github.com/astrobayer/gracefoReading.git
+# optional, and required only to drive an integrator or to run the full gate:
+git clone <your odeSuite remote> odeSuite
+\end{lstlisting}
+
+\noindent The sibling layout matters: the gate and the CI job both look for the dependencies next to
+the repository.
+
+\section{Setting up, in order}
+Run each dependency's setup first, then the toolbox's. Order matters, because the toolbox's setup
+probes what is already on the path.
+
+\begin{lstlisting}
+run('~/MATLAB/referenceSystem/setupReferenceSystem.m')
+run('~/MATLAB/gracefoReading/setupGraceFOReading.m')
+run('~/MATLAB/odeSuite/gjToolboxSetup.m')        % only if you cloned it
+cd('~/MATLAB/NonGravForces')
+setupNonGravForces
+\end{lstlisting}
+
+\noindent \texttt{setupNonGravForces} adds the toolbox root, \texttt{tests/} and \texttt{tools/} to
+the path and registers the documentation. It prints a line for everything it does.
+
+\section{What setup fetches, and what it refuses to}
+\textbf{Setup is the only place in the toolbox that touches the network}, it does so only when
+something is missing, and it says so when it does. \texttt{NonGravForces.buildMex} never fetches:
+it refuses and names setup. An installer may reach the network; a build step may not.
+
+\begin{table}[h]\centering\footnotesize
+\begin{tabular}{@{}llp{7.2cm}@{}}\toprule
+Option & Default & What it controls\\\midrule
+\texttt{'FetchMsis'} & \texttt{"ifMissing"} & NRLMSISE-00 and NRLMSIS 2.1 source, cloned at a
+ pinned commit from its maintainer. Not redistributed here: it carries no redistribution grant.\\
+\texttt{'FetchData'} & \texttt{"ifMissing"} & IERS Earth-orientation and CelesTrak space-weather
+ files, and GRACE-FO Level-1B from the GFZ ISDC archive.\\
+\texttt{'FetchKernels'} & \texttt{"ifMissing"} & The DE440 planetary ephemeris, pinned by SHA-256.\\
+\texttt{'FetchGroops'} & \texttt{"never"} & The GROOPS CERES grids. Default \emph{never}, because
+ two of the files are \SI{1.25}{\giga\byte} \emph{each}.\\
+\texttt{'DataPool'} & --- & Where the large external data live, if you keep them outside the
+ repository.\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent Every fetch is verified by content, not by HTTP status: a status code is not a file, and
+one of these URLs answers \texttt{200} with an HTML error page. Every downloaded file is hashed on
+\emph{every} call, not only when it is first downloaded, because a check that runs only on download
+protects only the first run.
+
+To install without any network access at all:
+
+\begin{lstlisting}
+setupNonGravForces('FetchMsis', "never", 'FetchData', "never", 'FetchKernels', "never")
+\end{lstlisting}
+
+\noindent Everything except the \texttt{msis00} and \texttt{msis21} density backends works without
+any of it.
+
+\section{Building the compiled parts}
+\begin{lstlisting}
+NonGravForces.buildMex                 % all targets
+NonGravForces.buildMex('Check', true)  % report only: what is built, and from which sources
+\end{lstlisting}
+
+\noindent There are five targets: \texttt{msis}, \texttt{msis21}, \texttt{hwm14}, \texttt{kernel}
+(the single-epoch force kernel) and \texttt{rhs} (the integrator's right-hand side, which needs
+\texttt{gjToolbox}). \texttt{buildMex} reports an unbuildable target rather than raising, so a user
+without \texttt{gjToolbox} still gets the other four.
+
+\section{Verifying the installation}
+\begin{lstlisting}
+runNgfTests                      % the suite; 'ExcludeSlow', false adds the speed tag
+NonGravForces.dependencyReport   % what is present, which version, and what is missing
+doc NonGravForces                % the browsable documentation
+\end{lstlisting}
+
+\noindent If you want exactly what continuous integration runs --- dependencies installed from the
+sibling folders, the suite, and a single verdict --- run \texttt{matlab -batch ciGate}. It raises
+\texttt{NonGravForces:ciGate:red} on any failure, so a batch call exits non-zero. It restores your
+saved MATLAB path afterwards: dependency setups call \texttt{savepath}, and a gate has no business
+rewriting your environment.
+
+\section{When something goes wrong}
+\begin{description}[leftmargin=1.4em,style=nextline]
+\item[\texttt{buildMex} says it cannot find a compiler.] Install the MinGW-w64 support package from
+ the Add-On Explorer. The toolbox does not attempt to install it for you.
+\item[A MEX file cannot be overwritten on Windows.] A mapped DLL is locked, and so is every ancestor
+ folder. Restart MATLAB and build before calling anything else; \texttt{clear mex} was measured not
+ to release it once an OpenMP thread pool is live.
+\item[A test is \emph{incomplete} rather than failing.] It skipped because a fixture is missing.
+ Fixtures are committed, never fetched, precisely so that this cannot happen --- if it does, the
+ checkout is damaged.
+\item[\texttt{density} refuses with \texttt{inputDrivers}.] The \texttt{msis} backends need space
+ weather. Pass a CelesTrak \texttt{spaceWeather} struct, or explicit
+ \texttt{'Drivers', struct('f107',\ldots,'f107a',\ldots,'ap',\ldots)}.
+\end{description}
+
+
+%=======================================================================================
+\chapter{Theory and implementation}
+\label{ch:theory}
+
+\noindent The sections of this chapter are shared, verbatim, with the standalone reference
+document \texttt{NonGravForces\_Theory\_and\_Implementation.pdf}: both documents input one
+source, so the theory exists once and cannot differ between them. Equations are given in the
+form the code implements, and every approximation is named with its magnitude.
+
+\input{theory_body}
+%=======================================================================================
+\chapter{Practical implementation}
+\label{ch:practical}
+
+\section{\texttt{Options}: the fidelity ladder}
+An \texttt{Options} object is a validated, immutable option set. Three presets fix the default tier
+of every model family:
+
+\begin{table}[h]\centering\footnotesize
+\begin{tabular}{@{}llll@{}}\toprule
+ & \texttt{fast} & \texttt{standard} & \texttt{precise}\\\midrule
+\texttt{drag.density} & exponential & NRLMSISE-00 & NRLMSIS 2.1\\
+\texttt{drag.wind} & co-rotation & co-rotation & co-rotation (HWM14 opt-in)\\
+\texttt{drag.gsi} & \texttt{constantCd} & Sentman & Sentman\\
+\texttt{drag.accommodation} & fixed 0.85 & fixed 0.85 & fixed 0.85\\
+\texttt{srp.eclipse} & conical & conical & SOLAARS-CF\\
+\texttt{erp.backend} & none & Knocke & CERES\\
+\texttt{erp.grid} & --- & $12\times24$ & $24\times48$\\
+\texttt{thermal.model} & none & steady state & steady state (transient opt-in)\\
+\texttt{geom.selfShadow} & none & LUT 16 & LUT 32\\
+\texttt{sun.source} & analytic & analytic & DE440\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{lstlisting}
+opt = NonGravForces.Options("standard");
+opt = NonGravForces.Options("precise", "drag.wind", "hwm14");   % an opt-in extension
+opt = opt.set("srp.tsi", 1367);        % a COPY: Options is a value class
+\end{lstlisting}
+
+\noindent Two rules make this safe to rely on. \textbf{Every admissible value evaluates}: a value
+the toolbox cannot compute is not offered, so an option that validates will not fail three layers
+down. And \textbf{extended models are opt-ins that no preset enables} --- HWM14 winds, the transient
+thermal model, body torques --- so preset results never move when a new model lands.
+
+An option a model does not read is not silently ignored when it contradicts the choice:
+\texttt{Model} refuses a non-empty \texttt{drag.alpha} beside a computed accommodation, a
+\texttt{maxwell} gas without a specular fraction, and \texttt{walker2014} without a surface mass.
+
+\section{\texttt{Model}: the single point of access}
+\begin{lstlisting}
+M = NonGravForces.Model(macro, opt, 'Attitude', att, 'Eop', eop, 'SpaceWeather', sw);
+
+[a, info]      = M.accel(epoch, r, v, q);      % 3xK m/s^2, body frame by default
+[tau, info]    = M.torque(epoch, r, v, q);     % 3xK N m
+[a, tau, info] = M.evaluate(epoch, r, v, q);   % both from ONE environment pass
+T              = M.series(epoch, r, v, q);     % timetable, chunked, optionally parfor
+[J, names]     = M.partials(epoch, r, v, q, 'WithRespectTo', ["r","v","cdScale"]);
+B              = M.budget(epoch, r, v, q);     % per-effect table
+\end{lstlisting}
+
+\noindent \texttt{accel} and \texttt{torque} are two reductions of \emph{the same} per-panel force
+array: $\vv F=\sum_k\vv F_k$ and $\vv\tau=\sum_k(\vv c_k-\vv r_{cm})\times\vv F_k$. They cannot
+disagree about the physics because they are not two implementations of it. If you want both, call
+\texttt{evaluate} and pay for the environment once.
+
+\texttt{info} carries the environment the evaluation actually saw --- density, species, gas
+temperature, relative velocity, the shadow fractions, the panel temperatures --- and
+\texttt{info.provenance}, which records the toolbox and dependency versions, the option hash, the
+files read and the warnings raised. A result that cannot say where it came from is not a result.
+
+\section{Three evaluation paths, all first class}
+This is a design ruling, not an optimisation, and it is worth understanding before you choose one.
+
+\begin{description}[leftmargin=1.4em,style=nextline]
+\item[The vectorised MATLAB path.] \texttt{Model.accel} and \texttt{Model.series} over an arc. This
+ is normative: everything else is verified against it, never the reverse.
+\item[The compiled single-epoch kernel.] \texttt{kernel.singleEpoch}, a hand-written C port of the
+ force kernel, for a pointwise right-hand side.
+\item[The native chain.] \texttt{app.DynamicsSource} evaluates the \emph{whole} chain in C over
+ tables built once per run, for an integrator's inner loop (Chapter~\ref{ch:integrator}).
+\end{description}
+
+\noindent Neither replaces the other and none is justified by speed. \texttt{Model} gains no
+\texttt{'Backend'} option, because that would make one a mode of another. The price of this choice
+is that they must agree, and that agreement is asserted: the native evaluator matches
+\texttt{Model.accel} to $2.5\times10^{-14}$ relative at a table node, in seven configurations chosen
+to reach every branch.
+
+\section{Errors, warnings and what they mean}
+Every error identifier is \texttt{NonGravForces:<unit>:<mnemonic>}, where the mnemonic's first token
+is one of \texttt{input}, \texttt{dep}, \texttt{data}, \texttt{numeric}, \texttt{unsupported} or
+\texttt{notImplemented}, and every message ends with the correction after ``\texttt{ -> }''. Errors
+from a dependency propagate unwrapped: a \texttt{referenceSystem:} identifier means that toolbox
+said it, and re-badging it here would hide where the fault is.
+
+Only two units may \emph{warn}. \texttt{dependencyReport} reports what is installed.
+\texttt{kernel.accommodation} warns when a computed accommodation model is evaluated outside the
+range it was fitted in:
+
+\begin{lstlisting}
+Warning: accommodation walker2014: 600 of 600 epochs lie outside the atomic-oxygen partial
+pressure of 1e-5 Pa and above, which is below about 300 km. The returned coefficient is an
+extrapolation of a fitted model -> read info.insideFit, choose a fixed alpha (March et al. 2021
+recommend 0.85), or silence this with warning('off', 'NonGravForces:accommodation:outsideFit').
+\end{lstlisting}
+
+\noindent \textbf{This warning will fire on GRACE-FO}, and that is its purpose --- see
+\S\ref{sec:lim-accommodation}. Silence it with \texttt{warning('off', \ldots)} once you have decided
+the extrapolation is what you want.
+
+%=======================================================================================
+\chapter{Driving an orbit integrator}
+\label{ch:integrator}
+
+\section{What this interface is for}
+An integrator calls its right-hand side many times per step, at times it chooses, non-monotonically,
+and often repeatedly at the same $t$. That is a different problem from evaluating an arc: the
+per-call cost dominates, and anything that can be computed once per run should be.
+
+\texttt{app.DynamicsSource} subclasses \texttt{gjToolbox.DynamicsSource}, that toolbox's frozen
+dynamics interface. It builds time tables once at \texttt{prepare} --- Earth orientation, attitude
+nodes, space-weather bins, the Sun and Moon, the CERES month --- and then evaluates the whole force
+chain in C against them.
+
+\section{Using it}
+\begin{lstlisting}
+M   = NonGravForces.Model(macro, NonGravForces.Options("standard"), ...
+          'Attitude', att, 'Eop', eop, 'SpaceWeather', sw);
+
+src = NonGravForces.app.DynamicsSource(M, 'Epoch', t0_tai, ...
+          'Margin_s', 30, 'TableStep_s', 60);
+
+src = src.prepare(struct('Span', [0 5400], 'StencilSpan', [0 5400], 'MaxColumns', 1));
+
+a   = src.accel(t, r, v);        % t seconds from 'Epoch'; r, v in GCRS
+\end{lstlisting}
+
+\noindent \texttt{'Epoch'} is the TAI datetime that $t=0$ means. \texttt{'Margin\_s'} widens the
+tables beyond the span you declare, because an integrator's stencil reaches outside the interval it
+is integrating. \texttt{'TableStep\_s'} is the table spacing: \SI{60}{\second} costs
+$8\times10^{-11}$ relative between nodes, and the error falls as the fourth power of the step.
+
+\section{Native or vectorised}
+\begin{lstlisting}
+src = NonGravForces.app.DynamicsSource(M, 'Epoch', t0, 'Native', false);   % MATLAB binding
+\end{lstlisting}
+
+\noindent With \texttt{'Native'} true (the default when the \texttt{rhs} MEX is built) the chain runs
+in C. With false it runs the MATLAB path over the same tables. The two agree to rounding, and the
+MATLAB binding exists so that a user without a compiler can still integrate, and so that a parity
+difference can be localised.
+
+\texttt{src.diagnostics(t, r, v)} returns what the native evaluator computed on the way to one
+acceleration --- the three effects separately, the density, the species, the gas temperature, the
+relative velocity, the sub-satellite point, the eclipse factor, the mass and the attitude matrix. It
+is how you find \emph{where} two implementations differ rather than only that they do.
+
+\section{What it refuses, and why that is a feature}
+\begin{itemize}[leftmargin=1.4em]
+\item \texttt{thermal.model = "transient"} --- it carries temperatures from epoch to epoch, and an
+ integrator calls the right-hand side non-monotonically and repeatedly at one $t$. There is no
+ correct answer, so there is no answer.
+\item \texttt{geom.selfShadow = "raycast"} --- a ray cast per direction is not an inner loop.
+\item \texttt{erp.backend = "ceresClimatology"} --- it reads a 64\,800-cell monthly grid, which is
+ not table material.
+\item An attitude provider built with \texttt{"squad"} --- the native evaluator interpolates by
+ slerp.
+\end{itemize}
+
+\noindent Each of these \emph{refuses at construction}, immediately, rather than degrading. The
+alternative was worse than it looks: the option name is mapped to a C enum by position, and a name
+the C does not know would map to zero --- which is \texttt{"none"}. A model that computes Earth
+radiation would have quietly become one that does not, on the native path only.
+%=======================================================================================
+\chapter{A GRACE-type processing chain, step by step}
+\label{ch:walkthrough}
+
+This chapter builds a processing chain from nothing, using only the fixtures committed to the
+repository, so you can run it as you read. \textbf{Every number printed below was produced by
+running this code}, not composed for the document.
+
+The excerpt is 600 seconds of GRACE-C on 2020-01-01. That is deliberately short: it is enough to
+show the chain and, as \S\ref{sec:cal-short} explains, too short to determine a scale factor ---
+which is itself worth seeing.
+
+\section{Step 1: the auxiliary data}
+\begin{lstlisting}
+root = 'C:\path\to\NonGravForces';
+f = @(varargin) fullfile(root, 'data', varargin{:});
+
+eop = referenceSystem.readEop(f('eop', 'finals2000A_2019-09_2020-03.all'));
+sw  = NonGravForces.io.spaceWeather(f('spaceweather', 'SW-All_2019-09_2020-03.csv'));
+\end{lstlisting}
+
+\noindent Earth orientation comes from \texttt{referenceSystem}, not from here. Space weather is the
+CelesTrak file; \texttt{io.spaceWeather} returns a struct carrying a \texttt{query} function, and
+the \texttt{msis} density backends take it directly.
+
+\section{Step 2: orbit and attitude}
+\begin{lstlisting}
+[ep, r, v] = NonGravForces.io.readGNV1B(f('samples','GNV1B_2020-01-01_C_04.txt'), 'Eop', eop);
+[eq, q]    = NonGravForces.io.readSCA1B(f('samples','SCA1B_2020-01-01_C_04.txt'));
+att        = NonGravForces.geom.AttitudeProvider(eq, q);
+\end{lstlisting}
+
+\noindent \textbf{Two traps live in this step, and a reader should know they are already handled.}
+GNV1B is Earth-fixed (ITRS), not inertial --- \texttt{readGNV1B} rotates it through
+\texttt{referenceSystem.rotationItrsToGcrs}, which also produces the velocity correctly, and a GPS
+time tag is not UT1. And SCA1B is ICRF$\to$SRF, so it must be conjugated exactly \emph{once} to give
+BODY$\to$GCRS. Doing it twice, or not at all, produces an attitude that looks plausible and is
+wrong; \texttt{geom.checkAttitudeSense} exists to catch precisely that.
+
+\section{Step 3: the spacecraft}
+\begin{lstlisting}
+macro = NonGravForces.geom.graceFO("C");
+\end{lstlisting}
+
+\noindent \texttt{geom.graceFO} builds the handbook panel model. Use \texttt{geom.boxWing} for a
+generic satellite, or \texttt{geom.MacroModel} directly if you have your own panels.
+
+\textbf{Do not take the mass from MAS1B.} That product is cold-gas \emph{tank} mass, about
+\SI{30}{\kilo\gram} in total, not spacecraft mass; using it gives accelerations 20 to 40 times too
+large. \texttt{io.massModel} defaults to the handbook constant and asserts that the result exceeds
+\SI{500}{\kilo\gram}.
+
+\section{Step 4: the options and the model}
+\begin{lstlisting}
+opt = NonGravForces.Options("standard");
+M   = NonGravForces.Model(macro, opt, 'Attitude', att, 'Eop', eop, 'SpaceWeather', sw);
+\end{lstlisting}
+
+\section{Step 5: evaluate, and look at the environment it saw}
+\begin{lstlisting}
+idx = 1:200;
+e   = referenceSystem.daySecondToEpoch([ep.day(idx) ep.sec(idx)], ep.scale);
+[a, info] = M.accel(e, r(:, idx), v(:, idx));
+\end{lstlisting}
+
+\noindent \texttt{info} is not a diagnostic afterthought: it carries the density, the species, the
+relative velocity, the shadow fractions, the panel temperatures and the accommodation the
+evaluation actually used, plus the provenance of all of it.
+
+\section{Step 6: which effect carries the arc}
+\begin{lstlisting}
+B = M.budget(e, r(:, idx), v(:, idx));
+\end{lstlisting}
+
+\section{Step 7: compare with the measured accelerations}
+\begin{lstlisting}
+[epa, aMeas] = NonGravForces.io.readACC1B(f('samples','ACT1B_2020-01-01_C_04.txt'));
+[tf, loc]    = ismember(ep.sec(idx), epa.sec);
+am           = aMeas(:, loc(tf));
+\end{lstlisting}
+
+\noindent Compare \emph{shape}, not level. The measured along-track is dominated by instrument bias
+drift over an excerpt this short, so its correlation means nothing; cross-track and radial are the
+informative axes.
+
+\section{Step 8: calibrate}
+\label{sec:cal-short}
+\begin{lstlisting}
+cal = NonGravForces.app.calibrate(am, a, e, 'Bias', "constant", 'Scale', "diag");
+\end{lstlisting}
+
+\section{What this chain actually prints}
+\begin{lstlisting}
+--- Step 1: the auxiliary data -------------------------------------------
+EOP rows 213, space weather family celestrak
+
+--- Step 2: orbit and attitude -------------------------------------------
+GNV1B epochs 600 (GPS), |r| = 6885.4 km, |v| = 7.5970 km/s
+SCA1B quaternions 600, provider method slerp
+
+--- Step 3: the spacecraft ----------------------------------------------
+panels 8, area sum 16.9163 m^2, mass 601.214 kg
+silhouette defect |sum A_k n_k| = 1.406e-01 m^2
+   (zero only for a CLOSED body; the 8-panel GRACE-FO model is an open box-wing,
+    so a non-zero value here is expected and is not a fault)
+
+--- Step 4: the options and the model ------------------------------------
+preset standard: density msis00, gsi sentman, accommodation fixed (alpha 0.85), erp knocke, thermal steadyState
+
+--- Step 5: evaluate over an arc -----------------------------------------
+epochs 200, |a| RMS 2.4555e-08 m/s^2
+   drag      7.6358e-09   (31.1 % of the total RMS)
+   radiation 2.3439e-08
+   thermal   5.5046e-09
+info fields: frame, K, rho, nu, mass_kg, vrel_body, sources, temperature_K, flowShadow, accommodation, lla, backends, drag, radiation, thermal, provenance
+density 4.5107e-14 kg/m^3, |v_rel| 7594.2 m/s
+
+--- Step 6: the per-effect budget ----------------------------------------
+      effect        rms_norm
+    ___________    __________
+
+    "drag"         7.6358e-09
+    "radiation"    2.3439e-08
+    "thermal"      5.5046e-09
+    "total"        2.4555e-08
+
+
+--- Step 7: compare with the measured accelerations ----------------------
+cross-track correlation with ACT1B  0.9722
+radial      correlation with ACT1B  0.9954
+
+--- Step 8: calibrate ----------------------------------------------------
+estimated bias  [-3.15e-07 -1.13e-05 -1.61e-07] m/s^2
+estimated scale [0.16 0.6965 0.8529]
+sigma0 per axis [1.26e-10 1.7e-10 8.77e-11] m/s^2
+condition number per axis [57 46 7]
+\end{lstlisting}
+
+\noindent \textbf{Read the last block sceptically, because it is the lesson.} The recovered scale
+factors are \num{0.16}, \num{0.70} and \num{0.85}, with condition numbers 57, 46 and 7. A scale
+factor is determined by the \emph{spread} of the modelled signal across the arc, and 200 seconds of
+a 90-minute orbit carries almost none: the estimate is badly conditioned and those numbers are not
+to be believed. The bias is far better determined, because a bias is a constant design column and
+its uncertainty falls as $1/\sqrt{K}$.
+
+Compare \S\ref{sec:ex-cal}, where the same estimator recovers a \emph{planted} scale to four parts
+in $10^{16}$ on an arc built to determine it. The estimator is not the problem; the arc is.
+\textbf{Use hours rather than minutes, and read \texttt{cal.condition} before believing
+\texttt{cal.scale}.}
+
+Note also the silhouette defect of \SI{0.14}{\metre\squared} in step~3. That quantity is zero for a
+\emph{closed} body; the 8-panel GRACE-FO model is an open box-wing, so a non-zero value there is
+expected and is not a fault.
+%=======================================================================================
+\chapter{Worked examples}
+\label{ch:examples}
+
+Four runnable demonstrations ship in \texttt{demos/}. The test suite executes every one of them on
+every run --- not for their numbers, which the unit tests already bound, but because \textbf{a demo
+nobody executes rots}, exactly as one of this project's own documentation pages once did. What
+follows is what they print.
+
+\section{Which effect carries the arc, and what a modelling choice costs}
+\begin{lstlisting}
+demoForceBudget
+\end{lstlisting}
+\begin{lstlisting}
+Per-effect budget over 10 epochs, body frame:
+
+      model         effect        rms_norm      share
+    __________    ___________    __________    _______
+
+    "fast"        "drag"         1.0287e-07     1.1502
+    "fast"        "radiation"    2.5663e-08    0.28695
+    "fast"        "thermal"               0          0
+    "fast"        "total"        8.9433e-08          1
+    "standard"    "drag"         8.4956e-09    0.32603
+    "standard"    "radiation"    2.5001e-08    0.95945
+    "standard"    "thermal"      5.9707e-09    0.22914
+    "standard"    "total"        2.6057e-08          1
+
+The share column is formed from rms_norm, so it can sum to more than one when two
+effects partly cancel in the total. That is a property of the arc, not an error,
+which is why the total row is reported beside them.
+\end{lstlisting}
+
+\noindent The \texttt{fast} preset overstates the drag by an order of magnitude here, because its
+exponential atmosphere is a stand-in rather than a model, and it carries no thermal term at all. The
+point is not that \texttt{fast} is wrong: a fidelity tier is a statement about which physics you are
+prepared to omit, and this is what omitting it costs on this arc.
+
+Note the \texttt{share} column summing above one. That is a property of the arc rather than an
+error --- the shares are formed from each effect's RMS norm, and two effects that partly cancel in
+the total will exceed it. The total row is printed beside them so that the reader can see it.
+
+\section{Recovering a planted density scale}
+\begin{lstlisting}
+demoDensityInversion
+\end{lstlisting}
+\begin{lstlisting}
+planted scale        1.7000
+recovered, worst     1.700000  (relative error 3.92e-16)
+model density        8.8736e-13 kg/m^3
+inverted density     1.5085e-12 kg/m^3
+residual across drag 5.305e-23 m/s^2  (zero: the scaling was along the drag direction)
+
+Against real data the perpendicular residual is the honest quality flag: it is what
+the density cannot explain, and it grows when the attitude, the radiation model or
+the calibration is wrong.
+\end{lstlisting}
+
+\noindent The inversion is a \emph{division}. The gas force is exactly linear in the species
+densities, so a single model evaluation gives the whole sensitivity, and the planted scale comes
+back to four parts in $10^{16}$ --- which is rounding, not skill. The interesting output is the
+residual across the drag direction: it is what the density cannot explain, and it grows when the
+attitude, the radiation model or the calibration is wrong. \texttt{app.densityInversion} does not
+calibrate and says so.
+
+\section{Recovering a planted bias and scale}
+\label{sec:ex-cal}
+\begin{lstlisting}
+demoGraceFOCalibration
+\end{lstlisting}
+\begin{lstlisting}
+            planted      recovered     formal sigma
+bias x    1.0000e-06   1.0026e-06     9.48e-09
+bias y   -3.0000e-06  -2.9986e-06     3.10e-09
+bias z    2.0000e-07   2.0003e-07     6.08e-10
+scale x       1.0500       1.0204     1.05e-01
+scale y       0.9600       0.8795     2.00e-01
+scale z       1.0100       1.0596     2.63e-01
+
+sigma0 (a-posteriori) 1.866e-09 m/s^2 against a planted 2.0e-09
+
+Those formal sigmas are OPTIMISTIC. The weights are diagonal and accelerometer noise
+is not white; it rises as 1/f below a few mHz. They compare axes and arcs honestly,
+they are not statements of absolute accuracy. Whiten with qc.residuals first if that
+matters.
+\end{lstlisting}
+
+\noindent This is the contrast promised in \S\ref{sec:cal-short}: on an arc built to determine the
+parameters, the same estimator recovers them.
+
+Take the demo's own warning about the formal sigmas seriously. They are optimistic, because the
+weights are diagonal while accelerometer noise is not white --- it rises as $1/f$ below a few
+millihertz. They compare axes and arcs honestly; they are not statements of absolute accuracy.
+Whiten with \texttt{qc.residuals} first if that distinction matters to you.
+
+A planted parameter is the only honest demonstration here, and the demo says so: no ACT1B file for
+this satellite and day existed when it was written.
+
+\section{A cold-atom accelerometer}
+\begin{lstlisting}
+demoCAI
+\end{lstlisting}
+\begin{lstlisting}
+readings per cycle   29 valid of 600 samples (dead time 1.0 s)
+drag phase           1.2232 rad  = 3.0389e-07 m/s^2 equivalent
+wrapped phase        1.2575 rad  (what the instrument returns)
+fringe integer       0  (what the readout cannot tell you)
+
+Coriolis phase       8.8550e+00 rad = 1.409e+00 fringes
+as an acceleration   2.20e-06 m/s^2, against a drag of 3.0e-07
+
+One millimetre per second of atom velocity outweighs the signal several times over. The
+rotation input is not a refinement to this instrument; it has to be measured or compensated.
+\end{lstlisting}
+
+\noindent The headline is not the drag. \textbf{The Coriolis phase is seven times the signal}: one
+millimetre per second of atom velocity relative to the instrument, at GRACE-FO's
+\SI{1.1}{\milli\radian\per\second} nadir-pointing rate, produces an apparent
+\SI{2.2e-6}{\metre\per\second\squared} against a drag of \SI{3e-7}{}. For this instrument the
+rotation input is not a refinement --- it has to be measured or compensated.
+
+Two further details are visible in the output. Only 29 of 600 samples carry a reading, because the
+interrogation time is dead time and \emph{nothing is interpolated across it}; and the readout
+returns a wrapped phase, so the fringe integer is reported separately as the thing the instrument
+cannot tell you.
+%=======================================================================================
+\chapter{Limitations}
+\label{ch:limits}
+
+Everything in this chapter is a property of the toolbox as shipped, measured where a number is
+given. A limitation a user discovers is a defect; a limitation written down is a specification.
+
+\section{Energy accommodation: the presets use a fitted constant}
+\label{sec:lim-accommodation}
+All three presets set \texttt{drag.accommodation = "fixed"} with $\alpha_E=0.85$, the value March
+et al.\ (2021) recommend after optimising a \emph{constant} per mission against attitude manoeuvres
+and wind analyses. The adsorption models --- \texttt{pilinski2010}, \texttt{pilinski2011},
+\texttt{walker2014}, \texttt{sesam} --- are available by name and are not defaults.
+
+This is a ruling, not an approximation, and the reason is measured. At CHAMP's altitude and solar
+activity (\SIrange{300}{350}{\kilo\metre}, $F_{10.7}=70$) \texttt{pilinski2010} returns
+\numrange{0.86}{0.95}, straddling the \numrange{0.85}{0.93} that March et al.\ report for SESAM
+there: \textbf{the adsorption family reproduces the published range where the published range was
+measured}. The same code returns \numrange{0.11}{0.17} at GRACE-FO's \SI{520}{\kilo\metre} in deep
+solar minimum, and \numrange{0.63}{0.83} at that altitude at $F_{10.7}=180$, because the
+atomic-oxygen partial pressure that drives the Langmuir coverage falls by two orders of magnitude
+between them.
+
+So these models predict a factor-of-five swing in GRACE-FO's accommodation over the solar cycle, and
+2020-01-01 --- the day this toolbox is validated on --- sits at its extreme low end. On that day the
+choice is worth \SI{17.5}{\percent} of the drag:
+
+\begin{table}[h]\centering\footnotesize
+\begin{tabular}{@{}lll@{}}\toprule
+\texttt{drag.accommodation} & $\alpha_E$ & drag RMS [\si{\metre\per\second\squared}]\\\midrule
+\texttt{fixed} 0.85 (shipped) & 0.850 & \num{6.8826e-9}\\
+\texttt{fixed} 0.93 (Doornbos 2011, superseded) & 0.930 & \num{6.6158e-9}\\
+\texttt{walker2014} & \numrange{0.116}{0.164} & \num{8.0886e-9}\\
+\texttt{pilinski2010} & \numrange{0.051}{0.098} & \num{8.1882e-9}\\
+\texttt{pilinski2011} & \numrange{0.034}{0.067} & \num{8.2164e-9}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent For accelerometer calibration that is not a refinement: it is absorbed by the estimated
+scale factor and propagates into any density inverted from it. If you select a computed model, the
+toolbox warns once per call that it is extrapolating, and \texttt{info.insideFit} says which epochs.
+
+\section{Gas--surface interaction: CLL is refused}
+\texttt{drag.gsi} offers \texttt{sentman}, \texttt{maxwell} and \texttt{constantCd}. The
+Cercignani--Lampis--Lord model is \emph{not} offered and is refused by name. Walker et al.\ (2014)
+publish closed forms for \emph{whole bodies} --- sphere, cylinder, and a flat plate at normal
+incidence only --- and defer arbitrary orientation to a source this project does not hold. This
+kernel needs per-panel $C_p$ and $C_\tau$ at arbitrary incidence, which no equation in that paper
+provides. Offering a CLL that silently used the normal-incidence form would be worse than refusing.
+
+\section{Earth radiation: no diurnal cycle}
+\texttt{erp.backend = "ceres"} uses monthly CERES EBAF fluxes; \texttt{"ceresClimatology"} uses the
+1\textdegree\ GROOPS monthly climatology. \textbf{Neither carries a diurnal cycle}, whatever the
+file is named --- the GROOPS file is called SYN1deg but is a monthly mean. The albedo is applied to
+the \emph{instantaneous} insolation, which restores the day side; the longwave is a monthly mean and
+is not corrected for local time. The hourly SYN1deg product would fix this and is not implemented.
+
+\texttt{"ceresClimatology"} additionally has \textbf{no native evaluator}: it reads a 64\,800-cell
+grid, which is not table material for an integrator, and \texttt{app.DynamicsSource} refuses it at
+construction.
+
+\section{Thermal re-radiation: the literature disagrees with itself}
+The presets model thermal re-radiation instantaneously (\texttt{thermal.model = "steadyState"}).
+Two peer-reviewed results disagree about whether that helps:
+
+\begin{itemize}[leftmargin=1.4em]
+\item Hładczuk et al.\ (2024), GRACE-FO: adding instantaneous re-radiation to a panel model takes
+ the cross-track residual from \SI{4.22}{} to \SI{3.04}{\nano\metre\per\second\squared}, and thermal
+ inertia takes it to \SI{1.70}{}. It helps.
+\item Vielberg \& Kusche (2020), GRACE-A: instantaneous re-radiation fits ``more than \SI{39}{\percent}
+ worse'' to calibrated cross-track accelerations, and ``did not lead to improvements''. It hurts.
+\end{itemize}
+
+\noindent The presets follow the first: it is the right satellite, four years later, and its
+Section~3 repairs the cross-track calibration that the second names as a possible cause of its own
+result --- it also names neglected horizontal winds, which this toolbox models and that study did
+not. \textbf{It is an open question in the field.} Set \texttt{thermal.model = "none"} to take the
+other position.
+
+There is also no exact per-axis TRP oracle for GRACE-FO in the literature this project holds. What
+is verified is the magnitude: \SI{5.263}{\nano\metre\per\second\squared} cross-track here, between
+the \SI{4.22}{} that Hładczuk et al.\ leave when they omit the term and the \SI{6.4}{} Siemes et al.\
+(2023) publish for GRACE-A.
+
+\section{Cost}
+\texttt{Model.accel} costs \textbf{\SI{88}{\milli\second} per epoch} in the \texttt{standard} preset,
+which is \SI{2.1}{\hour} for a day at \SI{1}{\hertz}. It is dominated by \texttt{geom.selfShadow}
+interpolating 577 source directions per epoch. The \texttt{fast} preset is \SI{2}{\milli\second}.
+This is accepted as a stated cost rather than a defect; if you need a full day at full rate, use
+\texttt{Model.series} with \texttt{parfor}, or the native path of Chapter~\ref{ch:integrator}.
+
+\section{What is not modelled at all}
+\begin{itemize}[leftmargin=1.4em]
+\item \textbf{Gravity}, in any form. $T=\partial\vv g/\partial\vv r$ enters
+ \texttt{sensor.Electrostatic}'s CoM coupling and must be supplied by the caller in
+ \texttt{dyn.gravityGradient}; without it that term is omitted and \texttt{info.gradient} says
+ \texttt{"none"}. For GRACE-FO's few-hundred-micrometre offset it is of order
+ \SI{e-12}{\metre\per\second\squared}.
+\item \textbf{Antenna thrust and Lorentz forces} ($\lesssim\SI{e-11}{\metre\per\second\squared}$):
+ hooks only.
+\item \textbf{The CRN filter} of the Level-1B accelerometer product.
+ \texttt{sensor.Electrostatic} applies an FIR kernel \emph{you supply}; it constructs none, because
+ the defining paper has not been read for this implementation and a guessed filter compared against
+ real data is a comparison between two different bandwidths.
+\item \textbf{A GROOPS cross-validation.} The reader and writer of GROOPS instrument files have
+ never been checked against a real GROOPS installation.
+\end{itemize}
+
+\section{Data the toolbox does not ship}
+Level-1B products, CERES grids, the DE440 ephemeris and the atmosphere model sources are fetched or
+supplied by you, never redistributed. One consequence is worth stating rather than discovering:
+\textbf{the demos do not run from an installed copy without the data}, because they need the
+2020-01-01 GRACE-C arc.
+
+%=======================================================================================
+\appendix
+\chapter{Complete API}
+\label{ch:api}
+\input{api_generated}
+
+%=======================================================================================
+\chapter{References}
+\input{references}
+
+\end{document}
+
