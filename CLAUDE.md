@@ -606,6 +606,14 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   rule. Assert the ratio; record the absolute with a ceiling an order of magnitude above it.
 - **When the MCP bridge is down, CI is still a MATLAB tier**: push the branch, let the `matlab`
   job run `ciGate`, read `tests/last_run.txt` from the run artefact. That is how LP-6b was verified.
+- **ASK WHETHER THE PR MERGED BEFORE PUSHING A FOLLOW-UP TO ITS BRANCH.** `main` is not protected
+  against this and git will not warn: when a PR is merged the branch is deleted, and a later `git
+  push` to that name SILENTLY RECREATES it. The push succeeds, `git ls-remote` confirms the SHA, and
+  **no CI runs at all**, because no open PR points at it — a green-looking push that was never
+  tested. The tell is `* [new branch]` in the push output for a branch that already existed; read
+  it. This happened twice on 2026-09-18, once after #54 merged and once after #55. Recovery is
+  cheap (branch from HEAD, push, open a new PR, delete the recreated one) but only if it is noticed,
+  and the failure mode is indistinguishable from success in every check except the run list.
 - **RE-RUN `auditPackage.py` AFTER THE GATE, NOT BEFORE IT.** The gate writes `tests/last_run.txt`
   and check 11 compares `README.md`'s quoted test count against it, so an audit run before the gate
   is an audit of the previous run's numbers. On 2026-09-18 that reddened CI on a branch whose local
