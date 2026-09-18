@@ -2,6 +2,15 @@ classdef MacroModel
 %MACROMODEL Panel ("macro") geometry of a spacecraft, frozen and validated once.
 %
 %   mm = NonGravForces.geom.MacroModel(panels, 'Name', "GRACE-C", 'Inertia', I)
+%   s  = mm.silhouetteDefect()     % 3x1; zero for a closed convex body
+%
+% METHODS
+%   s = silhouetteDefect(obj)  sum_k A_k n_k, the area-weighted sum of the outward normals, 3x1
+%                              in the body frame. It is ZERO for a closed convex body, so it is
+%                              the one-line check that a panel set closes: a non-zero value means
+%                              the panels do not enclose a volume, usually a missing face or a
+%                              normal pointing inward. It is a DIAGNOSTIC and no force reads it;
+%                              geom.graceFO's own tests assert it against the handbook geometry.
 %
 %   PANELS is a struct array, one element per surface element, with fields
 %     name        string     label
@@ -65,6 +74,30 @@ classdef MacroModel
 %   centreOfMass    3x1 double m, body frame (origin = ACC proof mass for GRACE-FO)
 %   proofMassOffset 3x1 double m, CG -> proof mass (CoM-coupling term, LP-7)
 %   reference   string     source of the numbers
+%
+% NAME-VALUE ARGUMENTS
+%   The properties above are read-only once built; these are how they are SET at construction.
+%   The names are PascalCase where the properties they fill are camelCase, and three of them were
+%   described nowhere in this help until 2026-09-18 -- the property was documented and the way to
+%   fill it was not, which is a gap a reader cannot close by guessing.
+%
+%   Name             Size  Type    Units      Description
+%   ----             ----  ----    -----      -----------
+%   Name             1x1   string  -          Model label, e.g. "GRACE-C"; default ""
+%   Inertia          3x3   double  kg m^2     Inertia tensor about the CoM, body frame; default NaN(3).
+%                                             Required by kernel.bodyTorques' gravity-gradient term.
+%   CentreOfMass     3x1   double  m          CoM in the body frame, whose ORIGIN for GRACE-FO is the
+%                                             accelerometer proof mass; default zeros. Read by the
+%                                             torque reduction as the point moments are taken about.
+%   ProofMassOffset  3x1   double  m          CG -> proof mass, body frame; default zeros. This is the
+%                                             `dr` of sensor.Electrostatic's CoM-coupling term, and it
+%                                             is NOT the negative of CentreOfMass in general: the two
+%                                             are independent statements about the same geometry, and
+%                                             a model that carries one need not carry the other.
+%   Reference        1x1   string  -          Provenance of the numbers, e.g. "JPL D-56935 Tab.4";
+%                                             default "". Carried into provenance, never computed with.
+%   Mass_kg          1x1   double  kg         Spacecraft mass; default NaN (a Model then needs 'Mass').
+%                                             MAS1B is COLD-GAS TANK mass, not this: see io.massModel.
 %
 % ERRORS
 %   NonGravForces:MacroModel:inputPanels     missing field / wrong shape; internalShare or Mass_kg invalid

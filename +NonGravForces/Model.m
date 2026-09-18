@@ -11,6 +11,44 @@ classdef Model
 %   [J, names, info] = M.partials(epoch, r, v, q, 'WithRespectTo', ["r","v","cdScale"])
 %   B                = M.budget(epoch, r, v, q)                      % per-effect table
 %
+% METHOD NAME-VALUE ARGUMENTS
+%   Every method takes 'Frame', "body" (default) or "gcrs". These are the rest, and none of them
+%   appeared in this help until 2026-09-18: a caller could pass them, the code validated them, and
+%   the class that is this toolbox's single point of access described them nowhere.
+%
+%   Method      Name           Size   Type    Units   Description
+%   ------      ----           ----   ----    -----   -----------
+%   torque      B_body         3xK    double  T       Magnetic field at the satellite, BODY frame.
+%   evaluate                                          Required by the magnetic torque and by nothing
+%                                                     else; default [] and the term is omitted. Get
+%                                                     it from env.magneticField, rotated to the body.
+%   torque      Dipole_Am2     3x1    double  A m^2   Residual magnetic dipole of the spacecraft,
+%   evaluate                                          body frame; default []. The torque is
+%                                                     m x B, so BOTH of these are needed or neither
+%                                                     is: one alone leaves the term out silently.
+%                                                     torques.magnetic must also be true.
+%   evaluate    T0_K           Nx1    double  K       Initial panel temperatures for a TRANSIENT
+%                                                     thermal model, one per panel; default [] and
+%                                                     the steady state is used as the start. Ignored
+%                                                     by thermal.model "none" and "steadyState".
+%   series      Quantities     1x2    string  -       "accel" (default), "torque", or both. Selects
+%                                                     which columns the timetable carries; a torque
+%                                                     column costs the torque reduction, which accel
+%                                                     alone does not pay for.
+%   partials    Method         1x1    string  -       "" (default: the Options' partials.method),
+%                                                     "analytic" or "finiteDiff". analytic uses
+%                                                     kernel.partials' closed forms; finiteDiff is a
+%                                                     central difference in the parameter, for
+%                                                     cross-checking the analytic form. A complex
+%                                                     step is NOT offered and is refused by name:
+%                                                     MATLAB's erf, erfc and every norm in the chain
+%                                                     discard the imaginary part (measured
+%                                                     2026-09-08).
+%   partials    WithRespectTo  1xP    string  -       Any of "r", "v" (default ["r" "v"]),
+%                                                     "cdScale", "crScale", "alpha". alpha is
+%                                                     refused for a two-state surface, which
+%                                                     computes its own coverage.
+%
 %   The Model owns the packed macro model, the attitude provider, the mass, the
 %   Earth-orientation, space-weather, ephemeris and CERES sources, the resolved
 %   Options and the self-shadow table. It computes forces and torques and nothing
