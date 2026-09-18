@@ -607,7 +607,7 @@ Every one of these was an actual defect found in a predecessor or a dependency.
 - **When the MCP bridge is down, CI is still a MATLAB tier**: push the branch, let the `matlab`
   job run `ciGate`, read `tests/last_run.txt` from the run artefact. That is how LP-6b was verified.
 - **ONE WARM-UP CALL IS NOT WARM.** `tools/benchmark.m` warmed once before timing, and on 2026-09-18
-  that cost a factor of 5.7 on `kernel.singleEpoch` (2.44 ms against a settled 0.456) and 7.8 on the
+  that cost a factor of 5.4 on `kernel.singleEpoch` (2.44 ms against a settled 0.456) and 7.8 on the
   fast preset at K=1 (31.9 against 4.00). The evidence had been visible for an hour without being
   read: three consecutive invocations in one MATLAB process, the first reporting the high value and
   the next two agreeing on the low one. It warms five times now. **An argument had already been
