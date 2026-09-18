@@ -606,6 +606,14 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   rule. Assert the ratio; record the absolute with a ceiling an order of magnitude above it.
 - **When the MCP bridge is down, CI is still a MATLAB tier**: push the branch, let the `matlab`
   job run `ciGate`, read `tests/last_run.txt` from the run artefact. That is how LP-6b was verified.
+- **RE-RUN `auditPackage.py` AFTER THE GATE, NOT BEFORE IT.** The gate writes `tests/last_run.txt`
+  and check 11 compares `README.md`'s quoted test count against it, so an audit run before the gate
+  is an audit of the previous run's numbers. On 2026-09-18 that reddened CI on a branch whose local
+  audit had been clean twice: two tests were added, the gate recorded 381, `README.md` still said
+  379, and nothing had re-read the pair. **A check is only evidence about the moment it ran.** The
+  same mistake in a different costume cost a CI wait the same day: a loop that asked "are any checks
+  pending?" was satisfied by the PREVIOUS commit's completed checks and reported green for code CI
+  had never seen. Pin the query to the SHA, and re-run the cheap check last.
 - **ONE WARM-UP CALL IS NOT WARM.** `tools/benchmark.m` warmed once before timing, and on 2026-09-18
   that cost a factor of 5.4 on `kernel.singleEpoch` (2.44 ms against a settled 0.456) and 7.8 on the
   fast preset at K=1 (31.9 against 4.00). The evidence had been visible for an hour without being
