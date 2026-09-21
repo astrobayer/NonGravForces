@@ -425,9 +425,17 @@ this toolbox uses is now fetched, never redistributed, and each is recorded in
 `THIRD-PARTY-NOTICES.md`. Corrected 2026-09-16 (LP-C WP-C12); it had been wrong for a week because
 nothing compares this file with the repository.
 
-**Version rule (decided 2026-09-06):** the numeric fields of `toolboxVersion`
-are the authority and `semantic` is composed from them; minor = levels
-delivered, patch = HANDOVER amendment. `auditPackage.py` compares every copy
+**Version rule (owner's ruling, 2026-09-21 — supersedes the local rule of
+2026-09-06):** the numeric fields of `toolboxVersion` are the authority and
+`semantic` is composed from them. **MAJOR is a breaking interface, MINOR is
+added functionality, PATCH is a fix** — one scheme for every repository,
+defined in ci-actions `VERSIONING.md`, which is the authority this file
+merely states. The local rule it replaced (minor = levels delivered, patch =
+HANDOVER amendment) is dead; 0.12.0 is not renumbered, and the meaning
+changes at the next bump. Note that this repository's one DELIBERATE, argued
+deviation from `VERSIONING.md` is a different clause and is untouched: the
+`gracefoReading >= 1.0.1` PATCH minimum of O-12/O-25.
+`auditPackage.py` compares every copy
 (Contents.m, README, doc/html footers) and checks `FunctionList.html` against
 `tools/buildDocs.py`, which regenerates every page of `doc/html` and `helptoc.xml`; run both before every push.
 

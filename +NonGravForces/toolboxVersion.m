@@ -6,11 +6,25 @@ function v = toolboxVersion(format)
 %
 %   THE NUMERIC FIELDS ARE THE AUTHORITY AND THE STRING IS COMPOSED FROM THEM
 %   (rule R1, decision of 2026-09-06): an edit changes major/minor/patch below
-%   and nothing else. Version rule (P-7 as re-based): minor = number of
-%   levels delivered (LP-2 -> 0.2.0), patch = HANDOVER amendment without a code
-%   change. Every copy of the version elsewhere (Contents.m, README.md,
-%   doc/html footers) is compared against this function by auditPackage.py;
-%   tests compare, never pin a literal.
+%   and nothing else. Every copy of the version elsewhere (Contents.m,
+%   README.md, doc/html footers) is compared against this function by
+%   auditPackage.py; tests compare, never pin a literal.
+%
+%   WHAT THE THREE COMPONENTS MEAN (owner's ruling, 2026-09-21). One scheme
+%   governs every repository of this organisation: MAJOR is a breaking
+%   interface, MINOR is added functionality, PATCH is a fix. See ci-actions
+%   VERSIONING.md, which is the authority; this help states the rule, it does
+%   not own it.
+%
+%   THE LOCAL RULE THIS REPLACED, named because a dead rule that is not named
+%   stays alive: minor used to be the number of LEVELS DELIVERED (LP-2 gave
+%   0.2.0) and patch a HANDOVER amendment without a code change. Under that
+%   rule a document edit moved the version and a delivered level moved the
+%   minor whether or not a caller gained anything. 0.12.0 is NOT renumbered -
+%   the ruling says FROM NOW ON, and at 0.y.z there is no stability promise to
+%   revise, which makes this the cheapest possible moment to change meaning.
+%   The levels delivered remain a fact worth recording; they are recorded in
+%   the HANDOVER, not in the version field.
 %
 % INPUT ARGUMENTS
 %   Name     Size  Type   Units  Description
