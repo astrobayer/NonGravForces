@@ -1344,7 +1344,7 @@ this session; the MATLAB suite runs in CI on the self-hosted runner.
   CoG -> proof-mass offset). No version bump: the MINOR bump for the added unit belongs to the release
   that carries it (GUIDE step 13).
 
-**Delivered 2026-09-22, ☑ — verified on the self-hosted CI runner, run `35771831961` (commit `214f632`): `GATE TRUE (388 passed, 0 failed, 0 incomplete, 0 audit shortfalls)`, 14 exempt units. Predicted 388, measured 388. Tier A (local gate) not run: no MATLAB in the session; the runner's run is the MATLAB verdict. The run log is the CI artefact `nonGravForcesRunLog`; the committed `tests/last_run.txt` still holds the 381 host run, because this session's network could not fetch the artefact.**
+**Delivered 2026-09-22, ☑ — verified on the self-hosted CI runner, run `35771831961` (commit `214f632`): `GATE TRUE (388 passed, 0 failed, 0 incomplete, 0 audit shortfalls)`, 14 exempt units. Predicted 388, measured 388. Tier A (local gate) not run: no MATLAB in the session; the runner's run is the MATLAB verdict. The run log of the merge head (run `35773012179`, R2026a Update 5, 388/388) is committed as `tests/last_run.txt`; the owner supplied the artefact, which this session's network could not fetch.**
 - **R-5 prints the same surface table as D-56935**, digit for digit, down to note 2's 0.65/0.72 and the
   1.07 budget the non-operating value produces. `geom.grace` transcribes it from R-5 independently and
   `tNgfGeom/graceMetamorphicAcrossDocuments` compares the two transcriptions: one fact, two documents, now
@@ -1364,8 +1364,12 @@ this session; the MATLAB suite runs in CI on the self-hosted runner.
 - **Found while reading R-5**: classic MAS1B is spacecraft mass, not tank mass (O-46).
 - **Prediction for the gate:** 381 + 7 = **388** tests (tNgfGeom: 10 + 7 = 17), 0 failed, 0 incomplete,
   0 category shortfalls (`grace` holds exemptions for vectorization and speed only, as `graceFO`).
-- **Next session:** on the next Tier A gate, commit its `tests/last_run.txt` (388 or more) with `README.md`'s
-  quoted count; then N-08 (#65) when N-02 and X-13 are in.
+- **Read from the run log, 2026-09-22:** every `grace` bound held, and the measurements match the Python
+  predictions (side silhouette 2.5328e-3 vs 2.53e-3; overhang 2.2 um from 56 mm). One bound was a knife
+  edge: `grace zenith plane vs thrusters` measured **1.0000e-03 against 1.0000e-03**, passing on its 1e-12
+  only, because the gap is 1 mm by construction. It now asserts the thruster lies inside the face and bounds
+  the gap at 2 mm, the 1.5 mm that millimetre rounding of three printed values allows plus margin.
+- **Next session:** N-08 (#65) when N-02 and X-13 are in.
 
 ## Part H — Obligations and open items
 
