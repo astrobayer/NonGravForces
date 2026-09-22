@@ -167,6 +167,10 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-09-17, after LP-E)
 
+- **2026-09-22, N-07 (#64):** `geom.grace` (GRACE-A/B, from R-5 = Bettadpur 2012 Sec. I.5.3) delivered
+  ◐ on Tier B, 57 units; predicted 388 tests, verdict from CI. O-46 opened (classic MAS1B is spacecraft
+  mass; R-5 prints no inertia). The other eleven N-issues wait on timeSeriesPreparation, lsqvce#110 and N-02.
+
 - **379/379 GREEN on Tier A** (2026-09-17, LP-E complete, R2026a Update 4): `matlab -batch ciGate`
   over an isolated dependency root, predicted 379, 0 failed, 0 incomplete, 0 category shortfalls,
   Code Analyzer clean on `+NonGravForces`, `auditPackage.py` clean (56 units, 56 catalogue rows,
@@ -413,7 +417,7 @@ repository had written down about them.
   under `tests/fixtures/groops/` and committed; neither CI nor the host needs a
   GROOPS installation.
 
-**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-45 with an owner
+**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-46 with an owner
 and a re-entry condition each. This file deliberately does NOT list them: the copy that
 used to live here had drifted to O-15 of 21 and showed two closed items as open, and no
 check compared the two (R1). Read Part H.
