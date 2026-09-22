@@ -39,7 +39,7 @@ L6 sensor   Sensor (abstract), Electrostatic, AtomInterferometer, DragFree
 L5 Model    accel | torque | series | partials | budget   <- single point of access
 L4 kernel   gsiCoefficients, accommodation, dragPanelForce, radiationPanelForce,
             thermalRecoil, assemble, bodyTorques, partials, singleEpoch (C/MEX)
-L3 geom     MacroModel, graceFO, boxWing, selfShadow, flowShadow, thermalState,
+L3 geom     MacroModel, graceFO, grace, boxWing, selfShadow, flowShadow, thermalState,
             AttitudeProvider, checkAttitudeSense
 L2 env      density, wind, eclipseFactor, earthRadiance, magneticField, radiationSources
 L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
@@ -47,7 +47,7 @@ L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
 L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options, buildMex
 ```
 
-56 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
+57 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
 both directions against the files on disk, and this sentence's number against it
 — which it genuinely did not until 2026-09-16, when the sentence said 53 and the
 catalogue held 55; `auditPackage.py` check 5 now compares both this number and
@@ -166,6 +166,10 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 ---
 
 ## 5. Current status (2026-09-17, after LP-E)
+
+- **2026-09-22, N-07 (#64):** `geom.grace` (GRACE-A/B, from R-5 = Bettadpur 2012 Sec. I.5.3) delivered
+  on Tier B and ☑ on the CI runner (run 35771831961: 388 passed, 0 failed, 0 incomplete, predicted 388), 57 units. O-46 opened (classic MAS1B is spacecraft
+  mass; R-5 prints no inertia). The other eleven N-issues wait on timeSeriesPreparation, lsqvce#110 and N-02.
 
 - **379/379 GREEN on Tier A** (2026-09-17, LP-E complete, R2026a Update 4): `matlab -batch ciGate`
   over an isolated dependency root, predicted 379, 0 failed, 0 incomplete, 0 category shortfalls,
@@ -413,7 +417,7 @@ repository had written down about them.
   under `tests/fixtures/groops/` and committed; neither CI nor the host needs a
   GROOPS installation.
 
-**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-45 with an owner
+**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-46 with an owner
 and a re-entry condition each. This file deliberately does NOT list them: the copy that
 used to live here had drifted to O-15 of 21 and showed two closed items as open, and no
 check compared the two (R1). Read Part H.
@@ -449,6 +453,14 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   spacecraft mass**. Use the handbook constant: 601.214 kg (GRACE-C),
   601.209 kg (GRACE-D). Misuse gives 20–40× accelerations. `io.massModel`
   defaults to the constant and asserts > 500 kg.
+  **Classic GRACE is the opposite**: its MAS1B (RL02) carries the SPACECRAFT mass,
+  476.85 kg for GRACE-A on 2008-01-01 against the 487.2 kg launch mass of R-5
+  Sec. I.5.3.3, so `io.massModel` cannot serve it (O-46).
+- **R-5's surface table IS D-56935's**: the GRACE Product Specification (Bettadpur 2012)
+  and the GRACE-FO handbook print the same eight rows digit for digit, and
+  `tNgfGeom/graceMetamorphicAcrossDocuments` compares the two transcriptions. The
+  dimensions differ (3123/720/694 mm vs 3122.5/721/695) and so does the origin: R-5's
+  Fig 3 puts the C.o.G. 275 mm above the nadir plane, not at mid-height.
 - **GNV1B is Earth-fixed (ITRS)**, not inertial. Rotate via
   `referenceSystem.rotationItrsToGcrs` + `applyRotation` (which also gives the
   velocity). A GPS tag is not UT1.

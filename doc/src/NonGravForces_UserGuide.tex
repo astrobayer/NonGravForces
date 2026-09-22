@@ -83,7 +83,7 @@ L6 sensor   Sensor (abstract), Electrostatic, AtomInterferometer, DragFree
 L5 Model    accel | torque | series | partials | budget      <- single point of access
 L4 kernel   gsiCoefficients, accommodation, dragPanelForce, radiationPanelForce,
             thermalRecoil, assemble, bodyTorques, partials, singleEpoch (C/MEX)
-L3 geom     MacroModel, graceFO, boxWing, selfShadow, flowShadow, thermalState,
+L3 geom     MacroModel, graceFO, grace, boxWing, selfShadow, flowShadow, thermalState,
             AttitudeProvider, checkAttitudeSense
 L2 env      density, wind, eclipseFactor, earthRadiance, magneticField, radiationSources
 L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
@@ -462,13 +462,18 @@ wrong; \texttt{geom.checkAttitudeSense} exists to catch precisely that.
 macro = NonGravForces.geom.graceFO("C");
 \end{lstlisting}
 
-\noindent \texttt{geom.graceFO} builds the handbook panel model. Use \texttt{geom.boxWing} for a
+\noindent \texttt{geom.graceFO} builds the handbook panel model. For the classic GRACE-A/B satellites,
+\texttt{geom.grace("A")} builds the model of the GRACE Product Specification (Bettadpur 2012,
+Sec.~I.5.3), whose surface table is the same as GRACE-FO's but whose dimensions, origin and
+\SI{487.2}{\kilo\gram} launch mass are its own. Use \texttt{geom.boxWing} for a
 generic satellite, or \texttt{geom.MacroModel} directly if you have your own panels.
 
 \textbf{Do not take the mass from MAS1B.} That product is cold-gas \emph{tank} mass, about
 \SI{30}{\kilo\gram} in total, not spacecraft mass; using it gives accelerations 20 to 40 times too
 large. \texttt{io.massModel} defaults to the handbook constant and asserts that the result exceeds
-\SI{500}{\kilo\gram}.
+\SI{500}{\kilo\gram}. \emph{Classic GRACE is the opposite case:} its MAS1B carries the spacecraft
+mass (\SI{476.85}{\kilo\gram} for GRACE-A on 2008-01-01), which \texttt{io.massModel} does not serve;
+pass it to \texttt{Model} as \texttt{'Mass'} (HANDOVER O-46).
 
 \section{Step 4: the options and the model}
 \begin{lstlisting}

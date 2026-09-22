@@ -35,6 +35,8 @@ function c = const()
 %   c.lambertDiffuse  1x1   double  -         2/3, Lambertian recoil factor
 %   c.graceFO         1x1   struct  -         Handbook (JPL D-56935 Tab.4):
 %                                             .massC .massD [kg]
+%   c.grace           1x1   struct  -         Launch mass (Bettadpur 2012, GRACE 327-720
+%                                             Sec. I.5.3.3): .massA .massB [kg]
 %
 % ERRORS
 %   (none) The function takes no input and cannot fail.
@@ -46,7 +48,8 @@ function c = const()
 %   TSI is supplied.
 %
 % REFERENCES
-%   IAU 2015 Resolution B3; CODATA 2018; Wen et al. 2019 JPL D-56935 Table 4.
+%   IAU 2015 Resolution B3; CODATA 2018; Wen et al. 2019 JPL D-56935 Table 4;
+%   Bettadpur 2012 GRACE 327-720 Rev 4.6 Sec. I.5.3.3.
 %
 % EXAMPLE
 %   c = NonGravForces.const; P0 = c.S0 / 299792458
@@ -70,4 +73,5 @@ c.speciesName = ["He","O","N2","O2","Ar","H","N","O_anomalous"];
 c.speciesMass = [4.002602, 15.9994, 28.0134, 31.9988, 39.948, 1.00794, 14.0067, 15.9994] * 1e-3;
 c.lambertDiffuse = 2/3;
 c.graceFO = struct('massC', 601.214, 'massD', 601.209);
+c.grace   = struct('massA', 487.2, 'massB', 487.2);       % launch mass; classic MAS1B holds the mission value
 end

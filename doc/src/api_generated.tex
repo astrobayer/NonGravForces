@@ -5,7 +5,7 @@
 %
 % \input-able from a report-class document; it opens no document and no chapter.
 
-\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 56 units, toolbox version 0.12.0.
+\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 57 units, toolbox version 0.12.0.
 
 \section{L0 \texttt{core} --- constants, options, provenance, uniform errors and the MEX build}
 
@@ -125,6 +125,7 @@ c.\allowbreak{}speciesName & 1x8 & string & - & He O N2 O2 Ar H N O\_anomalous \
 c.\allowbreak{}speciesMass & 1x8 & double & kg/\allowbreak{}mol & Molar masses of the MSIS species \\
 c.\allowbreak{}lambertDiffuse & 1x1 & double & - & 2/3, Lambertian recoil factor \\
 c.\allowbreak{}graceFO & 1x1 & struct & - & Handbook (JPL D-56935 Tab.4): .massC .massD [kg] \\
+c.\allowbreak{}grace & 1x1 & struct & - & Launch mass (Bettadpur 2012, GRACE 327-720 Sec. I.5.3.3): .massA .massB [kg] \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
@@ -1856,6 +1857,73 @@ mm & 1x1 & NonGravForces.geom.MacroModel with .inertia (Table 4), .V (plate poly
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{MATLAB:\allowbreak{}validators:\allowbreak{}mustBeMember}] satellite is not "C" or "D" (arguments block)
+\end{description}
+plus the contract errors of geom.MacroModel, which validates the table.
+
+
+\subsection{\texttt{NonGravForces.geom.grace}}
+\label{api:geom.grace}
+\noindent GRACE-A/B macro model from the GRACE Product Specification Document (Bettadpur 2012), Sec. I.5.3.
+
+\begin{lstlisting}
+mm = NonGravForces.geom.grace("A")
+mm = NonGravForces.geom.grace("B", 'SolarArrayOperating', false)
+\end{lstlisting}
+
+\subsubsection*{INPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+satellite & 1x1 & string & - & "A" (GRACE-1, FM-1) or "B" (GRACE-2, FM-2) \\
+\end{longtable}
+
+\subsubsection*{NAME-VALUE ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{7.90cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+SolarArrayOperating & 1x1 & logical & true: absVis 0.65 / diffVis 0.30 (closes). false: absVis 0.72 with diffVis 0.23 so that the budget closes (the printed 0.30 would sum to 1.07 - a handbook defect). \\
+\end{longtable}
+
+\subsubsection*{OUTPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{10.10cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+mm & 1x1 & NonGravForces.geom.MacroModel with .V (plate polygons), .heatCapacity, .mass\_kg (the launch mass, NonGravForces.const.grace), .inertia NaN(3) \\
+\end{longtable}
+
+\subsubsection*{ERRORS}
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
+\item[\texttt{MATLAB:\allowbreak{}validators:\allowbreak{}mustBeMember}] satellite is not "A" or "B" (arguments block)
 \end{description}
 plus the contract errors of geom.MacroModel, which validates the table.
 
