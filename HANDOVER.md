@@ -1330,6 +1330,20 @@ first -- an open row is a standing instruction to repeat what it says. `auditPac
 now compares every per-epoch millisecond figure in the repository against the measured table in
 `tools/benchmark_reference.csv`, so this particular fact has one authority and a machine that reads it.
 
+### N-07 — `geom.grace`, the GRACE-A/B macro model (issue #64, opened 2026-09-22)
+
+**Scope, frozen 2026-09-22 before any code** (timeSeriesPreparation GUIDE step 3). Tier B: no MATLAB in
+this session; the MATLAB suite runs in CI on the self-hosted runner.
+- **Afterwards true:** `NonGravForces.geom.grace("A"|"B")` returns a `MacroModel` whose every number is
+  read from R-5 (Bettadpur 2012, GRACE 327-720 Rev 4.6, Sec. I.5.3.3-I.5.3.5, PDF pp. 20-23, supplied by
+  the owner on 2026-09-22 because the session's network reaches no host that serves it); tests in the
+  seven categories; catalogue row, `Contents.m`, help, generated HTML and LaTeX, `CLAUDE.md` and `README.md`
+  in sync.
+- **Out of scope:** classic calibration presets, thermal handling and the mission mass (N-08); a
+  `cylinder` element for the boom (no kernel consumes one); any number R-5 does not print (inertia,
+  CoG -> proof-mass offset). No version bump: the MINOR bump for the added unit belongs to the release
+  that carries it (GUIDE step 13).
+
 ## Part H — Obligations and open items
 
 | # | Item | Status | Owner | Re-entry |
