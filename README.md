@@ -1,6 +1,6 @@
 # NonGravForces 0.12.0
 
-Non-gravitational forces, torques and partials for LEO satellites (GRACE-FO reference case). Third concept, designed from scratch after the audits of `SatelliteNonGravToolbox` v1 and `NonGravToolbox` v0.1.1.
+Non-gravitational forces, torques and partials for LEO satellites (GRACE-FO reference case; classic GRACE-A/B macro model since N-07). Third concept, designed from scratch after the audits of `SatelliteNonGravToolbox` v1 and `NonGravToolbox` v0.1.1.
 
 * Specification and plan: `HANDOVER.md` (single source of truth)
 * Theory and implementation: `doc/src/NonGravForces_Theory_and_Implementation.tex` — the source is the deliverable. CI builds the PDF on every run and uploads it as the `theoryDocument` artefact; build it locally with `pdflatex` twice in `doc/src`. No PDF is committed: the one that used to be said "version 0.1.0" for three weeks because nothing compared it with anything (HANDOVER O-38). <!-- versionScan:allow -->
@@ -11,7 +11,7 @@ run('../referenceSystem/setupReferenceSystem.m'); run('../gracefoReading/setupGr
 run('../odeSuite/gjToolboxSetup.m')      % optional for the toolbox, required by ciGate
 setupNonGravForces; runNgfTests
 ```
-Status: 56 catalogued units, all delivered and verified in MATLAB, no stubs left (`auditPackage.py` compares this number with `doc/functionlist.csv`). **LP-E is complete**: version 0.12.0, and **381/381 green** on the LP-R work that follows it. Next is LP-R, the release level.
+Status: 57 catalogued units, all delivered, no stubs left (`auditPackage.py` compares this number with `doc/functionlist.csv`); 56 are verified in MATLAB, and `geom.grace` (N-07, #64) is delivered ◐ until the CI gate that runs its tests is read. **LP-E is complete**: version 0.12.0, and **381/381 green** on the LP-R work that follows it. Next is LP-R, the release level.
 
 Licensed MIT (see `LICENSE`). The NRLMSISE-00 C source is **not** in this repository — it carries no redistribution grant, so it is fetched from its maintainer instead:
 

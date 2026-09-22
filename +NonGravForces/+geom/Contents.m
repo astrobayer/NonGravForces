@@ -3,6 +3,7 @@
 %
 %   MacroModel           - Panel geometry frozen and validated once
 %   graceFO              - GRACE-FO macro model from JPL D-56935
+%   grace                - GRACE-A/B macro model from the GRACE Product Specification (Bettadpur 2012)
 %   boxWing              - Generic box-wing macro model factory
 %   selfShadow           - Per-panel unobstructed fraction toward a direction: exact ray cast or cube-map table
 %   flowShadow           - Self-shadowing of a free-molecular gas stream: flux-weighted occlusion ratios per species

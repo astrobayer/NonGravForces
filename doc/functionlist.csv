@@ -26,6 +26,7 @@ env,magneticField,function,L2,WP-C10,done,IGRF main geomagnetic field at Earth-f
 env,radiationSources,function,L2,WP-08,done,Source list {dir_body P band} from Sun and Earth radiance for one epoch batch
 geom,MacroModel,class,L3,WP-09,done,Panel geometry frozen and validated once
 geom,graceFO,function,L3,WP-09,done,GRACE-FO macro model from JPL D-56935
+geom,grace,function,L3,N-07,done,GRACE-A/B macro model from the GRACE Product Specification (Bettadpur 2012)
 geom,boxWing,function,L3,WP-09,done,Generic box-wing macro model factory
 geom,selfShadow,function,L3,WP-10,done,Per-panel unobstructed fraction toward a direction: exact ray cast or cube-map table
 geom,flowShadow,function,L3,WP-C1,done,Self-shadowing of a free-molecular gas stream: flux-weighted occlusion ratios per species

@@ -849,7 +849,7 @@ def render_all():
     out["Testing.html"] = page("Testing", "".join(p), version, date, model)
 
     # --- index
-    p = ["<p>A MATLAB toolbox computing non-gravitational forces and torques on GRACE-FO satellites: gas-surface "
+    p = ["<p>A MATLAB toolbox computing non-gravitational forces and torques on GRACE-FO and GRACE satellites: gas-surface "
          "interaction, solar and Earth radiation pressure, thermal recoil, and the sensors that measure them. "
          "%d of %d catalogued units are delivered; %d are documented stubs.</p><ul>"
          % (len(done), len(rows), len(stubs))]
