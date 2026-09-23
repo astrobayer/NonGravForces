@@ -168,7 +168,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 ## 5. Current status (2026-09-17, after LP-E)
 
 - **2026-09-22, N-07 (#64):** `geom.grace` (GRACE-A/B, from R-5 = Bettadpur 2012 Sec. I.5.3) delivered
-  on Tier B and ☑ on the CI runner (run 35771831961: 388 passed, 0 failed, 0 incomplete, predicted 388), 57 units. O-46 opened (classic MAS1B is spacecraft
+  on Tier B and ☑ on the CI runner (runs 35771831961 and 35773012179: 388 passed, 0 failed, 0 incomplete, predicted 388; the second's log is `tests/last_run.txt`), 57 units. O-46 opened (classic MAS1B is spacecraft
   mass; R-5 prints no inertia). The other eleven N-issues wait on timeSeriesPreparation, lsqvce#110 and N-02.
 
 - **379/379 GREEN on Tier A** (2026-09-17, LP-E complete, R2026a Update 4): `matlab -batch ciGate`

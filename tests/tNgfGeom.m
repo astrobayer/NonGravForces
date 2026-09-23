@@ -141,7 +141,12 @@ classdef tNgfGeom < NgfTestCase
             zNadir = a.C(3, [a.panels.name] == "Nadir"); zZen = a.C(3, [a.panels.name] == "Zenith");
             tc.verifyBoundAndRecord("grace overhang depth vs Fig 3 (56 mm)", abs((max(V(3,:)) - zNadir) - 0.056), 1e-3, "m");
             tc.verifyBoundAndRecord("grace nadir plane vs thrusters A14/A22 (Z = +275 mm)", abs(zNadir - 0.275), 1e-3, "m");
-            tc.verifyBoundAndRecord("grace zenith plane vs thrusters A12/A24 (Z = -444 mm)", abs(zZen + 0.444), 1e-3 + 1e-12, "m", "the thruster sits 1 mm inside the 720 - 275 = 445 mm zenith face");
+            % The zenith face (720 - 275 = 445 mm, from two printed values) and the thruster (444 mm) are
+            % each rounded to the millimetre, so rounding alone allows 1.5 mm between them. The thruster
+            % must lie INSIDE the body; the gap is bounded at 2 mm. (Until 2026-09-22 this asserted the gap
+            % at 1 mm + 1e-12 and measured exactly 1.0000e-03: a bound that passed on its tolerance only.)
+            tc.verifyLessThan(zZen, -0.444, "thrusters A12/A24 must sit inside the zenith face");
+            tc.verifyBoundAndRecord("grace zenith plane vs thrusters A12/A24 (Z = -444 mm)", abs(zZen + 0.444), 2e-3, "m", "measured 1 mm on CI run 35773012179; millimetre rounding of three printed values allows 1.5 mm");
             tc.verifyBoundAndRecord("grace rear face vs orbit thrusters O11/O21 (X = -1561 mm)", abs(min(V(1,:)) + 1.561), 1e-3, "m");
             side = (max(V(3,:)) - min(V(3,:))) * (max(V(1,:)) - min(V(1,:))) + 0.0461901;   % prismatic body: silhouette from the side
             tc.verifyBoundAndRecord("grace side silhouette vs Fig 4 C.o.A. area", abs(side / 2.4633921 - 1), 1e-2, "-", "measured 2.53e-3 in Python on 2026-09-22 before any MATLAB run");
