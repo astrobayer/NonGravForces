@@ -144,8 +144,9 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with: { path: NonGravForces }
-      # ciGate checks for ALL THREE siblings - referenceSystem/setupReferenceSystem.m,
-      # gracefoReading/setupGraceFOReading.m and odeSuite/gjToolboxSetup.m. The
+      # ciGate checks for ALL FIVE siblings - referenceSystem/setupReferenceSystem.m,
+      # gracefoReading/setupGraceFOReading.m, odeSuite/gjToolboxSetup.m,
+      # timeSeriesPreparation/setupTimeSeriesPreparation.m and lsqvce/lsqvce_setup.m. The
       # gracefoReading checkout was lost when this file was patched for the
       # self-hosted runner: the removal block ended mid-step and took the
       # following one with it. It never showed up as a failure because the
@@ -199,6 +200,28 @@ jobs:
           repository: astrobayer/odeSuite
           ref: main
           path: odeSuite
+          token: ${{ secrets.REFERENCE_READ_TOKEN }}
+          persist-credentials: false
+      # timeSeriesPreparation and lsqvce joined the gate with O-45 (2026-10-14).
+      # timeSeriesPreparation owns the CRN kernel sensor.Electrostatic filters
+      # with by default (N-04) and, after N-01, the qc stage; lsqvce is the
+      # estimator app.calibrate declares against from N-02 on. Same token, same
+      # persist-credentials and the same ref-on-purpose as odeSuite above: the
+      # ref skips the default-branch API call, so only Contents:read is needed.
+      # Neither is continue-on-error, for odeSuite's reason: a gate that runs
+      # without the dependency would report green about code it never loaded.
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: astrobayer/timeSeriesPreparation
+          ref: main
+          path: timeSeriesPreparation
+          token: ${{ secrets.REFERENCE_READ_TOKEN }}
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: astrobayer/lsqvce
+          ref: main
+          path: lsqvce
           token: ${{ secrets.REFERENCE_READ_TOKEN }}
           persist-credentials: false
       # The probe and the reasoning behind it live in
