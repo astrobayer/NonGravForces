@@ -2,7 +2,8 @@ function ciGate(options)
 %CIGATE The ONE CI entry point for NonGravForces: install dependencies, run the suite, judge.
 %
 %   ciGate                       % what .github/workflows/ci.yml runs
-%   ciGate('DependencyRoot', p)  % folder holding referenceSystem/, gracefoReading/ and odeSuite/
+%   ciGate('DependencyRoot', p)  % folder holding referenceSystem/, gracefoReading/, odeSuite/,
+%                                % timeSeriesPreparation/ and lsqvce/
 %
 %   Usable locally as a postflight: matlab -batch ciGate. It is never a bare
 %   runNgfTests call: runNgfTests RETURNS a result and errors only with
@@ -11,7 +12,8 @@ function ciGate(options)
 %
 % NAME-VALUE ARGUMENTS
 %   DependencyRoot  1x1 string  Folder that contains referenceSystem/,
-%                               gracefoReading/ and odeSuite/ as siblings.
+%                               gracefoReading/, odeSuite/,
+%                               timeSeriesPreparation/ and lsqvce/ as siblings.
 %                               Default: the parent of this repository, which
 %                               is the CI checkout layout and the owner's
 %                               local layout.
@@ -41,8 +43,13 @@ here = fileparts(mfilename('fullpath'));
 % and REQUIRED for the gate: since LP-C WP-C9 the app layer serves gjToolbox's frozen interface
 % and the rhs MEX compiles against its csrc/gj_native.h, so a gate without it would leave
 % app.DynamicsSource and the whole native evaluator unrun and still report GREEN.
+% timeSeriesPreparation and lsqvce joined with O-45 (2026-10-14): the first owns the CRN kernel
+% sensor.Electrostatic filters with by default (N-04) and, after N-01, the qc stage; the second is
+% the estimator app.calibrate declares against (N-02). Both are required by the gate for the same
+% reason as odeSuite: without them the units that call them would go unrun and the gate stay green.
 deps = ["referenceSystem/setupReferenceSystem.m", "gracefoReading/setupGraceFOReading.m", ...
-        "odeSuite/gjToolboxSetup.m"];
+        "odeSuite/gjToolboxSetup.m", "timeSeriesPreparation/setupTimeSeriesPreparation.m", ...
+        "lsqvce/lsqvce_setup.m"];
 % THE GATE LEAVES THE MACHINE AS IT FOUND IT (O-43). Dependency setups call `savepath`, so running
 % this gate REWROTE the developer's saved MATLAB path -- on 2026-09-17 a bare run replaced the saved
 % referenceSystem entry with a scratchpad clone that a later session would delete. The saved path is
@@ -52,7 +59,7 @@ deps = ["referenceSystem/setupReferenceSystem.m", "gracefoReading/setupGraceFORe
 %
 % This is NOT the fix O-43's re-entry condition imagined ("pass 'Save', false where the dependency
 % supports it"): `setupGraceFOReading()` takes NO arguments and calls `savepath` unconditionally, so
-% a per-dependency opt-out could never have covered all three. Restoring the file covers every
+% a per-dependency opt-out could never have covered all of them (lsqvce_setup saves the path too). Restoring the file covers every
 % setup, including one that cannot be told, and couples this gate to none of their signatures.
 pathdefFile = which('pathdef.m');
 pathdefBefore = '';
