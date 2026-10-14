@@ -174,11 +174,11 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 - **2026-10-14, N-02a (#59, first of three PRs):** `app.syntheticPair` (the calibration truth through the real
   CRN chain) and `app.Calibration` (scale + bias curve, apply/invert/save/load); 59 units. ◐; prediction 408.
 - **2026-10-14, N-01 (#58):** the six `qc` units forward to `timeSeriesPreparation.qc` with a
-  `deprecated` warning; O-1/O-18 moved there; O-47 deletes them after the next release. ◐.
+  `deprecated` warning; O-1/O-18 moved there; O-47 deletes them after the next release. ☑ with N-04 (run 38636885801: 394/394, predicted 394).
 - **2026-10-14, N-04 (#61):** `sensor.Electrostatic` filters with the L1B CRN kernel from
   `timeSeriesPreparation.crnKernel("ACC")` by default, on 10 Hz dynamics whose grid it checks from
   `dyn.epoch`; `'OutputRate', 1` samples like ACT1B; `[]` stays unfiltered. timeSeriesPreparation and
-  lsqvce are gate siblings since #76. ◐ until the CI gate is read.
+  lsqvce are gate siblings since #76. ☑ (run 38636885801: 394/394, predicted 394).
 - **2026-09-22, N-07 (#64):** `geom.grace` (GRACE-A/B, from R-5 = Bettadpur 2012 Sec. I.5.3) delivered
   on Tier B and ☑ on the CI runner (runs 35771831961 and 35773012179: 388 passed, 0 failed, 0 incomplete, predicted 388; the second's log is `tests/last_run.txt`), 57 units. O-46 opened (classic MAS1B is spacecraft
   mass; R-5 prints no inertia). The other eleven N-issues wait on timeSeriesPreparation, lsqvce#110 and N-02.

@@ -1369,7 +1369,7 @@ fast under an isequaln gate; the two argument blocks were compared and are ident
   here as moved; O-47 opens for the deletion.
 - **Out of scope:** the deletion itself (O-47, after the release that carries the forwarders).
 
-**Delivered 2026-10-14, ◐.** Prediction for the gate: 393 (after N-04) + 1 = **394**
+**Delivered 2026-10-14, ☑** on the CI runner (run 38636885801, PR #77 with N-04: **394 passed, 0 failed, 0 incomplete, 0 shortfalls, predicted 394**). Prediction for the gate was: 393 (after N-04) + 1 = **394**
 (`tNgfQc/qcForwardingContract`: bit-equality with the target, the warning provoked on all six units,
 `depMissing` provoked by taking the package off the path), 0 failed, 0 incomplete, 0 shortfalls.
 
@@ -1388,7 +1388,7 @@ as gate siblings).
   the sensor convolves the same taps with the same sum), a version bump (planned 0.13.0 with N-02/N-06),
   and the calibration upgrade (N-02).
 
-**Delivered 2026-10-14, ◐ (Tier B; the verdict is the CI `matlab` job on the PR's last commit).**
+**Delivered 2026-10-14, ☑ (Tier B; verified with N-01 by the CI `matlab` job, run 38636885801: 394/394, predicted 394).**
 - **The oracle is the published number, recomputed:** the DC gain through the sensor is asserted against
   the printed 1 + 1.115e-7 (±5e-11, half the last printed digit), and an independent Python evaluation
   of ATBD App. B written for this check gives 1 + 1.11516e-7 and a gain at f0 of exactly 1. Unit gain at
