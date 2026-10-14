@@ -43,7 +43,7 @@ kernel,bodyTorques,function,L4,WP-24,done,Gravity-gradient and magnetic body tor
 kernel,partials,function,L4,WP-16,done,Analytic per-panel derivatives: alpha densityScale speed pressureScale temperature
 kernel,singleEpoch,function,L4,WP-17b,done,Compiled single-epoch kernel: gas radiation and thermal recoil with their reductions
 sensor,Sensor,class,L6,WP-29,interface,Abstract measurement model: observe / partials / noiseModel
-sensor,Electrostatic,class,L6,WP-29,done,Electrostatic accelerometer: bias scale matrix proof-mass offset coupling FIR filter
+sensor,Electrostatic,class,L6,WP-29,done,Electrostatic accelerometer: bias scale matrix proof-mass offset coupling; L1B CRN filter by default
 sensor,AtomInterferometer,class,L6,WP-29,done,Cold-atom interferometer: phase = k_eff a T^2 with dead time rotation and the 2 pi ambiguity
 sensor,DragFree,class,L6,WP-29,done,Drag-free residual: sensitivity high-pass cascade with actuator saturation
 qc,residuals,function,L7,WP-31,done,Whitened residuals measured - modelled with preliminary calibration

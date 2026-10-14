@@ -835,6 +835,16 @@ never closed. It is left mentioned rather than silently replaced, because a read
 figure elsewhere deserves to know which number this project stands behind.
 \end{quote}
 
+\section{The accelerometer filter}
+Level-1B accelerations are the \SI{10}{Hz} ACT1A stream through the CRN low-pass of the L1B ATBD
+(JPL D-27672, App.~B). Since N-04 (2026-10-14) \texttt{sensor.Electrostatic} applies that filter by
+default, with the kernel taken from \texttt{timeSeriesPreparation.crnKernel("ACC")} and never built
+here: 1407 taps on the \SI{10}{Hz} grid, unit gain at $f_0 = \SI{0.37}{mHz}$, DC gain
+$1 + 1.1\times10^{-7}$. The default therefore needs \SI{10}{Hz} dynamics with \texttt{dyn.epoch}, which
+it checks; \texttt{'OutputRate', 1} samples the result at \SI{1}{Hz} as ACT1B is formed. Pass
+\texttt{[]} as the kernel for an unfiltered sensor at any rate, or any odd-length FIR of your own.
+The first and last 703 samples (\SI{70.3}{s}) of an arc are marked invalid in \texttt{y.mask}.
+
 \section{What is not modelled at all}
 \begin{itemize}[leftmargin=1.4em]
 \item \textbf{Gravity}, in any form. $T=\partial\vv g/\partial\vv r$ enters
@@ -844,10 +854,6 @@ figure elsewhere deserves to know which number this project stands behind.
  \SI{e-12}{\metre\per\second\squared}.
 \item \textbf{Antenna thrust and Lorentz forces} ($\lesssim\SI{e-11}{\metre\per\second\squared}$):
  hooks only.
-\item \textbf{The CRN filter} of the Level-1B accelerometer product.
- \texttt{sensor.Electrostatic} applies an FIR kernel \emph{you supply}; it constructs none, because
- the defining paper has not been read for this implementation and a guessed filter compared against
- real data is a comparison between two different bandwidths.
 \item \textbf{A GROOPS cross-validation.} The reader and writer of GROOPS instrument files have
  never been checked against a real GROOPS installation.
 \end{itemize}

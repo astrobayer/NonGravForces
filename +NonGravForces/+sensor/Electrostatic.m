@@ -1,8 +1,10 @@
 classdef Electrostatic < NonGravForces.sensor.Sensor
-%ELECTROSTATIC Electrostatic accelerometer: bias, 3x3 scale, proof-mass offset coupling, FIR filter.
+%ELECTROSTATIC Electrostatic accelerometer: bias, 3x3 scale, proof-mass offset coupling; L1B CRN filter by default.
 %
-%   s = NonGravForces.sensor.Electrostatic(bias, S, dr, kernel)
-%   s = NonGravForces.sensor.Electrostatic(bias, S, dr, kernel, 'Rotation', R, 'SampleRate', 10)
+%   s = NonGravForces.sensor.Electrostatic(bias, S, dr)                       % CRN-filtered, 10 Hz input
+%   s = NonGravForces.sensor.Electrostatic(bias, S, dr, "crn", 'OutputRate', 1) % as ACT1B: 1 Hz samples
+%   s = NonGravForces.sensor.Electrostatic(bias, S, dr, [])                   % unfiltered, any rate
+%   s = NonGravForces.sensor.Electrostatic(bias, S, dr, kernel, 'Rotation', R, 'SampleRate', fs)
 %   y = s.observe(dyn);  [J, names] = s.partials(dyn);  asd = s.noiseModel(f)
 %
 %   WHAT AN ELECTROSTATIC ACCELEROMETER READS. Its proof mass sits at a point
@@ -54,17 +56,26 @@ classdef Electrostatic < NonGravForces.sensor.Sensor
 %   is of order 1e-12 m/s^2 and is usually left out, but that is the caller's
 %   judgement to make with a number, not this class's to make by omission.
 %
-%   THE FILTER IS A KERNEL YOU SUPPLY, NOT ONE THIS CLASS INVENTS. L1B
-%   accelerations are the ACT1A stream through the CRN low-pass of Wu et al.
-%   (2006), and a model compared against them must go through the same filter or
-%   the comparison is between two different bandwidths. The coefficients of that
-%   filter are defined in that paper, which has NOT been read for this
-%   implementation, so no kernel is constructed here and none is guessed: pass
-%   the coefficients as `kernel` and they are applied by convolution, with the
-%   (L-1)/2 samples at each end marked invalid in `y.mask` because the kernel
-%   there overlaps data that does not exist. Pass [] and nothing is filtered.
-%   The partials go through the same kernel, or they would describe a signal
-%   the observation is not.
+%   THE DEFAULT FILTER IS THE L1B CRN KERNEL, AND IT IS NOT BUILT HERE (N-04,
+%   owner ruling 2026-10-14). L1B accelerations are the 10 Hz ACT1A stream
+%   through the CRN low-pass of the GRACE L1B ATBD (Wu et al. 2006, App. B), and
+%   a model compared against them must go through the same filter or the
+%   comparison is between two different bandwidths. The kernel's one authority
+%   is timeSeriesPreparation.crnKernel("ACC"): 1407 taps on the 10 Hz grid,
+%   normalised at f0 with its DC gain of 1 + 1.1e-7 kept. This class takes its
+%   taps from there and convolves; it computes none of them.
+%     Because the taps are defined on a 10 Hz grid, the CRN default needs 10 Hz
+%   dynamics: 'SampleRate' defaults to 10, a kernel whose rate differs from
+%   'SampleRate' is refused, and dyn.epoch is REQUIRED and checked to be on that
+%   grid, because a 1 Hz arc convolved with 0.1 s taps is a filter of a
+%   different bandwidth that nothing would report. 'OutputRate' then samples the
+%   filtered series (never averages it), as L1B forms 1 Hz ACT1B from it.
+%     Any other FIR is still accepted as a numeric `kernel` and applied at
+%   whatever rate the caller supplies; [] filters nothing and accepts any rate.
+%   The (L-1)/2 samples at each end are marked invalid in `y.mask`, because the
+%   kernel there overlaps data that does not exist -- 703 samples, 70.3 s, for
+%   the CRN kernel. The partials go through the same kernel and the same
+%   sampling, or they would describe a signal the observation is not.
 %
 % CONSTRUCTOR ARGUMENTS
 %   Name     Size  Type    Units    Description
@@ -72,13 +83,20 @@ classdef Electrostatic < NonGravForces.sensor.Sensor
 %   bias     3x1   double  m/s^2    Additive bias in the accelerometer frame; default zeros
 %   S        3x3   double  -        Scale matrix; a 3x1 is taken as its diagonal; default eye(3)
 %   dr       3x1   double  m        Proof-mass offset from the CoM, body frame; default zeros
-%   kernel   1xL   double  -        FIR coefficients, L odd, sum ~= 0; default [] (no filter)
+%   kernel   1x1   string  -        "crn" (default): timeSeriesPreparation.crnKernel("ACC")
+%            1x1   struct  -        a timeSeriesPreparation.crnKernel result (e.g. other options);
+%                                   its .fs must equal 'SampleRate'
+%            1xL   double  -        any FIR, L odd, sum ~= 0, applied at the caller's rate;
+%                                   [] = no filter
 %
 % NAME-VALUE ARGUMENTS
 %   Name         Size  Type    Units       Description
 %   ----         ----  ----    -----       -----------
 %   Rotation     3x3   double  -           Body -> accelerometer frame; default eye(3)
-%   SampleRate   1x1   double  Hz          Nominal rate, carried for noiseModel; default 1
+%   SampleRate   1x1   double  Hz          Rate of dyn; must equal a CRN kernel's fs; default 10
+%   OutputRate   1x1   double  Hz          Rate of y: every (SampleRate/OutputRate)-th filtered
+%                                          sample from the first, an integer ratio; default
+%                                          'SampleRate' (no sampling). 1 reproduces ACT1B's rate
 %   NoiseAsd     3x1   double  m/s^2/rtHz  White floor per axis; default [1e-10; 1e-9; 1e-10],
 %                                          the GRACE-FO order with the cross-track axis ten
 %                                          times worse (Kornfeld et al. 2019)
@@ -87,18 +105,26 @@ classdef Electrostatic < NonGravForces.sensor.Sensor
 %
 % METHODS
 %   y          = observe(obj, dyn)     dyn: .a 3xK body, .omega 3xK body, .omegaDot 3xK body,
-%                                      optional .epoch, optional .gravityGradient 3x3xK.
-%                                      y: .value 3xK (accelerometer frame), .mask 3xK logical,
-%                                      .frame, .epoch, .info
-%   [J, names] = partials(obj, dyn)    d(y)/d(theta), (3K)x15, theta = [bias; S(:); dr].
+%                                      .epoch (1xK s, datetime, or a referenceSystem epoch with
+%                                      .day/.sec; REQUIRED with a CRN kernel, optional otherwise),
+%                                      optional .gravityGradient 3x3xK.
+%                                      y: .value 3xM (accelerometer frame, M = ceil(K/stride)),
+%                                      .mask 3xM logical, .frame, .epoch (sampled like .value),
+%                                      .info (.kernel "crn ACC" | "user" | "none", .outputStride)
+%   [J, names] = partials(obj, dyn)    d(y)/d(theta), (3M)x15, theta = [bias; S(:); dr].
 %                                      Row (k-1)*3+i is axis i of epoch k: axis fastest
 %   asd        = noiseModel(obj, f_Hz) 3xN one-sided amplitude spectral density
 %   n          = numParameters(obj)    15
 %
 % ERRORS
 %   NonGravForces:Electrostatic:inputShape   an argument or a dyn field has the wrong size
-%   NonGravForces:Electrostatic:inputKernel  the kernel is empty-summed, of even length, or not a vector
-%   NonGravForces:Electrostatic:inputDyn     dyn lacks a, omega or omegaDot, or their epoch counts differ
+%   NonGravForces:Electrostatic:inputKernel  the kernel is empty-summed, of even length, not a vector,
+%                                            text other than "crn", a struct without .F/.fs, or a
+%                                            CRN kernel whose .fs differs from 'SampleRate'
+%   NonGravForces:Electrostatic:depMissing   "crn" asked for and timeSeriesPreparation is not on the path
+%   NonGravForces:Electrostatic:inputDyn     dyn lacks a, omega or omegaDot, or their epoch counts differ;
+%                                            with a CRN kernel: dyn.epoch missing, of the wrong length
+%                                            or type, or not on the kernel's grid
 %   NonGravForces:Electrostatic:numericNaN   an input contains NaN or Inf
 %
 % REFERENCES
@@ -106,26 +132,32 @@ classdef Electrostatic < NonGravForces.sensor.Sensor
 %   a point offset from the centre of mass); Frommknecht B. (2007) PhD, TU
 %   Munich (GRACE accelerometer calibration model); Klinger B., Mayer-Guerr T.
 %   (2016) Adv. Space Res. 58:1597 (bias and scale parametrisation);
-%   Wu S.-C. et al. (2006) GRACE ACC filter (the CRN kernel, NOT implemented
-%   here); JPL D-56935 GRACE-FO L1 Handbook (frames, proof-mass geometry);
+%   Wu S.-C., Kruizinga G., Bertiger W. (2006) Algorithm Theoretical Basis
+%   Document for GRACE Level-1B Data Processing, JPL D-27672, App. B (the CRN
+%   kernel; its taps come from timeSeriesPreparation.crnKernel); JPL D-56935
+%   GRACE-FO L1 Handbook (frames, proof-mass geometry);
 %   Kornfeld R. et al. (2019) J. Spacecraft Rockets 56:931 (noise floor).
 %
 % EXAMPLE
-%   s = NonGravForces.sensor.Electrostatic([1e-6; -3e-6; 2e-7], diag([1.05 0.96 1.01]), [2e-4; 0; -1e-4]);
-%   dyn = struct('a', aBody, 'omega', w, 'omegaDot', wdot);
+%   % 10 Hz dynamics through the L1B CRN kernel, sampled at 1 Hz like ACT1B:
+%   s = NonGravForces.sensor.Electrostatic([1e-6; -3e-6; 2e-7], diag([1.05 0.96 1.01]), ...
+%           [2e-4; 0; -1e-4], "crn", 'OutputRate', 1);
+%   dyn = struct('a', aBody, 'omega', w, 'omegaDot', wdot, 'epoch', t10Hz_s);
 %   y = s.observe(dyn);
 %   r = NonGravForces.qc.residuals(measured', y.value', 'Whitening', "highpass", 'Window', 601);
 %
-% See also NonGravForces.sensor.Sensor, NonGravForces.qc.residuals, NonGravForces.app.calibrate, referenceSystem.angularVelocityFromRotationRate.
+% See also timeSeriesPreparation.crnKernel, NonGravForces.sensor.Sensor, NonGravForces.qc.residuals, NonGravForces.app.calibrate, referenceSystem.angularVelocityFromRotationRate.
 %
 % KEYWORDS accelerometer electrostatic bias scale factor centre of mass offset calibration
-% Created 2026-09-08 by Claude Opus 5 (Anthropic).
+% Created 2026-09-08 by Claude Opus 5 (Anthropic); CRN default kernel (N-04) 2026-10-14 by Claude (Anthropic).
     properties (SetAccess = private)
         bias (3,1) double = zeros(3, 1)
         scale (3,3) double = eye(3)
         dr_m (3,1) double = zeros(3, 1)
         rotation (3,3) double = eye(3)
         kernel (1,:) double = []
+        kernelSource (1,1) string = "none"
+        outputRate (1,1) double = 10
         noiseAsd (3,1) double = [1e-10; 1e-9; 1e-10]
         noiseCorner (1,1) double = 5e-3
     end
@@ -135,9 +167,10 @@ classdef Electrostatic < NonGravForces.sensor.Sensor
                 bias double = zeros(3, 1)
                 S double = eye(3)
                 dr double = zeros(3, 1)
-                kernel double = []
+                kernel = "crn"
                 options.Rotation double = eye(3)
-                options.SampleRate (1,1) double {mustBePositive} = 1
+                options.SampleRate (1,1) double {mustBePositive, mustBeFinite} = 10
+                options.OutputRate (1,1) double = NaN
                 options.NoiseAsd double = [1e-10; 1e-9; 1e-10]
                 options.NoiseCorner (1,1) double {mustBePositive} = 5e-3
                 options.Name (1,1) string = "electrostatic"
@@ -160,7 +193,13 @@ classdef Electrostatic < NonGravForces.sensor.Sensor
             if ~isequal(size(options.Rotation), [3 3])
                 NonGravForces.fail(unit, "inputShape", "'Rotation' must be 3x3 -> got %s", mat2str(size(options.Rotation)));
             end
-            k = kernel(:)';
+            [k, src] = NonGravForces.sensor.Electrostatic.resolveKernel(kernel, options.SampleRate);
+            outRate = options.OutputRate;
+            if isnan(outRate), outRate = options.SampleRate; end
+            stride = options.SampleRate / outRate;
+            if ~(isfinite(stride) && stride >= 1 && abs(stride - round(stride)) <= 1e-9 * stride)
+                NonGravForces.fail(unit, "inputShape", "'OutputRate' must divide 'SampleRate' (%g Hz) by a whole number -> got %g Hz", options.SampleRate, outRate);
+            end
             if ~isempty(k)
                 if ~isvector(kernel) || mod(numel(k), 2) ~= 1
                     NonGravForces.fail(unit, "inputKernel", "the filter kernel must be a vector of ODD length so it has a centre sample -> got %s", mat2str(size(kernel)));
@@ -181,6 +220,8 @@ classdef Electrostatic < NonGravForces.sensor.Sensor
             obj.dr_m = d;
             obj.rotation = options.Rotation;
             obj.kernel = k;
+            obj.kernelSource = src;
+            obj.outputRate = outRate;
             obj.noiseAsd = asd;
             obj.noiseCorner = options.NoiseCorner;
             obj.name = options.Name;
@@ -194,11 +235,14 @@ classdef Electrostatic < NonGravForces.sensor.Sensor
             aSensed = obj.sensedAcceleration(a, w, wd, T);
             raw = obj.bias + obj.scale * (obj.rotation * aSensed);
             [val, mask] = obj.applyFilter(raw);
+            idx = obj.outputIndex(K);
+            val = val(:, idx); mask = mask(:, idx);
             edge = 0; if ~isempty(obj.kernel), edge = (numel(obj.kernel) - 1) / 2; end
             grad = "none"; if ~isempty(T), grad = "supplied"; end
-            info = struct('K', K, 'filtered', ~isempty(obj.kernel), 'edgeSamples', edge, ...
+            info = struct('K', K, 'filtered', ~isempty(obj.kernel), 'kernel', obj.kernelSource, ...
+                'edgeSamples', edge, 'outputStride', round(obj.sampleRate / obj.outputRate), ...
                 'gradient', grad, 'provenance', NonGravForces.provenance("sensor.Electrostatic"));
-            ep = []; if isfield(dyn, 'epoch'), ep = dyn.epoch; end
+            ep = []; if isfield(dyn, 'epoch'), ep = NonGravForces.sensor.Electrostatic.sampleEpoch(dyn.epoch, idx, K); end
             y = struct('value', val, 'mask', mask, 'frame', "accelerometer", 'epoch', ep, 'info', info);
         end
 
@@ -234,6 +278,9 @@ classdef Electrostatic < NonGravForces.sensor.Sensor
                     J(:, p) = reshape(obj.applyFilter(col), 3 * K, 1);
                 end
             end
+            % ...and sampled exactly as the observation is.
+            idx = obj.outputIndex(K);
+            J = J(reshape((idx - 1) * 3 + (1:3)', [], 1), :);
             names = ["bias_x", "bias_y", "bias_z", ...
                 "scale_11", "scale_21", "scale_31", "scale_12", "scale_22", "scale_32", ...
                 "scale_13", "scale_23", "scale_33", "dr_x", "dr_y", "dr_z"];
@@ -254,7 +301,7 @@ classdef Electrostatic < NonGravForces.sensor.Sensor
     end
 
     methods (Access = private)
-        function [a, w, wd, K, T] = checkDyn(obj, dyn) %#ok<INUSL>
+        function [a, w, wd, K, T] = checkDyn(obj, dyn)
             %CHECKDYN The three required fields, their shapes, and the optional gradient.
             unit = "Electrostatic";
             if ~isstruct(dyn) || ~isscalar(dyn) || ~all(isfield(dyn, {'a', 'omega', 'omegaDot'}))
@@ -278,6 +325,32 @@ classdef Electrostatic < NonGravForces.sensor.Sensor
             if any(~isfinite([a(:); w(:); wd(:); T(:)]))
                 NonGravForces.fail(unit, "numericNaN", "dyn contains NaN/Inf -> screen the dynamics before observing them");
             end
+            if startsWith(obj.kernelSource, "crn")
+                obj.checkGrid(dyn, K);
+            end
+        end
+
+        function checkGrid(obj, dyn, K)
+            %CHECKGRID A CRN kernel is defined on its own grid: the dynamics must be on it, measured.
+            unit = "Electrostatic";
+            fixHint = "-> pass dynamics sampled at %g Hz with dyn.epoch, or build the sensor with kernel [] for unfiltered dynamics at another rate";
+            if ~isfield(dyn, 'epoch') || isempty(dyn.epoch)
+                NonGravForces.fail(unit, "inputDyn", "the CRN kernel is defined on a %g Hz grid and dyn.epoch is needed to check that the dynamics are on it " + fixHint, obj.sampleRate, obj.sampleRate);
+            end
+            t = NonGravForces.sensor.Electrostatic.epochSeconds(dyn.epoch);
+            if numel(t) ~= K
+                NonGravForces.fail(unit, "inputDyn", "dyn.epoch must hold one epoch per sample (%d) -> got %d", K, numel(t));
+            end
+            step = diff(t);
+            if K > 1 && any(abs(step - 1 / obj.sampleRate) > 1e-6)
+                NonGravForces.fail(unit, "inputDyn", "dyn.epoch is not on the kernel's grid: steps %g to %g s, the kernel needs %g s " + fixHint, ...
+                    min(step), max(step), 1 / obj.sampleRate, obj.sampleRate);
+            end
+        end
+
+        function idx = outputIndex(obj, K)
+            %OUTPUTINDEX The samples y keeps: every stride-th from the first. Sampled, never averaged.
+            idx = 1:round(obj.sampleRate / obj.outputRate):K;
         end
 
         function aSensed = sensedAcceleration(obj, a, w, wd, T)
@@ -310,6 +383,71 @@ classdef Electrostatic < NonGravForces.sensor.Sensor
                 mask(:) = false;                 % every sample touches an edge
             else
                 mask(:, [1:h, K - h + 1:K]) = false;
+            end
+        end
+    end
+
+    methods (Static, Access = private)
+        function [k, src] = resolveKernel(kernel, sampleRate)
+            %RESOLVEKERNEL The taps and where they came from: "crn <preset>", "user" or "none".
+            unit = "Electrostatic";
+            crn = [];
+            if ischar(kernel) || isstring(kernel)
+                if ~(isscalar(string(kernel)) && string(kernel) == "crn")
+                    NonGravForces.fail(unit, "inputKernel", "a kernel given as text must be ""crn"" -> got ""%s""; pass a numeric FIR or [] otherwise", strjoin(string(kernel), " "));
+                end
+                % exist() does not resolve package functions (CLAUDE.md section 7); which() does.
+                if isempty(which('timeSeriesPreparation.crnKernel'))
+                    NonGravForces.fail(unit, "depMissing", "the default kernel is timeSeriesPreparation.crnKernel(""ACC"") and timeSeriesPreparation is not on the path -> run setupTimeSeriesPreparation, or pass [] for an unfiltered sensor");
+                end
+                crn = timeSeriesPreparation.crnKernel("ACC");
+            elseif isstruct(kernel)
+                if ~isscalar(kernel) || ~all(isfield(kernel, {'F', 'fs'}))
+                    NonGravForces.fail(unit, "inputKernel", "a kernel given as a struct must be a timeSeriesPreparation.crnKernel result with fields F and fs -> got fields %s", strjoin(string(fieldnames(kernel))', ", "));
+                end
+                crn = kernel;
+            elseif ~isnumeric(kernel)
+                NonGravForces.fail(unit, "inputKernel", "the kernel must be ""crn"", a crnKernel struct, a numeric FIR or [] -> got a %s", class(kernel));
+            end
+            if isempty(crn)
+                k = double(kernel(:)');
+                src = "user"; if isempty(k), src = "none"; end
+                return
+            end
+            if crn.fs ~= sampleRate
+                NonGravForces.fail(unit, "inputKernel", "the CRN kernel is defined at %g Hz and 'SampleRate' is %g Hz -> pass dynamics on the kernel's grid ('SampleRate', %g), or [] for no filter", crn.fs, sampleRate, crn.fs);
+            end
+            k = crn.F(:)';
+            src = "crn";
+            if isfield(crn, 'preset'), src = "crn " + string(crn.preset); end
+        end
+
+        function t = epochSeconds(e)
+            %EPOCHSECONDS Seconds since the first epoch, from any of the three accepted forms.
+            if isstruct(e) && isscalar(e) && all(isfield(e, {'day', 'sec'}))
+                t = (double(e.day(:)) - double(e.day(1))) * 86400 + (double(e.sec(:)) - double(e.sec(1)));
+            elseif isdatetime(e)
+                t = seconds(e(:) - e(1));
+            elseif isnumeric(e)
+                t = double(e(:)) - double(e(1));
+            else
+                NonGravForces.fail("Electrostatic", "inputDyn", "dyn.epoch must be seconds, a datetime, or a referenceSystem epoch with .day and .sec -> got a %s", class(e));
+            end
+        end
+
+        function ep = sampleEpoch(e, idx, K)
+            %SAMPLEEPOCH The epochs of the samples y keeps, in the form they were given.
+            if isempty(e)
+                ep = e;
+            elseif isstruct(e) && isscalar(e)
+                ep = e;
+                for f = string(fieldnames(e))'
+                    if numel(e.(f)) == K, ep.(f) = e.(f)(idx); end
+                end
+            elseif numel(e) == K
+                ep = e(idx);
+            else
+                ep = e;
             end
         end
     end

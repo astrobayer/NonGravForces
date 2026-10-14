@@ -182,7 +182,7 @@ v & 1x1 & struct & - & .major .minor .patch (uint16), .semantic (string, compose
 
 \subsection{\texttt{NonGravForces.dependencyReport}}
 \label{api:NonGravForces.dependencyReport}
-\noindent Presence and version of the four ecosystem toolboxes.
+\noindent Presence and version of the five ecosystem toolboxes.
 
 \begin{lstlisting}
 deps = NonGravForces.dependencyReport
@@ -220,7 +220,7 @@ Verbose & 1x1 & logical & - & Print a table (default true). \\
 \endfoot
 \bottomrule
 \endlastfoot
-deps & 1x4 & struct & - & .name .required (logical) .present (logical) .version (string, "" if absent) .minimum (string) .comparable (logical: the two are dotted numbers and can be ordered) .belowMinimum (logical: present, comparable and older than .minimum) .setup (string: setup function) .role (string) \\
+deps & 1x5 & struct & - & .name .required (logical) .present (logical) .version (string, "" if absent) .minimum (string) .comparable (logical: the two are dotted numbers and can be ordered) .belowMinimum (logical: present, comparable and older than .minimum) .setup (string: setup function) .role (string) \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
@@ -3234,11 +3234,13 @@ Subclasses use NonGravForces.fail("\textless{}Subclass\textgreater{}", ...).
 
 \subsection{\texttt{NonGravForces.sensor.Electrostatic}}
 \label{api:sensor.Electrostatic}
-\noindent Electrostatic accelerometer: bias, 3x3 scale, proof-mass offset coupling, FIR filter.
+\noindent Electrostatic accelerometer: bias, 3x3 scale, proof-mass offset coupling; L1B CRN filter by default.
 
 \begin{lstlisting}
-s = NonGravForces.sensor.Electrostatic(bias, S, dr, kernel)
-s = NonGravForces.sensor.Electrostatic(bias, S, dr, kernel, 'Rotation', R, 'SampleRate', 10)
+s = NonGravForces.sensor.Electrostatic(bias, S, dr)                       % CRN-filtered, 10 Hz input
+s = NonGravForces.sensor.Electrostatic(bias, S, dr, "crn", 'OutputRate', 1) % as ACT1B: 1 Hz samples
+s = NonGravForces.sensor.Electrostatic(bias, S, dr, [])                   % unfiltered, any rate
+s = NonGravForces.sensor.Electrostatic(bias, S, dr, kernel, 'Rotation', R, 'SampleRate', fs)
 y = s.observe(dyn);  [J, names] = s.partials(dyn);  asd = s.noiseModel(f)
 \end{lstlisting}
 
@@ -3259,7 +3261,7 @@ y = s.observe(dyn);  [J, names] = s.partials(dyn);  asd = s.noiseModel(f)
 bias & 3x1 & double & m/\allowbreak{}s\textasciicircum{}2 & Additive bias in the accelerometer frame; default zeros \\
 S & 3x3 & double & - & Scale matrix; a 3x1 is taken as its diagonal; default eye(3) \\
 dr & 3x1 & double & m & Proof-mass offset from the CoM, body frame; default zeros \\
-kernel & 1xL & double & - & FIR coefficients, L odd, sum \textasciitilde{}= 0; default [] (no filter) \\
+kernel & 1x1 & string & - & "crn" (default): timeSeriesPreparation.crnKernel("ACC") 1x1 struct - a timeSeriesPreparation.crnKernel result (e.g. other options); its .fs must equal 'SampleRate' 1xL double - any FIR, L odd, sum \textasciitilde{}= 0, applied at the caller's rate; [] = no filter \\
 \end{longtable}
 
 \subsubsection*{NAME-VALUE ARGUMENTS}
@@ -3277,7 +3279,8 @@ kernel & 1xL & double & - & FIR coefficients, L odd, sum \textasciitilde{}= 0; d
 \bottomrule
 \endlastfoot
 Rotation & 3x3 & double & - & Body -\textgreater{} accelerometer frame; default eye(3) \\
-SampleRate & 1x1 & double & Hz & Nominal rate, carried for noiseModel; default 1 \\
+SampleRate & 1x1 & double & Hz & Rate of dyn; must equal a CRN kernel's fs; default 10 \\
+OutputRate & 1x1 & double & Hz & Rate of y: every (SampleRate/OutputRate)-th filtered sample from the first, an integer ratio; default 'SampleRate' (no sampling). 1 reproduces ACT1B's rate \\
 NoiseAsd & 3x1 & double & m/\allowbreak{}s\textasciicircum{}2/\allowbreak{}rtHz & White floor per axis; default [1e-10; 1e-9; 1e-10], the GRACE-FO order with the cross-track axis ten times worse (Kornfeld et al. 2019) \\
 NoiseCorner & 1x1 & double & Hz & Below it the ASD rises as 1/f; default 5e-3 \\
 Name & 1x1 & string & - & Instrument label; default "electrostatic" \\
@@ -3286,10 +3289,13 @@ Name & 1x1 & string & - & Instrument label; default "electrostatic" \\
 \subsubsection*{METHODS}
 \begin{lstlisting}
 y          = observe(obj, dyn)     dyn: .a 3xK body, .omega 3xK body, .omegaDot 3xK body,
-                                   optional .epoch, optional .gravityGradient 3x3xK.
-                                   y: .value 3xK (accelerometer frame), .mask 3xK logical,
-                                   .frame, .epoch, .info
-[J, names] = partials(obj, dyn)    d(y)/d(theta), (3K)x15, theta = [bias; S(:); dr].
+                                   .epoch (1xK s, datetime, or a referenceSystem epoch with
+                                   .day/.sec; REQUIRED with a CRN kernel, optional otherwise),
+                                   optional .gravityGradient 3x3xK.
+                                   y: .value 3xM (accelerometer frame, M = ceil(K/stride)),
+                                   .mask 3xM logical, .frame, .epoch (sampled like .value),
+                                   .info (.kernel "crn ACC" | "user" | "none", .outputStride)
+[J, names] = partials(obj, dyn)    d(y)/d(theta), (3M)x15, theta = [bias; S(:); dr].
                                    Row (k-1)*3+i is axis i of epoch k: axis fastest
 asd        = noiseModel(obj, f_Hz) 3xN one-sided amplitude spectral density
 n          = numParameters(obj)    15
@@ -3298,8 +3304,9 @@ n          = numParameters(obj)    15
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}Electrostatic:\allowbreak{}inputShape}] an argument or a dyn field has the wrong size
-\item[\texttt{NonGravForces:\allowbreak{}Electrostatic:\allowbreak{}inputKernel}] the kernel is empty-summed, of even length, or not a vector
-\item[\texttt{NonGravForces:\allowbreak{}Electrostatic:\allowbreak{}inputDyn}] dyn lacks a, omega or omegaDot, or their epoch counts differ
+\item[\texttt{NonGravForces:\allowbreak{}Electrostatic:\allowbreak{}inputKernel}] the kernel is empty-summed, of even length, not a vector, text other than "crn", a struct without .F/.fs, or a CRN kernel whose .fs differs from 'SampleRate'
+\item[\texttt{NonGravForces:\allowbreak{}Electrostatic:\allowbreak{}depMissing}] "crn" asked for and timeSeriesPreparation is not on the path
+\item[\texttt{NonGravForces:\allowbreak{}Electrostatic:\allowbreak{}inputDyn}] dyn lacks a, omega or omegaDot, or their epoch counts differ; with a CRN kernel: dyn.epoch missing, of the wrong length or type, or not on the kernel's grid
 \item[\texttt{NonGravForces:\allowbreak{}Electrostatic:\allowbreak{}numericNaN}] an input contains NaN or Inf
 \end{description}
 
