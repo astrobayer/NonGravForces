@@ -56,3 +56,5 @@ app,calibrate,function,L8,WP-19,done,Accelerometer calibration: bias basis + 3x3
 app,DynamicsSource,class,L8,WP-C9,done,The acceleration as gjToolbox's integrator interface (native C entry)
 app,forceBudget,function,L8,WP-30,done,Per-effect per-axis acceleration budget over an arc; chunked and across models
 app,densityInversion,function,L8,WP-32,done,Thermosphere density from calibrated accelerations; the inversion is a division
+app,syntheticPair,function,L8,N-02,done,Truth generator: a 10 Hz model arc and its CRN-filtered 1 Hz observation with every planted value
+app,Calibration,class,L8,N-02,done,An accelerometer calibration: scale + time-varying bias + uncertainty + gates; apply/invert/save/load

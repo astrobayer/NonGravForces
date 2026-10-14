@@ -50,7 +50,7 @@ def help_names(src, title):
 
 
 def declared(src):
-    sig = re.search(r'^\s*function\s+(?:\[([^\]]*)\]|(\w+))?\s*=?\s*(\w+)\s*\(([^)]*)\)', src, re.M)
+    sig = re.search(r'^\s*function\s+(?:(?:\[([^\]]*)\]|(\w+))\s*=\s*)?(\w+)\s*\(([^)]*)\)', src, re.M)   # output clause optional as a whole (see audit_class)
     if not sig:
         return None
     outs = [o.strip() for o in sig.group(1).split(',')] if sig.group(1) else ([sig.group(2)] if sig.group(2) else [])
