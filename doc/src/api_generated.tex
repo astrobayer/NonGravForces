@@ -703,6 +703,7 @@ aux & 1x1 & struct & - & .epoch (GPS epoch struct of ALL K records), .thruster (
 \item[\texttt{NonGravForces:\allowbreak{}readTHR1B:\allowbreak{}dataEmpty}] no record survives TimeRange
 \item[\texttt{NonGravForces:\allowbreak{}readTHR1B:\allowbreak{}dataColumn}] no on\_time\_* variable in the header
 \item[\texttt{NonGravForces:\allowbreak{}readTHR1B:\allowbreak{}dataTimeRef}] time\_ref is not 'G' (GPS) for every record
+\item[\texttt{NonGravForces:\allowbreak{}readTHR1B:\allowbreak{}depMissing}] timeSeriesPreparation (the event table's owner) not on the path
 \item[\texttt{gracefoReading:\allowbreak{}*, referenceSystem:\allowbreak{}*}] propagated unwrapped
 \item[\texttt{MATLAB:\allowbreak{}badsubscript}] from gracefoReading.readL1bMulti when SEVERAL files are given and TimeRange excludes every record (dependency defect, HANDOVER O-12)
 \end{description}
@@ -3462,7 +3463,7 @@ m          = magnitudeResponse(obj, f_Hz)   |S(f)| of the cascade, evaluated on 
 
 \subsection{\texttt{NonGravForces.qc.residuals}}
 \label{api:qc.residuals}
-\noindent Residuals of measured minus modelled observations under a preliminary calibration, optionally whitened.
+\noindent [DEPRECATED, forwards to timeSeriesPreparation.qc.residuals] Residuals of measured minus modelled observations under a preliminary calibration, optionally whitened.
 
 \begin{lstlisting}
 r = NonGravForces.qc.residuals(y_meas, y_model)
@@ -3483,29 +3484,14 @@ r = NonGravForces.qc.residuals(y_meas, y_model)
 \endfoot
 \bottomrule
 \endlastfoot
-y\_\allowbreak{}meas & KxM & double & any & K samples of M channels (columns), e.g. ACT1B accelerations \\
-y\_\allowbreak{}model & KxM & double & any & Modelled observable at the same samples (sensor.observe) \\
+y\_\allowbreak{}meas & KxM & double & any & measured series, as timeSeriesPreparation.qc.residuals \\
+y\_\allowbreak{}model & KxM & double & any & modelled series, as timeSeriesPreparation.qc.residuals \\
+varargin & 1xN & cell & - & its name-value arguments, passed through unchanged \\
 \end{longtable}
 
 \subsubsection*{NAME-VALUE ARGUMENTS}
-\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endfirsthead
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endhead
-\midrule
-\endfoot
-\bottomrule
-\endlastfoot
-Bias & 1xM\textbar{}\allowbreak{}KxM & double & units & Preliminary bias, default zeros \\
-Scale & 1xM\textbar{}\allowbreak{}MxM & double & - & Preliminary scale (diagonal as 1xM, or full MxM), default identity \\
-Whitening & 1x1 & string & - & "none" (default) \textbar{} "difference" \textbar{} "highpass" \\
-Window & 1x1 & double & samples & Odd length \textgreater{}= 3 for "highpass" (required by it) \\
-\end{longtable}
+Bias, Scale, Whitening, Window: those of timeSeriesPreparation.qc.residuals, with its defaults; the two argument blocks are identical (compared 2026-10-14).
+
 
 \subsubsection*{OUTPUT ARGUMENTS}
 \begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
@@ -3521,19 +3507,24 @@ Window & 1x1 & double & samples & Odd length \textgreater{}= 3 for "highpass" (r
 \endfoot
 \bottomrule
 \endlastfoot
-r & KxM & double & units & Whitened residuals \\
-info & 1x1 & struct & - & .raw (KxM, before whitening), .sigmaRobust (1xM, 1.4826 MAD of r, NaN-free), .whitening, .window, .provenance \\
+r & KxM & double & - & as timeSeriesPreparation.qc.residuals, unchanged \\
+info & 1x1 & struct & - & as timeSeriesPreparation.qc.residuals, unchanged \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}residuals:\allowbreak{}inputShape}] y\_meas and y\_model not KxM of the same size, Bias/Scale of the wrong size
-\item[\texttt{NonGravForces:\allowbreak{}residuals:\allowbreak{}inputWindow}] highpass without an odd Window \textgreater{}= 3
+\item[\texttt{NonGravForces:\allowbreak{}residuals:\allowbreak{}depMissing}] timeSeriesPreparation is not on the path
+\item[\texttt{timeSeriesPreparation:\allowbreak{}residuals:\allowbreak{}*}] the target's errors, unwrapped
+\end{description}
+
+\subsubsection*{WARNINGS}
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
+\item[\texttt{NonGravForces:\allowbreak{}residuals:\allowbreak{}deprecated}] on every call; call timeSeriesPreparation.qc.residuals
 \end{description}
 
 \subsection{\texttt{NonGravForces.qc.hampel}}
 \label{api:qc.hampel}
-\noindent Robust point-outlier detector: moving median and scaled MAD, per column.
+\noindent [DEPRECATED, forwards to timeSeriesPreparation.qc.hampel] Robust point-outlier detector: moving median and scaled MAD, per column.
 
 \begin{lstlisting}
 mask = NonGravForces.qc.hampel(x)
@@ -3554,27 +3545,13 @@ mask = NonGravForces.qc.hampel(x)
 \endfoot
 \bottomrule
 \endlastfoot
-x & KxM & double & any & K samples of M channels (columns). A row vector is treated as one channel. \\
+x & KxM & double & any & samples down the columns, as timeSeriesPreparation.qc.hampel \\
+varargin & 1xN & cell & - & its name-value arguments, passed through unchanged \\
 \end{longtable}
 
 \subsubsection*{NAME-VALUE ARGUMENTS}
-\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endfirsthead
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endhead
-\midrule
-\endfoot
-\bottomrule
-\endlastfoot
-Window & 1x1 & double & samples & Odd window length \textgreater{}= 3, default 61 (1 min at 1 Hz: longer than a CRN-filtered impulse, shorter than an orbit). \\
-Threshold & 1x1 & double & - & Multiple of the robust sigma, default 4 (Gaussian false-alarm rate 6e-5/sample). \\
-MinSigma & 1x1 & double & units & Floor on the robust sigma, default 0: set to the instrument noise level so that a flat window cannot flag quantisation. \\
-\end{longtable}
+Window, Threshold, MinSigma: those of timeSeriesPreparation.qc.hampel, with its defaults; the two argument blocks are identical (compared 2026-10-14).
+
 
 \subsubsection*{OUTPUT ARGUMENTS}
 \begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
@@ -3590,19 +3567,24 @@ MinSigma & 1x1 & double & units & Floor on the robust sigma, default 0: set to t
 \endfoot
 \bottomrule
 \endlastfoot
-mask & KxM & logical & - & true = outlier \\
-info & 1x1 & struct & - & .median (KxM) .sigma (KxM, robust) .score (KxM, \textbar{}x-med\textbar{}/sigma) .nFlagged (1xM) .provenance \\
+mask & KxM & logical & - as & timeSeriesPreparation.qc.hampel, unchanged \\
+info & 1x1 & struct & - as & timeSeriesPreparation.qc.hampel, unchanged \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}hampel:\allowbreak{}inputShape}] x is not a 2-D real double array
-\item[\texttt{NonGravForces:\allowbreak{}hampel:\allowbreak{}inputWindow}] Window even, \textless{} 3, or non-integer
+\item[\texttt{NonGravForces:\allowbreak{}hampel:\allowbreak{}depMissing}] timeSeriesPreparation is not on the path
+\item[\texttt{timeSeriesPreparation:\allowbreak{}hampel:\allowbreak{}*}] the target's errors, unwrapped
+\end{description}
+
+\subsubsection*{WARNINGS}
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
+\item[\texttt{NonGravForces:\allowbreak{}hampel:\allowbreak{}deprecated}] on every call; call timeSeriesPreparation.qc.hampel
 \end{description}
 
 \subsection{\texttt{NonGravForces.qc.detectImpulses}}
 \label{api:qc.detectImpulses}
-\noindent Matched-filter detection of pulses with a known shape (the CRN impulse response) in whitened residuals; thruster priors are assigned first.
+\noindent [DEPRECATED, forwards to timeSeriesPreparation.qc.detectImpulses] Matched-filter detection of pulses with a known shape (the CRN impulse response) in whitened residuals; thruster priors are assigned first.
 
 \begin{lstlisting}
 [events, info] = NonGravForces.qc.detectImpulses(r, 'Epoch', t, 'Response', h)
@@ -3623,29 +3605,13 @@ info & 1x1 & struct & - & .median (KxM) .sigma (KxM, robust) .score (KxM, \textb
 \endfoot
 \bottomrule
 \endlastfoot
-r & KxM & double & units & Whitened residuals (qc.residuals), M = 1 (axis "all") or 3 (x, y, z) \\
+r & Kx1\textbar{}\allowbreak{}Kx3 & double & any & residual series, as timeSeriesPreparation.qc.detectImpulses \\
+varargin & 1xN & cell & - & its name-value arguments, passed through unchanged \\
 \end{longtable}
 
 \subsubsection*{NAME-VALUE ARGUMENTS}
-\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endfirsthead
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endhead
-\midrule
-\endfoot
-\bottomrule
-\endlastfoot
-Epoch & Kx1 & datetime & UTC & Sample epochs (required; eventTable times) \\
-Response & Lx1 & double & any & Pulse template, L \textgreater{}= 2, not constant (required: the CRN impulse response at the sample rate; no default shape is assumed) \\
-Priors & Nx8 & table & - & qc.eventTable rows (class impulse) to assign, default none \\
-Threshold & 1x1 & double & sigma & Detection threshold on \textbar{}score\textbar{}, default 5 (Gaussian false alarm 6e-7 per sample, \textasciitilde{}0.05 per day at 1 Hz) \\
-PriorWindow\_\allowbreak{}s & 1x1 & double & s & Assignment window around a prior epoch, default 5 \\
-\end{longtable}
+Epoch, Response, Priors, Threshold, PriorWindow\_s: those of timeSeriesPreparation.qc.detectImpulses, with its defaults; the two argument blocks are identical (compared 2026-10-14).
+
 
 \subsubsection*{OUTPUT ARGUMENTS}
 \begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
@@ -3661,22 +3627,24 @@ PriorWindow\_\allowbreak{}s & 1x1 & double & s & Assignment window around a prio
 \endfoot
 \bottomrule
 \endlastfoot
-events & Nx8 & table & - & qc.eventTable rows, class "impulse", sorted by tStart \\
-info & 1x1 & struct & - & .score (KxM), .amplitude (KxM, c/(hz.h)), .sigmaCorr (1xM), .templateGain (hz.h), .nanCount (1xM), .unmatchedPriors (rows of Priors without a detection), .provenance \\
+events & Nx8 & table & - & as timeSeriesPreparation.qc.detectImpulses, unchanged \\
+info & 1x1 & struct & - & as timeSeriesPreparation.qc.detectImpulses, unchanged \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}detectImpulses:\allowbreak{}inputShape}] r not KxM with M = 1 or 3, or Epoch not Kx1 datetime
-\item[\texttt{NonGravForces:\allowbreak{}detectImpulses:\allowbreak{}inputEpoch}] Epoch missing or not UTC
-\item[\texttt{NonGravForces:\allowbreak{}detectImpulses:\allowbreak{}inputResponse}] Response missing, shorter than 2 samples, longer than K, or constant
-\item[\texttt{NonGravForces:\allowbreak{}detectImpulses:\allowbreak{}inputPriors}] Priors not an eventTable-shaped table
-\item[\texttt{NonGravForces:\allowbreak{}detectImpulses:\allowbreak{}inputRange}] Threshold or PriorWindow\_s \textless{}= 0
+\item[\texttt{NonGravForces:\allowbreak{}detectImpulses:\allowbreak{}depMissing}] timeSeriesPreparation is not on the path
+\item[\texttt{timeSeriesPreparation:\allowbreak{}detectImpulses:\allowbreak{}*}] the target's errors, unwrapped
+\end{description}
+
+\subsubsection*{WARNINGS}
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
+\item[\texttt{NonGravForces:\allowbreak{}detectImpulses:\allowbreak{}deprecated}] on every call; call timeSeriesPreparation.qc.detectImpulses
 \end{description}
 
 \subsection{\texttt{NonGravForces.qc.detectJumps}}
 \label{api:qc.detectJumps}
-\noindent Change points in level or slope of whitened residuals by PELT with a BIC penalty; eclipse and mass priors are assigned.
+\noindent [DEPRECATED, forwards to timeSeriesPreparation.qc.detectJumps] Change points in level or slope of whitened residuals by PELT with a BIC penalty; eclipse and mass priors are assigned.
 
 \begin{lstlisting}
 [events, info] = NonGravForces.qc.detectJumps(r, 'Epoch', t)
@@ -3697,30 +3665,13 @@ info & 1x1 & struct & - & .score (KxM), .amplitude (KxM, c/(hz.h)), .sigmaCorr (
 \endfoot
 \bottomrule
 \endlastfoot
-r & KxM & double & units & Whitened residuals, M = 1 (axis "all") or 3 (x, y, z); NaN samples are removed before segmentation and the indices mapped back \\
+r & Kx1\textbar{}\allowbreak{}Kx3 & double & any & residual series, as timeSeriesPreparation.qc.detectJumps \\
+varargin & 1xN & cell & - & its name-value arguments, passed through unchanged \\
 \end{longtable}
 
 \subsubsection*{NAME-VALUE ARGUMENTS}
-\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endfirsthead
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endhead
-\midrule
-\endfoot
-\bottomrule
-\endlastfoot
-Epoch & Kx1 & datetime & UTC & Sample epochs (required) \\
-Model & 1x1 & string & - & "level" (default) \textbar{} "slope" \\
-Penalty & 1x1 & double & units\textasciicircum{}2 & Penalty per change point, default BIC (see above) \\
-MinSegment & 1x1 & double & samples & Shortest segment, default 2 (level) or 3 (slope) \\
-Priors & Nx8 & table & - & qc.eventTable rows to assign, default none \\
-PriorWindow\_\allowbreak{}s & 1x1 & double & s & Assignment window, default 60 \\
-\end{longtable}
+Epoch, Model, Penalty, MinSegment, Priors, PriorWindow\_s: those of timeSeriesPreparation.qc.detectJumps, with its defaults; the two argument blocks are identical (compared 2026-10-14).
+
 
 \subsubsection*{OUTPUT ARGUMENTS}
 \begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
@@ -3736,80 +3687,82 @@ PriorWindow\_\allowbreak{}s & 1x1 & double & s & Assignment window, default 60 \
 \endfoot
 \bottomrule
 \endlastfoot
-events & Nx8 & table & - & qc.eventTable rows, class "jump", sorted by tStart \\
-info & 1x1 & struct & - & .changePoints (1xM cell of sample indices: first sample of each new segment), .penalty (1xM), .sigma (1xM), .cost (1xM, optimal objective), .segments (1xM cell of [first last level\textbar{}intercept slope]), .provenance \\
+events & Nx8 & table & - & as timeSeriesPreparation.qc.detectJumps, unchanged \\
+info & 1x1 & struct & - & as timeSeriesPreparation.qc.detectJumps, unchanged \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}detectJumps:\allowbreak{}inputShape}] r not KxM with M = 1 or 3, or Epoch not Kx1
-\item[\texttt{NonGravForces:\allowbreak{}detectJumps:\allowbreak{}inputEpoch}] Epoch missing or not UTC
-\item[\texttt{NonGravForces:\allowbreak{}detectJumps:\allowbreak{}inputRange}] Penalty \textless{}= 0, MinSegment \textless{} 2 (or \textless{} 3 for slope), PriorWindow\_s \textless{}= 0
-\item[\texttt{NonGravForces:\allowbreak{}detectJumps:\allowbreak{}inputPriors}] Priors not an eventTable-shaped table
-\item[\texttt{NonGravForces:\allowbreak{}detectJumps:\allowbreak{}dataEmpty}] fewer than 2 MinSegment finite samples in a channel
+\item[\texttt{NonGravForces:\allowbreak{}detectJumps:\allowbreak{}depMissing}] timeSeriesPreparation is not on the path
+\item[\texttt{timeSeriesPreparation:\allowbreak{}detectJumps:\allowbreak{}*}] the target's errors, unwrapped
+\end{description}
+
+\subsubsection*{WARNINGS}
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
+\item[\texttt{NonGravForces:\allowbreak{}detectJumps:\allowbreak{}deprecated}] on every call; call timeSeriesPreparation.qc.detectJumps
 \end{description}
 
 \subsection{\texttt{NonGravForces.qc.eventTable}}
 \label{api:qc.eventTable}
-\noindent Canonical event table (schema authority) for quality-control results.
+\noindent [DEPRECATED, forwards to timeSeriesPreparation.qc.eventTable] Canonical event table (schema authority) for quality-control results.
 
 \begin{lstlisting}
 T = NonGravForces.qc.eventTable()                       % empty, schema only
 T = NonGravForces.qc.eventTable(tStart, tEnd, class, axis, amplitude, sigma, source, confidence)
 \end{lstlisting}
 
-\subsubsection*{INPUT ARGUMENTS (all 1xN or Nx1, same N)}
-\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{7.90cm}@{}}
+\subsubsection*{INPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
 \toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
 \midrule
 \endfirsthead
 \toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
 \midrule
 \endhead
 \midrule
 \endfoot
 \bottomrule
 \endlastfoot
-tStart & datetime & - & UTC, first affected sample \\
-tEnd & datetime & - & UTC, last affected sample (== tStart for a point) \\
-class & string & - & "outlier" \textbar{} "impulse" \textbar{} "jump" \\
-axis & string & - & "x" \textbar{} "y" \textbar{} "z" \textbar{} "all" \\
-amplitude & double & m/\allowbreak{}s\textasciicircum{}2 & estimated size (step size for jumps); NaN means NOT ESTIMATED, which is what io.readTHR1B writes for a thruster firing \\
-sigma & double & m/\allowbreak{}s\textasciicircum{}2 & 1-sigma uncertainty of amplitude, \textgreater{}= 0; NaN with the amplitude \\
-source & string & - & "THR1B" \textbar{} "MAS1B" \textbar{} "eclipse" \textbar{} "heater" \textbar{} "magnetorquer" \textbar{} "unassigned" \\
-confidence & double & - & in [0,1], finite (a probability, never NaN) \\
+varargin & 1x0 or & 1x8 & cell - & the eight columns of timeSeriesPreparation.qc.eventTable, or none \\
 \end{longtable}
 
+\subsubsection*{NAME-VALUE ARGUMENTS}
+None.
+
+
 \subsubsection*{OUTPUT ARGUMENTS}
-\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{9.40cm}@{}}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
 \toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Description}} \\
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
 \midrule
 \endfirsthead
 \toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Description}} \\
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
 \midrule
 \endhead
 \midrule
 \endfoot
 \bottomrule
 \endlastfoot
-T & table & N rows, columns as above in that order. \\
+T & Nx8 & table & - & the target's table, unchanged \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}eventTable:\allowbreak{}inputArity}] not 0 or 8 arguments
-\item[\texttt{NonGravForces:\allowbreak{}eventTable:\allowbreak{}inputClass}] class / axis / source not in set
-\item[\texttt{NonGravForces:\allowbreak{}eventTable:\allowbreak{}inputLength}] columns of different length
-\item[\texttt{NonGravForces:\allowbreak{}eventTable:\allowbreak{}numericNaN}] Inf amplitude or sigma, or non-finite confidence
+\item[\texttt{NonGravForces:\allowbreak{}eventTable:\allowbreak{}depMissing}] timeSeriesPreparation is not on the path
+\item[\texttt{timeSeriesPreparation:\allowbreak{}eventTable:\allowbreak{}*}] the target's errors, unwrapped
+\end{description}
+
+\subsubsection*{WARNINGS}
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
+\item[\texttt{NonGravForces:\allowbreak{}eventTable:\allowbreak{}deprecated}] on every call; call timeSeriesPreparation.qc.eventTable
 \end{description}
 
 \subsection{\texttt{NonGravForces.qc.screen}}
 \label{api:qc.screen}
-\noindent Quality-control orchestrator: residuals -\textgreater{} outliers -\textgreater{} impulses -\textgreater{} jumps -\textgreater{} mask and event table.
+\noindent [DEPRECATED, forwards to timeSeriesPreparation.qc.screen] Quality-control orchestrator: residuals -\textgreater{} outliers -\textgreater{} impulses -\textgreater{} jumps -\textgreater{} mask and event table.
 
 \begin{lstlisting}
 [mask, events, info] = NonGravForces.qc.screen(y_meas, y_model, t)
@@ -3830,39 +3783,15 @@ T & table & N rows, columns as above in that order. \\
 \endfoot
 \bottomrule
 \endlastfoot
-y\_\allowbreak{}meas & KxM & double & units & Measured observable, M = 1 or 3 channels (columns) \\
-y\_\allowbreak{}model & KxM & double & units & Modelled observable \\
-epoch & Kx1 & datetime & UTC & Sample epochs \\
+y\_\allowbreak{}meas & KxM & double & any & measured series, as timeSeriesPreparation.qc.screen \\
+y\_\allowbreak{}model & KxM & double & any & modelled series, as timeSeriesPreparation.qc.screen \\
+epoch & Kx1 & datetime & UTC & sample epochs, as timeSeriesPreparation.qc.screen \\
+varargin & 1xN & cell & - & its name-value arguments, passed through unchanged \\
 \end{longtable}
 
 \subsubsection*{NAME-VALUE ARGUMENTS}
-\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endfirsthead
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endhead
-\midrule
-\endfoot
-\bottomrule
-\endlastfoot
-Bias & 1xM\textbar{}\allowbreak{}KxM & double & units & Preliminary bias, default zeros (as qc.residuals) \\
-Scale & 1xM\textbar{}\allowbreak{}MxM & double & - & Preliminary scale, diagonal as 1xM or full MxM, default identity (as qc.residuals) \\
-Whitening & 1x1 & string & - & "none" (default) \textbar{} "difference" \textbar{} "highpass" \\
-Window & 1x1 & double & samples & Odd length \textgreater{}= 3, required by "highpass" \\
-HampelWindow & 1x1 & double & samples & default 61 \\
-HampelThreshold & 1x1 & double & sigma & default 4 \\
-Response & Lx1 & double & any & Pulse template for detectImpulses; default [] = impulse step skipped \\
-Thrusters & Nx8 & table & - & Impulse priors (io.readTHR1B), default none \\
-ImpulseThreshold & 1x1 & double & sigma & default 5 \\
-Priors & Nx8 & table & - & Jump priors (eclipse, MAS1B events), default none \\
-JumpModel & 1x1 & string & - & "level" (default) \textbar{} "slope" \\
-JumpPenalty & 1x1 & double & units\textasciicircum{}2 & default BIC (detectJumps) \\
-JumpMinSegment & 1x1 & double & samples & default 30 (the CRN width: shorter level changes are pulses or outliers, not jumps; the BIC alone admits 3-sigma noise segments of a few samples) \\
-\end{longtable}
+Bias, Scale, Whitening, Window, HampelWindow, HampelThreshold, Response, ImpulseThreshold, Thrusters, Priors, JumpModel, JumpPenalty, JumpMinSegment: those of timeSeriesPreparation.qc.screen, with its defaults; the two argument blocks are identical (compared 2026-10-14).
+
 
 \subsubsection*{OUTPUT ARGUMENTS}
 \begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
@@ -3878,16 +3807,20 @@ JumpMinSegment & 1x1 & double & samples & default 30 (the CRN width: shorter lev
 \endfoot
 \bottomrule
 \endlastfoot
-mask & KxM & logical & - & true = do not use the sample (outlier or inside an impulse) \\
-events & Nx8 & table & - & qc.eventTable of all detections \\
-info & 1x1 & struct & - & .residual (KxM, whitened, untouched), .residualClean (outliers replaced, pulses NaN), .outliers (KxM logical, after pulses claimed theirs), .impulses .jumps (detector infos, or "skipped"), .isolatedOutliers (KxM logical, the runs of \textless{}= 2 samples replaced before the matched filter), .counts (struct outlier/impulse/jump), .provenance \\
+mask & KxM & logical & - as & timeSeriesPreparation.qc.screen, unchanged \\
+events & Nx8 & table & - as & timeSeriesPreparation.qc.screen, unchanged \\
+info & 1x1 & struct & - as & timeSeriesPreparation.qc.screen, unchanged \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}screen:\allowbreak{}inputShape}] y\_meas/y\_model not KxM with M = 1 or 3, or epoch not Kx1 datetime
-\item[\texttt{NonGravForces:\allowbreak{}screen:\allowbreak{}inputEpoch}] epoch not UTC
-\item[\texttt{NonGravForces:\allowbreak{}residuals:\allowbreak{}*, NonGravForces:\allowbreak{}hampel:\allowbreak{}*, NonGravForces:\allowbreak{}detectImpulses:\allowbreak{}*, NonGravForces:\allowbreak{}detectJumps:\allowbreak{}*}] propagated
+\item[\texttt{NonGravForces:\allowbreak{}screen:\allowbreak{}depMissing}] timeSeriesPreparation is not on the path
+\item[\texttt{timeSeriesPreparation:\allowbreak{}screen:\allowbreak{}*}] the target's errors, unwrapped
+\end{description}
+
+\subsubsection*{WARNINGS}
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
+\item[\texttt{NonGravForces:\allowbreak{}screen:\allowbreak{}deprecated}] on every call; call timeSeriesPreparation.qc.screen
 \end{description}
 
 \section{L8 \texttt{app} --- applications built from the layers below}

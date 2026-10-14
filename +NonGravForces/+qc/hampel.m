@@ -1,98 +1,65 @@
-function [mask, info] = hampel(x, options)
-%HAMPEL Robust point-outlier detector: moving median and scaled MAD, per column.
+function [mask, info] = hampel(x, varargin)
+%HAMPEL [DEPRECATED, forwards to timeSeriesPreparation.qc.hampel] Robust point-outlier detector: moving median and scaled MAD, per column.
 %
 %   mask = NonGravForces.qc.hampel(x)
 %   [mask, info] = NonGravForces.qc.hampel(x, 'Window', 61, 'Threshold', 4)
 %
-%   Flags sample i of column j when |x(i,j) - med(i,j)| > t * 1.4826 * MAD(i,j),
-%   where med and MAD are computed over a centred window of W samples
-%   (truncated at the edges). Median and MAD are unaffected by up to ~50 %
-%   contaminated samples in a window, which is why this - and not a moving
-%   mean/std - is the first pass on accelerometer residuals containing
-%   thruster spikes and twangs (see the ACCURACY block).
-%
-%   NaN POLICY. NaN samples are never flagged and never enter the window
-%   statistics; a window with fewer than 3 finite samples flags nothing.
+%   DEPRECATED (N-01, 2026-10-14). The qc stage moved to timeSeriesPreparation
+%   (CONCEPT 10.1 N-01, X-05): it ported this unit UNCHANGED, froze the port
+%   and gates every later change against it with isequaln (X-16). This unit
+%   now only forwards: it warns NonGravForces:hampel:deprecated and calls
+%   timeSeriesPreparation.qc.hampel with the same arguments. It is deleted in
+%   the release after the one that carries the forwarding. The target's errors
+%   propagate unwrapped (timeSeriesPreparation:hampel:*), as every foreign error
+%   does in this toolbox. Call the target directly.
 %
 % INPUT ARGUMENTS
-%   Name       Size  Type    Units  Description
-%   ----       ----  ----    -----  -----------
-%   x          KxM   double  any    K samples of M channels (columns). A row
-%                                   vector is treated as one channel.
+%   Name      Size     Type     Units Description
+%   ----      ----     ----     ----- -----------
+%   x         KxM      double   any   samples down the columns, as timeSeriesPreparation.qc.hampel
+%   varargin  1xN      cell     -     its name-value arguments, passed through unchanged
 %
 % NAME-VALUE ARGUMENTS
-%   Window     1x1   double  samples Odd window length >= 3, default 61
-%                                   (1 min at 1 Hz: longer than a CRN-filtered
-%                                   impulse, shorter than an orbit).
-%   Threshold  1x1   double  -      Multiple of the robust sigma, default 4
-%                                   (Gaussian false-alarm rate 6e-5/sample).
-%   MinSigma   1x1   double  units  Floor on the robust sigma, default 0:
-%                                   set to the instrument noise level so that
-%                                   a flat window cannot flag quantisation.
+%   Window, Threshold, MinSigma: those of timeSeriesPreparation.qc.hampel,
+%   with its defaults; the two argument blocks are identical (compared 2026-10-14).
 %
 % OUTPUT ARGUMENTS
-%   Name       Size  Type     Units  Description
-%   ----       ----  ----     -----  -----------
-%   mask       KxM   logical  -      true = outlier
-%   info       1x1   struct   -      .median (KxM) .sigma (KxM, robust)
-%                                    .score (KxM, |x-med|/sigma) .nFlagged
-%                                    (1xM) .provenance
+%   Name      Size  Type    Units Description
+%   ----      ----  ----    ----- -----------
+%   mask      KxM   logical -  as timeSeriesPreparation.qc.hampel, unchanged
+%   info      1x1   struct  -  as timeSeriesPreparation.qc.hampel, unchanged
 %
 % ACCURACY
-%   The scale factor 1.4826 makes MAD consistent with sigma for Gaussian
-%   noise; for the coloured 1/f accelerometer noise it overestimates sigma
-%   by up to ~10 % inside a 61-sample window, which is conservative.
-%   Impulses wider than Window/2 are NOT outliers to this detector by design
-%   - they go to detectImpulses.
+%   None of its own: the target's numbers, bit for bit. tests/tNgfQc*.m run the
+%   pre-move suite through this forwarder.
 %
 % ERRORS
-%   NonGravForces:hampel:inputShape    x is not a 2-D real double array
-%   NonGravForces:hampel:inputWindow   Window even, < 3, or non-integer
+%   NonGravForces:hampel:depMissing   timeSeriesPreparation is not on the path
+%   timeSeriesPreparation:hampel:*    the target's errors, unwrapped
+%
+% WARNINGS
+%   NonGravForces:hampel:deprecated   on every call; call timeSeriesPreparation.qc.hampel
 %
 % REFERENCES
-%   Hampel (1974) J. Am. Stat. Assoc. 69:383; Pearson (2002) EURASIP JASP.
+%   timeSeriesPreparation docs/CONCEPT.md section 10.1 rows N-01, X-05, X-16.
 %
 % EXAMPLE
-%   x = randn(1000,1); x(500) = 12;
-%   mask = NonGravForces.qc.hampel(x); find(mask)   % -> 500
+%   % Call the target directly; this name disappears in the release after next.
+%   help timeSeriesPreparation.qc.hampel
 %
-% See also NonGravForces.qc.screen, NonGravForces.qc.detectImpulses, movmedian.
+% See also timeSeriesPreparation.qc.hampel.
 %
-% KEYWORDS outlier robust median MAD quality control
-% Created 2026-08-27 by Claude Fable 5 (Anthropic).
+% KEYWORDS deprecated forwarder quality control
+% Created 2026-09-07 by Claude Fable 5 (Anthropic); reduced to a forwarder (N-01) 2026-10-14 by Claude (Anthropic).
 arguments
-    x double
-    options.Window (1,1) double = 61
-    options.Threshold (1,1) double {mustBePositive} = 4
-    options.MinSigma (1,1) double {mustBeNonnegative} = 0
+    x
 end
-if ~ismatrix(x) || ~isreal(x)
-    NonGravForces.fail("hampel", "inputShape", "x must be a real KxM matrix -> got %s", mat2str(size(x)));
+arguments (Repeating)
+    varargin
 end
-W = options.Window;
-if W < 3 || mod(W, 2) ~= 1 || W ~= round(W)
-    NonGravForces.fail("hampel", "inputWindow", "Window must be an odd integer >= 3 -> got %g", W);
+if isempty(which('timeSeriesPreparation.qc.hampel'))
+    NonGravForces.fail("hampel", "depMissing", "qc.hampel forwards to timeSeriesPreparation.qc.hampel and timeSeriesPreparation is not on the path -> run setupTimeSeriesPreparation");
 end
-if isrow(x), x = x(:); end
-[K, M] = size(x);
-h = (W - 1) / 2;
-med = nan(K, M); sig = nan(K, M);
-for j = 1:M
-    xj = x(:, j);
-    for i = 1:K
-        lo = max(1, i - h); hi = min(K, i + h);
-        w = xj(lo:hi); w = w(isfinite(w));
-        if numel(w) < 3, continue; end
-        m = median(w);
-        med(i, j) = m;
-        sig(i, j) = 1.4826 * median(abs(w - m));
-    end
-end
-sig = max(sig, options.MinSigma);
-score = abs(x - med) ./ sig;                     % NaN where sig is 0 or x NaN
-mask = score > options.Threshold;                % NaN > t is false
-mask(~isfinite(x)) = false;
-info.median = med; info.sigma = sig; info.score = score;
-info.nFlagged = sum(mask, 1);
-info.provenance = NonGravForces.provenance("qc.hampel", 'Options', options);
+warning("NonGravForces:hampel:deprecated", "NonGravForces.qc.hampel is deprecated and forwards to timeSeriesPreparation.qc.hampel -> call that directly; this name is removed in the release after the one that carries the forwarding");
+[mask, info] = timeSeriesPreparation.qc.hampel(x, varargin{:});
 end

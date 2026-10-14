@@ -46,12 +46,12 @@ sensor,Sensor,class,L6,WP-29,interface,Abstract measurement model: observe / par
 sensor,Electrostatic,class,L6,WP-29,done,Electrostatic accelerometer: bias scale matrix proof-mass offset coupling; L1B CRN filter by default
 sensor,AtomInterferometer,class,L6,WP-29,done,Cold-atom interferometer: phase = k_eff a T^2 with dead time rotation and the 2 pi ambiguity
 sensor,DragFree,class,L6,WP-29,done,Drag-free residual: sensitivity high-pass cascade with actuator saturation
-qc,residuals,function,L7,WP-31,done,Whitened residuals measured - modelled with preliminary calibration
-qc,hampel,function,L7,WP-31,done,Robust point-outlier detector (moving median + MAD)
-qc,detectImpulses,function,L7,WP-31,done,Matched filter on the CRN impulse response with THR1B priors
-qc,detectJumps,function,L7,WP-31,done,Piecewise-constant/linear change-point detection (PELT + BIC)
-qc,eventTable,function,L7,WP-31,done,Canonical event table constructor and schema
-qc,screen,function,L7,WP-31,done,Orchestrator: residuals -> outliers -> impulses -> jumps -> mask
+qc,residuals,function,L7,WP-31,done,DEPRECATED - forwards to timeSeriesPreparation.qc.residuals (N-01): Whitened residuals measured - modelled with preliminary calibration
+qc,hampel,function,L7,WP-31,done,DEPRECATED - forwards to timeSeriesPreparation.qc.hampel (N-01): Robust point-outlier detector (moving median + MAD)
+qc,detectImpulses,function,L7,WP-31,done,DEPRECATED - forwards to timeSeriesPreparation.qc.detectImpulses (N-01): Matched filter on the CRN impulse response with THR1B priors
+qc,detectJumps,function,L7,WP-31,done,DEPRECATED - forwards to timeSeriesPreparation.qc.detectJumps (N-01): Piecewise-constant/linear change-point detection (PELT + BIC)
+qc,eventTable,function,L7,WP-31,done,DEPRECATED - forwards to timeSeriesPreparation.qc.eventTable (N-01): Canonical event table constructor and schema
+qc,screen,function,L7,WP-31,done,DEPRECATED - forwards to timeSeriesPreparation.qc.screen (N-01): Orchestrator: residuals -> outliers -> impulses -> jumps -> mask
 app,calibrate,function,L8,WP-19,done,Accelerometer calibration: bias basis + 3x3 scale + jumps by separable weighted least squares
 app,DynamicsSource,class,L8,WP-C9,done,The acceleration as gjToolbox's integrator interface (native C entry)
 app,forceBudget,function,L8,WP-30,done,Per-effect per-axis acceleration budget over an arc; chunked and across models

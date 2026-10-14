@@ -34,7 +34,8 @@ Nine layers; a layer calls only lower layers plus the four dependencies.
 
 ```
 L8 app      calibrate, forceBudget, densityInversion, DynamicsSource (gjToolbox entry, native C)
-L7 qc       residuals, hampel, detectImpulses, detectJumps, eventTable, screen
+L7 qc       residuals, hampel, detectImpulses, detectJumps, eventTable, screen  (DEPRECATED forwarders
+            to timeSeriesPreparation.qc since N-01; deleted after the next release, O-47)
 L6 sensor   Sensor (abstract), Electrostatic, AtomInterferometer, DragFree
 L5 Model    accel | torque | series | partials | budget   <- single point of access
 L4 kernel   gsiCoefficients, accommodation, dragPanelForce, radiationPanelForce,
@@ -170,6 +171,8 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-09-17, after LP-E)
 
+- **2026-10-14, N-01 (#58):** the six `qc` units forward to `timeSeriesPreparation.qc` with a
+  `deprecated` warning; O-1/O-18 moved there; O-47 deletes them after the next release. ◐.
 - **2026-10-14, N-04 (#61):** `sensor.Electrostatic` filters with the L1B CRN kernel from
   `timeSeriesPreparation.crnKernel("ACC")` by default, on 10 Hz dynamics whose grid it checks from
   `dyn.epoch`; `'OutputRate', 1` samples like ACT1B; `[]` stays unfiltered. timeSeriesPreparation and
@@ -424,7 +427,7 @@ repository had written down about them.
   under `tests/fixtures/groops/` and committed; neither CI nor the host needs a
   GROOPS installation.
 
-**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-46 with an owner
+**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-47 with an owner
 and a re-entry condition each. This file deliberately does NOT list them: the copy that
 used to live here had drifted to O-15 of 21 and showed two closed items as open, and no
 check compared the two (R1). Read Part H.

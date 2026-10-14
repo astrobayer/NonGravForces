@@ -1,5 +1,5 @@
 classdef tNgfQc < NgfTestCase
-%TNGFQC Tests of qc.hampel and qc.eventTable: all seven categories.
+%TNGFQC Tests of qc.hampel and qc.eventTable: all seven categories, run through the N-01 forwarders.
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).
     methods (Static)
         function [x, flagged] = oracle()
@@ -15,9 +15,9 @@ classdef tNgfQc < NgfTestCase
             tc.verifySize(m, [100 2]); tc.verifyClass(m, 'logical');
             tc.verifySize(info.score, [100 2]); tc.verifyEqual(size(info.nFlagged), [1 2]);
             tc.verifyEqual(size(NonGravForces.qc.hampel(randn(1, 50))), [50 1], 'a row is one channel');
-            tc.verifyErrorId(@() NonGravForces.qc.hampel(randn(3,3,3)), 'NonGravForces:hampel:inputShape');
-            tc.verifyErrorId(@() NonGravForces.qc.hampel(x, 'Window', 10), 'NonGravForces:hampel:inputWindow');
-            tc.verifyErrorId(@() NonGravForces.qc.hampel(x, 'Window', 1), 'NonGravForces:hampel:inputWindow');
+            tc.verifyErrorId(@() NonGravForces.qc.hampel(randn(3,3,3)), 'timeSeriesPreparation:hampel:inputShape');
+            tc.verifyErrorId(@() NonGravForces.qc.hampel(x, 'Window', 10), 'timeSeriesPreparation:hampel:inputWindow');
+            tc.verifyErrorId(@() NonGravForces.qc.hampel(x, 'Window', 1), 'timeSeriesPreparation:hampel:inputWindow');
             tc.verifyError(@() NonGravForces.qc.hampel(x, 'Threshold', -1), 'MATLAB:validators:mustBePositive');
             tc.verifyEqual(info.provenance.unit, "qc.hampel");
         end
@@ -28,10 +28,51 @@ classdef tNgfQc < NgfTestCase
             t = datetime(2020,1,1,'TimeZone','UTC') + seconds([10 20]);
             T2 = NonGravForces.qc.eventTable(t, t, ["outlier","jump"], ["x","all"], [1e-8 2e-9], [1e-9 1e-9], ["THR1B","eclipse"], [0.9 0.5]);
             tc.verifyEqual(height(T2), 2);
-            tc.verifyErrorId(@() NonGravForces.qc.eventTable(t), 'NonGravForces:eventTable:inputArity');
-            tc.verifyErrorId(@() NonGravForces.qc.eventTable(t, t, ["blip","jump"], ["x","all"], [1 2], [1 1], ["THR1B","eclipse"], [0.9 0.5]), 'NonGravForces:eventTable:inputClass');
-            tc.verifyErrorId(@() NonGravForces.qc.eventTable(t, t(1), ["outlier","jump"], ["x","all"], [1 2], [1 1], ["THR1B","eclipse"], [0.9 0.5]), 'NonGravForces:eventTable:inputLength');
-            tc.verifyErrorId(@() NonGravForces.qc.eventTable(t, t, ["outlier","jump"], ["x","all"], [1 2], [1 1], ["THR1B","eclipse"], [0.9 1.5]), 'NonGravForces:eventTable:inputClass');
+            tc.verifyErrorId(@() NonGravForces.qc.eventTable(t), 'timeSeriesPreparation:eventTable:inputArity');
+            tc.verifyErrorId(@() NonGravForces.qc.eventTable(t, t, ["blip","jump"], ["x","all"], [1 2], [1 1], ["THR1B","eclipse"], [0.9 0.5]), 'timeSeriesPreparation:eventTable:inputClass');
+            tc.verifyErrorId(@() NonGravForces.qc.eventTable(t, t(1), ["outlier","jump"], ["x","all"], [1 2], [1 1], ["THR1B","eclipse"], [0.9 0.5]), 'timeSeriesPreparation:eventTable:inputLength');
+            tc.verifyErrorId(@() NonGravForces.qc.eventTable(t, t, ["outlier","jump"], ["x","all"], [1 2], [1 1], ["THR1B","eclipse"], [0.9 1.5]), 'timeSeriesPreparation:eventTable:inputClass');
+        end
+        function qcForwardingContract(tc)
+            % N-01 (2026-10-14): every NonGravForces.qc unit forwards to timeSeriesPreparation.qc. Three
+            % facts are asserted, each provoked: the numbers are the target's bit for bit, every call
+            % warns <unit>:deprecated, and without the target each forwarder refuses by name.
+            x = tNgfQc.oracle();
+            [m1, i1] = NonGravForces.qc.hampel(x, 'Window', 31);
+            [m2, i2] = timeSeriesPreparation.qc.hampel(x, 'Window', 31);
+            tc.verifyEqual(m1, m2); tc.verifyEqual(rmfield(i1, 'provenance'), rmfield(i2, 'provenance'));
+            y = [x, 2 * x]; ym = 0.9 * y + 1e-3;
+            r1 = NonGravForces.qc.residuals(y, ym, 'Whitening', "highpass", 'Window', 31);
+            r2 = timeSeriesPreparation.qc.residuals(y, ym, 'Whitening', "highpass", 'Window', 31);
+            tc.verifyEqual(r1, r2);
+            tc.verifyEqual(NonGravForces.qc.eventTable(), timeSeriesPreparation.qc.eventTable());
+            % The warning, on every unit. It is off for the rest of the suite (NgfTestCase), so it is
+            % switched on here; a call the target rejects still warns first, which is what lets one
+            % harmless invalid call per unit stand in for a valid one.
+            units = ["hampel", "residuals", "detectImpulses", "detectJumps", "eventTable", "screen"];
+            calls = {@() NonGravForces.qc.hampel(x), @() NonGravForces.qc.residuals(y, ym), ...
+                @() NonGravForces.qc.detectImpulses(zeros(3, 2)), @() NonGravForces.qc.detectJumps(zeros(3, 2)), ...
+                @() NonGravForces.qc.eventTable(), @() NonGravForces.qc.screen(zeros(3, 1), zeros(2, 1), [])};
+            for k = 1:numel(units)
+                id = "NonGravForces:" + units(k) + ":deprecated";
+                st = warning('on', id); restoreW = onCleanup(@() warning(st));
+                lastwarn('');
+                try, calls{k}(); catch, end %#ok<NOCOM>
+                [~, got] = lastwarn();
+                tc.verifyEqual(string(got), id, "qc." + units(k) + " must warn that it is deprecated");
+                clear restoreW
+            end
+            % Without the target, each forwarder refuses by name. The package goes off the path for
+            % these calls only and comes back whatever happens.
+            tspRoot = fileparts(fileparts(fileparts(which('timeSeriesPreparation.qc.hampel'))));
+            saved = path; restoreP = onCleanup(@() path(saved));
+            rmpath(tspRoot);
+            tc.assertEmpty(which('timeSeriesPreparation.qc.hampel'), 'the package must be off the path for this check');
+            tc.verifyErrorId(@() NonGravForces.qc.hampel(x), 'NonGravForces:hampel:depMissing');
+            tc.verifyErrorId(@() NonGravForces.qc.eventTable(), 'NonGravForces:eventTable:depMissing');
+            tc.verifyErrorId(@() NonGravForces.qc.screen(y, ym, []), 'NonGravForces:screen:depMissing');
+            clear restoreP
+            tc.verifyNotEmpty(which('timeSeriesPreparation.qc.hampel'), 'the path must be restored');
         end
     end
     methods (Test, TestTags = {'reference'})
@@ -76,10 +117,10 @@ classdef tNgfQc < NgfTestCase
             t = datetime(2020, 1, 1, 'TimeZone', 'UTC');
             e = @(am, sg, cf) NonGravForces.qc.eventTable(t, t, "jump", "x", am, sg, "unassigned", cf);
             % A NaN confidence passed the [0,1] test until 2026-09-07: every comparison with NaN is false.
-            tc.verifyErrorId(@() e(1e-9, 1e-10, NaN), 'NonGravForces:eventTable:numericNaN');
-            tc.verifyErrorId(@() e(Inf, 1e-10, 0.5), 'NonGravForces:eventTable:numericNaN');
-            tc.verifyErrorId(@() e(1e-9, Inf, 0.5), 'NonGravForces:eventTable:numericNaN');
-            tc.verifyErrorId(@() e(1e-9, -1e-10, 0.5), 'NonGravForces:eventTable:inputClass');
+            tc.verifyErrorId(@() e(1e-9, 1e-10, NaN), 'timeSeriesPreparation:eventTable:numericNaN');
+            tc.verifyErrorId(@() e(Inf, 1e-10, 0.5), 'timeSeriesPreparation:eventTable:numericNaN');
+            tc.verifyErrorId(@() e(1e-9, Inf, 0.5), 'timeSeriesPreparation:eventTable:numericNaN');
+            tc.verifyErrorId(@() e(1e-9, -1e-10, 0.5), 'timeSeriesPreparation:eventTable:inputClass');
             % but a NaN amplitude and sigma mean 'not estimated' and must be accepted: that is
             % exactly what io.readTHR1B writes for every thruster firing.
             tc.verifyEqual(height(e(NaN, NaN, 1)), 1, 'a certain epoch with an unknown size is a valid event');
@@ -135,7 +176,8 @@ classdef tNgfQc < NgfTestCase
             % that the host speed cancels. Measured 2026-08-27 on R2026a: 382x,
             % which is the interpreted-loop vs compiled-builtin gap, not an
             % algorithmic defect (O(K*W) both). Bound 1000; the loop is the
-            % first candidate for the C/MEX port (HANDOVER O-1).
+            % first candidate for the C/MEX port (HANDOVER O-1). Since N-01 this times the
+            % forwarder, i.e. timeSeriesPreparation's X-16 hampel, where O-1 now lives.
             rng(4); x = randn(86400, 3);
             t1 = tic; NonGravForces.qc.hampel(x); tH = toc(t1);
             t2 = tic; movmedian(x, 61); tM = toc(t2);
