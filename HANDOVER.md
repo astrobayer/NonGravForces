@@ -1330,6 +1330,21 @@ first -- an open row is a standing instruction to repeat what it says. `auditPac
 now compares every per-epoch millisecond figure in the repository against the measured table in
 `tools/benchmark_reference.csv`, so this particular fact has one authority and a machine that reads it.
 
+### N-04 — `sensor.Electrostatic` takes its default kernel from `timeSeriesPreparation.crnKernel` (issue #61, 2026-10-14)
+
+**Scope, frozen 2026-10-14 before any code.** Tier B. Owner ruling 2026-10-14 (asked, three options
+put): the DEFAULT kernel is `crnKernel("ACC")`, applied to 10 Hz dynamics; a 1 Hz arc is refused unless
+the caller passes `[]` explicitly. Plumbing went first as its own PR (#76: timeSeriesPreparation and lsqvce
+as gate siblings).
+- **Afterwards true:** `Electrostatic(bias, S, dr)` filters with the toolbox kernel's taps, unchanged;
+  `'SampleRate'` defaults to 10 and must equal a CRN kernel's `fs`; `dyn.epoch` (seconds, datetime or a
+  referenceSystem `.day/.sec` epoch) is required with a CRN kernel and checked to lie on its grid;
+  `'OutputRate'` samples the filtered series (never averages) as ACT1B is formed; `dependencyReport`
+  lists timeSeriesPreparation (optional, minimum 1.4); docs, catalogue, user guide and `CLAUDE.md` follow.
+- **Out of scope:** using `crnApply` itself (it needs a timeSeriesPreparation `Arc` on int64 ns epochs;
+  the sensor convolves the same taps with the same sum), a version bump (planned 0.13.0 with N-02/N-06),
+  and the calibration upgrade (N-02).
+
 ### N-07 — `geom.grace`, the GRACE-A/B macro model (issue #64, opened 2026-09-22)
 
 **Scope, frozen 2026-09-22 before any code** (timeSeriesPreparation GUIDE step 3). Tier B: no MATLAB in
