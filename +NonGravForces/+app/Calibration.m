@@ -6,6 +6,7 @@ classdef Calibration
 %   S   = cal.scaleAt(t)                % 3x3xK scale at int64 GPS-ns epochs (N-03a)
 %   d   = cal.drift()                   % Wald test of a time-varying scale against a constant
 %   a   = cal.apply(obsArc)             % calibrated accelerations, a timeSeriesPreparation.Arc
+%   a   = cal.apply(obsArc, 'Regressors', R)   % with measured regressor terms (N-11a)
 %   inv = cal.invert()                  % the same calibration in the correction direction
 %   T   = cal.summaryTable()
 %   cal.save(file);  cal = NonGravForces.app.Calibration.load(file)
@@ -55,6 +56,16 @@ classdef Calibration
 %   degrees of freedom. The test is the band made into one number: it asks
 %   whether the band excludes every constant, jointly over the curve.
 %
+%   MEASURED REGRESSORS (N-11a; CONCEPT 6.2). A calibration may carry terms in
+%   measured series z_k (accelerometer temperatures, magnetorquer currents):
+%   y = b(t) + sum_k c_k (z_k(t) - m_k) + S a, with the coefficients 3xK in
+%   regressors.coef, their means m_k in regressors.mean and their names and
+%   units beside them. apply then needs the series ('Regressors', an Arc with
+%   those column names) and REFUSES without them: dropping a term the fit
+%   estimated would apply a different calibration than the one fitted. The
+%   series are interpolated linearly onto the arc's epochs, as the estimator
+%   interpolated them onto the raw grid.
+%
 %   APPLY inverts the observation equation per epoch: a = S \ (y - b(t)), with
 %   S = S(t) when the scale is a curve. The
 %   bias is evaluated, not filtered: the estimator fits H*b, and for a bias
@@ -86,7 +97,9 @@ classdef Calibration
 %                              .gates struct, .convention "observation"|"correction",
 %                              .provenance struct; optional .scaleCurve struct (.basis,
 %                              .t0, .knots, .tRef int64, .coef 9xQ, .cov 1x9 cell of QxQ,
-%                              [] where not estimated) for a time-varying scale
+%                              [] where not estimated) for a time-varying scale; optional
+%                              .regressors struct (.names 1xK, .units 1xK, .mean 1xK, .coef
+%                              3xK, .cov 1x3 cell of KxK)
 %
 % NAME-VALUE ARGUMENTS
 %   None.
@@ -98,6 +111,8 @@ classdef Calibration
 %   covScale     9x9  double  -      covariance of scale(:), NaN where not estimated
 %   bias         1x1  struct  m/s^2  .basis .t0 .knots .jumps .coef (3xP) .cov (1x3 cell)
 %   quadratic    3x1  double  s^2/m  K2 per axis; NaN = not estimated
+%   regressors   1x1  struct  -      .names .units .mean (1xK) .coef (3xK, m/s^2 per unit) .cov
+%                                    (1x3 cell, KxK); K = 0 without measured regressors
 %   uncertainty  1x1  struct  -      as the estimator reports it (sigma, inflation, EIV bound, ...)
 %   gates        1x1  struct  -      observability and preflight verdicts
 %   convention   1x1  string  -      "observation" (y = b + S a) or "correction" (a = b + S y)
@@ -108,15 +123,19 @@ classdef Calibration
 %   S = scaleAt(obj, t)         3x3xK; the constant S repeated when not time-varying
 %   s = scaleSigmaAt(obj, t)    3x3xK pointwise sigma of S(t); NaN where not estimated
 %   tf = isTimeVarying(obj)     scaleCurve.basis is not "constant"
+%   r = regressorTermAt(obj, t, R)   3xK: sum_k c_k (z_k(t) - m_k) from the measured series R
+%   Z = Calibration.interpolateSeries(R, col, t)   columns col of Arc R, linearly at int64 t (NaN
+%                               outside); the one rule of the estimator and of apply
 %   d = drift(obj, alpha)       .statistic .dof .pValue (3x3, NaN where not tested)
 %                               .significant (3x3 logical) .alpha; alpha default 0.05
 %   tf = isDriftSignificant(obj, alpha)   drift(obj, alpha).significant
+%   out = apply(obj, arc, 'Regressors', R)   R needed when regressors.names is not empty;
 %   out = apply(obj, arc)       arc: timeSeriesPreparation.Arc with 3 columns in m/s2; out: the
 %                               calibrated arc (derive: same epochs, provenance appended)
 %   inv = invert(obj)           the other convention, first-order covariance
 %   T = summaryTable(obj)       one row per scale entry and bias coefficient, plus one per
 %                               scale-curve coefficient when time-varying
-%   save(obj, file)             versioned MAT file (schemaVersion "2"; "1" files still load)
+%   save(obj, file)             versioned MAT file (schemaVersion "3"; "1" and "2" files load)
 %   cal = Calibration.load(file)
 %   B = Calibration.basis(bias, t)   KxP basis matrix at int64 epochs
 %
@@ -141,6 +160,8 @@ classdef Calibration
 %   NonGravForces:Calibration:numericSingular invert/apply: S is singular to working precision
 %                                            (at some epoch, for a time-varying scale)
 %   NonGravForces:Calibration:unsupportedTimeVarying  invert of a time-varying scale
+%   NonGravForces:Calibration:inputRegressors  apply without the regressor series the calibration
+%                                            carries, or an Arc that lacks one of their columns
 %
 % WARNINGS
 %   NonGravForces:Calibration:newerSchema    load: written by a newer schema; read field by field
@@ -168,7 +189,7 @@ classdef Calibration
 % KEYWORDS calibration accelerometer bias scale apply invert spline provenance
 % Created 2026-10-14 by Claude (Anthropic) for Matthias Weigelt.
     properties (Constant)
-        SchemaVersion = "2"
+        SchemaVersion = "3"
     end
     properties (SetAccess = private)
         scale (3,3) double = eye(3)
@@ -176,6 +197,7 @@ classdef Calibration
         covScale (9,9) double = nan(9)
         bias (1,1) struct = struct('basis', "constant", 't0', int64(0), 'knots', int64([]), 'jumps', zeros(1, 0, 'int64'), 'coef', zeros(3, 1), 'cov', {{[], [], []}})
         quadratic (3,1) double = nan(3, 1)
+        regressors (1,1) struct = struct('names', strings(1, 0), 'units', strings(1, 0), 'mean', zeros(1, 0), 'coef', zeros(3, 0), 'cov', {cell(1, 3)})
         uncertainty (1,1) struct = struct()
         gates (1,1) struct = struct()
         convention (1,1) string = "observation"
@@ -221,6 +243,9 @@ classdef Calibration
                 end
                 obj.quadratic = fit.quadratic(:);
             end
+            if isfield(fit, 'regressors') && ~isempty(fit.regressors)
+                obj.regressors = NonGravForces.app.Calibration.checkRegressors(fit.regressors);
+            end
             if isfield(fit, 'uncertainty'), obj.uncertainty = fit.uncertainty; end
             if isfield(fit, 'gates'), obj.gates = fit.gates; end
             if isfield(fit, 'convention')
@@ -242,8 +267,13 @@ classdef Calibration
             b = obj.bias.coef * B.';
         end
 
-        function out = apply(obj, arc)
+        function out = apply(obj, arc, nv)
             %APPLY Calibrated accelerations from a measured arc, in the arc's own epochs.
+            arguments
+                obj
+                arc
+                nv.Regressors = []
+            end
             unit = "Calibration";
             if ~isa(arc, 'timeSeriesPreparation.Arc') || ~isscalar(arc) || size(arc.obs, 2) ~= 3
                 NonGravForces.fail(unit, "inputArc", "apply takes one timeSeriesPreparation.Arc with three acceleration columns -> got a %s", class(arc));
@@ -256,6 +286,9 @@ classdef Calibration
             end
             y = arc.obs.';                                     % 3xK
             b = obj.biasAt(arc.t);
+            if ~isempty(obj.regressors.names)
+                b = b + obj.regressorTermAt(arc.t, nv.Regressors);
+            end
             if obj.isTimeVarying()
                 % One 3x3 solve per epoch, as pages: the curve gives every epoch its own S.
                 S3 = obj.scaleAt(arc.t);
@@ -303,6 +336,20 @@ classdef Calibration
                 nb.cov = newCov;
             end
             fit.bias = nb;
+            if ~isempty(obj.regressors.names)
+                g = obj.regressors;
+                g.coef = -Si * g.coef;
+                if all(cellfun(@(c) ~isempty(c), g.cov))
+                    Kr = numel(g.names); nc = cell(1, 3);
+                    for i = 1:3
+                        C = zeros(Kr);
+                        for j = 1:3, C = C + Si(i, j)^2 * obj.regressors.cov{j}; end
+                        nc{i} = C;
+                    end
+                    g.cov = nc;
+                end
+                fit.regressors = g;
+            end
             if obj.convention == "observation", fit.convention = "correction"; else, fit.convention = "observation"; end
             out = NonGravForces.app.Calibration(fit);
         end
@@ -321,6 +368,14 @@ classdef Calibration
                 if isempty(obj.bias.cov{i}), s = nan(P, 1); else, s = sqrt(diag(obj.bias.cov{i})); end
                 sig = [sig; s]; %#ok<AGROW>
             end
+            for k = 1:numel(obj.regressors.names)
+                for i = 1:3
+                    names = [names; "r_" + obj.regressors.names(k) + "_" + ax(i)]; %#ok<AGROW>
+                    vals = [vals; obj.regressors.coef(i, k)]; %#ok<AGROW>
+                    if isempty(obj.regressors.cov{i}), sg = NaN; else, sg = sqrt(obj.regressors.cov{i}(k, k)); end
+                    sig = [sig; sg]; %#ok<AGROW>
+                end
+            end
             if obj.isTimeVarying()
                 Q = size(obj.scaleCurve.coef, 2);
                 for k = 1:9
@@ -331,6 +386,20 @@ classdef Calibration
                 end
             end
             T = table(names, vals, sig, 'VariableNames', {'parameter', 'value', 'sigma'});
+        end
+
+        function r = regressorTermAt(obj, t, R)
+            %REGRESSORTERMAT sum_k c_k (z_k(t) - m_k), 3xK, from the measured series R.
+            g = obj.regressors;
+            if isempty(R) || ~isa(R, 'timeSeriesPreparation.Arc')
+                NonGravForces.fail("Calibration", "inputRegressors", "this calibration carries regressor terms in %s -> pass 'Regressors', an Arc with those columns", strjoin(g.names, ", "));
+            end
+            [found, col] = ismember(g.names, R.names);
+            if ~all(found)
+                NonGravForces.fail("Calibration", "inputRegressors", "'Regressors' lacks %s -> pass the series the calibration was fitted with", strjoin(g.names(~found), ", "));
+            end
+            Z = NonGravForces.app.Calibration.interpolateSeries(R, col, t) - g.mean;
+            r = g.coef * Z.';
         end
 
         function tf = isTimeVarying(obj)
@@ -438,6 +507,18 @@ classdef Calibration
             obj = NonGravForces.app.Calibration(rmfield(c, 'schemaVersion'));
         end
 
+        function Z = interpolateSeries(R, col, t)
+            %INTERPOLATESERIES Columns col of the Arc R, linearly at int64 epochs t (NaN outside).
+            %   One rule for the estimator and for apply: linear, so a housekeeping series sampled every
+            %   few seconds is never overshot between its samples.
+            tr = double(R.t - R.t(1)) / 1e9; tq = double(t(:) - R.t(1)) / 1e9;
+            Z = zeros(numel(tq), numel(col));
+            for k = 1:numel(col)
+                z = R.obs(:, col(k)); ok = isfinite(z);
+                Z(:, k) = interp1(tr(ok), z(ok), tq, 'linear', NaN);
+            end
+        end
+
         function B = basis(bias, t)
             %BASIS The KxP bias basis at int64 GPS-ns epochs t (the estimator uses this too).
             t = t(:);
@@ -492,7 +573,7 @@ classdef Calibration
         end
 
         function s = toStruct(obj)
-            s = struct('schemaVersion', NonGravForces.app.Calibration.SchemaVersion, 'scale', obj.scale, 'scaleCurve', obj.scaleCurve, ...
+            s = struct('schemaVersion', NonGravForces.app.Calibration.SchemaVersion, 'scale', obj.scale, 'scaleCurve', obj.scaleCurve, 'regressors', obj.regressors, ...
                 'covScale', obj.covScale, 'bias', obj.bias, 'quadratic', obj.quadratic, ...
                 'uncertainty', obj.uncertainty, 'gates', obj.gates, 'convention', obj.convention, ...
                 'provenance', obj.provenance);
@@ -500,6 +581,22 @@ classdef Calibration
     end
 
     methods (Static, Access = private)
+        function g = checkRegressors(g)
+            %CHECKREGRESSORS Validate a regressor struct: names, units, means, coefficients, covariances.
+            unit = "Calibration";
+            if ~isstruct(g) || ~isscalar(g) || ~all(isfield(g, {'names', 'mean', 'coef'}))
+                NonGravForces.fail(unit, "inputFit", ".regressors must be a struct with names, mean and coef -> see the help");
+            end
+            Kr = numel(g.names);
+            if ~isequal(size(g.coef), [3 Kr]) || numel(g.mean) ~= Kr || ~all(isfinite([g.coef(:); g.mean(:)]))
+                NonGravForces.fail(unit, "inputFit", ".regressors.coef must be a finite 3x%d and .mean 1x%d -> got %s and %s", Kr, Kr, mat2str(size(g.coef)), mat2str(size(g.mean)));
+            end
+            if ~isfield(g, 'units') || isempty(g.units), g.units = repmat("-", 1, Kr); end
+            if ~isfield(g, 'cov') || isempty(g.cov), g.cov = cell(1, 3); end
+            g = struct('names', reshape(string(g.names), 1, []), 'units', reshape(string(g.units), 1, []), ...
+                'mean', reshape(g.mean, 1, []), 'coef', g.coef, 'cov', {reshape(g.cov, 1, 3)});
+        end
+
         function sc = checkScaleCurve(sc, scale)
             %CHECKSCALECURVE Validate a scale curve and its agreement with S at tRef.
             unit = "Calibration";

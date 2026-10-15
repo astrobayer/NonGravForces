@@ -52,6 +52,18 @@ classdef tNgfCalibration < NgfTestCase
                 'coef', [S0(:), slope(:)], 'cov', {{[4e-8 1e-9; 1e-9 9e-8], [], [], [], [], [], [], [], [1e-8 0; 0 2e-8]}});
             cal = NonGravForces.app.Calibration(struct('scale', S0, 'scaleCurve', sc, 'bias', base.bias));
         end
+        function [cal, R, C, m] = regCal(tc)
+            %REGCAL splineCal(8) with two regressor terms and the hourly series that drives them.
+            base = tc.splineCal(8);
+            t = base.bias.t0 + int64(0:599)' * int64(6e9);
+            z = [22 + 0.1 * sin((1:600)' / 40), 0.02 * cos((1:600)' / 13)];
+            nm = {'temp', 'curr'}; u = struct('temp', 'C', 'curr', 'A');
+            R = timeSeriesPreparation.Arc(t, z, struct("obsNames", {nm}, "variableNames", {nm}, "variableFieldNames", {nm}, ...
+                "variableUnits", u, "fileName", "REG", "product", "REG"));
+            C = [3e-9 2e-8; -1e-9 0; 5e-10 -4e-8]; m = [22 0];
+            g = struct('names', ["temp" "curr"], 'units', ["C" "A"], 'mean', m, 'coef', C, 'cov', {{eye(2) * 1e-20, eye(2) * 1e-20, eye(2) * 1e-20}});
+            cal = NonGravForces.app.Calibration(struct('scale', base.scale, 'bias', base.bias, 'regressors', g));
+        end
         function cal = splineCal(~, P)
             %SPLINECAL A calibration with a cubic B-spline bias on uniform hourly knots (P coefficients).
             t0 = int64(631152018) * int64(1e9);
@@ -76,7 +88,7 @@ classdef tNgfCalibration < NgfTestCase
             tc.verifyEqual(obs.t, ref.t(1:10:end));
             tc.verifyEqual(obs.names, ["lin_accl_x" "lin_accl_y" "lin_accl_z"]);
             tc.verifyEqual(obs.units, repmat("m/s2", 1, 3));
-            tc.verifyEqual(sort(string(fieldnames(truth)))', sort(["scale" "scaleDrift_per_day" "bias0" "biasDrift_per_day" ...
+            tc.verifyEqual(sort(string(fieldnames(truth)))', sort(["scale" "scaleDrift_per_day" "regressors" "regressorCoupling" "bias0" "biasDrift_per_day" ...
                 "quadratic" "bias" "noise" "spikes" "gap" "kernel" "orbitPeriod_s" "seed" "provenance"]));
             tc.verifySize(truth.bias, [3 n]);
             tc.verifyEqual(height(truth.spikes), 3);
@@ -87,13 +99,14 @@ classdef tNgfCalibration < NgfTestCase
             tc.verifyErrorId(@() NonGravForces.app.syntheticPair('Days', tc.Days, 'Bias', [1 2]), "NonGravForces:syntheticPair:inputShape");
             tc.verifyErrorId(@() NonGravForces.app.syntheticPair('Days', tc.Days, 'ScaleDrift', [1 2 3]), "NonGravForces:syntheticPair:inputShape");
             tc.verifyEqual(truth.scaleDrift_per_day, zeros(3));
+            tc.verifyEmpty(truth.regressors, 'no regressor is planted by default (N-11a)');
             tc.verifyErrorId(@() NonGravForces.app.syntheticPair('Days', 0.001), "NonGravForces:syntheticPair:inputRange");
             tc.verifyErrorId(@() NonGravForces.app.syntheticPair('Days', 0.01, 'Spikes', 40), "NonGravForces:syntheticPair:inputRange");
         end
         function calibrationContract(tc)
             cal = tc.splineCal(8);
             tc.verifyEqual(cal.convention, "observation");
-            tc.verifyEqual(cal.SchemaVersion, "2");
+            tc.verifyEqual(cal.SchemaVersion, "3");
             tc.verifyFalse(cal.isTimeVarying());
             tc.verifyTrue(all(isnan(cal.quadratic)));
             tc.verifyTrue(all(isnan(cal.covScale), 'all'));
@@ -163,6 +176,29 @@ classdef tNgfCalibration < NgfTestCase
             sing = good; sing.scaleCurve.coef(:, 2) = 0; sing.scaleCurve.coef([3 6 9], 2) = -cal.scale(3, :).' / 0.5;   % row 3 of S(t) vanishes at day 0.5
             singCal = NonGravForces.app.Calibration(sing);
             tc.verifyErrorId(@() singCal.apply(tc.arc3(cal.bias.t0 + int64(43200e9), zeros(1, 3))), "NonGravForces:Calibration:numericSingular");
+        end
+
+        function calibrationRegressorContract(tc)
+            % N-11a: measured regressor terms travel with the calibration and apply refuses without them.
+            [cal, R, C] = tc.regCal();
+            tc.verifyEqual(cal.regressors.names, ["temp" "curr"]);
+            tc.verifyEqual(cal.regressors.units, ["C" "A"]);
+            t = R.t(10:20);
+            arc = tc.arc3(t, zeros(numel(t), 3));
+            tc.verifyErrorId(@() cal.apply(arc), "NonGravForces:Calibration:inputRegressors");
+            nm = {'temp'}; one = timeSeriesPreparation.Arc(R.t, R.obs(:, 1), struct("obsNames", {nm}, "variableNames", {nm}, ...
+                "variableFieldNames", {nm}, "variableUnits", struct('temp', 'C'), "fileName", "REG", "product", "REG"));
+            tc.verifyErrorId(@() cal.apply(arc, 'Regressors', one), "NonGravForces:Calibration:inputRegressors");
+            tc.verifySize(cal.apply(arc, 'Regressors', R).obs, [numel(t) 3]);
+            T = cal.summaryTable();
+            tc.verifySize(T, [9 + 3 * 8 + 3 * 2, 3]);
+            inv = cal.invert();
+            tc.verifyEqual(inv.regressors.coef, -(cal.scale \ eye(3)) * C, 'RelTol', 1e-12, 'the correction direction maps the coefficients as it maps the bias');
+            folder = tc.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
+            f = fullfile(folder, 'reg.mat'); cal.save(f);
+            tc.verifyTrue(isequaln(NonGravForces.app.Calibration.load(f), cal));
+            bad = struct('scale', eye(3), 'bias', cal.bias, 'regressors', struct('names', "a", 'mean', [1 2], 'coef', zeros(3, 1)));
+            tc.verifyErrorId(@() NonGravForces.app.Calibration(bad), "NonGravForces:Calibration:inputFit");
         end
     end
 
@@ -285,6 +321,21 @@ classdef tNgfCalibration < NgfTestCase
                 max(abs([d.statistic(1, 1), d.statistic(3, 3)] - W) ./ W), 1e-12, "-", "pinv of a 1x1 is its reciprocal");
             tc.verifyEqual([d.dof(1, 1), d.dof(3, 3)], [1 1]);
             tc.verifyEqual(d.pValue(1, 1), erfc(sqrt(W(1) / 2)), 'RelTol', 1e-12, 'chi-square with 1 dof: P(X > W) = erfc(sqrt(W/2))');
+        end
+
+        function calibrationRegressorPrecision(tc)
+            % apply against a per-epoch loop of y = S a + b(t) + C (z(t) - m), z interpolated linearly.
+            [cal, R, C, m] = tc.regCal();
+            t = R.t(1) + int64(0:239)' * int64(7.3e9);
+            a = 1e-7 * [cos((1:240)' / 9), sin((1:240)' / 7), cos((1:240)' / 5)];
+            b = cal.biasAt(t);
+            tq = double(t - R.t(1)) / 1e9; tr = double(R.t - R.t(1)) / 1e9;
+            z = [interp1(tr, R.obs(:, 1), tq), interp1(tr, R.obs(:, 2), tq)] - m;
+            y = (cal.scale * a.' + b + C * z.').';
+            got = cal.apply(tc.arc3(t, y), 'Regressors', R).obs;
+            err = max(abs(got - a), [], 'all') / max(abs(a), [], 'all');
+            tc.verifyBoundAndRecord("Calibration apply with regressor terms vs the observation equation", err, 1e-9, "-", ...
+                "a 3x3 solve after subtracting the regressor term; the 1e-7 signal beside a 2e-7 bias leaves ~1e-15, bound generous");
         end
     end
 

@@ -3806,6 +3806,8 @@ Days & 1x1 & double & day & Arc length, \textgreater{} 0; default 1 \\
 Start & 1x1 & int64 & ns & First epoch, GPS ns past 2000-01-01 12:00:00; default 2020-01-01 00:00:18 GPS \\
 Seed & 1x1 & double & - & Seed of every random draw; default 1 \\
 Scale & 3x3 & double & - & True scale matrix S (a 3x1 is its diagonal); default diag([0.96 0.98 0.95]) \\
+RegressorFcn & 1x1 & function\_\allowbreak{}handle & - & Measured series z(ts) (n x K, ts in s since Start) whose planted coupling raw += z * RegressorCoupling'; default none (N-11a) \\
+RegressorCoupling & 3xK & double & m/\allowbreak{}s\textasciicircum{}2/\allowbreak{}unit & The true coefficients; default empty \\
 ScaleDrift & 3x3 & double & 1/\allowbreak{}day & True linear drift of S, so S(t) = Scale + ScaleDrift * (t - Start) / 1 day; default zeros \\
 Bias & 3x1 & double & m/\allowbreak{}s\textasciicircum{}2 & True bias at Start; default [2e-7; -1e-7; 5e-8] \\
 BiasDrift & 3x1 & double & m/\allowbreak{}s\textasciicircum{}2/\allowbreak{}day & True linear bias drift; default [1e-9; 0; -5e-10] \\
@@ -3834,7 +3836,7 @@ OrbitPeriod\_\allowbreak{}s & 1x1 & double & s & Orbital period; default 5640 (\
 \endlastfoot
 obs & 1x1 & timeSeriesPreparation.\allowbreak{}Arc & m/\allowbreak{}s\textasciicircum{}2 & CRN-filtered observation at 1 Hz, product ACT1B, columns lin\_accl\_x/y/z; NaN (and the layer crnWindow) where the filter window met an edge or the gap \\
 ref & 1x1 & timeSeriesPreparation.\allowbreak{}Arc & m/\allowbreak{}s\textasciicircum{}2 & The model at 10 Hz, same column names \\
-truth & 1x1 & struct & - & .scale (at Start) .scaleDrift\_per\_day .bias0 .biasDrift\_per\_day .quadratic .bias (3xK1 at obs.t) .noise (.asd .corner .seeds) .spikes (table: t int64, axis, amplitude) .gap (int64 [first last] on the 10 Hz grid, or empty) .kernel (crnKernel struct) .orbitPeriod\_s .seed .provenance \\
+truth & 1x1 & struct & - & .scale (at Start) .scaleDrift\_per\_day .regressors (Arc of the series on the 10 Hz grid, columns reg1..regK, or []) .regressorCoupling .bias0 .biasDrift\_per\_day .quadratic .bias (3xK1 at obs.t) .noise (.asd .corner .seeds) .spikes (table: t int64, axis, amplitude) .gap (int64 [first last] on the 10 Hz grid, or empty) .kernel (crnKernel struct) .orbitPeriod\_s .seed .provenance \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
@@ -3855,6 +3857,7 @@ b   = cal.biasAt(t)                 % 3xK bias at int64 GPS-ns epochs
 S   = cal.scaleAt(t)                % 3x3xK scale at int64 GPS-ns epochs (N-03a)
 d   = cal.drift()                   % Wald test of a time-varying scale against a constant
 a   = cal.apply(obsArc)             % calibrated accelerations, a timeSeriesPreparation.Arc
+a   = cal.apply(obsArc, 'Regressors', R)   % with measured regressor terms (N-11a)
 inv = cal.invert()                  % the same calibration in the correction direction
 T   = cal.summaryTable()
 cal.save(file);  cal = NonGravForces.app.Calibration.load(file)
@@ -3875,7 +3878,7 @@ B   = NonGravForces.app.Calibration.basis(bias, t)   % the bias basis, shared wi
 \endfoot
 \bottomrule
 \endlastfoot
-fit & 1x1 & struct & - & .scale 3x3; .bias struct (.basis, .t0 int64, .knots int64 1xQ, optional .jumps int64 1xJ, .coef 3xP with P including the J steps, optional .cov 1x3 cell of PxP); optional .covScale 9x9 (cov of scale(:)), .quadratic 3x1, .uncertainty struct, .gates struct, .convention "observation"\textbar{}"correction", .provenance struct; optional .scaleCurve struct (.basis, .t0, .knots, .tRef int64, .coef 9xQ, .cov 1x9 cell of QxQ, [] where not estimated) for a time-varying scale \\
+fit & 1x1 & struct & - & .scale 3x3; .bias struct (.basis, .t0 int64, .knots int64 1xQ, optional .jumps int64 1xJ, .coef 3xP with P including the J steps, optional .cov 1x3 cell of PxP); optional .covScale 9x9 (cov of scale(:)), .quadratic 3x1, .uncertainty struct, .gates struct, .convention "observation"\textbar{}"correction", .provenance struct; optional .scaleCurve struct (.basis, .t0, .knots, .tRef int64, .coef 9xQ, .cov 1x9 cell of QxQ, [] where not estimated) for a time-varying scale; optional .regressors struct (.names 1xK, .units 1xK, .mean 1xK, .coef 3xK, .cov 1x3 cell of KxK) \\
 \end{longtable}
 
 \subsubsection*{NAME-VALUE ARGUMENTS}
@@ -3890,6 +3893,8 @@ scaleCurve   1x1  struct  -      .basis ("constant" when the scale is not a curv
 covScale     9x9  double  -      covariance of scale(:), NaN where not estimated
 bias         1x1  struct  m/s^2  .basis .t0 .knots .jumps .coef (3xP) .cov (1x3 cell)
 quadratic    3x1  double  s^2/m  K2 per axis; NaN = not estimated
+regressors   1x1  struct  -      .names .units .mean (1xK) .coef (3xK, m/s^2 per unit) .cov
+                                 (1x3 cell, KxK); K = 0 without measured regressors
 uncertainty  1x1  struct  -      as the estimator reports it (sigma, inflation, EIV bound, ...)
 gates        1x1  struct  -      observability and preflight verdicts
 convention   1x1  string  -      "observation" (y = b + S a) or "correction" (a = b + S y)
@@ -3902,15 +3907,19 @@ b = biasAt(obj, t)          t Kx1 int64 GPS ns; b 3xK in m/s^2
 S = scaleAt(obj, t)         3x3xK; the constant S repeated when not time-varying
 s = scaleSigmaAt(obj, t)    3x3xK pointwise sigma of S(t); NaN where not estimated
 tf = isTimeVarying(obj)     scaleCurve.basis is not "constant"
+r = regressorTermAt(obj, t, R)   3xK: sum_k c_k (z_k(t) - m_k) from the measured series R
+Z = Calibration.interpolateSeries(R, col, t)   columns col of Arc R, linearly at int64 t (NaN
+                            outside); the one rule of the estimator and of apply
 d = drift(obj, alpha)       .statistic .dof .pValue (3x3, NaN where not tested)
                             .significant (3x3 logical) .alpha; alpha default 0.05
 tf = isDriftSignificant(obj, alpha)   drift(obj, alpha).significant
+out = apply(obj, arc, 'Regressors', R)   R needed when regressors.names is not empty;
 out = apply(obj, arc)       arc: timeSeriesPreparation.Arc with 3 columns in m/s2; out: the
                             calibrated arc (derive: same epochs, provenance appended)
 inv = invert(obj)           the other convention, first-order covariance
 T = summaryTable(obj)       one row per scale entry and bias coefficient, plus one per
                             scale-curve coefficient when time-varying
-save(obj, file)             versioned MAT file (schemaVersion "2"; "1" files still load)
+save(obj, file)             versioned MAT file (schemaVersion "3"; "1" and "2" files load)
 cal = Calibration.load(file)
 B = Calibration.basis(bias, t)   KxP basis matrix at int64 epochs
 \end{lstlisting}
@@ -3941,6 +3950,7 @@ cal & 1x1 & NonGravForces.app.Calibration \\
 \item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}dataSchema}] load: not a calibration file, or no schemaVersion
 \item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}numericSingular}] invert/apply: S is singular to working precision (at some epoch, for a time-varying scale)
 \item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}unsupportedTimeVarying}] invert of a time-varying scale
+\item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}inputRegressors}] apply without the regressor series the calibration carries, or an Arc that lacks one of their columns
 \end{description}
 
 \subsubsection*{WARNINGS}
@@ -3999,6 +4009,7 @@ Scale & 3x3 & string & - & "diag" (default) \textbar{} "full" \textbar{} a 3x3 l
 ScaleBasis & 1x1 & string & - & "constant" (default) \textbar{} "linear" \textbar{} "hat" \textbar{} "pspline": the time dependence of every estimated entry \\
 ScaleKnotSpacing\_\allowbreak{}s & 1x1 & double & s & Knot spacing of a "hat" or "pspline" scale; default 43200, at least the bias's when both are knotted \\
 ScaleMode & 1x1 & string & - & With several arcs: "common" (default) or "perArc" \\
+Regressors & 1xN & Arc & - & Measured series, one Arc of K columns (one per obs arc, or one covering all); default none \\
 Span & 1x2 & int64 & ns & [first last] epoch the bias and scale bases must cover; default [] = the first and last usable observation epoch. Cross-validation passes the WHOLE arc's span, so that a B-spline is defined over a held-out block (N-03b) \\
 FixCrossTrack & 1x1 & logical & - & Hold S\_yy at its a-priori value; default true \\
 ScaleApriori & 3x3 & double & - & Values of the entries not estimated; default eye(3) \\
@@ -4040,6 +4051,7 @@ info & 1x1 & struct & - & .residual (Arc at obs epochs, NaN where not fitted) .n
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputJumps}] 'Jumps' not int64
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputScaleBasis}] a knotted scale basis finer than the knotted bias basis
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputSpan}] 'Span' not an increasing int64 pair
+\item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputRegressors}] 'Regressors' not an Arc (or one per arc), or a series with no finite value or no variation on the arc
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}unsupportedMultiArc}] common mode with a knotted bias, 'Jumps' or a time-varying scale
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}numericCollinear}] the VIF gate refused a row with several model columns
 \item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}inputBasis}] knots the basis refuses

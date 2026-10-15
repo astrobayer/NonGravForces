@@ -16,6 +16,7 @@ classdef tNgfFitCalibration < NgfTestCase
     properties (Constant)
         Quiet = 1e-30 * ones(3, 1)   % a noise ASD far below the rounding bound
         TruthS = [0.96 2e-3 0; 0 0.98 0; -1e-3 0 0.95]
+        RegC = [3e-9 2e-8; -1e-9 0; 5e-10 -4e-8]
     end
     methods
         function bound = rowBound(~, truth, ref)
@@ -47,6 +48,10 @@ classdef tNgfFitCalibration < NgfTestCase
                     'BiasDrift', zeros(3, 1), 'NoiseAsd', asd, varargin{:});
             end
         end
+        function z = regFcn(~, ts)
+            %REGFCN A temperature-like and a current-like series (n x 2).
+            z = [22 + 0.3 * sin(2 * pi * ts / 5640 + 0.7), 0.04 * cos(2 * pi * ts / 2820)];
+        end
         function [x, names] = estimateOf(~, cal, info, i)
             %ESTIMATEOF The fitted parameters of axis i in the order of info.names{i}.
             names = info.names{i};
@@ -55,6 +60,7 @@ classdef tNgfFitCalibration < NgfTestCase
             for k = 1:numel(names)
                 nm = names(k);
                 if startsWith(nm, "b_"), x(k) = cal.bias.coef(i, str2double(extractAfter(nm, "b_")));
+                elseif startsWith(nm, "r_"), x(k) = cal.regressors.coef(i, cal.regressors.names == extractAfter(nm, "r_"));
                 elseif startsWith(nm, "S_") && strlength(nm) > 4
                     % a scale-curve coefficient S_ij_q (N-03a): row (j-1)*3+i of scaleCurve.coef
                     j = find(ax == extractBetween(nm, 4, 4));
@@ -444,6 +450,73 @@ classdef tNgfFitCalibration < NgfTestCase
             c2 = NonGravForces.app.fitCalibration(o2, ref, 'BiasBasis', "constant", 'NBoot', 0);
             tc.verifyEqual(c2(1).scale([1 9]), 2 * c1(1).scale([1 9]));
             for k = 1:3, tc.verifyEqual(c2(k).bias.coef([1 3], :), 2 * c1(k).bias.coef([1 3], :)); end
+        end
+    end
+
+    % ===================================================================== N-11a: measured regressors
+    methods (Test, TestTags = {'reference'})
+        function fitCalibrationRegressorReference(tc)
+            % Noise-free with a planted coupling to two measured series: every parameter, the
+            % coefficients included, returns to the computed rounding bound; over two days in common mode
+            % the coefficients are one set and return too.
+            [obs, ref, truth] = NonGravForces.app.syntheticPair('Days', 0.1, 'NoiseAsd', tc.Quiet, 'Spikes', 0, 'Gap_s', 0, ...
+                'RegressorFcn', @(ts) tc.regFcn(ts), 'RegressorCoupling', tc.RegC);
+            [cal, info] = NonGravForces.app.fitCalibration(obs, ref, 'Regressors', truth.regressors, 'FixCrossTrack', false, 'NBoot', 0);
+            for i = 1:3
+                % the coefficients multiply the DEMEANED series, so the bias at Start absorbs C m
+                tc.verifyRecovered(cal, info, truth, ref, obs, i, [truth.bias0(i) + tc.RegC(i, :) * cal.regressors.mean.', truth.biasDrift_per_day(i), ...
+                    tc.RegC(i, :), truth.scale(i, i)], "fitCalibration regressors");
+            end
+            obs2 = timeSeriesPreparation.Arc.empty; ref2 = obs2; regs = obs2;
+            for k = 1:2
+                st = int64(7305 * 86400 - 43200 + 18 + (k - 1) * 86400) * int64(1e9);
+                [obs2(k), ref2(k), tr] = NonGravForces.app.syntheticPair('Days', 0.1, 'Start', st, 'Seed', k, 'NoiseAsd', tc.Quiet, ...
+                    'Spikes', 0, 'Gap_s', 0, 'BiasDrift', zeros(3, 1), 'RegressorFcn', @(ts) tc.regFcn(ts), 'RegressorCoupling', tc.RegC);
+                regs(k) = tr.regressors;
+            end
+            c2 = NonGravForces.app.fitCalibration(obs2, ref2, 'Regressors', regs, 'BiasBasis', "constant", 'FixCrossTrack', false, 'NBoot', 0);
+            tc.verifyEqual(c2(2).regressors.coef, c2(1).regressors.coef, 'one common set of coefficients');
+            tc.verifyBoundAndRecord("fitCalibration multi-arc regressor coefficients, relative", ...
+                max(abs(c2(1).regressors.coef - tc.RegC), [], 'all') / max(abs(tc.RegC), [], 'all'), 1e-9, "-", ...
+                "noise-free; rounding of the joint solve, measured ~1e-13 when written");
+        end
+    end
+    methods (Test, TestTags = {'robustness'})
+        function fitCalibrationRegressorRobustness(tc)
+            % A constant channel is refused before any fit, paired with the live series accepted; a series
+            % covering only part of the arc fits the rows it covers.
+            [obs, ref, truth] = NonGravForces.app.syntheticPair('Days', 0.1, 'Spikes', 0, 'RegressorFcn', @(ts) tc.regFcn(ts), ...
+                'RegressorCoupling', tc.RegC);
+            R = truth.regressors;
+            dead = R.derive(R.t, [R.obs(:, 1), repmat(-273.2, numel(R.t), 1)], "test.dead");
+            tc.verifyErrorId(@() NonGravForces.app.fitCalibration(obs, ref, 'Regressors', dead, 'NBoot', 0), "NonGravForces:fitCalibration:inputRegressors");
+            tc.verifyErrorId(@() NonGravForces.app.fitCalibration(obs, ref, 'Regressors', 5, 'NBoot', 0), "NonGravForces:fitCalibration:inputRegressors");
+            cal = NonGravForces.app.fitCalibration(obs, ref, 'Regressors', R, 'NBoot', 0);
+            tc.verifyTrue(all(isfinite(cal.regressors.coef), 'all'));
+            half = R.t <= R.t(round(0.7 * end));          % 70 %: above the 0.5 minimum-data gate
+            part = timeSeriesPreparation.Arc(R.t(half), R.obs(half, :), struct("obsNames", {cellstr(R.names)}, "variableNames", {cellstr(R.names)}, ...
+                "variableFieldNames", {cellstr(R.names)}, "variableUnits", struct('reg1', '-', 'reg2', '-'), "fileName", "REG", "product", "REG"));
+            [~, info] = NonGravForces.app.fitCalibration(obs, ref, 'Regressors', part, 'NBoot', 0);
+            tc.verifyFalse(any(info.rows(obs.t > R.t(find(half, 1, 'last')), 1)), 'no row beyond the series is fitted');
+        end
+    end
+    methods (Test, TestTags = {'metamorphic'})
+        function fitCalibrationRegressorMetamorphic(tc)
+            % A series in other units (x 10) has its coefficients divided by 10, and an offset (+ 5) changes
+            % nothing but the stored mean: the column is demeaned.
+            [obs, ref, truth] = NonGravForces.app.syntheticPair('Days', 0.1, 'Spikes', 0, 'RegressorFcn', @(ts) tc.regFcn(ts), ...
+                'RegressorCoupling', tc.RegC);
+            R = truth.regressors;
+            c1 = NonGravForces.app.fitCalibration(obs, ref, 'Regressors', R, 'NBoot', 0);
+            c10 = NonGravForces.app.fitCalibration(obs, ref, 'Regressors', R.derive(R.t, 10 * R.obs, "test.x10"), 'NBoot', 0);
+            c5 = NonGravForces.app.fitCalibration(obs, ref, 'Regressors', R.derive(R.t, R.obs + 5, "test.plus5"), 'NBoot', 0);
+            tc.verifyBoundAndRecord("fitCalibration regressor x10 -> coefficient / 10", ...
+                max(abs(10 * c10.regressors.coef - c1.regressors.coef), [], 'all') / max(abs(c1.regressors.coef), [], 'all'), 1e-9, "-", ...
+                "a rescaled column in an equilibrated solve; rounding only");
+            tc.verifyBoundAndRecord("fitCalibration regressor + 5 -> same coefficients", ...
+                max(abs(c5.regressors.coef - c1.regressors.coef), [], 'all') / max(abs(c1.regressors.coef), [], 'all'), 1e-9, "-", ...
+                "the column is demeaned; only the rounding of the interpolation differs");
+            tc.verifyEqual(c5.regressors.mean, c1.regressors.mean + 5, 'AbsTol', 1e-12);
         end
     end
 end
