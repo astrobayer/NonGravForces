@@ -179,7 +179,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   referenceSystem >= 2.3. ◐; prediction 414. The 0.13.0 bump waits for a Tier-A benchmark run (O-48).
 - **2026-10-15, N-02b (#59, second of three PRs):** `app.fitCalibration`, the estimator: CRN-filtered bias basis,
   model and K2 columns per axis through `lsqvce.fit` (kind A), VIF gate, block bootstrap, EIV bound; lsqvce in
-  `dependencyReport`; 60 units. ◐; prediction 414.
+  `dependencyReport`; 60 units. ☑ (414/414 on f9587d4, predicted 414, after two fixes the first run found).
 - **2026-10-14, N-02a (#59, first of three PRs):** `app.syntheticPair` (the calibration truth through the real
   CRN chain) and `app.Calibration` (scale + bias curve, apply/invert/save/load); 59 units. ☑ (run 38685265825:
   408/408, predicted 408).

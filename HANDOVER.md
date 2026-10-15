@@ -1392,7 +1392,7 @@ untouched until N-02c replaces it; the new estimator is its own public unit so t
   own: the cofactor was scaled back with the observation scale (a bound 5e6 too tight), and the
   knots spanned the whole arc (a hat outside every fitted window, refused as singular). Both fixed.
 
-**Delivered 2026-10-15, ◐.** Prediction for the gate: 408 (after N-02a) + 6 = **414**
+**Delivered 2026-10-15, ☑** on the CI runner after the two fixes (run of f9587d4: **414 passed, 0 failed, 0 incomplete, 0 shortfalls, predicted 414**). Prediction for the gate was: 408 (after N-02a) + 6 = **414**
 (`tests/tNgfFitCalibration.m`: contract, reference, precision, robustness, metamorphic, speed;
 vectorization exempt with its reason), 0 failed, 0 incomplete, 0 shortfalls, 60 units. The
 noise-free reference recovers a full S with off-diagonals, the drifting bias and K2 against a bound
