@@ -1,4 +1,4 @@
-# NonGravForces 0.14.0
+# NonGravForces 0.15.0
 
 Non-gravitational forces, torques and partials for LEO satellites (GRACE-FO reference case; classic GRACE-A/B macro model since N-07). Third concept, designed from scratch after the audits of `SatelliteNonGravToolbox` v1 and `NonGravToolbox` v0.1.1.
 
@@ -11,7 +11,7 @@ run('../referenceSystem/setupReferenceSystem.m'); run('../gracefoReading/setupGr
 run('../odeSuite/gjToolboxSetup.m')      % optional for the toolbox, required by ciGate
 setupNonGravForces; runNgfTests
 ```
-Status: 57 catalogued units, all delivered, no stubs left (`auditPackage.py` compares this number with `doc/functionlist.csv`); all are verified in MATLAB. **Version 0.14.0** removes the deprecated `NonGravForces.qc` forwarders (O-47): quality control is `timeSeriesPreparation.qc`. **405/405 green** on Tier A after N-03c completed the calibration diagnostics: per-revolution fit and driver attribution (R2026a Update 4, 2026-10-15; `tests/last_run.txt`).
+Status: 57 catalogued units, all delivered, no stubs left (`auditPackage.py` compares this number with `doc/functionlist.csv`); all are verified in MATLAB. **Version 0.15.0** completes the accelerometer calibration diagnostics of N-03: a time-varying scale with its drift test, model comparison by blocked cross-validation, the per-revolution fit and its attribution on drivers. **405/405 green** on Tier A (R2026a Update 4, 2026-10-15; `tests/last_run.txt`).
 
 Licensed MIT (see `LICENSE`). The NRLMSISE-00 C source is **not** in this repository — it carries no redistribution grant, so it is fetched from its maintainer instead:
 

@@ -1,11 +1,11 @@
-NonGravForces 0.14.0  run 2026-10-15 13:23 UTC  MATLAB 26.1.0.3312084 (R2026a) Update 4
-tests 405  passed 405  failed 0  incomplete 0  duration 305.5 s  GATE TRUE
+NonGravForces 0.15.0  run 2026-10-15 14:14 UTC  MATLAB 26.1.0.3312084 (R2026a) Update 4
+tests 405  passed 405  failed 0  incomplete 0  duration 309.8 s  GATE TRUE
 
 == category audit (units short of a category) ==
 none
 
 == recorded bounds ==
-densityInversion, 4 chunks / 1 chunk over 20 epochs   1.5433e+00 <=   4.0000e+00 -      four Model.accel calls instead of one; the divisions are free by comparison
+densityInversion, 4 chunks / 1 chunk over 20 epochs   1.6207e+00 <=   4.0000e+00 -      four Model.accel calls instead of one; the divisions are free by comparison
 doubling the measured gas part doubles the density   1.1375e-16 <=   1.0000e-13 -      linearity in rho, seen from the other side
 a radiation error along the drag direction moves rho by exactly its size   2.2204e-16 <=   1.0000e-12 -      nothing separates the two along that direction, which is why residualPerp is reported beside every value
 an error across the drag direction leaves rho untouched   1.1375e-16 <=   1.0000e-12 -      the projection is what the inversion reads, so an orthogonal error can only reach residualPerp
@@ -21,7 +21,7 @@ density inversion recovers a planted scale of 1.7   3.9184e-16 <=   1.0000e-13 -
 planted scale 1.7: the perpendicular residual stays at zero   2.5791e-16 <=   1.0000e-13 -      scaling along the drag direction cannot create a component across it
 density inversion recovers a planted scale of 3.25   2.7329e-16 <=   1.0000e-13 -      the measurement's gas part was scaled by a known factor and nothing else was touched
 planted scale 3.25: the perpendicular residual stays at zero   1.0293e-15 <=   1.0000e-13 -      scaling along the drag direction cannot create a component across it
-forceBudget, 4 chunks / 1 chunk over 20 epochs   2.3909e+00 <=   4.0000e+00 -      four Model.accel calls instead of one on the same 20 epochs; the per-call overhead is what this measures, and a ratio near 4 would mean the evaluation does not vectorise over epochs at all
+forceBudget, 4 chunks / 1 chunk over 20 epochs   2.2944e+00 <=   4.0000e+00 -      four Model.accel calls instead of one on the same 20 epochs; the per-call overhead is what this measures, and a ratio near 4 would mean the evaluation does not vectorise over epochs at all
 forceBudget, gcrs vs body maximum magnitude ratio   1.0010e+00 <=   1.6000e+00 -      per-axis maxima can fall on different epochs after a rotation, so the norm of the maxima may grow; it cannot grow without bound
 forceBudget: cdScale 2 doubles the drag row   0.0000e+00 <=   1.0000e-15 -      cdScale multiplies the per-panel gas force and nothing else
 forceBudget: cdScale leaves the radiation row alone   0.0000e+00 <=   1.0000e-15 -      the effects are separate reductions over separate per-panel arrays
@@ -32,7 +32,7 @@ forceBudget RMS, 40 epochs in chunks of 7 vs one chunk   1.4708e-16 <=   1.0000e
 forceBudget maxima under chunking          0.0000e+00 <=   0.0000e+00 m/s^2  a maximum of maxima is exact whatever the grouping
 forceBudget share vs rms_norm ratio        0.0000e+00 <=   0.0000e+00 -      one division, quoted back
 forceBudget vs Model.budget, one chunk     0.0000e+00 <=   0.0000e+00 m/s^2  the same reduction over the same evaluation: bitwise or the unit computes physics of its own
-calibrate / (run + fitCalibration)         1.1682e+00 <=   1.5000e+00 -      calibrate adds conversions and a merge; an Arc reference has no attribution to fit
+calibrate / (run + fitCalibration)         1.1317e+00 <=   1.5000e+00 -      calibrate adds conversions and a merge; an Arc reference has no attribution to fit
 calibrate recovers a declared jump         0.0000e+00 <=   1.0000e-06 rel    noise-free; the step is one more exact column
 calibrate scale beside a jump              1.1102e-16 <=   1.0000e-06 -      noise-free
 calibrate jump epochs vs UTC->GPS arithmetic   0.0000e+00 <=   2.3942e+02 ns     oracle in double seconds: eps of ~6.3e8 s, plus the 1 ns rounding
@@ -44,8 +44,8 @@ calibrate noise-free scale axis 3          4.7139e-06 <=   1.0000e+00 -      err
 calibrate real day axis 1: residual RMS / demeaned ACT1B RMS   3.1369e-01 <=   1.0000e+00 -      least squares with a constant in the basis cannot do worse than the mean
 calibrate real day axis 2: residual RMS / demeaned ACT1B RMS   9.9624e-01 <=   1.0000e+00 -      least squares with a constant in the basis cannot do worse than the mean
 calibrate real day axis 3: residual RMS / demeaned ACT1B RMS   4.7963e-02 <=   1.0000e+00 -      least squares with a constant in the basis cannot do worse than the mean
-syntheticPair, 2x arc / 1x arc             1.9100e+00 <=   4.0000e+00 -      n log n would be about 2.1; quadratic 4
-Calibration.apply, 20000 / 5000 epochs     2.6651e+00 <=   8.0000e+00 -      linear would be 4; the basis is evaluated column by column
+syntheticPair, 2x arc / 1x arc             1.8575e+00 <=   4.0000e+00 -      n log n would be about 2.1; quadratic 4
+Calibration.apply, 20000 / 5000 epochs     2.6228e+00 <=   8.0000e+00 -      linear would be 4; the basis is evaluated column by column
 syntheticPair bias offset -> dcGain * offset   7.7093e-22 <=   8.6982e-19 m/s^2  two runs
 Calibration flat curve vs constant scale, apply   2.1692e-16 <=   2.2204e-14 -      pages vs one 3x3 solve
 syntheticPair half arc vs whole arc        0.0000e+00 <=   7.8935e-19 m/s^2  the same sums, the BLAS product associated by batch
@@ -61,21 +61,21 @@ Calibration pspline partition of unity     3.3307e-16 <=   3.5527e-15 -      fou
 syntheticPair vs crnApply(S m) + dcGain b   1.2176e-21 <=   7.8935e-19 m/s^2  bound 4 Nf eps sum|F| max|raw|, computed
 Calibration.apply on the truth vs the filtered model   1.3235e-21 <=   1.6286e-18 m/s^2  bound cond(S) 8 Nf eps sum|F| max|raw|
 Calibration.basis pspline vs closed form   4.9960e-16 <=   2.2204e-13 -      Cox-de Boor against the per-segment cubic, values <= 2/3
-compareCalibrations, 2 candidates / 1      1.9657e+00 <=   4.0000e+00 -      linear in candidates would be 2; the shared buffer computation pulls it lower
+compareCalibrations, 2 candidates / 1      1.9816e+00 <=   4.0000e+00 -      linear in candidates would be 2; the shared buffer computation pulls it lower
 compareCalibrations CV misses of the planted bias order, fraction   0.0000e+00 <=   0.0000e+00 -      3 seeds x 3 axes, Days 0.25, 5 folds; CV must find the truth every time
 compareCalibrations AIC picks the overfit spline, fraction   1.0000e+00 <=   1.0000e+00 -      recorded, not bounded: the v3 plan's claim is that it exceeds 0.5 (IC_unreliable)
 P0 from S0=1361 vs 4.5398e-6 Pa (Montenbruck & Gill give 4.56e-6 for 1367)   1.6159e-06 <=   1.0000e-04 rel    max |a-e| / max |e|
 const.Rgas = kB*NA                         0.0000e+00 <=   1.0000e-15 rel    max |a-e| / max |e|
-wind vs the rotationItrsToGcrs it calls    2.2187e+00 <=   4.5000e+00 -      budget 3x the expected 1.4: one rotation call plus two page products; 5 repeats, median
-wind hwm14 / corotation time ratio, 600 epochs   1.5907e+00 <=   6.0000e+00 -      measured 1.76 on 2026-09-15; budget 3x
-msis00 86400 / 8640 epochs time ratio      9.8743e-01 <=   2.0000e+00 -      linear scaling; measured see last_run
-msis21 / msis00 time ratio, 8640 epochs    5.2020e+00 <=   1.5000e+01 -      measured 4.8 on 2026-09-15; budget 3x
-magneticField degree 13 / degree 1 time ratio, 86400 positions   5.1781e+01 <=   1.5000e+02 -      measured 50.8 on 2026-09-15; budget 3x
-eclipse conical / cylindrical time ratio   1.0898e+00 <=   8.0000e+00 -      
-earthRadiance ceresClimatology / knocke time ratio [12 24], 600 epochs   3.1060e+00 <=   3.0000e+01 -      see last_run; budget set above the measured figure, ratio not absolute
-earthRadiance ceres / knocke time ratio [12 24], 600 epochs   5.2793e+00 <=   1.5000e+01 -      measured 5.0 on 2026-09-15; budget 3x
-earthRadiance [24 48] / [12 24] time ratio   1.9572e+00 <=   8.0000e+00 -      4x the tiles
-radiationSources / earthRadiance time ratio (600 epochs)   3.6556e+00 <=   6.0000e+00 -      
+wind vs the rotationItrsToGcrs it calls    2.2532e+00 <=   4.5000e+00 -      budget 3x the expected 1.4: one rotation call plus two page products; 5 repeats, median
+wind hwm14 / corotation time ratio, 600 epochs   1.6665e+00 <=   6.0000e+00 -      measured 1.76 on 2026-09-15; budget 3x
+msis00 86400 / 8640 epochs time ratio      9.7045e-01 <=   2.0000e+00 -      linear scaling; measured see last_run
+msis21 / msis00 time ratio, 8640 epochs    5.1548e+00 <=   1.5000e+01 -      measured 4.8 on 2026-09-15; budget 3x
+magneticField degree 13 / degree 1 time ratio, 86400 positions   5.3847e+01 <=   1.5000e+02 -      measured 50.8 on 2026-09-15; budget 3x
+eclipse conical / cylindrical time ratio   1.0673e+00 <=   8.0000e+00 -      
+earthRadiance ceresClimatology / knocke time ratio [12 24], 600 epochs   3.1197e+00 <=   3.0000e+01 -      see last_run; budget set above the measured figure, ratio not absolute
+earthRadiance ceres / knocke time ratio [12 24], 600 epochs   4.9077e+00 <=   1.5000e+01 -      measured 5.0 on 2026-09-15; budget 3x
+earthRadiance [24 48] / [12 24] time ratio   1.9082e+00 <=   8.0000e+00 -      4x the tiles
+radiationSources / earthRadiance time ratio (600 epochs)   3.5764e+00 <=   6.0000e+00 -      
 co-rotation doubles with the position      0.0000e+00 <=   1.0000e-15 -      an exact power of two through two matrix products
 co-rotation removed and added back         1.2857e-16 <=   1.0000e-15 -      two roundings of a 7.6 km/s velocity; measured 1.3e-16
 hwm14 minus corotation is the model wind   4.1211e-13 <=   1.0000e-09 m/s    (v - c) - (v - c - w) = w, three roundings of a 7.6 km/s velocity
@@ -148,7 +148,7 @@ SRP at 1 au vs tsi/c                       0.0000e+00 <=   1.0000e-15 rel    one
 DE440 vs the analytic Sun: direction       3.1446e-03 <=   5.0000e-02 arcsec measured 0.0031 arcsec 2026-09-16; 1 arcsec of Sun direction moves a panel's cosine by 5e-6
 DE440 vs the analytic Sun: distance        2.0083e-09 <=   1.0000e-07 -      measured 2.0e-9 (0.3 km) 2026-09-16
 DE440 vs the analytic Sun: solar radiation pressure   4.0165e-09 <=   1.0000e-07 -      twice the relative distance difference (1/r^2); measured 4.0e-9, far below the 1e-3 uncertainty of the solar constant itself
-fitCalibration, 2x arc / 1x arc            1.9544e+00 <=   4.0000e+00 -      linear would be 2 and a fixed overhead pulls it lower; quadratic 4
+fitCalibration, 2x arc / 1x arc            1.9205e+00 <=   4.0000e+00 -      linear would be 2 and a fixed overhead pulls it lower; quadratic 4
 fitCalibration prediction + residual vs observation   1.3156e-01 <=   1.0000e+00 -      two subtractions of the same fitted value; bound 4 eps max|y|
 fitCalibration S(t), hat with one span vs linear   3.0868e-03 <=   1.0000e+00 -      two parameterisations of one column space; bound 100 eps cond max|S|
 fitCalibration scale error in bootstrap sigma   3.1104e+00 <=   5.0000e+00 sigma  seeded noise, 100 replicates
@@ -177,11 +177,11 @@ MacroModel energy closure vis              0.0000e+00 <=   1.0000e-12 -
 MacroModel energy closure ir               0.0000e+00 <=   1.0000e-12 -      
 graceFO total area vs Table 5 sum          0.0000e+00 <=   1.0000e-07 rel    max |a-e| / max |e|
 renormalised normal vs printed digits      7.3135e-07 <=   1.0000e-06 -      six printed digits: their norm is 1 - 7.3e-7 (measured 2026-09-07; the record had declared 5e-7)
-flowShadow (32 epochs) / radiation occlusion look-up (577 x 32)   3.9285e+00 <=   1.6000e+01 -      measured 5.3 on 2026-09-15; budget 3x
-checkAttitudeSense vs one rotationFromQuaternion over 600 epochs   6.1779e+00 <=   1.2000e+01 -      budget 3x the expected 4: two rotations, one quaternion conjugation and two atan2 angles; 5 repeats, median
-selfShadow cube-map query / ray cast time ratio (600 directions)   9.4199e-04 <=   1.0000e-02 -      O(1) look-up; measured 2.4e-3
-thermalState transient / steady time ratio (600 epochs)   1.5733e+00 <=   2.0000e+01 -      RK4 substeps
-AttitudeProvider.at / interpolateQuaternions time ratio   1.0342e+00 <=   8.0000e+00 -      three-output form of the dependency
+flowShadow (32 epochs) / radiation occlusion look-up (577 x 32)   3.6691e+00 <=   1.6000e+01 -      measured 5.3 on 2026-09-15; budget 3x
+checkAttitudeSense vs one rotationFromQuaternion over 600 epochs   6.8733e+00 <=   1.2000e+01 -      budget 3x the expected 4: two rotations, one quaternion conjugation and two atan2 angles; 5 repeats, median
+selfShadow cube-map query / ray cast time ratio (600 directions)   1.2257e-03 <=   1.0000e-02 -      O(1) look-up; measured 2.4e-3
+thermalState transient / steady time ratio (600 epochs)   1.5814e+00 <=   2.0000e+01 -      RK4 substeps
+AttitudeProvider.at / interpolateQuaternions time ratio   9.9954e-01 <=   8.0000e+00 -      three-output form of the dependency
 flowShadow y-mirror swaps starboard and port   5.5511e-16 <=   1.0000e-12 -      the cube map is symmetric in y to the ray cast's sampling, which is symmetric; the flow frame is not, so rounding enters
 flowShadow normal ratio vs beam at s = 400   5.4173e-05 <=   2.0000e-02 -      spread 1/s = 2.5e-3 rad across a cube cell of 0.2 rad with a value jump <= 1
 boxWing area scaling                       0.0000e+00 <=   1.0000e-14 m^2    products of two lengths
@@ -217,7 +217,7 @@ selfShadow raycast 100 vs Python 160 (lit plates)   3.7500e-03 <=   1.0000e-02 -
 steady-state temperature vs closed form    0.0000e+00 <=   1.0000e-09 K      one fourth root
 nominal attitude (+X against v) vs SCA1B   8.6093e-01 <=   3.0000e+00 deg    pointing offsets ~1 deg; measured 0.86
 checkAttitudeSense max nadir angle, real day   8.6018e-01 <=   3.0000e+00 deg    measured 0.86
-native accel / MATLAB accel, one state     4.5617e-02 <=   8.0000e-02 -      measured 0.0234 (43x) on 2026-09-16, R2026a, standard preset; budget 3x the measured ratio
+native accel / MATLAB accel, one state     3.7691e-02 <=   8.0000e-02 -      measured 0.0234 (43x) on 2026-09-16, R2026a, standard preset; budget 3x the measured ratio
 native drag doubles with cdScale           0.0000e+00 <=   1.0000e-15 -      an exact power of two through a linear factor
 propagated arc: native binding vs vectorized binding over 300 s   0.0000e+00 <=   1.0000e-06 m      one model through two stepping kernels; the acceleration differs by 1e-14 relative and the arc is 300 s (measured 0 m)
 the source's two paths at a table node     6.3945e-16 <=   1.0000e-12 -      the C evaluator against Model.accel through the same source
@@ -226,20 +226,20 @@ native relative velocity vs Model's        0.0000e+00 <=   1.0000e-12 -      the
 native shadow factor vs Model's            0.0000e+00 <=   1.0000e-12 -      the same eclipse model
 native evaluator vs Model.accel at the table nodes (7 configurations)   1.3692e-15 <=   1.0000e-13 -      accumulated rounding of two implementations of one expression set, written in the same association order where it decides the digits; measured 2.504e-14 on 2026-09-16
 native evaluator vs Model.accel between the table nodes (60 s tables)   8.1162e-11 <=   1.0000e-09 -      the cubic tables' interpolation error, not the model's: measured 8.124e-11 at 60 s spacing, and it falls as the fourth power of the step
-GROOPS grid: one grid of 60 / one grid of 2   1.0045e+00 <=   3.0000e+00 -      seeking means the cost of one grid does not grow with the file: 30x the payload must not cost 30x. A reader that ignored TimeRange would land near 30
+GROOPS grid: one grid of 60 / one grid of 2   1.0428e+00 <=   3.0000e+00 -      seeking means the cost of one grid does not grow with the file: 30x the payload must not cost 30x. A reader that ignored TimeRange would land near 30
 GROOPS grid: read-write-read is a fixed point   0.0000e+00 <=   0.0000e+00 -      bitwise; the two files describe the same grid
 GROOPS grid values survive the round trip   0.0000e+00 <=   0.0000e+00 -      float64 written and read unchanged: bitwise or the reader is lossy
 GROOPS grid: solid angles sum to 4 pi      6.6613e-16 <=   1.0000e-12 -      the writer lays a cosine-weighted grid on the sphere; the reader must not rescale it
-importCERES vs three bare ncread calls     8.0039e+00 <=   2.5000e+01 -      checks and one permutation on 1.2e5 floats per field; measured 8.3 on 2026-09-15, budget 3x
-igrfCoefficients, 195 rows x 27 columns    2.1691e+01 <=   2.0000e+03 ms     a smoke ceiling on a 42 kB parse, not a claim about this host
-readMAG1B, 600 records                     4.7540e+01 <=   5.0000e+03 ms     a smoke ceiling on a 600-record parse, not a claim about this host
-readACC1B / readL1b time ratio             1.0717e+00 <=   5.0000e+00 -      measured 0.98
-readSCA1B / readL1b time ratio             1.0462e+00 <=   5.0000e+00 -      measured 1.46
-readGNV1B GCRS / ITRS time ratio           1.1684e+00 <=   5.0000e+00 -      measured 1.16 warm
-readTHR1B / readL1b time ratio             1.0450e+00 <=   5.0000e+00 -      measured 1.04
-readMAS1B / readL1b time ratio             1.3600e+00 <=   5.0000e+00 -      measured 1.47
-massModel.at(86400) / interp1 time ratio   2.6371e+00 <=   7.0000e+00 -      measured 2.24
-spaceWeather.query(86400) / ismember time ratio   4.5037e+01 <=   2.0000e+02 -      measured 65
+importCERES vs three bare ncread calls     7.8869e+00 <=   2.5000e+01 -      checks and one permutation on 1.2e5 floats per field; measured 8.3 on 2026-09-15, budget 3x
+igrfCoefficients, 195 rows x 27 columns    2.2064e+01 <=   2.0000e+03 ms     a smoke ceiling on a 42 kB parse, not a claim about this host
+readMAG1B, 600 records                     4.8545e+01 <=   5.0000e+03 ms     a smoke ceiling on a 600-record parse, not a claim about this host
+readACC1B / readL1b time ratio             1.0420e+00 <=   5.0000e+00 -      measured 0.98
+readSCA1B / readL1b time ratio             1.0457e+00 <=   5.0000e+00 -      measured 1.46
+readGNV1B GCRS / ITRS time ratio           1.1620e+00 <=   5.0000e+00 -      measured 1.16 warm
+readTHR1B / readL1b time ratio             1.0015e+00 <=   5.0000e+00 -      measured 1.04
+readMAS1B / readL1b time ratio             1.5311e+00 <=   5.0000e+00 -      measured 1.47
+massModel.at(86400) / interp1 time ratio   2.8499e+00 <=   7.0000e+00 -      measured 2.24
+spaceWeather.query(86400) / ismember time ratio   5.1436e+01 <=   2.0000e+02 -      measured 65
 a quarter step moves a quarter of the difference   9.0949e-13 <=   1.0000e-11 nT     linearity in the weight, checked away from the midpoint where a factor of two would hide
 magnitude equals the norm of the components   0.0000e+00 <=   0.0000e+00 T      one vecnorm, quoted back
 microtesla to tesla is a pure scaling      2.1176e-16 <=   1.0000e-15 -      every non-zero component divided by its file value gives the same factor
@@ -276,13 +276,13 @@ readMAG1B branch currents vs the first data line, mA to A   0.0000e+00 <=   0.00
 measured field magnitude over the excerpt   3.6751e+01 <=   1.0000e+02 uT     the Earth's field at 490 km reaches about 50 microtesla; a bound of 100 catches a misread column without asserting the geomagnetic model
 SCA1B body +Z vs nadir (conjugated)        8.6018e-01 <=   3.0000e+00 deg    measured 0.86; 96 without the conjugation
 GNV1B GCRS-ITRS longitude vs IAU1982 GMST   1.9067e-01 <=   5.0000e-01 deg    precession since J2000 dominates (measured 0.19)
-d(drag)/d(alpha) vs one force evaluation   3.4466e+00 <=   9.0000e+00 -      budget 3x the expected 3: the derivative evaluates the force and the coefficients again; 5 repeats, median
-gsiCoefficients: 1e5-element array vs 100 scalar calls, time ratio   1.2144e+00 <=   5.0000e+01 -      budget 3x the expected 1000/60; N = 1e5, 5 repeats, median
-dragPanelForce: K = 1000 batched vs one epoch, time ratio   7.0138e+00 <=   1.0000e+02 -      budget 3x the expected ~30; 8 species x 8 plates; 5 repeats, median
-radiationPanelForce: K = 1000 x 51 sources vs one epoch, time ratio   2.0254e+01 <=   3.0000e+02 -      budget 3x the expected ~100 (the source loop is not batched over K); 5 repeats, median
-thermalRecoil: K = 1e4 vs one epoch, time ratio   5.1881e+00 <=   6.0000e+01 -      budget 3x the expected ~20; 5 repeats, median
-assemble: K = 1e4 vs one epoch, time ratio   4.7886e+00 <=   6.0000e+01 -      budget 3x the expected ~20; 5 repeats, median
-bodyTorques: K = 1e4 vs one epoch, time ratio   1.8457e+00 <=   6.0000e+01 -      budget 3x the expected ~20; 5 repeats, median
+d(drag)/d(alpha) vs one force evaluation   3.9521e+00 <=   9.0000e+00 -      budget 3x the expected 3: the derivative evaluates the force and the coefficients again; 5 repeats, median
+gsiCoefficients: 1e5-element array vs 100 scalar calls, time ratio   9.1872e-01 <=   5.0000e+01 -      budget 3x the expected 1000/60; N = 1e5, 5 repeats, median
+dragPanelForce: K = 1000 batched vs one epoch, time ratio   8.5727e+00 <=   1.0000e+02 -      budget 3x the expected ~30; 8 species x 8 plates; 5 repeats, median
+radiationPanelForce: K = 1000 x 51 sources vs one epoch, time ratio   1.6659e+01 <=   3.0000e+02 -      budget 3x the expected ~100 (the source loop is not batched over K); 5 repeats, median
+thermalRecoil: K = 1e4 vs one epoch, time ratio   4.7196e+00 <=   6.0000e+01 -      budget 3x the expected ~20; 5 repeats, median
+assemble: K = 1e4 vs one epoch, time ratio   4.2813e+00 <=   6.0000e+01 -      budget 3x the expected ~20; 5 repeats, median
+bodyTorques: K = 1e4 vs one epoch, time ratio   1.8144e+00 <=   6.0000e+01 -      budget 3x the expected ~20; 5 repeats, median
 d(drag)/d(alpha) doubles with the density   0.0000e+00 <=   1.0000e-15 -      an exact power of two through a linear factor
 d(drag)/d(speed) doubles with the density   0.0000e+00 <=   1.0000e-15 -      an exact power of two through a linear factor
 d(drag)/d(densityScale) doubles with the density   0.0000e+00 <=   1.0000e-15 -      an exact power of two through a linear factor
@@ -352,8 +352,8 @@ recoil of the +x plate vs (2/3) sigma T^4 A / c   9.5163e-13 <=   1.0000e-11 N  
 cube at uniform temperature: net recoil    0.0000e+00 <=   1.0000e-20 N      opposite faces cancel exactly
 gravity-gradient torque vs Wertz eq. 17-30   3.9049e-16 <=   1.0000e-14 -      closed form, rounding only
 gravity-gradient torque magnitude at 490 km   4.1272e-06 <=   1.0000e-03 -      hand calculation: 3 GM/r^3 = 3.688e-6 s^-2, x 200 kg m^2 x sin(0.3) cos(0.3) = 2.0824e-4 N m
-single-epoch kernel: compiled / MATLAB chain (median of 5 x 200)   4.6743e-01 <=   1.0000e+00 -      compiled 423.6 us, MATLAB 906.1 us per epoch on this host; a value above 1 is a FINDING, not a flake: it says the port buys nothing and D.6 must be rewritten
-single-epoch compiled kernel, absolute cost per epoch   4.2356e+02 <=   1.0000e+04 us     smoke ceiling, not a claim; 901.8 us measured on the CI runner 2026-09-08, MATLAB chain 4149.6 us
+single-epoch kernel: compiled / MATLAB chain (median of 5 x 200)   4.3536e-01 <=   1.0000e+00 -      compiled 621.3 us, MATLAB 1427.0 us per epoch on this host; a value above 1 is a FINDING, not a flake: it says the port buys nothing and D.6 must be rewritten
+single-epoch compiled kernel, absolute cost per epoch   6.2126e+02 <=   1.0000e+04 us     smoke ceiling, not a claim; 901.8 us measured on the CI runner 2026-09-08, MATLAB chain 4149.6 us
 gas force doubles with the density         0.0000e+00 <=   1.0000e-15 -      rho enters every species term linearly; the coefficients do not depend on it
 radiation force triples with the pressure   1.5678e-16 <=   1.0000e-15 -      P multiplies the whole optical expression
 thermal recoil scales as T^4               0.0000e+00 <=   1.0000e-15 -      Stefan-Boltzmann with an exact power of two
@@ -395,7 +395,7 @@ fixture normals vs live geom.graceFO       3.3307e-16 <=   1.0000e-15 -      one
 fixture centroids vs live geom.graceFO     4.4409e-16 <=   1.0000e-15 m      one CSV round trip
 fixture optics vs live geom.graceFO        0.0000e+00 <=   1.0000e-15 -      one CSV round trip
 fixture inertia vs live geom.graceFO       0.0000e+00 <=   1.0000e-09 kg m^2 printed to 17 digits from Table 4
-fast preset vs standard preset, same arc (40 epochs)   3.3845e-01 <=   7.5000e-01 -      measured 0.25 on 2026-09-15 (it was 0.02 before WP-C3; that 88 ms of HANDOVER O-29 was per-call overhead, not physics)
+fast preset vs standard preset, same arc (40 epochs)   2.8875e-01 <=   7.5000e-01 -      measured 0.25 on 2026-09-15 (it was 0.02 before WP-C3; that 88 ms of HANDOVER O-29 was per-call overhead, not physics)
 thermal inertia vs instantaneous: the step it is worth   9.4977e-10 <=   4.0000e-09 m/s^2  [H24] Table 3 (b)->(c) buys 1.34 nm/s^2 of residual on GRACE-FO; measured 0.950e-9 as a model difference, the same order
 drag doubles with cdScale                  0.0000e+00 <=   1.0000e-15 -      an exact power of two through a linear factor
 radiation doubles with crScale             0.0000e+00 <=   1.0000e-15 -      as above
@@ -414,8 +414,8 @@ Sentman lift: drag angle off the stream    8.1709e-01 <=   2.0000e+00 deg    the
 constantCd drag direction vs -v_rel        4.4409e-16 <=   1.0000e-14 -      constantCd resolves every windward plate along the stream by construction: no lift; measured 1e-16
 thermal recoil magnitude vs Siemes 2023 (6.4 nm/s^2)   9.2528e-10 <=   4.0000e-09 m/s^2  published cross-track RMS for GRACE-A 2008; measured median 5.475e-9 over this arc
 thermal recoil cross-track RMS vs Hladczuk 2024 case (a) (4.22 nm/s^2)   1.0433e-09 <=   2.5000e-09 m/s^2  the residual left by omitting thermal emission bounds its magnitude; measured 5.263e-9, between the GRACE-FO and GRACE-A published figures
-perRevolution, 2x arc / 1x arc             2.1674e+00 <=   4.0000e+00 -      linear in windows would be 2
-attributeRevolutions, 2x revolutions / 1x   6.1184e-01 <=   4.0000e+00 -      linear would be 2
+perRevolution, 2x arc / 1x arc             2.0988e+00 <=   4.0000e+00 -      linear in windows would be 2
+attributeRevolutions, 2x revolutions / 1x   4.9083e-01 <=   4.0000e+00 -      linear would be 2
 attributeRevolutions driver x10 -> coefficient / 10   8.8818e-16 <=   1.0000e-12 -      a rescaled column in a QR solve; rounding only
 perRevolution noise-free scale error       1.1102e-15 <=   1.0000e-09 -      rounding of one revolution's CRN-filtered solve; fitCalibration's computed bound is ~1e-12 on longer arcs
 perRevolution noise-free bias error, relative   1.0059e-14 <=   1.0000e-06 -      the bias is the small parameter beside a 2e-7 signal; same rounding, relative to 2e-7
@@ -423,7 +423,7 @@ attributeRevolutions wrong verdicts, fraction   0.0000e+00 <=   0.0000e+00 -    
 attributeRevolutions F10.7 coefficient, relative error   1.3845e-02 <=   2.0000e-01 -      v3 WP-17: within 20 %
 attributeRevolutions beta' of a Sun-plane orbit   2.1416e-04 <=   5.0000e-03 rad    the Sun moves ~0.04 deg/h out of the plane fixed at the first epoch; 3 revolutions ~ 4.7 h
 attributeRevolutions eclipse fraction vs asin(Re/R)/pi   5.1845e-04 <=   1.0000e-02 -      conical vs cylindrical shadow and a 10 s sampling: the penumbra is ~10 s of a 5650 s revolution
-DragFree observe, 5000 epochs / 500 epochs   4.6493e+00 <=   2.0000e+01 -      linear in K would be 10; the allowance covers an interpreted loop whose per-sample cost is small next to the timer
+DragFree observe, 5000 epochs / 500 epochs   4.8500e+00 <=   2.0000e+01 -      linear in K would be 10; the allowance covers an interpreted loop whose per-sample cost is small next to the timer
 the residual doubles with the drag below saturation   0.0000e+00 <=   1.0000e-14 -      an unsaturated loop is a linear filter and nothing else
 reversing the drag reverses the residual   0.0000e+00 <=   1.0000e-14 -      linearity again, in the sign
 a bias is a rigid shift of the residual    4.5495e-24 <=   1.3235e-22 m/s^2  it is added outside the filter and outside the gain; the bound is ten times eps of the residual it is differenced out of
@@ -436,7 +436,7 @@ DragFree partials vs central differences   5.5905e-15 <=   1.0000e-09 -      bia
 DragFree rejection vs the analytic |S(f)|, three decades   6.2793e-16 <=   1.0000e-06 -      an integer number of periods after 60 time constants; what is left is the residue of the transient, not a modelling difference
 DragFree gain at the bandwidth is 1/sqrt(2) for one section   1.1633e-04 <=   1.0000e-03 -      the bilinear transform warps the corner slightly; 1e-3 is that warping at f_c = fs/100, not a slack bound
 a constant drag is rejected to nothing     0.0000e+00 <=   1.0000e-12 -      the loop has all the time in the world against a constant; what remains is the decayed transient
-AtomInterferometer observe, 2000 epochs / 200 epochs   2.8321e+00 <=   1.0000e+01 -      linear in K would be 10 and a fixed overhead pulls it below; the convolution is the only term that grows
+AtomInterferometer observe, 2000 epochs / 200 epochs   2.3218e+00 <=   1.0000e+01 -      linear in K would be 10 and a fixed overhead pulls it below; the convolution is the only term that grows
 the phase doubles with the acceleration    0.0000e+00 <=   1.0000e-15 -      k_eff T^2 multiplies a linearly and nothing else touches it
 doubling the interrogation time quadruples the phase   0.0000e+00 <=   1.0000e-15 -      T enters squared; for a constant acceleration the weighting is exact at both T
 reversing the beam reverses the phase      0.0000e+00 <=   1.0000e-15 -      the projection <n, a> is the only place the direction enters
@@ -457,8 +457,8 @@ filtered scale column vs the filtered input   0.0000e+00 <=   4.0234e-12 -      
 J*theta vs the filtered reading            3.6993e-15 <=   4.0234e-09 -      fifteen columns summed; cancellation against a 3e-6 bias is the floor, hence the larger factor
 CRN DC gain through the sensor vs the printed 1 + 1.115e-7   1.5984e-11 <=   5.0000e-11 -      half a unit in the fourth printed digit of 1.115e-7
 CRN at f0: interior output vs input, relative to the amplitude   3.1764e-15 <=   4.0234e-12 -      normalised to unit response at f0 and zero phase by symmetry; the bound is 10x an Nf-term dot product's rounding
-Electrostatic observe, 60 epochs / 6 epochs   1.9788e+00 <=   1.0000e+01 -      linear in K would be 10 and a fixed overhead pulls it below; above 10 would mean the work is not vectorised
-Electrostatic partials, 60 epochs / 6 epochs   3.4492e+00 <=   2.0000e+01 -      a per-epoch loop of fixed work is linear; the allowance is generous because the loop body is tiny and the timer is not
+Electrostatic observe, 60 epochs / 6 epochs   1.9898e+00 <=   1.0000e+01 -      linear in K would be 10 and a fixed overhead pulls it below; above 10 would mean the work is not vectorised
+Electrostatic partials, 60 epochs / 6 epochs   3.4405e+00 <=   2.0000e+01 -      a per-epoch loop of fixed work is linear; the allowance is generous because the loop body is tiny and the timer is not
 a bias change is a rigid shift of the whole series   3.3881e-21 <=   1.0000e-20 m/s^2  bias enters once, outside everything else; eps(1e-5) is 1.7e-21
 doubling the scale doubles the non-bias part   1.3949e-15 <=   1.3949e-14 -      the scale multiplies the sensed acceleration and only that; the bound is the cancellation floor of removing a bias three times the signal
 the coupling is linear in the proof-mass offset   2.6144e-16 <=   1.0000e-14 -      both cross-product terms are linear operators acting on dr

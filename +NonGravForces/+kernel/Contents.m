@@ -1,5 +1,5 @@
 % KERNEL  NonGravForces.kernel - L4 layer.
-% Version 0.14.0  15-Oct-2026
+% Version 0.15.0  15-Oct-2026
 %
 %   gsiCoefficients      - Normal and tangential plate coefficients: sentman maxwell constantCd (cll/schamberg refuse)
 %   accommodation        - Energy accommodation per epoch: fixed or Pilinski 2010 or the Walker/Mehta adsorbate mixture

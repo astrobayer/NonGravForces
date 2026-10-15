@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-10-15 (O-47, release 0.14.0) by Claude Opus 5.5. Toolbox version 0.14.0.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-10-15 (O-49, release 0.15.0) by Claude Opus 5.5. Toolbox version 0.15.0.
 
 ---
 
@@ -171,8 +171,11 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-15, N-03c; N-03 complete)
+## 5. Current status (2026-10-15, release 0.15.0)
 
+- **2026-10-15, release 0.15.0 (O-49 closed):** N-03 released; benchmark re-run on Tier A (standard 17.0 ms at
+  K=1, 0.836 at K=100), 405/405 on Tier A, predicted 405. Also on `main`: #86, a failed kernel download now
+  names its cause in ciGate's message. Open N-issues: N-05 (figures, needs N-03 -- now unblocked), N-08..N-12.
 - **2026-10-15, N-03c (#60, third of three PRs):** `app.perRevolution` (bias + diagonal scale per window through
   `fitCalibration`; a gated window is NaN with its reason) and `app.attributeRevolutions` (drivers beta',
   eclipse fraction, F10.7/Ap, effect amplitudes, time -> `timeSeriesPreparation.regressDrivers`; verdict at
@@ -706,9 +709,9 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   differ by 4.0x — which is the real cost of a bad measurement: not the wrong digit, the conclusion
   drawn from it and written somewhere else.
 - **A per-epoch cost is mostly a property of the BATCH, not of the toolbox**, so never quote one
-  without K. `Model.accel` in the standard preset costs 20.0 ms at K=1 and 1.08 ms at K=100
-  (0.14.0, 2026-10-15, a shared host), because one call pays ~19 ms of setup before any per-epoch work (fast: 7.6
-  ms and 0.042). A day at 1 Hz through `Model.series` was 1 min 16 s on 2026-09-18 -- a figure
+  without K. `Model.accel` in the standard preset costs 17.0 ms at K=1 and 0.836 ms at K=100
+  (0.15.0, 2026-10-15), because one call pays ~16 ms of setup before any per-epoch work (fast: 5.1
+  ms and 0.045). A day at 1 Hz through `Model.series` was 1 min 16 s on 2026-09-18 -- a figure
   `tools/benchmark.m` does NOT produce, so nothing regenerates it. The authority is `tools/benchmark_reference.csv`,
   which `tools/benchmark.m` writes and `auditPackage.py` check 13 compares every quoted figure
   against; `tools/benchmark_last.txt` is the gitignored host log and is NOT the authority, because a
