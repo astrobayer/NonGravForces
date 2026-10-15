@@ -179,15 +179,15 @@ For orbit determination and calibration the toolbox returns $\partial\vv a/\part
 \section{Quality control: outliers, impulses, jumps}\label{sec:qc}
 Three event classes with different signatures need three detectors, all operating on whitened residuals $r(t)=y_{meas}-(b+\mathbf S\,y_{model})$ from a preliminary calibration:
 \begin{itemize}[nosep]
-\item \textbf{Outliers} (isolated samples): Hampel filter, moving median and $1.4826\cdot$MAD over a \SI{61}{\second} window, threshold $4\sigma$; robust to 50\,\% contamination, so thruster spikes and twangs cannot inflate the scale (a moving mean/std would). Implemented and verified against an independent numpy oracle (\texttt{qc.hampel}).
+\item \textbf{Outliers} (isolated samples): Hampel filter, moving median and $1.4826\cdot$MAD over a \SI{61}{\second} window, threshold $4\sigma$; robust to 50\,\% contamination, so thruster spikes and twangs cannot inflate the scale (a moving mean/std would). Implemented and verified against an independent numpy oracle (\texttt{timeSeriesPreparation.qc.hampel}; in this toolbox until 0.14.0).
 \item \textbf{Impulses} (CRN-shaped pulses, \SI{\sim30}{\second} wide, simultaneous in three axes): matched filter with the CRN impulse response; THR1B epochs are assigned first, unassigned pulses are twang/impact candidates; an impact (not a twang) also changes $\vv\omega$ in SCA1B.
 \item \textbf{Jumps} (steps in level or slope): PELT change-point detection (Killick et al.\ 2012) with BIC penalty on piecewise-constant and piecewise-linear models; eclipse entries/exits (from the shadow function) and mass-trim events (MAS1B) are priors. Jumps are \emph{estimated} as Heaviside columns in the calibration, never cut.
 \end{itemize}
-Output: a canonical event table (\texttt{qc.eventTable}: $t_{start},t_{end}$, class, axis, amplitude, $\sigma$, source, confidence) and a logical mask. Limits: impulses shorter than the CRN width are unresolvable in L1B (use ACC1A); jumps below \SI{\sim1}{nm/s^2} are indistinguishable from $1/f$ bias drift without temperature data; along-track thresholds must adapt to geomagnetic activity because the residual carries the 10--30\,\% density error. Metamorphic tests: time shift, affine scaling, time reversal, planted events recovered with amplitude to $3\sigma$.
+Output: a canonical event table (\texttt{timeSeriesPreparation.qc.eventTable}: $t_{start},t_{end}$, class, axis, amplitude, $\sigma$, source, confidence) and a logical mask. Limits: impulses shorter than the CRN width are unresolvable in L1B (use ACC1A); jumps below \SI{\sim1}{nm/s^2} are indistinguishable from $1/f$ bias drift without temperature data; along-track thresholds must adapt to geomagnetic activity because the residual carries the 10--30\,\% density error. Metamorphic tests: time shift, affine scaling, time reversal, planted events recovered with amplitude to $3\sigma$.
 
 \section{Implementation}
 \subsection{Architecture}
-Nine layers (L0 core, L1 io, L2 env, L3 geom, L4 kernel, L5 \texttt{Model}, L6 sensor, L7 qc, L8 app), \ngfunitcount{} units, one catalogue (\texttt{doc/functionlist.csv}) that generates the function reference and drives the stub and audit tests. A layer calls only lower layers plus the four dependencies. \texttt{Model} is the single point of access (\texttt{accel | torque | series | partials | budget}; \texttt{rhs} was removed in LP-C---an integrator binds \texttt{app.DynamicsSource} instead); \texttt{Options} is a value class with presets \texttt{fast/standard/precise} and validated dotted overrides; extended models are opt-ins that no preset enables, so preset results never move when a model lands.
+Eight layers (L0 core, L1 io, L2 env, L3 geom, L4 kernel, L5 \texttt{Model}, L6 sensor, L8 app; L7 qc moved to \texttt{timeSeriesPreparation.qc} and was deleted in 0.14.0), \ngfunitcount{} units, one catalogue (\texttt{doc/functionlist.csv}) that generates the function reference and drives the stub and audit tests. A layer calls only lower layers plus the four dependencies. \texttt{Model} is the single point of access (\texttt{accel | torque | series | partials | budget}; \texttt{rhs} was removed in LP-C---an integrator binds \texttt{app.DynamicsSource} instead); \texttt{Options} is a value class with presets \texttt{fast/standard/precise} and validated dotted overrides; extended models are opt-ins that no preset enables, so preset results never move when a model lands.
 
 \subsection{Workflow}
 \begin{lstlisting}
@@ -239,7 +239,7 @@ GRACE-FO mass, geometry & \SI{601.214}{kg}; JPL D-56935 Tables 4--5 & Wen 2019\\
 Oracle & Used for\\\midrule
 CODATA 2018, IAU 2015 B3 & \texttt{const} (verified)\\
 JPL D-56935 Tables 4--5 & \texttt{geom.graceFO} (verified: areas, optics, inertia, normals)\\
-numpy Hampel (\texttt{tools/pyxcheck}) & \texttt{qc.hampel} (verified, bit-for-bit flags)\\
+numpy Hampel (\texttt{tools/pyxcheck}) & \texttt{timeSeriesPreparation.qc.hampel} (verified, bit-for-bit flags; the oracle moved with it)\\
 Brodowski NRLMSISE-00 DOCUMENTATION table (17 cases) & density backend\\
 NRL/CCMC NRLMSIS 2.x and HWM14 test outputs; CNES DTM2020; SET JB2008 & extended density and wind\\
 igrf14 test cases; Zenodo 10.5281/zenodo.14012303 & magnetic field\\

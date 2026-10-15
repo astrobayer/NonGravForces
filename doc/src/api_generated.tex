@@ -5,7 +5,7 @@
 %
 % \input-able from a report-class document; it opens no document and no chapter.
 
-\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 60 units, toolbox version 0.13.0.
+\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 54 units, toolbox version 0.14.0.
 
 \section{L0 \texttt{core} --- constants, options, provenance, uniform errors and the MEX build}
 
@@ -138,7 +138,7 @@ c.\allowbreak{}grace & 1x1 & struct & - & Launch mass (Bettadpur 2012, GRACE 327
 
 \begin{lstlisting}
 v = NonGravForces.toolboxVersion            % struct
-s = NonGravForces.toolboxVersion('string')  % '0.13.0'
+s = NonGravForces.toolboxVersion('string')  % '0.14.0'
 \end{lstlisting}
 
 \subsubsection*{INPUT ARGUMENTS}
@@ -172,7 +172,7 @@ format & 1x1 & string & - & "struct" (default) or "string". \\
 \endfoot
 \bottomrule
 \endlastfoot
-v & 1x1 & struct & - & .major .minor .patch (uint16), .semantic (string, composed), .date (string, ISO), .concept (uint8, 3 = this redesign), .model (string: authoring model of this revision). With "string": char '0.13.0'. \\
+v & 1x1 & struct & - & .major .minor .patch (uint16), .semantic (string, composed), .date (string, ISO), .concept (uint8, 3 = this redesign), .model (string: authoring model of this revision). With "string": char '0.14.0'. \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
@@ -637,7 +637,7 @@ aux & 1x1 & struct & - & .frame ("GCRS"\textbar{}"ITRS"), .sigma\_r\_m (3xK, xpo
 
 \subsection{\texttt{NonGravForces.io.readTHR1B}}
 \label{api:io.readTHR1B}
-\noindent THR1B thruster-activation reader: qc.eventTable impulse priors plus per-thruster on-times.
+\noindent THR1B thruster-activation reader: timeSeriesPreparation.qc.eventTable impulse priors plus per-thruster on-times.
 
 \begin{lstlisting}
 [events, aux] = NonGravForces.io.readTHR1B(file)
@@ -692,7 +692,7 @@ TimeRange & 1x2 & double\textbar{}\allowbreak{}datetime & - & Forwarded to readL
 \endfoot
 \bottomrule
 \endlastfoot
-events & Nx8 & table & - & qc.eventTable schema; N records with a firing. \\
+events & Nx8 & table & - & timeSeriesPreparation.qc.eventTable schema; N records with a firing. \\
 aux & 1x1 & struct & - & .epoch (GPS epoch struct of ALL K records), .thruster (1xT string, header names without "on\_time\_"), .onTime\_s (TxK), .fired (TxK logical), .count (TxK cumulative thrust counts, thrust\_count\_* in header order), .accumDur\_s (struct .attCtrl 1xK .orbCtrl 1xK, cumulative), .numRecordsNoFiring, .qualflgBits, .product, .satellite, .files, .numRecords, .sampling\_s, .obsNames, .units, .provenance. \\
 \end{longtable}
 
@@ -3457,370 +3457,6 @@ m          = magnitudeResponse(obj, f_Hz)   |S(f)| of the cascade, evaluated on 
 \item[\texttt{NonGravForces:\allowbreak{}DragFree:\allowbreak{}inputRange}] bandwidth \textless{}= 0, order \textless{} 1 or not an integer, Authority \textless{}= 0, SampleRate \textless{}= 2 f\_c
 \item[\texttt{NonGravForces:\allowbreak{}DragFree:\allowbreak{}inputDyn}] dyn lacks a
 \item[\texttt{NonGravForces:\allowbreak{}DragFree:\allowbreak{}numericNaN}] an input contains NaN or Inf
-\end{description}
-
-\section{L7 \texttt{qc} --- quality control of a residual series}
-
-\subsection{\texttt{NonGravForces.qc.residuals}}
-\label{api:qc.residuals}
-\noindent [DEPRECATED, forwards to timeSeriesPreparation.qc.residuals] Residuals of measured minus modelled observations under a preliminary calibration, optionally whitened.
-
-\begin{lstlisting}
-r = NonGravForces.qc.residuals(y_meas, y_model)
-[r, info] = NonGravForces.qc.residuals(y_meas, y_model, 'Bias', b, 'Scale', S, 'Whitening', "highpass", 'Window', 601)
-\end{lstlisting}
-
-\subsubsection*{INPUT ARGUMENTS}
-\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endfirsthead
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endhead
-\midrule
-\endfoot
-\bottomrule
-\endlastfoot
-y\_\allowbreak{}meas & KxM & double & any & measured series, as timeSeriesPreparation.qc.residuals \\
-y\_\allowbreak{}model & KxM & double & any & modelled series, as timeSeriesPreparation.qc.residuals \\
-varargin & 1xN & cell & - & its name-value arguments, passed through unchanged \\
-\end{longtable}
-
-\subsubsection*{NAME-VALUE ARGUMENTS}
-Bias, Scale, Whitening, Window: those of timeSeriesPreparation.qc.residuals, with its defaults; the two argument blocks are identical (compared 2026-10-14).
-
-
-\subsubsection*{OUTPUT ARGUMENTS}
-\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endfirsthead
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endhead
-\midrule
-\endfoot
-\bottomrule
-\endlastfoot
-r & KxM & double & - & as timeSeriesPreparation.qc.residuals, unchanged \\
-info & 1x1 & struct & - & as timeSeriesPreparation.qc.residuals, unchanged \\
-\end{longtable}
-
-\subsubsection*{ERRORS}
-\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}residuals:\allowbreak{}depMissing}] timeSeriesPreparation is not on the path
-\item[\texttt{timeSeriesPreparation:\allowbreak{}residuals:\allowbreak{}*}] the target's errors, unwrapped
-\end{description}
-
-\subsubsection*{WARNINGS}
-\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}residuals:\allowbreak{}deprecated}] on every call; call timeSeriesPreparation.qc.residuals
-\end{description}
-
-\subsection{\texttt{NonGravForces.qc.hampel}}
-\label{api:qc.hampel}
-\noindent [DEPRECATED, forwards to timeSeriesPreparation.qc.hampel] Robust point-outlier detector: moving median and scaled MAD, per column.
-
-\begin{lstlisting}
-mask = NonGravForces.qc.hampel(x)
-[mask, info] = NonGravForces.qc.hampel(x, 'Window', 61, 'Threshold', 4)
-\end{lstlisting}
-
-\subsubsection*{INPUT ARGUMENTS}
-\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endfirsthead
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endhead
-\midrule
-\endfoot
-\bottomrule
-\endlastfoot
-x & KxM & double & any & samples down the columns, as timeSeriesPreparation.qc.hampel \\
-varargin & 1xN & cell & - & its name-value arguments, passed through unchanged \\
-\end{longtable}
-
-\subsubsection*{NAME-VALUE ARGUMENTS}
-Window, Threshold, MinSigma: those of timeSeriesPreparation.qc.hampel, with its defaults; the two argument blocks are identical (compared 2026-10-14).
-
-
-\subsubsection*{OUTPUT ARGUMENTS}
-\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endfirsthead
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endhead
-\midrule
-\endfoot
-\bottomrule
-\endlastfoot
-mask & KxM & logical & - as & timeSeriesPreparation.qc.hampel, unchanged \\
-info & 1x1 & struct & - as & timeSeriesPreparation.qc.hampel, unchanged \\
-\end{longtable}
-
-\subsubsection*{ERRORS}
-\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}hampel:\allowbreak{}depMissing}] timeSeriesPreparation is not on the path
-\item[\texttt{timeSeriesPreparation:\allowbreak{}hampel:\allowbreak{}*}] the target's errors, unwrapped
-\end{description}
-
-\subsubsection*{WARNINGS}
-\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}hampel:\allowbreak{}deprecated}] on every call; call timeSeriesPreparation.qc.hampel
-\end{description}
-
-\subsection{\texttt{NonGravForces.qc.detectImpulses}}
-\label{api:qc.detectImpulses}
-\noindent [DEPRECATED, forwards to timeSeriesPreparation.qc.detectImpulses] Matched-filter detection of pulses with a known shape (the CRN impulse response) in whitened residuals; thruster priors are assigned first.
-
-\begin{lstlisting}
-[events, info] = NonGravForces.qc.detectImpulses(r, 'Epoch', t, 'Response', h)
-[events, info] = NonGravForces.qc.detectImpulses(r, 'Epoch', t, 'Response', h, 'Priors', thr, 'Threshold', 5)
-\end{lstlisting}
-
-\subsubsection*{INPUT ARGUMENTS}
-\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endfirsthead
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endhead
-\midrule
-\endfoot
-\bottomrule
-\endlastfoot
-r & Kx1\textbar{}\allowbreak{}Kx3 & double & any & residual series, as timeSeriesPreparation.qc.detectImpulses \\
-varargin & 1xN & cell & - & its name-value arguments, passed through unchanged \\
-\end{longtable}
-
-\subsubsection*{NAME-VALUE ARGUMENTS}
-Epoch, Response, Priors, Threshold, PriorWindow\_s: those of timeSeriesPreparation.qc.detectImpulses, with its defaults; the two argument blocks are identical (compared 2026-10-14).
-
-
-\subsubsection*{OUTPUT ARGUMENTS}
-\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endfirsthead
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endhead
-\midrule
-\endfoot
-\bottomrule
-\endlastfoot
-events & Nx8 & table & - & as timeSeriesPreparation.qc.detectImpulses, unchanged \\
-info & 1x1 & struct & - & as timeSeriesPreparation.qc.detectImpulses, unchanged \\
-\end{longtable}
-
-\subsubsection*{ERRORS}
-\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}detectImpulses:\allowbreak{}depMissing}] timeSeriesPreparation is not on the path
-\item[\texttt{timeSeriesPreparation:\allowbreak{}detectImpulses:\allowbreak{}*}] the target's errors, unwrapped
-\end{description}
-
-\subsubsection*{WARNINGS}
-\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}detectImpulses:\allowbreak{}deprecated}] on every call; call timeSeriesPreparation.qc.detectImpulses
-\end{description}
-
-\subsection{\texttt{NonGravForces.qc.detectJumps}}
-\label{api:qc.detectJumps}
-\noindent [DEPRECATED, forwards to timeSeriesPreparation.qc.detectJumps] Change points in level or slope of whitened residuals by PELT with a BIC penalty; eclipse and mass priors are assigned.
-
-\begin{lstlisting}
-[events, info] = NonGravForces.qc.detectJumps(r, 'Epoch', t)
-[events, info] = NonGravForces.qc.detectJumps(r, 'Epoch', t, 'Model', "slope", 'Priors', ecl, 'Penalty', beta)
-\end{lstlisting}
-
-\subsubsection*{INPUT ARGUMENTS}
-\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endfirsthead
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endhead
-\midrule
-\endfoot
-\bottomrule
-\endlastfoot
-r & Kx1\textbar{}\allowbreak{}Kx3 & double & any & residual series, as timeSeriesPreparation.qc.detectJumps \\
-varargin & 1xN & cell & - & its name-value arguments, passed through unchanged \\
-\end{longtable}
-
-\subsubsection*{NAME-VALUE ARGUMENTS}
-Epoch, Model, Penalty, MinSegment, Priors, PriorWindow\_s: those of timeSeriesPreparation.qc.detectJumps, with its defaults; the two argument blocks are identical (compared 2026-10-14).
-
-
-\subsubsection*{OUTPUT ARGUMENTS}
-\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endfirsthead
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endhead
-\midrule
-\endfoot
-\bottomrule
-\endlastfoot
-events & Nx8 & table & - & as timeSeriesPreparation.qc.detectJumps, unchanged \\
-info & 1x1 & struct & - & as timeSeriesPreparation.qc.detectJumps, unchanged \\
-\end{longtable}
-
-\subsubsection*{ERRORS}
-\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}detectJumps:\allowbreak{}depMissing}] timeSeriesPreparation is not on the path
-\item[\texttt{timeSeriesPreparation:\allowbreak{}detectJumps:\allowbreak{}*}] the target's errors, unwrapped
-\end{description}
-
-\subsubsection*{WARNINGS}
-\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}detectJumps:\allowbreak{}deprecated}] on every call; call timeSeriesPreparation.qc.detectJumps
-\end{description}
-
-\subsection{\texttt{NonGravForces.qc.eventTable}}
-\label{api:qc.eventTable}
-\noindent [DEPRECATED, forwards to timeSeriesPreparation.qc.eventTable] Canonical event table (schema authority) for quality-control results.
-
-\begin{lstlisting}
-T = NonGravForces.qc.eventTable()                       % empty, schema only
-T = NonGravForces.qc.eventTable(tStart, tEnd, class, axis, amplitude, sigma, source, confidence)
-\end{lstlisting}
-
-\subsubsection*{INPUT ARGUMENTS}
-\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endfirsthead
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endhead
-\midrule
-\endfoot
-\bottomrule
-\endlastfoot
-varargin & 1x0 or & 1x8 & cell - & the eight columns of timeSeriesPreparation.qc.eventTable, or none \\
-\end{longtable}
-
-\subsubsection*{NAME-VALUE ARGUMENTS}
-None.
-
-
-\subsubsection*{OUTPUT ARGUMENTS}
-\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endfirsthead
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endhead
-\midrule
-\endfoot
-\bottomrule
-\endlastfoot
-T & Nx8 & table & - & the target's table, unchanged \\
-\end{longtable}
-
-\subsubsection*{ERRORS}
-\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}eventTable:\allowbreak{}depMissing}] timeSeriesPreparation is not on the path
-\item[\texttt{timeSeriesPreparation:\allowbreak{}eventTable:\allowbreak{}*}] the target's errors, unwrapped
-\end{description}
-
-\subsubsection*{WARNINGS}
-\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}eventTable:\allowbreak{}deprecated}] on every call; call timeSeriesPreparation.qc.eventTable
-\end{description}
-
-\subsection{\texttt{NonGravForces.qc.screen}}
-\label{api:qc.screen}
-\noindent [DEPRECATED, forwards to timeSeriesPreparation.qc.screen] Quality-control orchestrator: residuals -\textgreater{} outliers -\textgreater{} impulses -\textgreater{} jumps -\textgreater{} mask and event table.
-
-\begin{lstlisting}
-[mask, events, info] = NonGravForces.qc.screen(y_meas, y_model, t)
-[mask, events, info] = NonGravForces.qc.screen(y_meas, y_model, t, 'Bias', b, 'Scale', S, 'Response', crn, 'Thrusters', thr, 'Priors', ecl)
-\end{lstlisting}
-
-\subsubsection*{INPUT ARGUMENTS}
-\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endfirsthead
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endhead
-\midrule
-\endfoot
-\bottomrule
-\endlastfoot
-y\_\allowbreak{}meas & KxM & double & any & measured series, as timeSeriesPreparation.qc.screen \\
-y\_\allowbreak{}model & KxM & double & any & modelled series, as timeSeriesPreparation.qc.screen \\
-epoch & Kx1 & datetime & UTC & sample epochs, as timeSeriesPreparation.qc.screen \\
-varargin & 1xN & cell & - & its name-value arguments, passed through unchanged \\
-\end{longtable}
-
-\subsubsection*{NAME-VALUE ARGUMENTS}
-Bias, Scale, Whitening, Window, HampelWindow, HampelThreshold, Response, ImpulseThreshold, Thrusters, Priors, JumpModel, JumpPenalty, JumpMinSegment: those of timeSeriesPreparation.qc.screen, with its defaults; the two argument blocks are identical (compared 2026-10-14).
-
-
-\subsubsection*{OUTPUT ARGUMENTS}
-\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endfirsthead
-\toprule
-{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
-\midrule
-\endhead
-\midrule
-\endfoot
-\bottomrule
-\endlastfoot
-mask & KxM & logical & - as & timeSeriesPreparation.qc.screen, unchanged \\
-events & Nx8 & table & - as & timeSeriesPreparation.qc.screen, unchanged \\
-info & 1x1 & struct & - as & timeSeriesPreparation.qc.screen, unchanged \\
-\end{longtable}
-
-\subsubsection*{ERRORS}
-\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}screen:\allowbreak{}depMissing}] timeSeriesPreparation is not on the path
-\item[\texttt{timeSeriesPreparation:\allowbreak{}screen:\allowbreak{}*}] the target's errors, unwrapped
-\end{description}
-
-\subsubsection*{WARNINGS}
-\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}screen:\allowbreak{}deprecated}] on every call; call timeSeriesPreparation.qc.screen
 \end{description}
 
 \section{L8 \texttt{app} --- applications built from the layers below}

@@ -1,5 +1,5 @@
 % SENSOR  NonGravForces.sensor - L6 layer.
-% Version 0.13.0  15-Oct-2026
+% Version 0.14.0  15-Oct-2026
 %
 %   Sensor               - Abstract measurement model: observe / partials / noiseModel [interface]
 %   Electrostatic        - Electrostatic accelerometer: bias scale matrix proof-mass offset coupling; L1B CRN filter by default

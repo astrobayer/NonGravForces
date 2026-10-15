@@ -6,7 +6,7 @@ classdef (Abstract) Sensor
 %   referenceSystem - omega and omegaDot (3xK). A Sensor maps these to what a
 %   particular instrument reads, and provides the partials of that reading
 %   with respect to its own calibration parameters. Calibration (app.calibrate)
-%   and quality control (qc.screen) are written against THIS interface, so a
+%   and quality control (timeSeriesPreparation.qc.screen) are written against THIS interface, so a
 %   new instrument (optical, MEMS, cold-atom, drag-free residual) is one new
 %   subclass and zero changes elsewhere.
 %

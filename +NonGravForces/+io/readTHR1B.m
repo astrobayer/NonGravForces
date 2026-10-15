@@ -1,5 +1,5 @@
 function [events, aux] = readTHR1B(files, options)
-%READTHR1B THR1B thruster-activation reader: qc.eventTable impulse priors plus per-thruster on-times.
+%READTHR1B THR1B thruster-activation reader: timeSeriesPreparation.qc.eventTable impulse priors plus per-thruster on-times.
 %
 %   [events, aux] = NonGravForces.io.readTHR1B(file)
 %   [events, aux] = NonGravForces.io.readTHR1B(files, 'TimeRange', tr)
@@ -7,7 +7,7 @@ function [events, aux] = readTHR1B(files, options)
 %   Reads GRACE-FO THR1B files through gracefoReading and returns every
 %   activation as a row of the canonical event table (timeSeriesPreparation.qc.eventTable):
 %   class "impulse", source "THR1B", axis "all", confidence 1, amplitude and
-%   sigma NaN (a firing is a certain PRIOR for qc.detectImpulses, which
+%   sigma NaN (a firing is a certain PRIOR for timeSeriesPreparation.qc.detectImpulses, which
 %   estimates the amplitude and assigns the axis from the accelerometer data).
 %   tStart is the record epoch in UTC, tEnd = tStart + the longest on-time of
 %   the record. Records in which no thruster has an on-time are counted in
@@ -32,7 +32,7 @@ function [events, aux] = readTHR1B(files, options)
 % OUTPUT ARGUMENTS
 %   Name     Size  Type    Units  Description
 %   ----     ----  ----    -----  -----------
-%   events   Nx8   table   -      qc.eventTable schema; N records with a firing.
+%   events   Nx8   table   -      timeSeriesPreparation.qc.eventTable schema; N records with a firing.
 %   aux      1x1   struct  -      .epoch (GPS epoch struct of ALL K records),
 %                                 .thruster (1xT string, header names without
 %                                 "on_time_"), .onTime_s (TxK), .fired (TxK

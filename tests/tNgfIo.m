@@ -178,7 +178,7 @@ classdef tNgfIo < NgfTestCase
         end
         function readTHR1BContract(tc)
             [T, aux] = NonGravForces.io.readTHR1B(tc.f.thr);
-            tc.verifyEqual(T.Properties.VariableNames, NonGravForces.qc.eventTable().Properties.VariableNames);
+            tc.verifyEqual(T.Properties.VariableNames, timeSeriesPreparation.qc.eventTable().Properties.VariableNames);
             tc.verifyEqual(height(T), aux.numRecords - aux.numRecordsNoFiring);
             tc.verifyTrue(all(T.class == "impulse") && all(T.source == "THR1B") && all(T.axis == "all") && all(T.confidence == 1));
             tc.verifyTrue(all(isnan(T.amplitude)) && all(isnan(T.sigma)));

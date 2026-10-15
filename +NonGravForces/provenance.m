@@ -7,7 +7,7 @@ function p = provenance(unit, options)
 %   A result without provenance cannot be audited. The record answers: which
 %   toolbox version, which dependency versions, which option hash, which data
 %   files, which warnings, when. Two results may be combined only if their
-%   provenance is compatible (see NonGravForces.qc.screen for an example).
+%   provenance is compatible (see NonGravForces.app.forceBudget for an example).
 %
 % INPUT ARGUMENTS
 %   Name      Size  Type    Units  Description
