@@ -11,3 +11,5 @@
 %   compareCalibrations  - Rank candidate calibration models per axis by blocked cross-validation; AIC/BIC as IC_unreliable
 %   perRevolution        - Bias and diagonal scale per orbital revolution; a gated window is NaN with its reason
 %   attributeRevolutions - Per-revolution scales regressed on drivers; verdict density | geometry | sensor | mixed | unresolved
+%   plotCalibration      - Figure of a calibration: scale and bias with bands, residual ACF before/after whitening
+%   plotAttribution      - Figure of the attribution: per-revolution scales vs time and drivers; verdict banner
