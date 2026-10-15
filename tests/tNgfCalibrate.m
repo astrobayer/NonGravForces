@@ -139,14 +139,22 @@ classdef tNgfCalibrate < NgfTestCase
             % qc's jump events are reported in GPS ns and NOT fitted by default. The oracle for the
             % conversion is plain arithmetic: elapsed UTC seconds since 2000-01-01 12:00 UTC (datetime
             % ignores leap seconds) plus GPS-UTC of the date (18 s) minus GPS-UTC at J2000 (13 s).
+            % The oracle passes through a double of ~6.3e8 s, so it is exact only to eps of that
+            % (~120 ns); referenceSystem converts in int64. The bound is that eps, computed.
             ev = res2.flags.events;
-            expected = zeros(1, 0, 'int64');
+            got = res2.diagnostics.jumps;
             if istable(ev) && height(ev) > 0 && any(ev.class == "jump")
                 tj = ev.tStart(ev.class == "jump");
                 if isempty(tj.TimeZone), tj.TimeZone = 'UTC'; end
-                expected = reshape(unique(int64(round((seconds(tj - datetime(2000, 1, 1, 12, 0, 0, 'TimeZone', 'UTC')) + 5) * 1e9))), 1, []);
+                sec = seconds(tj - datetime(2000, 1, 1, 12, 0, 0, 'TimeZone', 'UTC')) + 5;
+                expected = reshape(unique(round(sec * 1e9)), 1, []);
+                tc.verifySize(got, size(expected));
+                tc.verifyBoundAndRecord("calibrate jump epochs vs UTC->GPS arithmetic", ...
+                    max(abs(double(got) - expected)), 2 * eps(max(sec)) * 1e9 + 1, "ns", ...
+                    "oracle in double seconds: eps of ~6.3e8 s, plus the 1 ns rounding");
+            else
+                tc.verifyEmpty(got);
             end
-            tc.verifyEqual(res2.diagnostics.jumps, expected);
             tc.verifyEmpty(res2.calibration.bias.jumps, 'jumps are fitted only when asked for');
         end
     end
