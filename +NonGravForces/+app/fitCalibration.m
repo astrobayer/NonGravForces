@@ -188,13 +188,22 @@ end
 K = localKernel(options.Kernel, unit);
 
 % --- the bias basis, on the grid the filter reads -----------------------------------------
-% The knots span every raw sample a filter window reads, half a kernel beyond the first and the
-% last observation epoch, so the B-splines are a partition of unity wherever H looks.
-t1 = obs.t(1); tN = obs.t(end);
-tA = t1; tB = tN;
-if ~isempty(K)
+% The knots span the USABLE epochs, the first and the last observation epoch that carries a finite
+% value (B-splines: widened by half a kernel, below). Spanning the whole arc instead put a hat
+% or a B-spline whose support lies outside every fitted window, a zero column the solve rightly
+% refused (lsqvce:qr:singularR, CI run 38690853810); spanning less would leave the curve
+% undefined where a window looks.
+t1 = obs.t(1);
+live = find(obs.weights > 0 & ~obs.filled & any(isfinite(obs.obs), 2));
+if isempty(live), live = 1:numel(obs.t); end
+tA = obs.t(live(1)); tB = obs.t(live(end));
+if ~isempty(K) && options.BiasBasis == "pspline"
+    % B-splines are a partition of unity only between knot 4 and knot end-3, so their span is
+    % widened to every raw sample a window reads. Hats are not widened: their linear extension
+    % beyond the end knots is still a partition of unity, and a hat centred outside the usable
+    % epochs would be seen by a window's edge taps alone.
     half = int64(K.Nh) * int64(round(1e9 / K.fs));
-    tA = t1 - half; tB = tN + half;
+    tA = tA - half; tB = tB + half;
 end
 bias = struct('basis', options.BiasBasis, 't0', t1, 'knots', int64([]), 'coef', [], 'cov', {{[], [], []}});
 h = int64(round(options.BiasKnotSpacing_s * 1e9));
@@ -358,10 +367,12 @@ else
 end
 % Back to the unscaled parameters. Q is the solve's own cofactor (sol.Cxx = sol.s0sq * Q), read
 % from the accumulator rather than divided out of Cxx, which a noise-free arc leaves 0 or NaN.
+% The cofactor (X'X)^-1 scales with the COLUMNS only; the covariance also carries the observation
+% scale sl^2, because its s0^2 was estimated in units of l / sl. Scaling the cofactor by sl^2 too
+% made it 4e-14 too small and a bound built on it 5e6 too tight (CI run 38690853810).
 x = R.x(:) * sl ./ s(:);
-u = sl^2 ./ (s(:) * s(:).');
-Qxx = R.acc.commonCofactor() .* u;
-Cxx = R.sol.Cxx .* u;
+Qxx = R.acc.commonCofactor() ./ (s(:) * s(:).');
+Cxx = R.sol.Cxx .* (sl^2 ./ (s(:) * s(:).'));
 end
 
 function c = localCovSpec(noise)
