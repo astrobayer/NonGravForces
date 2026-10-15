@@ -52,7 +52,7 @@ qc,detectImpulses,function,L7,WP-31,done,DEPRECATED - forwards to timeSeriesPrep
 qc,detectJumps,function,L7,WP-31,done,DEPRECATED - forwards to timeSeriesPreparation.qc.detectJumps (N-01): Piecewise-constant/linear change-point detection (PELT + BIC)
 qc,eventTable,function,L7,WP-31,done,DEPRECATED - forwards to timeSeriesPreparation.qc.eventTable (N-01): Canonical event table constructor and schema
 qc,screen,function,L7,WP-31,done,DEPRECATED - forwards to timeSeriesPreparation.qc.screen (N-01): Orchestrator: residuals -> outliers -> impulses -> jumps -> mask
-app,calibrate,function,L8,WP-19,done,Accelerometer calibration: bias basis + 3x3 scale + jumps by separable weighted least squares
+app,calibrate,function,L8,N-02,done,Accelerometer calibration of an Arc against a Model or a reference Arc: timeSeriesPreparation.run then lsqvce.fit; attribution
 app,DynamicsSource,class,L8,WP-C9,done,The acceleration as gjToolbox's integrator interface (native C entry)
 app,forceBudget,function,L8,WP-30,done,Per-effect per-axis acceleration budget over an arc; chunked and across models
 app,densityInversion,function,L8,WP-32,done,Thermosphere density from calibrated accelerations; the inversion is a division

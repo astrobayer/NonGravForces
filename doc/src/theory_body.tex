@@ -200,9 +200,8 @@ macro = NonGravForces.geom.graceFO("C");
 opt   = NonGravForces.Options("standard","drag.wind","hwm14");
 M     = NonGravForces.Model(macro, opt, 'Attitude', att, 'Mass', mass);
 T     = M.series(ep, r, v, q);                    % a_ng, tau, provenance
-sens  = NonGravForces.sensor.Electrostatic(...);
-[mask, events] = NonGravForces.qc.screen(y, sens.observe(T), thr, eclipse, mass);
-R = NonGravForces.app.calibrate(y, T, sens, 'Events', events, 'Mask', mask);
+% mask, CRN, align and QC run inside calibrate, through timeSeriesPreparation.run
+res = NonGravForces.app.calibrate(accArc, M, 'Orbit', orb, 'Attitude', att);  % run + lsqvce.fit
 \end{lstlisting}
 
 \subsection{Error handling}

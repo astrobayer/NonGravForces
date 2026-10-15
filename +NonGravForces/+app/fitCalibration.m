@@ -88,6 +88,10 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %   VifMax             1x1   double  -      VIF gate for a row with several model columns;
 %                                           default 10
 %   MinWeightFraction  1x1   double  -      Minimum-data gate of observability; default 0.5
+%   Jumps              1xJ   int64   ns     Epochs (GPS ns) of steps in the bias, one Heaviside
+%                                           column each, filtered like the basis; default none
+%   Robust             1x1   string  -      lsqvce M-estimation: "none" (default) | "huber" |
+%                                           "igg3" | "bisquare"; the bootstrap refits with it
 %
 % OUTPUT ARGUMENTS
 %   Name  Size  Type                            Units  Description
@@ -125,6 +129,7 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %                                                  or a non-finite 'ScaleApriori'
 %   NonGravForces:fitCalibration:inputGrid         'Kernel' [] and an obs epoch ref does not carry
 %   NonGravForces:fitCalibration:inputKernel       a kernel that is neither "crn", a struct nor []
+%   NonGravForces:fitCalibration:inputJumps        'Jumps' not int64
 %   NonGravForces:fitCalibration:numericCollinear  the VIF gate refused a row with several model
 %                                                  columns
 %   NonGravForces:Calibration:inputBasis           knots the basis refuses
@@ -134,6 +139,8 @@ function [cal, info] = fitCalibration(obs, ref, options)
 % WARNINGS
 %   NonGravForces:fitCalibration:knotsBelowFilterSpan  knot spacing below the kernel span Tf: the
 %                                                      filtered basis columns are nearly dependent
+%   NonGravForces:fitCalibration:jumpOutsideFit        a jump whose step is constant over the fitted
+%                                                      rows; it is dropped from the bias
 %
 % REFERENCES
 %   timeSeriesPreparation docs/CONCEPT.md 6.2 (the observation equation, the
@@ -168,6 +175,8 @@ arguments
     options.Seed (1,1) double {mustBeInteger, mustBeNonnegative} = 0
     options.VifMax (1,1) double {mustBePositive} = 10
     options.MinWeightFraction (1,1) double {mustBePositive, mustBeLessThanOrEqual(options.MinWeightFraction, 1)} = 0.5
+    options.Jumps = zeros(1, 0, 'int64')
+    options.Robust (1,1) string {mustBeMember(options.Robust, ["none" "huber" "igg3" "bisquare"])} = "none"
 end
 unit = "fitCalibration";
 if isempty(which('lsqvce.fit')) || isempty(which('timeSeriesPreparation.crnApply'))
@@ -196,7 +205,11 @@ if ~isempty(K)
     half = int64(K.Nh) * int64(round(1e9 / K.fs));
     tA = t1 - half; tB = tN + half;
 end
-bias = struct('basis', options.BiasBasis, 't0', t1, 'knots', int64([]), 'coef', [], 'cov', {{[], [], []}});
+if ~isa(options.Jumps, 'int64')
+    NonGravForces.fail(unit, "inputJumps", "'Jumps' must be int64 GPS ns, as timeSeriesPreparation.Arc stores time -> got %s", class(options.Jumps));
+end
+jumps = unique(options.Jumps(:)');                 % sorted, each once
+bias = struct('basis', options.BiasBasis, 't0', t1, 'knots', int64([]), 'jumps', jumps, 'coef', [], 'cov', {{[], [], []}});
 h = int64(round(options.BiasKnotSpacing_s * 1e9));
 switch options.BiasBasis
     case "hat"
@@ -227,8 +240,29 @@ else
         Hq = timeSeriesPreparation.crnApply(localArc(ref.t, ref.obs.^2, "q"), K, OutputEpochs = obs.t).obs;
     end
 end
+% A jump whose filtered step is the same on every usable row -- all of them before it (0) or all
+% after it (the DC gain, bitwise: one dot product of the same taps with ones) -- is the constant
+% column again, or nothing. It cannot be estimated and would make the design singular, so it is
+% dropped and said so, never fitted as noise.
+if ~isempty(jumps)
+    anyRow = obs.weights > 0 & ~obs.filled & any(isfinite(obs.obs), 2) & all(isfinite(HB), 2);
+    nB = size(HB, 2) - numel(jumps);
+    keep = true(1, numel(jumps));
+    for k = 1:numel(jumps)
+        v = HB(anyRow, nB + k);
+        keep(k) = ~isempty(v) && any(v ~= v(1));
+    end
+    if ~all(keep)
+        warning("NonGravForces:fitCalibration:jumpOutsideFit", ...
+            "%d of %d jumps lie outside the fitted rows (their step is constant there) and are not estimated -> nothing to do unless a jump inside the arc was expected", ...
+            nnz(~keep), numel(keep));
+        jumps = jumps(keep); bias.jumps = jumps;
+        HB = HB(:, [true(1, nB), keep]);
+    end
+end
 P = size(HB, 2);
-bNames = "b_" + string(1:P);
+nJ = numel(jumps);
+bNames = ["b_" + string(1:P - nJ), "jump_" + string(1:nJ)];
 axisNames = ["x" "y" "z"];
 
 % --- three problems ----------------------------------------------------------------------
@@ -275,7 +309,7 @@ for i = 1:3
     if any(~(modelVif <= options.VifMax)), gates.verdict(i) = "warn"; end
 
     % the solve: lsqvce.fit, kind A, one arc per contiguous run
-    [x, Qxx, Cxx, R] = localSolve(X, l, ok, obs.t, options.Noise);
+    [x, Qxx, Cxx, R] = localSolve(X, l, ok, obs.t, options.Noise, options.Robust);
     info.results{i} = R; info.Qxx{i} = Qxx; info.names{i} = names;
     stopReason(i) = string(R.stopReason);
     v = nan(N, 1); v(ok) = l(ok) - X(ok, :) * x;
@@ -287,7 +321,7 @@ for i = 1:3
         % regressors, whose constant bias column has no autocorrelation to measure.
         [~, bl] = timeSeriesPreparation.bootstrap(v, @(r) mean(r, 1, "omitnan"), NBoot = 2, Stage = "fitCalibration.block");
         z = [l, X]; z(~ok, :) = NaN;
-        [~, bi] = timeSeriesPreparation.bootstrap(z, @localBootStat, NBoot = options.NBoot, BlockLength = bl.blockLength, ...
+        [~, bi] = timeSeriesPreparation.bootstrap(z, @(zz) localBootStat(zz, options.Robust), NBoot = options.NBoot, BlockLength = bl.blockLength, ...
             Seed = options.Seed, Stage = "fitCalibration." + axisNames(i));
         rows = all(isfinite(bi.replicates), 2);
         Cuse = cov(bi.replicates(rows, :));
@@ -329,7 +363,7 @@ info.rows = rowsUsed;
 end
 
 % =========================================================================================
-function [x, Qxx, Cxx, R] = localSolve(X, l, ok, t, noise)
+function [x, Qxx, Cxx, R] = localSolve(X, l, ok, t, noise, robust)
 %LOCALSOLVE One axis through lsqvce.fit, kind A: one system, one day, one arc per run of rows.
 s = sqrt(mean(X(ok, :).^2, 1)); s(s == 0) = 1;
 sl = sqrt(mean(l(ok).^2)); if sl == 0, sl = 1; end
@@ -350,9 +384,9 @@ data.days = 1;
 sys = struct('buildDay', @(day, obsType) D, 'covariance', struct('acc', localCovSpec(noise)));
 data.systems = sys;
 if isstruct(noise) || noise ~= "estimate"
-    R = lsqvce.fit(data, lsqvce.Options(Verbose = false));
+    R = lsqvce.fit(data, lsqvce.Options(Robust = robust, Verbose = false));
 else
-    o = lsqvce.Options(Estimate = "noise", Pool = "stream", ArcFactors = false, Verbose = false);
+    o = lsqvce.Options(Estimate = "noise", Pool = "stream", ArcFactors = false, Robust = robust, Verbose = false);
     o.Noise = struct('Whitener', "ar");
     R = lsqvce.fit(data, o);
 end
@@ -375,13 +409,13 @@ else
 end
 end
 
-function x = localBootStat(z)
+function x = localBootStat(z, robust)
 %LOCALBOOTSTAT One bootstrap replicate: the same equilibrated solve, through lsqvce.fit (kind B).
 z = z(all(isfinite(z), 2), :);
 l = z(:, 1); X = z(:, 2:end);
 s = sqrt(mean(X.^2, 1)); s(s == 0) = 1;
 sl = sqrt(mean(l.^2)); if sl == 0, sl = 1; end
-R = lsqvce.fit(struct('A', X ./ s, 'l', l / sl), lsqvce.Options(Verbose = false));
+R = lsqvce.fit(struct('A', X ./ s, 'l', l / sl), lsqvce.Options(Robust = robust, Verbose = false));
 x = (R.x(:) * sl ./ s(:)).';
 end
 

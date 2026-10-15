@@ -51,12 +51,13 @@ which is generated from the code so that it cannot drift from it.
 partials, given a spacecraft's state, attitude and environment. One rule governs every other:
 
 \begin{quote}
-\textbf{\ngf\ computes forces and torques and nothing else.}
+\textbf{\ngf\ computes forces and torques, and applies them; it implements nothing it can call.}
 \end{quote}
 
 There is no gravity field in it, no equations of motion, no integrator and no least-squares
-machinery beyond the one linear calibration problem that separates by axis. Everything else is
-delegated to a named dependency, by qualified call, never copied or wrapped:
+machinery: since 0.13.0 the calibration application composes \texttt{timeSeriesPreparation.run}
+and \texttt{lsqvce.fit} instead of solving its own problem. Everything else is delegated to a
+named dependency, by qualified call, never copied or wrapped:
 
 \begin{table}[h]\centering\footnotesize
 \begin{tabular}{@{}lp{9.6cm}@{}}\toprule
@@ -66,6 +67,11 @@ Toolbox & What it owns\\\midrule
 \texttt{gracefoReading} & Level-1B ASCII reading, quality flags, GROOPS instrument export\\
 \texttt{gjToolbox} (odeSuite) & Gauss--Jackson integration. Optional for the toolbox, required by
  the gate: \texttt{app.DynamicsSource} implements that toolbox's frozen dynamics interface\\
+\texttt{timeSeriesPreparation} & The \texttt{Arc}, the L1B CRN kernel, mask, align, QC, noise,
+ observability, bootstrap and \texttt{run}. Optional for the toolbox, required by the gate: the
+ default accelerometer filter and the calibration's instrument stages\\
+\texttt{lsqvce} & Least squares, variance components, whitening, robust reweighting. Optional for
+ the toolbox, required by the gate: every number of \texttt{app.fitCalibration}\\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -77,7 +83,8 @@ makes the toolbox smaller than either of its two rejected predecessors while cov
 Nine layers; a layer calls only lower layers plus the dependencies.
 
 \begin{lstlisting}
-L8 app      calibrate, forceBudget, densityInversion, DynamicsSource (integrator entry, native C)
+L8 app      calibrate, fitCalibration, Calibration, syntheticPair, forceBudget, densityInversion,
+            DynamicsSource (integrator entry, native C)
 L7 qc       residuals, hampel, detectImpulses, detectJumps, eventTable, screen
 L6 sensor   Sensor (abstract), Electrostatic, AtomInterferometer, DragFree
 L5 Model    accel | torque | series | partials | budget      <- single point of access
@@ -511,8 +518,21 @@ informative axes.
 \section{Step 8: calibrate}
 \label{sec:cal-short}
 \begin{lstlisting}
-cal = NonGravForces.app.calibrate(am, a, e, 'Bias', "constant", 'Scale', "diag");
+acc = timeSeriesPreparation.Arc(referenceSystem.epochTo(epa, "gpsNanoseconds"), aMeas.', auxACT1B);
+res = NonGravForces.app.calibrate(acc, M, 'Orbit', struct('epoch', ep, 'r', r, 'v', v), ...
+                                  'Attitude', att, 'Fit', {'FixCrossTrack', false});
+res.calibration.summaryTable()
 \end{lstlisting}
+
+\noindent Since 0.13.0 (N-02) \texttt{app.calibrate} takes the observation as a
+\texttt{timeSeriesPreparation.Arc} (here built from the reader's triple with the ACT1B column names,
+\texttt{auxACT1B}) and the reference as a \texttt{Model}. The Model is evaluated along the orbit per
+effect and interpolated onto the 10\,Hz grid of the CRN filter; the instrument stages (mask, CRN,
+align, QC) run through \texttt{timeSeriesPreparation.run}; the estimate is \texttt{lsqvce.fit}
+through \texttt{app.fitCalibration}, every deterministic column filtered by the same CRN kernel as
+the observation. The result is the run's struct plus \texttt{calibration} (an
+\texttt{app.Calibration}) and \texttt{attribution}. The matrix interface of 0.12.0
+(\texttt{calibrate(yMeas, aModel, epoch)}) is gone.
 
 \section{What this chain actually prints}
 \begin{lstlisting}
@@ -555,23 +575,18 @@ cross-track correlation with ACT1B  0.9722
 radial      correlation with ACT1B  0.9954
 
 --- Step 8: calibrate ----------------------------------------------------
-estimated bias  [-3.15e-07 -1.13e-05 -1.61e-07] m/s^2
-estimated scale [0.16 0.6965 0.8529]
-sigma0 per axis [1.26e-10 1.7e-10 8.77e-11] m/s^2
-condition number per axis [57 46 7]
+(printed by the 0.12.0 estimator; not re-run for 0.13.0 -- see below)
 \end{lstlisting}
 
-\noindent \textbf{Read the last block sceptically, because it is the lesson.} The recovered scale
-factors are \num{0.16}, \num{0.70} and \num{0.85}, with condition numbers 57, 46 and 7. A scale
-factor is determined by the \emph{spread} of the modelled signal across the arc, and 200 seconds of
-a 90-minute orbit carries almost none: the estimate is badly conditioned and those numbers are not
-to be believed. The bias is far better determined, because a bias is a constant design column and
-its uncertainty falls as $1/\sqrt{K}$.
-
-Compare \S\ref{sec:ex-cal}, where the same estimator recovers a \emph{planted} scale to four parts
-in $10^{16}$ on an arc built to determine it. The estimator is not the problem; the arc is.
-\textbf{Use hours rather than minutes, and read \texttt{cal.condition} before believing
-\texttt{cal.scale}.}
+\noindent \textbf{The lesson of this step survives the rewrite, the numbers did not.} With the
+0.12.0 estimator, 200 seconds of this excerpt gave scale factors of 0.16, 0.70 and 0.85 at
+condition numbers 57, 46 and 7: a scale factor is determined by the \emph{spread} of the modelled
+signal across the arc, and minutes of a 90-minute orbit carry almost none. The 0.13.0 estimator
+reports the same fact in its gates (\texttt{res.calibration.gates.cond}, \texttt{.vif}) and refuses
+a full scale matrix the arc cannot separate; its numbers for this excerpt are written to
+\texttt{tests/last\_run.txt} by \texttt{tNgfCalibrate/calibrateRealDay} on every gate run rather
+than copied here, where nothing would compare them. \textbf{Use hours rather than minutes, and read
+the gates before believing \texttt{scale}.}
 
 Note also the silhouette defect of \SI{0.14}{\metre\squared} in step~3. That quantity is zero for a
 \emph{closed} body; the 8-panel GRACE-FO model is an open box-wing, so a non-zero value there is
@@ -646,33 +661,17 @@ calibrate and says so.
 \begin{lstlisting}
 demoGraceFOCalibration
 \end{lstlisting}
-\begin{lstlisting}
-            planted      recovered     formal sigma
-bias x    1.0000e-06   1.0026e-06     9.48e-09
-bias y   -3.0000e-06  -2.9986e-06     3.10e-09
-bias z    2.0000e-07   2.0003e-07     6.08e-10
-scale x       1.0500       1.0204     1.05e-01
-scale y       0.9600       0.8795     2.00e-01
-scale z       1.0100       1.0596     2.63e-01
+\noindent The demo prints, per axis, the planted bias and scale beside the recovered ones, the
+scale's bootstrap and formal sigma, the EIV attenuation bound and the stages \texttt{run} executed.
+Its truth is \texttt{app.syntheticPair}: a planted scale, a drifting bias, coloured noise, spikes
+and a gap, passed through the real Level-1B CRN chain. This is the contrast promised in
+\S\ref{sec:cal-short}: on an arc built to determine the parameters, the same estimator recovers
+them, and the recovery is asserted to within five bootstrap sigma by
+\texttt{tNgfCalibrate/calibratePrecision}.
 
-sigma0 (a-posteriori) 1.866e-09 m/s^2 against a planted 2.0e-09
-
-Those formal sigmas are OPTIMISTIC. The weights are diagonal and accelerometer noise
-is not white; it rises as 1/f below a few mHz. They compare axes and arcs honestly,
-they are not statements of absolute accuracy. Whiten with qc.residuals first if that
-matters.
-\end{lstlisting}
-
-\noindent This is the contrast promised in \S\ref{sec:cal-short}: on an arc built to determine the
-parameters, the same estimator recovers them.
-
-Take the demo's own warning about the formal sigmas seriously. They are optimistic, because the
-weights are diagonal while accelerometer noise is not white --- it rises as $1/f$ below a few
-millihertz. They compare axes and arcs honestly; they are not statements of absolute accuracy.
-Whiten with \texttt{qc.residuals} first if that distinction matters to you.
-
-A planted parameter is the only honest demonstration here, and the demo says so: no ACT1B file for
-this satellite and day existed when it was written.
+The two sigmas are reported side by side on purpose. The CRN-filtered residual is correlated, so
+the formal white-noise sigma is optimistic; the Calibration carries the moving-block bootstrap
+covariance, and \texttt{cal.uncertainty.inflation} is their ratio.
 
 \section{A cold-atom accelerometer}
 \begin{lstlisting}

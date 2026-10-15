@@ -45,7 +45,7 @@ here = fileparts(mfilename('fullpath'));
 % app.DynamicsSource and the whole native evaluator unrun and still report GREEN.
 % timeSeriesPreparation and lsqvce joined with O-45 (2026-10-14): the first owns the CRN kernel
 % sensor.Electrostatic filters with by default (N-04) and, after N-01, the qc stage; the second is
-% the estimator app.calibrate declares against (N-02). Both are required by the gate for the same
+% the estimator app.fitCalibration declares against (N-02b), and app.calibrate through it. Both are required by the gate for the same
 % reason as odeSuite: without them the units that call them would go unrun and the gate stay green.
 deps = ["referenceSystem/setupReferenceSystem.m", "gracefoReading/setupGraceFOReading.m", ...
         "odeSuite/gjToolboxSetup.m", "timeSeriesPreparation/setupTimeSeriesPreparation.m", ...
