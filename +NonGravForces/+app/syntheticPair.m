@@ -55,9 +55,10 @@ function [obs, ref, truth] = syntheticPair(options)
 % OUTPUT ARGUMENTS
 %   Name     Size  Type                        Units  Description
 %   ----     ----  ----                        -----  -----------
-%   obs      1x1   timeSeriesPreparation.Arc   m/s^2  CRN-filtered observation at 1 Hz, columns
-%                                                     lin_accl_x/y/z; NaN where the filter window
-%                                                     met an edge or the gap
+%   obs      1x1   timeSeriesPreparation.Arc   m/s^2  CRN-filtered observation at 1 Hz, product
+%                                                     ACT1B, columns lin_accl_x/y/z; NaN (and the
+%                                                     layer crnWindow) where the filter window met
+%                                                     an edge or the gap
 %   ref      1x1   timeSeriesPreparation.Arc   m/s^2  The model at 10 Hz, same column names
 %   truth    1x1   struct                      -      .scale .bias0 .biasDrift_per_day
 %                                                     .quadratic .bias (3xK1 at obs.t) .noise
@@ -185,7 +186,11 @@ names = {'lin_accl_x', 'lin_accl_y', 'lin_accl_z'};
 day = string(datetime(2000, 1, 1, 12, 0, 0) + seconds(double(options.Start) / 1e9), 'yyyy-MM-dd');
 rawArc = timeSeriesPreparation.Arc(t, raw, localAux(names, "ACT1A_" + day + "_C_04.txt", "ACT1A"));
 out1Hz = t(1:round(fs):end);
-obs = timeSeriesPreparation.crnApply(rawArc, kernel, OutputEpochs = out1Hz);
+filtered = timeSeriesPreparation.crnApply(rawArc, kernel, OutputEpochs = out1Hz);
+% The observation IS the ACT1B imitation, so it carries ACT1B's name and product (and with them
+% timeSeriesPreparation's ACT1B preset); the CRN window travels with it as the layer crnApply made.
+obs = timeSeriesPreparation.Arc(filtered.t, filtered.obs, localAux(names, "ACT1B_" + day + "_C_04.txt", "ACT1B"));
+obs = obs.addLayer("crnWindow", filtered.layers.crnWindow);
 ref = timeSeriesPreparation.Arc(t, model, localAux(names, "MODEL_" + day + "_C_04.txt", "MODEL"));
 
 t1 = double(obs.t - options.Start) / 1e9;

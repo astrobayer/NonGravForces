@@ -279,6 +279,12 @@ classdef tNgfCalibration < NgfTestCase
             % The right end of the spline support is inside it (the half-open last interval).
             last = cal.bias.knots(end - 3);
             tc.verifyEqual(sum(NonGravForces.app.Calibration.basis(cal.bias, last)), 1, 'AbsTol', 16 * eps);
+            % Jumps are unit steps after the smooth basis: 0 before, 1 from the jump epoch on.
+            bj = struct('basis', "constant", 't0', int64(0), 'knots', int64([]), 'jumps', int64([10 20]) * int64(1e9), 'coef', zeros(3, 3));
+            tc.verifyEqual(NonGravForces.app.Calibration.basis(bj, int64([0 10 15 20 25]') * int64(1e9)), ...
+                [1 0 0; 1 1 0; 1 1 0; 1 1 1; 1 1 1]);
+            bj.jumps = int64([20 10]) * int64(1e9);
+            tc.verifyErrorId(@() NonGravForces.app.Calibration.basis(bj, int64(0)), "NonGravForces:Calibration:inputBasis");
             % A hat basis extrapolates linearly beyond its knots.
             h = struct('basis', "hat", 't0', int64(0), 'knots', int64([0 86400e9]), 'coef', zeros(3, 2));
             tc.verifyEqual(NonGravForces.app.Calibration.basis(h, int64(2 * 86400e9)), [-1 2], 'AbsTol', 4 * eps);

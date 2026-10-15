@@ -33,6 +33,8 @@ classdef Calibration
 %     "pspline"   P = numel(knots) - 4: cubic B-splines on the FULL knot vector
 %                 (Cox-de Boor), so a uniform interior spacing h comes with
 %                 three extra knots beyond each end
+%   followed by one unit step per entry of bias.jumps (int64, optional): a
+%   jump in the bias is a Heaviside column, never a mask (CONCEPT 6.1, row 2).
 %   Knots and t0 are int64 GPS ns, exactly as timeSeriesPreparation.Arc stores
 %   time, so no epoch is rounded through a double before it is differenced.
 %
@@ -58,7 +60,8 @@ classdef Calibration
 %   Name  Size  Type    Units  Description
 %   ----  ----  ----    -----  -----------
 %   fit   1x1   struct  -      .scale 3x3; .bias struct (.basis, .t0 int64, .knots int64 1xQ,
-%                              .coef 3xP, optional .cov 1x3 cell of PxP); optional .covScale
+%                              optional .jumps int64 1xJ, .coef 3xP with P including the J
+%                              steps, optional .cov 1x3 cell of PxP); optional .covScale
 %                              9x9 (cov of scale(:)), .quadratic 3x1, .uncertainty struct,
 %                              .gates struct, .convention "observation"|"correction",
 %                              .provenance struct
@@ -69,7 +72,7 @@ classdef Calibration
 % PROPERTIES (read-only)
 %   scale        3x3  double  -      S
 %   covScale     9x9  double  -      covariance of scale(:), NaN where not estimated
-%   bias         1x1  struct  m/s^2  .basis .t0 .knots .coef (3xP) .cov (1x3 cell)
+%   bias         1x1  struct  m/s^2  .basis .t0 .knots .jumps .coef (3xP) .cov (1x3 cell)
 %   quadratic    3x1  double  s^2/m  K2 per axis; NaN = not estimated
 %   uncertainty  1x1  struct  -      as the estimator reports it (sigma, inflation, EIV bound, ...)
 %   gates        1x1  struct  -      observability and preflight verdicts
@@ -97,7 +100,7 @@ classdef Calibration
 %
 % ERRORS
 %   NonGravForces:Calibration:inputFit       the fit struct lacks a field, or one has the wrong size
-%   NonGravForces:Calibration:inputBasis     unknown basis, knots not increasing or too few
+%   NonGravForces:Calibration:inputBasis     unknown basis, knots or jumps not increasing, too few knots
 %   NonGravForces:Calibration:inputArc       apply: not a 3-column arc in m/s2
 %   NonGravForces:Calibration:unsupportedQuadratic  apply with a non-zero K2
 %   NonGravForces:Calibration:dataSchema     load: not a calibration file, or no schemaVersion
@@ -130,7 +133,7 @@ classdef Calibration
     properties (SetAccess = private)
         scale (3,3) double = eye(3)
         covScale (9,9) double = nan(9)
-        bias (1,1) struct = struct('basis', "constant", 't0', int64(0), 'knots', int64([]), 'coef', zeros(3, 1), 'cov', {{[], [], []}})
+        bias (1,1) struct = struct('basis', "constant", 't0', int64(0), 'knots', int64([]), 'jumps', zeros(1, 0, 'int64'), 'coef', zeros(3, 1), 'cov', {{[], [], []}})
         quadratic (3,1) double = nan(3, 1)
         uncertainty (1,1) struct = struct()
         gates (1,1) struct = struct()
@@ -153,12 +156,14 @@ classdef Calibration
             if ~isstruct(b) || ~all(isfield(b, {'basis', 't0', 'knots', 'coef'}))
                 NonGravForces.fail(unit, "inputFit", ".bias must be a struct with basis, t0, knots and coef -> see the help");
             end
-            P = NonGravForces.app.Calibration.numBasis(b.basis, b.knots);
+            jumps = NonGravForces.app.Calibration.jumpsOf(b);
+            P = NonGravForces.app.Calibration.numBasis(b.basis, b.knots) + numel(jumps);
             if ~isequal(size(b.coef), [3 P]) || ~all(isfinite(b.coef(:)))
                 NonGravForces.fail(unit, "inputFit", ".bias.coef must be a finite 3x%d for basis %s -> got %s", P, b.basis, mat2str(size(b.coef)));
             end
             if ~isfield(b, 'cov') || isempty(b.cov), b.cov = {[], [], []}; end
-            obj.bias = struct('basis', string(b.basis), 't0', int64(b.t0), 'knots', int64(b.knots(:)'), 'coef', b.coef, 'cov', {b.cov});
+            obj.bias = struct('basis', string(b.basis), 't0', int64(b.t0), 'knots', int64(b.knots(:)'), ...
+                'jumps', jumps, 'coef', b.coef, 'cov', {b.cov});
             obj.scale = fit.scale;
             if isfield(fit, 'covScale') && ~isempty(fit.covScale)
                 if ~isequal(size(fit.covScale), [9 9])
@@ -315,6 +320,12 @@ classdef Calibration
                     kn = double(int64(bias.knots(:)') - int64(bias.t0)) / 86400e9;
                     B = NonGravForces.app.Calibration.coxDeBoor(kn, days, 4);
             end
+            % Jumps: one unit step per epoch, 0 before it and 1 from it on (the sample AT the jump
+            % already carries the new level), appended after the smooth basis.
+            jumps = NonGravForces.app.Calibration.jumpsOf(bias);
+            if ~isempty(jumps)
+                B = [B, double(t >= jumps)];
+            end
         end
     end
 
@@ -334,6 +345,17 @@ classdef Calibration
     end
 
     methods (Static, Access = private)
+        function jumps = jumpsOf(bias)
+            %JUMPSOF The jump epochs of a bias struct as a strictly increasing int64 row (none: 1x0).
+            jumps = zeros(1, 0, 'int64');
+            if isfield(bias, 'jumps') && ~isempty(bias.jumps)
+                if ~isa(bias.jumps, 'int64') || any(diff(bias.jumps(:)') <= 0)
+                    NonGravForces.fail("Calibration", "inputBasis", "bias.jumps must be strictly increasing int64 GPS ns -> sort them and drop duplicates");
+                end
+                jumps = bias.jumps(:)';
+            end
+        end
+
         function P = numBasis(basis, knots)
             %NUMBASIS The number of basis functions, validating the basis and its knots.
             unit = "Calibration";

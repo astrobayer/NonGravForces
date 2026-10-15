@@ -39,6 +39,7 @@ ex.grace.vectorization          = "factory returns one object";
 ex.grace.speed                  = "no numerical work";
 ex.MacroModel.vectorization     = "constructor of one object";
 ex.fitCalibration.vectorization = "one call fits one arc; a campaign of arcs is a different estimator (N-09), and the three axes are asserted independent under metamorphic";
+ex.calibrate.vectorization    = "one call calibrates one arc; a campaign of arcs is N-09, and its parts (run, fitCalibration) carry their own vectorization claims";
 ex.MacroModel.speed             = "no numerical work";
 ex.const.vectorization          = "scalar struct";
 ex.const.speed                  = "no numerical work";

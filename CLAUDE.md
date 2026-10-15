@@ -21,10 +21,11 @@ Successor to two rejected predecessors (`SatelliteNonGravToolbox` v1,
 quantitative defects in the first and 14 architectural flaws in the second
 (`HANDOVER.md` Part C).
 
-**The rule that governs every other rule:**
-> NonGravForces computes forces and torques and nothing else.
+**The rule that governs every other rule** (reworded 2026-10-15 under N-06; HANDOVER A.2):
+> NonGravForces computes forces and torques, and applies them; it implements nothing it can call.
 
-No gravity field, no equations of motion, no integrator, no least-squares code.
+No gravity field, no equations of motion, no integrator, no least-squares code. The `app` layer
+composes (calibration through `timeSeriesPreparation.run` and `lsqvce.fit`); it does not solve.
 
 ---
 
@@ -61,7 +62,7 @@ records — A.2 rule, B.4 — follow with N-02c.)
 
 | Toolbox | Owns |
 |---|---|
-| `referenceSystem` ≥ 2.1 (2.1.216) | time scales, EOP, ITRS↔GCRS with derivatives, geodesy, quaternions, attitude interpolation, Sun/Moon states |
+| `referenceSystem` ≥ 2.3 (2.3.0; raised from 2.1 by N-02c for `epochTo(..., "gpsNanoseconds")`) | time scales, EOP, ITRS↔GCRS with derivatives, geodesy, quaternions, attitude interpolation, Sun/Moon states |
 | `gracefoReading` ≥ 1.0.1 (1.0.1) | L1B ASCII reading, quality flags, GROOPS instrument export/import. The PATCH minimum is deliberate and is the one exception to VERSIONING.md's MAJOR.MINOR rule (HANDOVER O-12, O-25) |
 | `timeSeriesPreparation` ≥ 1.4 (1.4.0) | The L1B CRN kernel (`crnKernel`), and after N-01 the `qc` stage. **Optional for the toolbox, required by `ciGate`**: `sensor.Electrostatic` filters with `crnKernel("ACC")` by DEFAULT (N-04, owner ruling 2026-10-14) and raises `Electrostatic:depMissing` without it. Its version is the `% Version` line of its `Contents.m` |
 | `lsqvce` ≥ 6.22 (6.22.0) | The one least-squares estimator (CONCEPT Q2). **Optional for the toolbox, required by `ciGate`**: `app.fitCalibration` declares kind A (one system, one day, one arc per contiguous run) per axis and its bootstrap refits kind B. Version from `lsqvce.util.toolboxVersion` |
@@ -173,9 +174,12 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-09-17, after LP-E)
 
+- **2026-10-15, N-02c (#59 third PR, with N-06 #63):** `app.calibrate(acc, M | refArc)` over
+  `timeSeriesPreparation.run` and `app.fitCalibration`; the 0.12.0 matrix interface is gone; A.2 reworded;
+  referenceSystem >= 2.3. ◐; prediction 414. The 0.13.0 bump waits for a Tier-A benchmark run (O-48).
 - **2026-10-15, N-02b (#59, second of three PRs):** `app.fitCalibration`, the estimator: CRN-filtered bias basis,
   model and K2 columns per axis through `lsqvce.fit` (kind A), VIF gate, block bootstrap, EIV bound; lsqvce in
-  `dependencyReport`; 60 units. ◐; prediction 414.
+  `dependencyReport`; 60 units. ☑ (414/414 on f9587d4, predicted 414, after two fixes the first run found).
 - **2026-10-14, N-02a (#59, first of three PRs):** `app.syntheticPair` (the calibration truth through the real
   CRN chain) and `app.Calibration` (scale + bias curve, apply/invert/save/load); 59 units. ☑ (run 38685265825:
   408/408, predicted 408).
@@ -435,7 +439,7 @@ repository had written down about them.
   under `tests/fixtures/groops/` and committed; neither CI nor the host needs a
   GROOPS installation.
 
-**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-47 with an owner
+**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-48 with an owner
 and a re-entry condition each. This file deliberately does NOT list them: the copy that
 used to live here had drifted to O-15 of 21 and showed two closed items as open, and no
 check compared the two (R1). Read Part H.
