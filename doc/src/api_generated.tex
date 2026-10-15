@@ -3510,7 +3510,7 @@ QualFlags & 1x1 & struct & - & Passed to run's mask stage; default none \\
 Thrusters & 1x1 & struct & - & THR1B Arc, passed to run's mask stage; default none \\
 Jumps & 1x1 & logical & - & Turn run's "jump" events into bias steps; default false (they are reported in diagnostics.jumps either way) \\
 VifMax & 1x1 & double & - & Attribution's VIF gate; default 10 \\
-Fit & 1xN & cell & - & Name-value pairs for app.fitCalibration (BiasBasis, Scale, Noise, NBoot, ...); default \{\} \\
+Fit & 1xN & cell & - & Name-value pairs for app.fitCalibration (BiasBasis, Scale, ScaleBasis for a time-varying scale, Noise, NBoot, ...); default \{\} \\
 \end{longtable}
 
 \subsubsection*{OUTPUT ARGUMENTS}
@@ -3803,6 +3803,7 @@ Days & 1x1 & double & day & Arc length, \textgreater{} 0; default 1 \\
 Start & 1x1 & int64 & ns & First epoch, GPS ns past 2000-01-01 12:00:00; default 2020-01-01 00:00:18 GPS \\
 Seed & 1x1 & double & - & Seed of every random draw; default 1 \\
 Scale & 3x3 & double & - & True scale matrix S (a 3x1 is its diagonal); default diag([0.96 0.98 0.95]) \\
+ScaleDrift & 3x3 & double & 1/\allowbreak{}day & True linear drift of S, so S(t) = Scale + ScaleDrift * (t - Start) / 1 day; default zeros \\
 Bias & 3x1 & double & m/\allowbreak{}s\textasciicircum{}2 & True bias at Start; default [2e-7; -1e-7; 5e-8] \\
 BiasDrift & 3x1 & double & m/\allowbreak{}s\textasciicircum{}2/\allowbreak{}day & True linear bias drift; default [1e-9; 0; -5e-10] \\
 Quadratic & 3x1 & double & s\textasciicircum{}2/\allowbreak{}m & True K2 per axis; default zeros \\
@@ -3830,13 +3831,13 @@ OrbitPeriod\_\allowbreak{}s & 1x1 & double & s & Orbital period; default 5640 (\
 \endlastfoot
 obs & 1x1 & timeSeriesPreparation.\allowbreak{}Arc & m/\allowbreak{}s\textasciicircum{}2 & CRN-filtered observation at 1 Hz, product ACT1B, columns lin\_accl\_x/y/z; NaN (and the layer crnWindow) where the filter window met an edge or the gap \\
 ref & 1x1 & timeSeriesPreparation.\allowbreak{}Arc & m/\allowbreak{}s\textasciicircum{}2 & The model at 10 Hz, same column names \\
-truth & 1x1 & struct & - & .scale .bias0 .biasDrift\_per\_day .quadratic .bias (3xK1 at obs.t) .noise (.asd .corner .seeds) .spikes (table: t int64, axis, amplitude) .gap (int64 [first last] on the 10 Hz grid, or empty) .kernel (crnKernel struct) .orbitPeriod\_s .seed .provenance \\
+truth & 1x1 & struct & - & .scale (at Start) .scaleDrift\_per\_day .bias0 .biasDrift\_per\_day .quadratic .bias (3xK1 at obs.t) .noise (.asd .corner .seeds) .spikes (table: t int64, axis, amplitude) .gap (int64 [first last] on the 10 Hz grid, or empty) .kernel (crnKernel struct) .orbitPeriod\_s .seed .provenance \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}syntheticPair:\allowbreak{}depMissing}] timeSeriesPreparation is not on the path
-\item[\texttt{NonGravForces:\allowbreak{}syntheticPair:\allowbreak{}inputShape}] Scale, Bias, BiasDrift, Quadratic or NoiseAsd of the wrong size, or not finite
+\item[\texttt{NonGravForces:\allowbreak{}syntheticPair:\allowbreak{}inputShape}] Scale, ScaleDrift, Bias, BiasDrift, Quadratic or NoiseAsd of the wrong size, or not finite
 \item[\texttt{NonGravForces:\allowbreak{}syntheticPair:\allowbreak{}inputRange}] the arc is too short for the CRN window plus the spikes and the gap, or the spikes find no room clear of each other
 \item[\texttt{timeSeriesPreparation:\allowbreak{}*}] from crnKernel, crnApply, synthTimeSeries, Arc
 \end{description}
@@ -3848,6 +3849,8 @@ truth & 1x1 & struct & - & .scale .bias0 .biasDrift\_per\_day .quadratic .bias (
 \begin{lstlisting}
 cal = NonGravForces.app.Calibration(fit)
 b   = cal.biasAt(t)                 % 3xK bias at int64 GPS-ns epochs
+S   = cal.scaleAt(t)                % 3x3xK scale at int64 GPS-ns epochs (N-03a)
+d   = cal.drift()                   % Wald test of a time-varying scale against a constant
 a   = cal.apply(obsArc)             % calibrated accelerations, a timeSeriesPreparation.Arc
 inv = cal.invert()                  % the same calibration in the correction direction
 T   = cal.summaryTable()
@@ -3869,7 +3872,7 @@ B   = NonGravForces.app.Calibration.basis(bias, t)   % the bias basis, shared wi
 \endfoot
 \bottomrule
 \endlastfoot
-fit & 1x1 & struct & - & .scale 3x3; .bias struct (.basis, .t0 int64, .knots int64 1xQ, optional .jumps int64 1xJ, .coef 3xP with P including the J steps, optional .cov 1x3 cell of PxP); optional .covScale 9x9 (cov of scale(:)), .quadratic 3x1, .uncertainty struct, .gates struct, .convention "observation"\textbar{}"correction", .provenance struct \\
+fit & 1x1 & struct & - & .scale 3x3; .bias struct (.basis, .t0 int64, .knots int64 1xQ, optional .jumps int64 1xJ, .coef 3xP with P including the J steps, optional .cov 1x3 cell of PxP); optional .covScale 9x9 (cov of scale(:)), .quadratic 3x1, .uncertainty struct, .gates struct, .convention "observation"\textbar{}"correction", .provenance struct; optional .scaleCurve struct (.basis, .t0, .knots, .tRef int64, .coef 9xQ, .cov 1x9 cell of QxQ, [] where not estimated) for a time-varying scale \\
 \end{longtable}
 
 \subsubsection*{NAME-VALUE ARGUMENTS}
@@ -3878,7 +3881,9 @@ None.
 
 \subsubsection*{PROPERTIES (read-only)}
 \begin{lstlisting}
-scale        3x3  double  -      S
+scale        3x3  double  -      S; for a time-varying scale, S(scaleCurve.tRef)
+scaleCurve   1x1  struct  -      .basis ("constant" when the scale is not a curve) .t0
+                                 .knots .tRef .coef (9xQ) .cov (1x9 cell)
 covScale     9x9  double  -      covariance of scale(:), NaN where not estimated
 bias         1x1  struct  m/s^2  .basis .t0 .knots .jumps .coef (3xP) .cov (1x3 cell)
 quadratic    3x1  double  s^2/m  K2 per axis; NaN = not estimated
@@ -3891,11 +3896,18 @@ provenance   1x1  struct  -      NonGravForces.provenance of the fit, plus the e
 \subsubsection*{METHODS}
 \begin{lstlisting}
 b = biasAt(obj, t)          t Kx1 int64 GPS ns; b 3xK in m/s^2
+S = scaleAt(obj, t)         3x3xK; the constant S repeated when not time-varying
+s = scaleSigmaAt(obj, t)    3x3xK pointwise sigma of S(t); NaN where not estimated
+tf = isTimeVarying(obj)     scaleCurve.basis is not "constant"
+d = drift(obj, alpha)       .statistic .dof .pValue (3x3, NaN where not tested)
+                            .significant (3x3 logical) .alpha; alpha default 0.05
+tf = isDriftSignificant(obj, alpha)   drift(obj, alpha).significant
 out = apply(obj, arc)       arc: timeSeriesPreparation.Arc with 3 columns in m/s2; out: the
                             calibrated arc (derive: same epochs, provenance appended)
 inv = invert(obj)           the other convention, first-order covariance
-T = summaryTable(obj)       one row per scale entry and bias coefficient
-save(obj, file)             versioned MAT file (schemaVersion "1")
+T = summaryTable(obj)       one row per scale entry and bias coefficient, plus one per
+                            scale-curve coefficient when time-varying
+save(obj, file)             versioned MAT file (schemaVersion "2"; "1" files still load)
 cal = Calibration.load(file)
 B = Calibration.basis(bias, t)   KxP basis matrix at int64 epochs
 \end{lstlisting}
@@ -3924,12 +3936,14 @@ cal & 1x1 & NonGravForces.app.Calibration \\
 \item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}inputArc}] apply: not a 3-column arc in m/s2
 \item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}unsupportedQuadratic}] apply with a non-zero K2
 \item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}dataSchema}] load: not a calibration file, or no schemaVersion
-\item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}numericSingular}] invert/apply: S is singular to working precision
+\item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}numericSingular}] invert/apply: S is singular to working precision (at some epoch, for a time-varying scale)
+\item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}unsupportedTimeVarying}] invert of a time-varying scale
 \end{description}
 
 \subsubsection*{WARNINGS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}newerSchema}] load: written by a newer schema; read field by field
+\item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}formalDrift}] drift: the covariance is the formal white-noise one (NBoot 0, Noise "white"), which a CRN-filtered residual violates; the test is then far too liberal
 \end{description}
 
 \subsection{\texttt{NonGravForces.app.fitCalibration}}
@@ -3939,6 +3953,7 @@ cal & 1x1 & NonGravForces.app.Calibration \\
 \begin{lstlisting}
 cal = NonGravForces.app.fitCalibration(obs, ref)
 [cal, info] = NonGravForces.app.fitCalibration(obs, ref, 'Scale', "full", 'BiasBasis', "pspline", 'NBoot', 0)
+cal = NonGravForces.app.fitCalibration(obs, ref, 'ScaleBasis', "linear")   % S(t), N-03a
 \end{lstlisting}
 
 \subsubsection*{INPUT ARGUMENTS}
@@ -3977,6 +3992,8 @@ Kernel & 1x1 & string & - & "crn" (default): crnKernel("ACC"); a crnKernel struc
 BiasBasis & 1x1 & string & - & "constant" \textbar{} "linear" (default) \textbar{} "hat" \textbar{} "pspline" \\
 BiasKnotSpacing\_\allowbreak{}s & 1x1 & double & s & Knot spacing of "hat" and "pspline"; default 10800. Below the kernel span Tf it warns \\
 Scale & 3x3 & string & - & "diag" (default) \textbar{} "full" \textbar{} a 3x3 logical mask \\
+ScaleBasis & 1x1 & string & - & "constant" (default) \textbar{} "linear" \textbar{} "hat" \textbar{} "pspline": the time dependence of every estimated entry \\
+ScaleKnotSpacing\_\allowbreak{}s & 1x1 & double & s & Knot spacing of a "hat" or "pspline" scale; default 43200, at least the bias's when both are knotted \\
 FixCrossTrack & 1x1 & logical & - & Hold S\_yy at its a-priori value; default true \\
 ScaleApriori & 3x3 & double & - & Values of the entries not estimated; default eye(3) \\
 Quadratic & 1x1 & logical & - & Estimate K2 per axis; default false \\
@@ -4003,7 +4020,7 @@ Robust & 1x1 & string & - & lsqvce M-estimation: "none" (default) \textbar{} "hu
 \endfoot
 \bottomrule
 \endlastfoot
-cal & 1x1 & NonGravForces.\allowbreak{}app.\allowbreak{}Calibration & - & Convention "observation"; covScale and bias cov from the bootstrap when NBoot \textgreater{} 0, else formal; .uncertainty (.sigmaScaleFormal, .sigmaScaleBootstrap, .inflation 3x3, .residualRms 1x3 m/s\textasciicircum{}2, .eiv, .noise, .nBoot, .stopReason); .gates (.vif, .cond, .maxAbsCorr, .weightFraction, .vifMax, .verdict) \\
+cal & 1x1 & NonGravForces.\allowbreak{}app.\allowbreak{}Calibration & - & Convention "observation"; scaleCurve when 'ScaleBasis' is not "constant"; covScale and bias cov from the bootstrap when NBoot \textgreater{} 0, else formal; .uncertainty (.sigmaScaleFormal, .sigmaScaleBootstrap, .inflation 3x3, .residualRms 1x3 m/s\textasciicircum{}2, .eiv, .noise, .nBoot, .stopReason); .gates (.vif, .cond, .maxAbsCorr, .weightFraction, .vifMax, .verdict) \\
 info & 1x1 & struct & - & .residual (Arc at obs epochs, NaN where not fitted) .names (1x3 cell of column names) .rows (Nx3 logical) .Qxx (1x3 cell, the unit-weight cofactor of each axis, in the unscaled parameters) .results (1x3 cell of lsqvce.Results) .observability (1x3 cell) \\
 \end{longtable}
 
@@ -4015,6 +4032,7 @@ info & 1x1 & struct & - & .residual (Arc at obs epochs, NaN where not fitted) .n
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputGrid}] 'Kernel' [] and an obs epoch ref does not carry
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputKernel}] a kernel that is neither "crn", a struct nor []
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputJumps}] 'Jumps' not int64
+\item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputScaleBasis}] a knotted scale basis finer than the knotted bias basis
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}numericCollinear}] the VIF gate refused a row with several model columns
 \item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}inputBasis}] knots the basis refuses
 \item[\texttt{timeSeriesPreparation:\allowbreak{}*}] crnApply, observability, bootstrap

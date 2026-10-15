@@ -68,8 +68,8 @@ function res = calibrate(acc, reference, options)
 %   Jumps      1x1   logical -      Turn run's "jump" events into bias steps; default false
 %                                   (they are reported in diagnostics.jumps either way)
 %   VifMax     1x1   double  -      Attribution's VIF gate; default 10
-%   Fit        1xN   cell    -      Name-value pairs for app.fitCalibration (BiasBasis, Scale, Noise,
-%                                   NBoot, ...); default {}
+%   Fit        1xN   cell    -      Name-value pairs for app.fitCalibration (BiasBasis, Scale,
+%                                   ScaleBasis for a time-varying scale, Noise, NBoot, ...); default {}
 %
 % OUTPUT ARGUMENTS
 %   Name  Size  Type    Units  Description

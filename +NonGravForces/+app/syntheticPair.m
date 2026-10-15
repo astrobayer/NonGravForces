@@ -10,8 +10,9 @@ function [obs, ref, truth] = syntheticPair(options)
 %       model(t)  orbital-band accelerations: along-track drag-like -2e-7 m/s^2
 %                 modulated at 1/rev and by a slow solar-flux proxy (27-day
 %                 period), cross-track 1/rev + 2/rev at 1e-8, radial at 5e-8
-%       raw(t)    = S model + b(t) + K2 .* (model.^2 - mean) + noise + spikes,
-%                 with b(t) = Bias + BiasDrift * (t / 1 day), noise coloured
+%       raw(t)    = S(t) model + b(t) + K2 .* (model.^2 - mean) + noise + spikes,
+%                 with S(t) = Scale + ScaleDrift * (t / 1 day) (N-03a; constant
+%                 by default), b(t) = Bias + BiasDrift * (t / 1 day), noise coloured
 %                 per axis (ASD NoiseAsd * sqrt(1 + (NoiseCorner/f)^2), the
 %                 sensor.Electrostatic form) from timeSeriesPreparation's
 %                 synthTimeSeries, spikes 1 s boxcars standing for thruster
@@ -42,6 +43,8 @@ function [obs, ref, truth] = syntheticPair(options)
 %   Seed            1x1   double  -            Seed of every random draw; default 1
 %   Scale           3x3   double  -            True scale matrix S (a 3x1 is its diagonal);
 %                                              default diag([0.96 0.98 0.95])
+%   ScaleDrift      3x3   double  1/day        True linear drift of S, so S(t) = Scale +
+%                                              ScaleDrift * (t - Start) / 1 day; default zeros
 %   Bias            3x1   double  m/s^2        True bias at Start; default [2e-7; -1e-7; 5e-8]
 %   BiasDrift       3x1   double  m/s^2/day    True linear bias drift; default [1e-9; 0; -5e-10]
 %   Quadratic       3x1   double  s^2/m        True K2 per axis; default zeros
@@ -60,7 +63,8 @@ function [obs, ref, truth] = syntheticPair(options)
 %                                                     layer crnWindow) where the filter window met
 %                                                     an edge or the gap
 %   ref      1x1   timeSeriesPreparation.Arc   m/s^2  The model at 10 Hz, same column names
-%   truth    1x1   struct                      -      .scale .bias0 .biasDrift_per_day
+%   truth    1x1   struct                      -      .scale (at Start) .scaleDrift_per_day
+%                                                     .bias0 .biasDrift_per_day
 %                                                     .quadratic .bias (3xK1 at obs.t) .noise
 %                                                     (.asd .corner .seeds) .spikes (table: t
 %                                                     int64, axis, amplitude) .gap (int64 [first
@@ -77,7 +81,7 @@ function [obs, ref, truth] = syntheticPair(options)
 %
 % ERRORS
 %   NonGravForces:syntheticPair:depMissing    timeSeriesPreparation is not on the path
-%   NonGravForces:syntheticPair:inputShape    Scale, Bias, BiasDrift, Quadratic or NoiseAsd of
+%   NonGravForces:syntheticPair:inputShape    Scale, ScaleDrift, Bias, BiasDrift, Quadratic or NoiseAsd of
 %                                             the wrong size, or not finite
 %   NonGravForces:syntheticPair:inputRange    the arc is too short for the CRN window plus the
 %                                             spikes and the gap, or the spikes find no room
@@ -102,6 +106,7 @@ arguments
     options.Start (1,1) int64 = int64(7305 * 86400 - 43200 + 18) * int64(1e9)
     options.Seed (1,1) double {mustBeInteger, mustBeNonnegative} = 1
     options.Scale double = diag([0.96 0.98 0.95])
+    options.ScaleDrift double = zeros(3)
     options.Bias double = [2e-7; -1e-7; 5e-8]
     options.BiasDrift double = [1e-9; 0; -5e-10]
     options.Quadratic double = zeros(3, 1)
@@ -119,8 +124,9 @@ end
 S = options.Scale;
 if isvector(S) && numel(S) == 3, S = diag(S(:)); end
 vec3 = {options.Bias, options.BiasDrift, options.Quadratic, options.NoiseAsd};
-if ~isequal(size(S), [3 3]) || any(cellfun(@numel, vec3) ~= 3) || ~all(isfinite([S(:); cell2mat(cellfun(@(v) v(:), vec3(:), "UniformOutput", false))]))
-    NonGravForces.fail(unit, "inputShape", "Scale must be 3x3 (or 3x1) and Bias, BiasDrift, Quadratic, NoiseAsd 3x1, all finite -> check the sizes");
+D = options.ScaleDrift;
+if ~isequal(size(S), [3 3]) || ~isequal(size(D), [3 3]) || any(cellfun(@numel, vec3) ~= 3) || ~all(isfinite([S(:); D(:); cell2mat(cellfun(@(v) v(:), vec3(:), "UniformOutput", false))]))
+    NonGravForces.fail(unit, "inputShape", "Scale must be 3x3 (or 3x1), ScaleDrift 3x3 and Bias, BiasDrift, Quadratic, NoiseAsd 3x1, all finite -> check the sizes");
 end
 b0 = options.Bias(:); drift = options.BiasDrift(:); k2 = options.Quadratic(:); asd = options.NoiseAsd(:);
 
@@ -154,6 +160,10 @@ for m = 1:3
     noise(:, m) = timeSeriesPreparation.spectral.synthTimeSeries("psd", fGrid, psd, fs, n, Seed = seeds(m));
 end
 raw = model * S.' + biasRaw + quadRaw + noise;
+if any(D(:) ~= 0)
+    % Added only when planted, so a constant-scale pair stays bitwise what it was before N-03a.
+    raw = raw + (ts / 86400) .* (model * D.');
+end
 
 % Spikes and the gap, placed by one stream, clear of the edges and of each other.
 rs = RandStream("twister", "Seed", options.Seed);
@@ -194,7 +204,7 @@ obs = obs.addLayer("crnWindow", filtered.layers.crnWindow);
 ref = timeSeriesPreparation.Arc(t, model, localAux(names, "MODEL_" + day + "_C_04.txt", "MODEL"));
 
 t1 = double(obs.t - options.Start) / 1e9;
-truth = struct('scale', S, 'bias0', b0, 'biasDrift_per_day', drift, 'quadratic', k2, ...
+truth = struct('scale', S, 'scaleDrift_per_day', D, 'bias0', b0, 'biasDrift_per_day', drift, 'quadratic', k2, ...
     'bias', b0 + drift .* (t1' / 86400), ...
     'noise', struct('asd', asd, 'corner', options.NoiseCorner, 'seeds', seeds), ...
     'spikes', table(spikeT, spikeAxis, repmat(options.SpikeAmplitude, options.Spikes, 1), ...

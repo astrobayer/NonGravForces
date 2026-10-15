@@ -44,6 +44,14 @@ classdef tNgfCalibration < NgfTestCase
                 'coef', [truth.bias0, truth.biasDrift_per_day]);
             cal = NonGravForces.app.Calibration(struct('scale', truth.scale, 'bias', bias));
         end
+        function cal = curveCal(tc, slope)
+            %CURVECAL splineCal(8) with a linear scale curve S(t) = S0 + slope * days on t0, tRef = t0.
+            base = tc.splineCal(8);
+            S0 = base.scale;
+            sc = struct('basis', "linear", 't0', base.bias.t0, 'knots', int64([]), 'tRef', base.bias.t0, ...
+                'coef', [S0(:), slope(:)], 'cov', {{[4e-8 1e-9; 1e-9 9e-8], [], [], [], [], [], [], [], [1e-8 0; 0 2e-8]}});
+            cal = NonGravForces.app.Calibration(struct('scale', S0, 'scaleCurve', sc, 'bias', base.bias));
+        end
         function cal = splineCal(~, P)
             %SPLINECAL A calibration with a cubic B-spline bias on uniform hourly knots (P coefficients).
             t0 = int64(631152018) * int64(1e9);
@@ -68,7 +76,7 @@ classdef tNgfCalibration < NgfTestCase
             tc.verifyEqual(obs.t, ref.t(1:10:end));
             tc.verifyEqual(obs.names, ["lin_accl_x" "lin_accl_y" "lin_accl_z"]);
             tc.verifyEqual(obs.units, repmat("m/s2", 1, 3));
-            tc.verifyEqual(sort(string(fieldnames(truth)))', sort(["scale" "bias0" "biasDrift_per_day" ...
+            tc.verifyEqual(sort(string(fieldnames(truth)))', sort(["scale" "scaleDrift_per_day" "bias0" "biasDrift_per_day" ...
                 "quadratic" "bias" "noise" "spikes" "gap" "kernel" "orbitPeriod_s" "seed" "provenance"]));
             tc.verifySize(truth.bias, [3 n]);
             tc.verifyEqual(height(truth.spikes), 3);
@@ -77,13 +85,16 @@ classdef tNgfCalibration < NgfTestCase
             tc.verifyEqual(truth.kernel.preset, "ACC");
             tc.verifyErrorId(@() NonGravForces.app.syntheticPair('Days', tc.Days, 'Scale', eye(2)), "NonGravForces:syntheticPair:inputShape");
             tc.verifyErrorId(@() NonGravForces.app.syntheticPair('Days', tc.Days, 'Bias', [1 2]), "NonGravForces:syntheticPair:inputShape");
+            tc.verifyErrorId(@() NonGravForces.app.syntheticPair('Days', tc.Days, 'ScaleDrift', [1 2 3]), "NonGravForces:syntheticPair:inputShape");
+            tc.verifyEqual(truth.scaleDrift_per_day, zeros(3));
             tc.verifyErrorId(@() NonGravForces.app.syntheticPair('Days', 0.001), "NonGravForces:syntheticPair:inputRange");
             tc.verifyErrorId(@() NonGravForces.app.syntheticPair('Days', 0.01, 'Spikes', 40), "NonGravForces:syntheticPair:inputRange");
         end
         function calibrationContract(tc)
             cal = tc.splineCal(8);
             tc.verifyEqual(cal.convention, "observation");
-            tc.verifyEqual(cal.SchemaVersion, "1");
+            tc.verifyEqual(cal.SchemaVersion, "2");
+            tc.verifyFalse(cal.isTimeVarying());
             tc.verifyTrue(all(isnan(cal.quadratic)));
             tc.verifyTrue(all(isnan(cal.covScale), 'all'));
             tc.verifySize(cal.biasAt(cal.bias.t0 + int64(0:9)' * int64(60e9)), [3 10]);
@@ -121,6 +132,37 @@ classdef tNgfCalibration < NgfTestCase
             folder = tc.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
             notCal = fullfile(folder, 'other.mat'); x = 1; save(notCal, 'x');
             tc.verifyErrorId(@() NonGravForces.app.Calibration.load(notCal), "NonGravForces:Calibration:dataSchema");
+        end
+
+        function calibrationTimeVaryingContract(tc)
+            % N-03a: a scale curve -- shapes, the one-authority check of scale against the curve,
+            % the refused inversion, and the drift report's fields.
+            slope = zeros(3); slope(1, 1) = 0.01; slope(3, 3) = -0.02;
+            cal = tc.curveCal(slope);
+            tc.verifyTrue(cal.isTimeVarying());
+            t = cal.bias.t0 + int64(0:4)' * int64(3600e9);
+            tc.verifySize(cal.scaleAt(t), [3 3 5]);
+            tc.verifySize(cal.scaleSigmaAt(t), [3 3 5]);
+            sg = cal.scaleSigmaAt(t);
+            tc.verifyTrue(all(isnan(sg(2, 2, :))), 'an entry without a covariance has no band');
+            d = cal.drift();
+            tc.verifyEqual(sort(string(fieldnames(d)))', sort(["statistic" "dof" "pValue" "significant" "alpha"]));
+            tc.verifyClass(cal.isDriftSignificant(0.01), 'logical');
+            T = cal.summaryTable();
+            tc.verifySize(T, [9 + 3 * 8 + 2 * 2, 3]);
+            tc.verifyErrorId(@() cal.invert(), "NonGravForces:Calibration:unsupportedTimeVarying");
+            good = struct('scale', cal.scale, 'scaleCurve', cal.scaleCurve, 'bias', cal.bias);
+            bad = good; bad.scale(1, 1) = bad.scale(1, 1) + 1e-6;
+            tc.verifyErrorId(@() NonGravForces.app.Calibration(bad), "NonGravForces:Calibration:inputFit");
+            bad = good; bad.scaleCurve.coef = zeros(9, 3);
+            tc.verifyErrorId(@() NonGravForces.app.Calibration(bad), "NonGravForces:Calibration:inputFit");
+            bad = good; bad.scaleCurve.cov = {eye(3)};
+            tc.verifyErrorId(@() NonGravForces.app.Calibration(bad), "NonGravForces:Calibration:inputFit");
+            bad = good; bad.scaleCurve.basis = "fourier";
+            tc.verifyErrorId(@() NonGravForces.app.Calibration(bad), "NonGravForces:Calibration:inputBasis");
+            sing = good; sing.scaleCurve.coef(:, 2) = 0; sing.scaleCurve.coef([3 6 9], 2) = -cal.scale(3, :).' / 0.5;   % row 3 of S(t) vanishes at day 0.5
+            singCal = NonGravForces.app.Calibration(sing);
+            tc.verifyErrorId(@() singCal.apply(tc.arc3(cal.bias.t0 + int64(43200e9), zeros(1, 3))), "NonGravForces:Calibration:numericSingular");
         end
     end
 
@@ -214,6 +256,38 @@ classdef tNgfCalibration < NgfTestCase
         end
     end
 
+    methods (Test, TestTags = {'precision'})
+        function calibrationTimeVaryingPrecision(tc)
+            % apply against an independent per-epoch loop of 3x3 solves of y = S(t) a + b(t), with
+            % S(t) written out by hand; and the Wald statistic of the linear basis against its
+            % closed form, the squared slope over its variance.
+            slope = zeros(3); slope(1, 1) = 0.01; slope(3, 3) = -0.02; slope(1, 2) = 1e-3;
+            cal = tc.curveCal(slope);
+            t = cal.bias.t0 + int64(0:239)' * int64(600e9);
+            days = double(t - cal.bias.t0) / 86400e9;
+            a = 1e-7 * [cos((1:240)' / 9), sin((1:240)' / 7), cos((1:240)' / 5)];
+            b = cal.biasAt(t);
+            y = zeros(240, 3); aRef = zeros(240, 3);
+            for k = 1:240
+                Sk = cal.scale + slope * days(k);
+                y(k, :) = (Sk * a(k, :).' + b(:, k)).';
+            end
+            got = cal.apply(tc.arc3(t, y)).obs;
+            for k = 1:240
+                aRef(k, :) = ((cal.scale + slope * days(k)) \ (y(k, :).' - b(:, k))).';
+            end
+            err = max(abs(got - aRef), [], 'all') / max(abs(a), [], 'all');
+            tc.verifyBoundAndRecord("Calibration apply with S(t) vs a per-epoch loop of solves", err, 100 * eps, "-", ...
+                "pages vs a loop; both one LU of the same 3x3, differing only in the order S(t) is formed");
+            d = cal.drift();
+            W = [0.01^2 / 9e-8, 0.02^2 / 2e-8];
+            tc.verifyBoundAndRecord("Calibration drift statistic vs slope^2 / var(slope)", ...
+                max(abs([d.statistic(1, 1), d.statistic(3, 3)] - W) ./ W), 1e-12, "-", "pinv of a 1x1 is its reciprocal");
+            tc.verifyEqual([d.dof(1, 1), d.dof(3, 3)], [1 1]);
+            tc.verifyEqual(d.pValue(1, 1), erfc(sqrt(W(1) / 2)), 'RelTol', 1e-12, 'chi-square with 1 dof: P(X > W) = erfc(sqrt(W/2))');
+        end
+    end
+
     % ===================================================================== vectorization
     methods (Test, TestTags = {'vectorization'})
         function syntheticPairVectorization(tc)
@@ -291,7 +365,7 @@ classdef tNgfCalibration < NgfTestCase
             % A file from a newer schema is read, and says so.
             folder = tc.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
             f = fullfile(folder, 'cal.mat'); cal.save(f);
-            s = load(f); s.calibration.schemaVersion = "2";
+            s = load(f); s.calibration.schemaVersion = string(str2double(NonGravForces.app.Calibration.SchemaVersion) + 1);   % newer than this toolbox, whatever it is
             f2 = fullfile(folder, 'cal2.mat'); save(f2, '-struct', 's');
             back = tc.verifyWarning(@() NonGravForces.app.Calibration.load(f2), "NonGravForces:Calibration:newerSchema");
             tc.verifyEqual(back.scale, cal.scale);
@@ -315,6 +389,9 @@ classdef tNgfCalibration < NgfTestCase
             ok = all(isfinite(shift), 2);
             err = max(abs(shift(ok, :) - tr1.kernel.dcGain * d.'), [], 'all');
             tc.verifyBoundAndRecord("syntheticPair bias offset -> dcGain * offset", err, tc.chainBound(tr1, r1, 4), "m/s^2", "two runs");
+            % 'ScaleDrift' zeros IS the default pair, bitwise (N-03a adds the term only when planted).
+            o5 = NonGravForces.app.syntheticPair('Days', tc.Days, 'Seed', 5, 'ScaleDrift', zeros(3));
+            tc.verifyTrue(isequaln(o5.obs, o1.obs));
         end
         function calibrationMetamorphic(tc)
             cal = tc.splineCal(8);
@@ -331,6 +408,30 @@ classdef tNgfCalibration < NgfTestCase
             ci = cal.invert();
             ci.save(f);
             tc.verifyTrue(isequaln(NonGravForces.app.Calibration.load(f), ci));
+        end
+
+        function calibrationTimeVaryingMetamorphic(tc)
+            % A curve with zero slope applies as the constant scale does, to a few eps (pages vs
+            % one matrix solve); a curve survives save/load; a schema-1 file loads as a constant.
+            flat = tc.curveCal(zeros(3));
+            base = tc.splineCal(8);
+            t = base.bias.t0 + int64(0:99)' * int64(60e9);
+            y = 1e-7 * [cos((1:100)' / 9), sin((1:100)' / 7), cos((1:100)' / 5)];
+            a0 = base.apply(tc.arc3(t, y)).obs; a1 = flat.apply(tc.arc3(t, y)).obs;
+            tc.verifyBoundAndRecord("Calibration flat curve vs constant scale, apply", ...
+                max(abs(a1 - a0), [], 'all') / max(abs(a0), [], 'all'), 100 * eps, "-", "pages vs one 3x3 solve");
+            cal = tc.curveCal(0.01 * eye(3));
+            folder = tc.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
+            f = fullfile(folder, 'curve.mat');
+            cal.save(f);
+            tc.verifyTrue(isequaln(NonGravForces.app.Calibration.load(f), cal));
+            old = struct('schemaVersion', "1", 'scale', base.scale, 'covScale', base.covScale, 'bias', base.bias, ...
+                'quadratic', base.quadratic, 'uncertainty', struct(), 'gates', struct(), 'convention', "observation", ...
+                'provenance', base.provenance);
+            calibration = old; f1 = fullfile(folder, 'schema1.mat'); save(f1, 'calibration');
+            c1 = NonGravForces.app.Calibration.load(f1);
+            tc.verifyFalse(c1.isTimeVarying());
+            tc.verifyEqual(c1.scale, base.scale);
         end
     end
 
