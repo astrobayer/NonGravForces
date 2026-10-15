@@ -8,3 +8,4 @@
 %   syntheticPair        - Truth generator: a 10 Hz model arc and its CRN-filtered 1 Hz observation with every planted value
 %   Calibration          - An accelerometer calibration: scale + time-varying bias + uncertainty + gates; apply/invert/save/load
 %   fitCalibration       - The calibration estimator: CRN-filtered bias basis and model columns per axis through lsqvce.fit; VIF gate + bootstrap + EIV bound
+%   compareCalibrations  - Rank candidate calibration models per axis by blocked cross-validation; AIC/BIC as IC_unreliable

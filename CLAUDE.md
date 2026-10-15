@@ -35,7 +35,7 @@ Eight layers; a layer calls only lower layers plus the four dependencies. L7 is 
 control moved to `timeSeriesPreparation.qc` (N-01) and its forwarders were deleted in 0.14.0 (O-47).
 
 ```
-L8 app      calibrate, fitCalibration, Calibration, syntheticPair, forceBudget, densityInversion, DynamicsSource (gjToolbox entry, native C)
+L8 app      calibrate, fitCalibration, compareCalibrations, Calibration, syntheticPair, forceBudget, densityInversion, DynamicsSource (gjToolbox entry, native C)
 L6 sensor   Sensor (abstract), Electrostatic, AtomInterferometer, DragFree
 L5 Model    accel | torque | series | partials | budget   <- single point of access
 L4 kernel   gsiCoefficients, accommodation, dragPanelForce, radiationPanelForce,
@@ -48,7 +48,7 @@ L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
 L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options, buildMex
 ```
 
-54 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
+55 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
 both directions against the files on disk, and this sentence's number against it
 — which it genuinely did not until 2026-09-16, when the sentence said 53 and the
 catalogue held 55; `auditPackage.py` check 5 now compares both this number and
@@ -171,8 +171,12 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-15, N-03a)
+## 5. Current status (2026-10-15, N-03b)
 
+- **2026-10-15, N-03b (#60, second of three PRs):** `app.compareCalibrations` ranks candidate models per axis by
+  blocked CV (`timeSeriesPreparation.crossval`), AIC/BIC as IC_unreliable columns; `fitCalibration` gains
+  `'Span'` and `info.prediction`. Fixed an N-03a defect (constant bias + held S_yy). 55 units. ☑ on Tier A:
+  390/390, predicted 390. Next: N-03c (per-revolution and attribution), then the release.
 - **2026-10-15, N-03a (#60, first of three PRs):** time-varying scale. `app.fitCalibration` takes
   `'ScaleBasis'`/`'ScaleKnotSpacing_s'`; `app.Calibration` carries `scaleCurve` with `scaleAt`, `scaleSigmaAt`,
   `drift` (Wald test) and `isDriftSignificant`, schema "2"; `syntheticPair` plants `'ScaleDrift'`. A knotted
@@ -582,6 +586,9 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   handbook digits (norm 1 - 7.3e-7, measured).
 - **`M_PI` is not in C99** and is absent under MSVC without `_USE_MATH_DEFINES`; `ngfKernel.c`
   defines its own `NGF_PI`.
+- **A SCALAR indexed by an empty index is 1x0, a column indexed by it is 0x1.** `x(sIdx)` with `sIdx = P + (1:0)`
+  breaks `J * x(sIdx)` only when x happens to be a scalar -- in `fitCalibration`, a constant bias on an axis
+  with no estimated scale. Shipped in N-03a, found by N-03b. Force the shape: `reshape(x(sIdx), [], 1)`.
 - **`struct('a', {})` builds a 0x0 struct ARRAY**, not a scalar with an empty field; only cell
   values distribute. Assignment into an element of a struct array also needs the same fields in
   the same ORDER, which is why `buildMex/localState` rebuilds the record instead of extending it.
