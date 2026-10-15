@@ -98,6 +98,10 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %                                           the time dependence of every estimated entry
 %   ScaleKnotSpacing_s 1x1   double  s      Knot spacing of a "hat" or "pspline" scale; default
 %                                           43200, at least the bias's when both are knotted
+%   Span               1x2   int64   ns     [first last] epoch the bias and scale bases must cover;
+%                                           default [] = the first and last usable observation epoch.
+%                                           Cross-validation passes the WHOLE arc's span, so that a
+%                                           B-spline is defined over a held-out block (N-03b)
 %   FixCrossTrack      1x1   logical -      Hold S_yy at its a-priori value; default true
 %   ScaleApriori       3x3   double  -      Values of the entries not estimated; default eye(3)
 %   Quadratic          1x1   logical -      Estimate K2 per axis; default false
@@ -131,6 +135,10 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %                                                      unit-weight cofactor of each axis, in the
 %                                                      unscaled parameters) .results (1x3 cell of
 %                                                      lsqvce.Results) .observability (1x3 cell)
+%                                                      .prediction (Arc at obs epochs: the fitted
+%                                                      observation, fixed scale entries included, at
+%                                                      EVERY row whose design is finite, fitted or not;
+%                                                      NaN elsewhere)
 %
 % ACCURACY
 %   The estimate is lsqvce's QR solve on equilibrated columns: rounding of
@@ -153,6 +161,7 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %   NonGravForces:fitCalibration:inputJumps        'Jumps' not int64
 %   NonGravForces:fitCalibration:inputScaleBasis   a knotted scale basis finer than the knotted
 %                                                  bias basis
+%   NonGravForces:fitCalibration:inputSpan         'Span' not an increasing int64 pair
 %   NonGravForces:fitCalibration:numericCollinear  the VIF gate refused a row with several model
 %                                                  columns
 %   NonGravForces:Calibration:inputBasis           knots the basis refuses
@@ -192,6 +201,7 @@ arguments
     options.Scale = "diag"
     options.ScaleBasis (1,1) string {mustBeMember(options.ScaleBasis, ["constant" "linear" "hat" "pspline"])} = "constant"
     options.ScaleKnotSpacing_s (1,1) double {mustBePositive, mustBeFinite} = 43200
+    options.Span = int64([])
     options.FixCrossTrack (1,1) logical = true
     options.ScaleApriori (3,3) double = eye(3)
     options.Quadratic (1,1) logical = false
@@ -231,7 +241,13 @@ t1 = obs.t(1);
 live = find(obs.weights > 0 & ~obs.filled & any(isfinite(obs.obs), 2));
 if isempty(live), live = 1:numel(obs.t); end
 tA = obs.t(live(1)); tB = obs.t(live(end));
-tA0 = tA; tB0 = tB;                                % the usable span itself, before any widening
+if ~isempty(options.Span)
+    if ~isa(options.Span, 'int64') || numel(options.Span) ~= 2 || options.Span(2) <= options.Span(1)
+        NonGravForces.fail(unit, "inputSpan", "'Span' must be an increasing int64 pair [first last] of GPS ns -> got %s %s", class(options.Span), mat2str(size(options.Span)));
+    end
+    tA = options.Span(1); tB = options.Span(2);
+end
+tA0 = tA; tB0 = tB;                                % the span itself, before any widening
 knotted = ["hat" "pspline"];
 if ismember(options.ScaleBasis, knotted) && ismember(options.BiasBasis, knotted) && options.ScaleKnotSpacing_s < options.BiasKnotSpacing_s
     NonGravForces.fail(unit, "inputScaleBasis", "a scale knot spacing of %g s is finer than the bias's %g s: a scale that varies faster than the bias is not separable from it -> raise 'ScaleKnotSpacing_s' to at least 'BiasKnotSpacing_s'", ...
@@ -342,7 +358,7 @@ coefS = S0(:) * constRow; covS = cell(1, 9);            % a fixed entry is its c
 Bref = NonGravForces.app.Calibration.basis(sc, sc.tRef);
 quad = nan(3, 1);
 sigF = nan(3); sigB = nan(3); resRms = nan(1, 3); stopReason = strings(1, 3);
-res = nan(N, 3); rowsUsed = false(N, 3);
+res = nan(N, 3); rowsUsed = false(N, 3); pred = nan(N, 3);
 info = struct('residual', [], 'names', {cell(1, 3)}, 'rows', [], 'Qxx', {cell(1, 3)}, ...
     'results', {cell(1, 3)}, 'observability', {cell(1, 3)});
 gates = struct('vif', {cell(1, 3)}, 'cond', nan(1, 3), 'maxAbsCorr', nan(1, 3), ...
@@ -391,6 +407,9 @@ for i = 1:3
     info.results{i} = R; info.Qxx{i} = Qxx; info.names{i} = names;
     stopReason(i) = string(R.stopReason);
     v = nan(N, 1); v(ok) = l(ok) - X(ok, :) * x;
+    % the fitted observation wherever the design is defined, held-out rows included (N-03b)
+    rp = all(isfinite(X), 2);
+    pred(rp, i) = X(rp, :) * x + Ha(rp, fix) * S0(i, fix).';
     res(:, i) = v;
     resRms(i) = sqrt(mean(v(ok).^2));
     if options.NBoot > 0
@@ -415,7 +434,9 @@ for i = 1:3
     % J maps the curve coefficients of row i to S(i, est) at tRef; for a constant scale it is the
     % identity and every line below reduces to what it was before N-03a.
     J = kron(eye(numel(est)), Bref);
-    scale(i, est) = (J * x(sIdx)).';
+    % x(sIdx) is forced to a column: x is a SCALAR when the bias is "constant" and the axis estimates
+    % no scale (S_yy held), and a scalar indexed by an empty index is 1x0, not 0x1 (found by N-03b).
+    scale(i, est) = (J * reshape(x(sIdx), [], 1)).';
     covScale(lin, lin) = J * Cuse(sIdx, sIdx) * J.';
     sigF(i, est) = sqrt(diag(J * Cxx(sIdx, sIdx) * J.')).';
     if options.NBoot > 0, sigB(i, est) = sqrt(diag(J * Cuse(sIdx, sIdx) * J.')).'; end
@@ -450,6 +471,7 @@ cal = NonGravForces.app.Calibration(struct('scale', scale, 'scaleCurve', sc, 'co
     'quadratic', quad, 'uncertainty', uncertainty, 'gates', gates, 'convention', "observation", 'provenance', prov));
 info.residual = obs.derive(obs.t, res, "NonGravForces.app.fitCalibration", struct('basis', options.BiasBasis));
 info.rows = rowsUsed;
+info.prediction = obs.derive(obs.t, pred, "NonGravForces.app.fitCalibration.prediction", struct('basis', options.BiasBasis));
 end
 
 % =========================================================================================

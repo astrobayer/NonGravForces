@@ -5,7 +5,7 @@
 %
 % \input-able from a report-class document; it opens no document and no chapter.
 
-\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 54 units, toolbox version 0.14.0.
+\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 55 units, toolbox version 0.14.0.
 
 \section{L0 \texttt{core} --- constants, options, provenance, uniform errors and the MEX build}
 
@@ -3994,6 +3994,7 @@ BiasKnotSpacing\_\allowbreak{}s & 1x1 & double & s & Knot spacing of "hat" and "
 Scale & 3x3 & string & - & "diag" (default) \textbar{} "full" \textbar{} a 3x3 logical mask \\
 ScaleBasis & 1x1 & string & - & "constant" (default) \textbar{} "linear" \textbar{} "hat" \textbar{} "pspline": the time dependence of every estimated entry \\
 ScaleKnotSpacing\_\allowbreak{}s & 1x1 & double & s & Knot spacing of a "hat" or "pspline" scale; default 43200, at least the bias's when both are knotted \\
+Span & 1x2 & int64 & ns & [first last] epoch the bias and scale bases must cover; default [] = the first and last usable observation epoch. Cross-validation passes the WHOLE arc's span, so that a B-spline is defined over a held-out block (N-03b) \\
 FixCrossTrack & 1x1 & logical & - & Hold S\_yy at its a-priori value; default true \\
 ScaleApriori & 3x3 & double & - & Values of the entries not estimated; default eye(3) \\
 Quadratic & 1x1 & logical & - & Estimate K2 per axis; default false \\
@@ -4021,7 +4022,7 @@ Robust & 1x1 & string & - & lsqvce M-estimation: "none" (default) \textbar{} "hu
 \bottomrule
 \endlastfoot
 cal & 1x1 & NonGravForces.\allowbreak{}app.\allowbreak{}Calibration & - & Convention "observation"; scaleCurve when 'ScaleBasis' is not "constant"; covScale and bias cov from the bootstrap when NBoot \textgreater{} 0, else formal; .uncertainty (.sigmaScaleFormal, .sigmaScaleBootstrap, .inflation 3x3, .residualRms 1x3 m/s\textasciicircum{}2, .eiv, .noise, .nBoot, .stopReason); .gates (.vif, .cond, .maxAbsCorr, .weightFraction, .vifMax, .verdict) \\
-info & 1x1 & struct & - & .residual (Arc at obs epochs, NaN where not fitted) .names (1x3 cell of column names) .rows (Nx3 logical) .Qxx (1x3 cell, the unit-weight cofactor of each axis, in the unscaled parameters) .results (1x3 cell of lsqvce.Results) .observability (1x3 cell) \\
+info & 1x1 & struct & - & .residual (Arc at obs epochs, NaN where not fitted) .names (1x3 cell of column names) .rows (Nx3 logical) .Qxx (1x3 cell, the unit-weight cofactor of each axis, in the unscaled parameters) .results (1x3 cell of lsqvce.Results) .observability (1x3 cell) .prediction (Arc at obs epochs: the fitted observation, fixed scale entries included, at EVERY row whose design is finite, fitted or not; NaN elsewhere) \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
@@ -4033,6 +4034,7 @@ info & 1x1 & struct & - & .residual (Arc at obs epochs, NaN where not fitted) .n
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputKernel}] a kernel that is neither "crn", a struct nor []
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputJumps}] 'Jumps' not int64
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputScaleBasis}] a knotted scale basis finer than the knotted bias basis
+\item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputSpan}] 'Span' not an increasing int64 pair
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}numericCollinear}] the VIF gate refused a row with several model columns
 \item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}inputBasis}] knots the basis refuses
 \item[\texttt{timeSeriesPreparation:\allowbreak{}*}] crnApply, observability, bootstrap
@@ -4043,4 +4045,80 @@ info & 1x1 & struct & - & .residual (Arc at obs epochs, NaN where not fitted) .n
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}knotsBelowFilterSpan}] knot spacing below the kernel span Tf: the filtered basis columns are nearly dependent
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}jumpOutsideFit}] a jump whose step is constant over the fitted rows; it is dropped from the bias
+\end{description}
+
+\subsection{\texttt{NonGravForces.app.compareCalibrations}}
+\label{api:app.compareCalibrations}
+\noindent Rank candidate calibration models by blocked cross-validation, per axis.
+
+\begin{lstlisting}
+T = NonGravForces.app.compareCalibrations(obs, ref, specs)
+[T, info] = NonGravForces.app.compareCalibrations(obs, ref, specs, 'Names', names, 'Folds', 5, 'Fit', {'Scale', "full"})
+\end{lstlisting}
+
+\subsubsection*{INPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+obs & 1x1 & timeSeriesPreparation.\allowbreak{}Arc & m/\allowbreak{}s\textasciicircum{}2 & Observation, as for app.fitCalibration \\
+ref & 1x1 & timeSeriesPreparation.\allowbreak{}Arc & m/\allowbreak{}s\textasciicircum{}2 & Model on the kernel's raw grid, as for app.fitCalibration \\
+specs & 1xC & cell & - & Candidate models: each a cell of app.fitCalibration name-value pairs (\{\} is the default model); C \textgreater{}= 1 \\
+\end{longtable}
+
+\subsubsection*{NAME-VALUE ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+Names & 1xC & string & - & A name per candidate; default "spec1" ... "specC" \\
+Fit & 1xN & cell & - & Name-value pairs common to every candidate (a spec's own pair wins); 'Kernel' belongs here; default \{\} \\
+Folds & 1x1 & double & - & Contiguous blocks, integer \textgreater{}= 2; default 5 \\
+Gap & 1x1 & double & rows & Buffer on each side of a test block; default [] = the larger of crossval's automatic block length and the kernel span in rows \\
+\end{longtable}
+
+\subsubsection*{OUTPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+T & Cx8 & table & - & One row per candidate: name (string), cvMse (1x3, m\textasciicircum{}2/s\textasciicircum{}4, mean over the folds of the test-row mean squared prediction error), cvMseSe (1x3, its standard error over the folds), rank (1x3, 1 = lowest cvMse on that axis), nParams (1x3), nRows (1x3, rows of the full-arc fit), aic and bic (1x3, from the full-arc fit; IC\_unreliable). T.Properties.UserData: .best (1x3 string, the rank-1 name per axis) .folds .gap .note \\
+info & 1x1 & struct & - & .foldLoss (1xC cell of Folds x 3) .testRows (Folds x 2) .gap .calibrations (1xC cell of the full-arc app.Calibration) \\
+\end{longtable}
+
+\subsubsection*{ERRORS}
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
+\item[\texttt{NonGravForces:\allowbreak{}compareCalibrations:\allowbreak{}depMissing}] timeSeriesPreparation is not on the path
+\item[\texttt{NonGravForces:\allowbreak{}compareCalibrations:\allowbreak{}inputFolds}] a candidate's knot spacing does not exceed the held-out window, so some fold cannot fit it
+\item[\texttt{NonGravForces:\allowbreak{}compareCalibrations:\allowbreak{}inputSpecs}] specs is not a non-empty cell of name-value cells, a spec sets 'Kernel', 'NBoot' or 'Span', or 'Names' does not have one name per spec
+\item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}*}] a candidate the estimator refuses
+\item[\texttt{timeSeriesPreparation:\allowbreak{}crossval:\allowbreak{}*}] folds that leave no training or test row
+\item[\texttt{timeSeriesPreparation:\allowbreak{}blockLength:\allowbreak{}tooShort}] the automatic gap on too short an arc
 \end{description}

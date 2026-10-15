@@ -105,6 +105,56 @@ classdef tNgfCalibrate < NgfTestCase
 
     % ===================================================================== precision
     methods (Test, TestTags = {'precision'})
+        function calibrateReferenceInterpolationPrecision(tc)
+            % HANDOVER Part I, N-02c, the owner's question of 2026-10-15: calibrate evaluates the Model
+            % at the 1 s orbit epochs and interpolates by pchip onto the 10 Hz raw grid. Measured here
+            % against the Model evaluated AT 10 Hz, across a shadow entry -- the hardest case, the
+            % radiation dropping in seconds -- through calibrate's own route
+            % (diagnostics.rawReference), both then CRN-filtered as the fit sees them.
+            % The orbit is circular at 490 km in the plane holding the Sun direction, so it crosses
+            % the umbra; states at both rates are the closed form, so no orbit is interpolated.
+            mu = 3.986004418e14; Re = 6378137; R = Re + 490e3; n = sqrt(mu / R^3);
+            day = 58849; sec0 = 3600;                               % 2020-01-01 01:00 GPS
+            s = referenceSystem.geocentricBodyState("sun", referenceSystem.daySecondToEpoch([day sec0], "GPS"));
+            s = s / norm(s);
+            e1 = -s; e2 = cross(s, [0; 0; 1]); e2 = e2 / norm(e2);
+            phi0 = -asin(Re / R);                                   % cylindrical shadow entry
+            t1 = -680:1:680; t10 = -680:0.1:680;                    % 1200 s plus the CRN margins
+            r = @(t) R * (cos(phi0 + n * t) .* e1 + sin(phi0 + n * t) .* e2);
+            v = @(t) R * n * (-sin(phi0 + n * t) .* e1 + cos(phi0 + n * t) .* e2);
+            ep1 = referenceSystem.daySecondToEpoch([repmat(day, numel(t1), 1), sec0 + t1(:)], "GPS");
+            ep10 = referenceSystem.daySecondToEpoch([repmat(day, numel(t10), 1), sec0 + t10(:)], "GPS");
+            att = NonGravForces.geom.AttitudeProvider(ep10, NonGravForces.geom.AttitudeProvider.nominal(r(t10), v(t10), true));
+            M = NonGravForces.Model(NonGravForces.geom.graceFO("C"), NonGravForces.Options("standard"), ...
+                'Attitude', att, 'Eop', tc.eop, 'SpaceWeather', tc.sw);
+            [a10, i10] = M.accel(ep10, r(t10), v(t10), att.at(ep10));
+            rad = vecnorm(i10.radiation);
+            tc.verifyLessThan(min(rad) / max(rad), 0.5, 'the arc must reach the umbra, or it measures a sunlit arc');
+            % the observation: the 10 Hz Model, CRN-filtered at the whole seconds, as ACT1B is formed
+            K = timeSeriesPreparation.crnKernel("ACC");
+            tns = referenceSystem.epochTo(ep10, "gpsNanoseconds");
+            names = {'lin_accl_x', 'lin_accl_y', 'lin_accl_z'};
+            units = struct('lin_accl_x', 'm/s2', 'lin_accl_y', 'm/s2', 'lin_accl_z', 'm/s2');
+            mk = @(t, X, prod) timeSeriesPreparation.Arc(t, X, struct("obsNames", {names}, "variableNames", {names}, ...
+                "variableFieldNames", {names}, "variableUnits", units, "fileName", prod + "_2020-01-01_C_04.txt", "product", prod));
+            Fd = timeSeriesPreparation.crnApply(mk(tns, a10.', "MODEL"), K, OutputEpochs = tns(1:10:end));
+            keep = all(isfinite(Fd.obs), 2);
+            acc = mk(Fd.t(keep), Fd.obs(keep, :), "ACT1B");
+            res = NonGravForces.app.calibrate(acc, M, 'Orbit', struct('epoch', ep1, 'r', r(t1), 'v', v(t1)), ...
+                'Attitude', att, 'Fit', {'NBoot', 0});
+            raw = res.diagnostics.rawReference;
+            [onGrid, at] = ismember(raw.t, tns);
+            tc.verifyTrue(all(onGrid), 'the raw reference lies on the 10 Hz grid');
+            Fr = timeSeriesPreparation.crnApply(raw, K, OutputEpochs = acc.t).obs;
+            d = Fr - acc.obs; ok = all(isfinite(d), 2);
+            signal = max(abs(acc.obs), [], 'all');
+            rawErr = max(abs(raw.obs - a10(:, at).'), [], 'all');
+            tc.verifyBoundAndRecord("calibrate reference, pchip vs 10 Hz Model, raw grid, / signal", rawErr / signal, 0.05, "-", ...
+                "recorded: unfiltered, the 1 s interpolation is visible at the shadow boundary (measured 3.9e-3)");
+            tc.verifyBoundAndRecord("calibrate reference, pchip vs 10 Hz Model, CRN-filtered, / signal", max(abs(d(ok, :)), [], 'all') / signal, 1e-3, "-", ...
+                "100x below the Model's own 10 % (density) error; measured 3.2e-5, i.e. 9.3e-13 m/s^2, against a filtered noise floor ESTIMATED at ~2e-11 (1e-10/rtHz over the 0.035 Hz band)");
+        end
+
         function calibratePrecision(tc)
             % Coloured noise, spikes and a gap through run's QC: the diagonal scale within 5 bootstrap sigma.
             [obs, ref, truth] = NonGravForces.app.syntheticPair('Days', 0.25, 'Seed', 7);

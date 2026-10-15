@@ -85,6 +85,11 @@ classdef tNgfFitCalibration < NgfTestCase
             tc.verifyErrorId(@() NonGravForces.app.fitCalibration(obs, shifted, 'Kernel', [], 'NBoot', 0), "NonGravForces:fitCalibration:inputGrid");
             tc.verifyWarning(@() NonGravForces.app.fitCalibration(obs, ref, 'BiasBasis', "hat", 'BiasKnotSpacing_s', 100, 'NBoot', 0), ...
                 "NonGravForces:fitCalibration:knotsBelowFilterSpan");
+            % N-03b: the prediction at every row, and the span the bases cover
+            tc.verifyEqual(info.prediction.t, obs.t);
+            tc.verifySize(info.prediction.obs, [numel(obs.t) 3]);
+            tc.verifyErrorId(@() NonGravForces.app.fitCalibration(obs, ref, 'Span', [1 2], 'NBoot', 0), "NonGravForces:fitCalibration:inputSpan");
+            tc.verifyErrorId(@() NonGravForces.app.fitCalibration(obs, ref, 'Span', obs.t([end 1]), 'NBoot', 0), "NonGravForces:fitCalibration:inputSpan");
         end
 
         function fitCalibrationTimeVaryingContract(tc)
@@ -210,6 +215,12 @@ classdef tNgfFitCalibration < NgfTestCase
                 "NonGravForces:fitCalibration:numericCollinear");
             c2 = NonGravForces.app.fitCalibration(obs, collinear, 'Scale', "diag", 'NBoot', 0);
             tc.verifyTrue(all(isfinite(c2.scale), 'all'), 'one model column per row is never gated');
+            % A constant bias with S_yy held: axis y has ONE parameter, so lsqvce returns a scalar,
+            % and a scalar indexed by an empty index is 1x0. N-03a broke this case and nothing caught
+            % it until N-03b's cross-validation fitted a constant bias (regression test).
+            cc = NonGravForces.app.fitCalibration(obs, ref, 'BiasBasis', "constant", 'NBoot', 0);
+            tc.verifyEqual(cc.scale(2, 2), 1);
+            tc.verifySize(cc.bias.coef, [3 1]);
             % The other noise paths: lsqvce's estimated law, and a declared ARMA law.
             ce = NonGravForces.app.fitCalibration(obs, ref, 'Noise', "estimate", 'NBoot', 0);
             tc.verifyTrue(all(isfinite(ce.scale), 'all'));
@@ -256,6 +267,17 @@ classdef tNgfFitCalibration < NgfTestCase
             c3 = NonGravForces.app.fitCalibration(obs2, ref, 'NBoot', 0);
             tc.verifyEqual(c3.scale([1 3], [1 3]) .* eye(2), 2 * c1.scale([1 3], [1 3]) .* eye(2));
             tc.verifyEqual(c3.bias.coef([1 3], :), 2 * c1.bias.coef([1 3], :));
+            % The prediction and the residual are two readings of one fit: on a fitted row,
+            % prediction + residual = observation, to the rounding of one subtraction each.
+            [~, info] = NonGravForces.app.fitCalibration(obs, ref, 'NBoot', 0);
+            rows = info.rows;
+            y = obs.obs(rows); back = info.prediction.obs(rows) + info.residual.obs(rows);
+            tc.verifyBoundAndRecord("fitCalibration prediction + residual vs observation", max(abs(back - y)) / (4 * eps * max(abs(y))), 1, "-", ...
+                "two subtractions of the same fitted value; bound 4 eps max|y|");
+            % 'Span' equal to the usable span is the default, bitwise.
+            live = find(any(isfinite(obs.obs), 2));
+            cs = NonGravForces.app.fitCalibration(obs, ref, 'NBoot', 0, 'Span', [obs.t(live(1)), obs.t(live(end))]);
+            tc.verifyEqual(cs.bias.coef, c1.bias.coef);
         end
 
         function fitCalibrationTimeVaryingMetamorphic(tc)
