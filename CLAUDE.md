@@ -33,7 +33,7 @@ No gravity field, no equations of motion, no integrator, no least-squares code.
 Nine layers; a layer calls only lower layers plus the four dependencies.
 
 ```
-L8 app      calibrate, Calibration, syntheticPair, forceBudget, densityInversion, DynamicsSource (gjToolbox entry, native C)
+L8 app      calibrate, fitCalibration, Calibration, syntheticPair, forceBudget, densityInversion, DynamicsSource (gjToolbox entry, native C)
 L7 qc       residuals, hampel, detectImpulses, detectJumps, eventTable, screen  (DEPRECATED forwarders
             to timeSeriesPreparation.qc since N-01; deleted after the next release, O-47)
 L6 sensor   Sensor (abstract), Electrostatic, AtomInterferometer, DragFree
@@ -48,7 +48,7 @@ L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
 L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options, buildMex
 ```
 
-59 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
+60 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
 both directions against the files on disk, and this sentence's number against it
 — which it genuinely did not until 2026-09-16, when the sentence said 53 and the
 catalogue held 55; `auditPackage.py` check 5 now compares both this number and
@@ -56,13 +56,15 @@ this file's version stamp).
 
 ### Dependencies — called by qualified name, never copied, wrapped or aliased
 
-(lsqvce re-enters with N-02/N-06; until then `ciGate` installs it and nothing calls it.)
+(lsqvce re-entered with N-02b on 2026-10-15: `app.fitCalibration` solves through `lsqvce.fit`. N-06's
+records — A.2 rule, B.4 — follow with N-02c.)
 
 | Toolbox | Owns |
 |---|---|
 | `referenceSystem` ≥ 2.1 (2.1.216) | time scales, EOP, ITRS↔GCRS with derivatives, geodesy, quaternions, attitude interpolation, Sun/Moon states |
 | `gracefoReading` ≥ 1.0.1 (1.0.1) | L1B ASCII reading, quality flags, GROOPS instrument export/import. The PATCH minimum is deliberate and is the one exception to VERSIONING.md's MAJOR.MINOR rule (HANDOVER O-12, O-25) |
 | `timeSeriesPreparation` ≥ 1.4 (1.4.0) | The L1B CRN kernel (`crnKernel`), and after N-01 the `qc` stage. **Optional for the toolbox, required by `ciGate`**: `sensor.Electrostatic` filters with `crnKernel("ACC")` by DEFAULT (N-04, owner ruling 2026-10-14) and raises `Electrostatic:depMissing` without it. Its version is the `% Version` line of its `Contents.m` |
+| `lsqvce` ≥ 6.22 (6.22.0) | The one least-squares estimator (CONCEPT Q2). **Optional for the toolbox, required by `ciGate`**: `app.fitCalibration` declares kind A (one system, one day, one arc per contiguous run) per axis and its bootstrap refits kind B. Version from `lsqvce.util.toolboxVersion` |
 | `gjToolbox` (odeSuite) ≥ 0.1 (0.1.0) | Gauss-Jackson integration. **Optional for the toolbox, required by `ciGate`**: `app.DynamicsSource` subclasses `gjToolbox.DynamicsSource` (so it cannot even load without it) and the `buildMex` target `rhs` compiles against `csrc/gj_native.h` (ABI 1). `Model.rhs` is gone — O-4 closed by removal, 2026-09-16 |
 
 ### Key design decisions
@@ -171,8 +173,12 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-09-17, after LP-E)
 
+- **2026-10-15, N-02b (#59, second of three PRs):** `app.fitCalibration`, the estimator: CRN-filtered bias basis,
+  model and K2 columns per axis through `lsqvce.fit` (kind A), VIF gate, block bootstrap, EIV bound; lsqvce in
+  `dependencyReport`; 60 units. ◐; prediction 414.
 - **2026-10-14, N-02a (#59, first of three PRs):** `app.syntheticPair` (the calibration truth through the real
-  CRN chain) and `app.Calibration` (scale + bias curve, apply/invert/save/load); 59 units. ◐; prediction 408.
+  CRN chain) and `app.Calibration` (scale + bias curve, apply/invert/save/load); 59 units. ☑ (run 38685265825:
+  408/408, predicted 408).
 - **2026-10-14, N-01 (#58):** the six `qc` units forward to `timeSeriesPreparation.qc` with a
   `deprecated` warning; O-1/O-18 moved there; O-47 deletes them after the next release. ☑ with N-04 (run 38636885801: 394/394, predicted 394).
 - **2026-10-14, N-04 (#61):** `sensor.Electrostatic` filters with the L1B CRN kernel from
