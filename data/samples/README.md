@@ -38,3 +38,9 @@ is as published. Cut on 2026-10-15 from the daily archives of GFZ ISDC
 
 The 2020-01-01 excerpts here are longer than the 600-record ones above, which stay as they are:
 `tests/tNgfIo.m` reads those. These are the oracle of `tNgfCalibrate/calibrateCampaignRealDays`.
+
+Added for N-11a (2026-10-15), from the same 2020-01-01 archive: `AHK1B_2020-01-01_C_04.txt`, the first
+**30 min (18002 records)** of accelerometer housekeeping, variable columns per record as `prod_flag` sets
+them; and `MAG1B_2020-01-01_C_04.txt`, the first **3600 records (30 min at 0.5 s)**; both with `num_records`
+rewritten and every data line as published. They are the oracle of `tNgfCalibrate/calibrateRegressorsRealDay`.
+On that day the sensor-unit temperatures TSU span only 0.022 C and TICUR reads -273.2 C (a dead channel).

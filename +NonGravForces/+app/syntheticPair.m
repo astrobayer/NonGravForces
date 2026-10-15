@@ -43,6 +43,10 @@ function [obs, ref, truth] = syntheticPair(options)
 %   Seed            1x1   double  -            Seed of every random draw; default 1
 %   Scale           3x3   double  -            True scale matrix S (a 3x1 is its diagonal);
 %                                              default diag([0.96 0.98 0.95])
+%   RegressorFcn    1x1   function_handle -    Measured series z(ts) (n x K, ts in s since Start) whose
+%                                              planted coupling raw += z * RegressorCoupling'; default
+%                                              none (N-11a)
+%   RegressorCoupling 3xK double  m/s^2/unit   The true coefficients; default empty
 %   ScaleDrift      3x3   double  1/day        True linear drift of S, so S(t) = Scale +
 %                                              ScaleDrift * (t - Start) / 1 day; default zeros
 %   Bias            3x1   double  m/s^2        True bias at Start; default [2e-7; -1e-7; 5e-8]
@@ -64,6 +68,8 @@ function [obs, ref, truth] = syntheticPair(options)
 %                                                     an edge or the gap
 %   ref      1x1   timeSeriesPreparation.Arc   m/s^2  The model at 10 Hz, same column names
 %   truth    1x1   struct                      -      .scale (at Start) .scaleDrift_per_day
+%                                                     .regressors (Arc of the series on the 10 Hz
+%                                                     grid, columns reg1..regK, or []) .regressorCoupling
 %                                                     .bias0 .biasDrift_per_day
 %                                                     .quadratic .bias (3xK1 at obs.t) .noise
 %                                                     (.asd .corner .seeds) .spikes (table: t
@@ -107,6 +113,8 @@ arguments
     options.Seed (1,1) double {mustBeInteger, mustBeNonnegative} = 1
     options.Scale double = diag([0.96 0.98 0.95])
     options.ScaleDrift double = zeros(3)
+    options.RegressorFcn = []
+    options.RegressorCoupling double = zeros(3, 0)
     options.Bias double = [2e-7; -1e-7; 5e-8]
     options.BiasDrift double = [1e-9; 0; -5e-10]
     options.Quadratic double = zeros(3, 1)
@@ -164,6 +172,18 @@ if any(D(:) ~= 0)
     % Added only when planted, so a constant-scale pair stays bitwise what it was before N-03a.
     raw = raw + (ts / 86400) .* (model * D.');
 end
+regArc = [];
+if ~isempty(options.RegressorFcn)
+    Zr = options.RegressorFcn(ts);
+    if size(Zr, 1) ~= n || ~isequal(size(options.RegressorCoupling), [3 size(Zr, 2)])
+        NonGravForces.fail(unit, "inputShape", "RegressorFcn must return %d rows and RegressorCoupling be 3x(its columns) -> got %s and %s", n, mat2str(size(Zr)), mat2str(size(options.RegressorCoupling)));
+    end
+    raw = raw + Zr * options.RegressorCoupling.';
+    rn = cellstr("reg" + string(1:size(Zr, 2)));
+    ru = struct(); for k = 1:numel(rn), ru.(rn{k}) = '-'; end
+    regArc = timeSeriesPreparation.Arc(t, Zr, struct("obsNames", {rn}, "variableNames", {rn}, "variableFieldNames", {rn}, ...
+        "variableUnits", ru, "fileName", "REGRESSORS", "product", "REGRESSORS"));
+end
 
 % Spikes and the gap, placed by one stream, clear of the edges and of each other.
 rs = RandStream("twister", "Seed", options.Seed);
@@ -204,13 +224,13 @@ obs = obs.addLayer("crnWindow", filtered.layers.crnWindow);
 ref = timeSeriesPreparation.Arc(t, model, localAux(names, "MODEL_" + day + "_C_04.txt", "MODEL"));
 
 t1 = double(obs.t - options.Start) / 1e9;
-truth = struct('scale', S, 'scaleDrift_per_day', D, 'bias0', b0, 'biasDrift_per_day', drift, 'quadratic', k2, ...
+truth = struct('scale', S, 'scaleDrift_per_day', D, 'regressors', regArc, 'regressorCoupling', options.RegressorCoupling, 'bias0', b0, 'biasDrift_per_day', drift, 'quadratic', k2, ...
     'bias', b0 + drift .* (t1' / 86400), ...
     'noise', struct('asd', asd, 'corner', options.NoiseCorner, 'seeds', seeds), ...
     'spikes', table(spikeT, spikeAxis, repmat(options.SpikeAmplitude, options.Spikes, 1), ...
         'VariableNames', {'t', 'axis', 'amplitude'}), ...
     'gap', gap, 'kernel', kernel, 'orbitPeriod_s', options.OrbitPeriod_s, 'seed', options.Seed, ...
-    'provenance', NonGravForces.provenance("app.syntheticPair", 'Options', options));
+    'provenance', NonGravForces.provenance("app.syntheticPair", 'Options', localHashable(options)));
 end
 
 function aux = localAux(names, fileName, product)
@@ -219,4 +239,10 @@ units = struct();
 for k = 1:numel(names), units.(names{k}) = 'm/s2'; end
 aux = struct("obsNames", {names}, "variableNames", {names}, "variableFieldNames", {names}, ...
     "variableUnits", units, "fileName", fileName, "product", product);
+end
+
+function o = localHashable(options)
+%LOCALHASHABLE The options as provenance hashes them: a function handle by its text.
+o = options;
+if ~isempty(o.RegressorFcn), o.RegressorFcn = string(func2str(o.RegressorFcn)); end
 end
