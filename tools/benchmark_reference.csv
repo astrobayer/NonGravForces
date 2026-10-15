@@ -1,19 +1,19 @@
 # NonGravForces per-epoch costs. WRITTEN BY tools/benchmark.m -- do not hand-edit.
 # The authority for every "<x> ms per epoch" figure quoted in this repository;
 # auditPackage.py check 13 compares each of them against the perEpoch_ms column.
-# generated 2026-10-15 11:39  toolbox 0.14.0  MATLAB 2026a  median of 5
+# generated 2026-10-15 16:07  toolbox 0.15.0  MATLAB 2026a  median of 5
 path,epochs,seconds,perEpoch_ms
-"Model.accel, fast preset",1,0.007654,7.6541
-"Model.accel, standard preset",1,0.019953,19.9525
-"Model.budget, fast preset",1,0.007939,7.9386
-"app.forceBudget, fast, 1 chunk",1,0.009235,9.2353
-"Model.accel, fast preset",10,0.010872,1.0872
-"Model.accel, standard preset",10,0.032982,3.2982
-"Model.budget, fast preset",10,0.012054,1.2054
-"app.forceBudget, fast, 1 chunk",10,0.009304,0.9304
-"Model.accel, fast preset",100,0.011822,0.1182
-"Model.accel, standard preset",100,0.108247,1.0825
-"Model.budget, fast preset",100,0.011728,0.1173
-"app.forceBudget, fast, 1 chunk",100,0.013702,0.1370
-"kernel.singleEpoch (compiled)",1,0.000497,0.4971
-"app.DynamicsSource.accel (native)",1,0.000553,0.5531
+"Model.accel, fast preset",1,0.005155,5.1546
+"Model.accel, standard preset",1,0.017020,17.0197
+"Model.budget, fast preset",1,0.005453,5.4528
+"app.forceBudget, fast, 1 chunk",1,0.006552,6.5521
+"Model.accel, fast preset",10,0.008654,0.8654
+"Model.accel, standard preset",10,0.031100,3.1100
+"Model.budget, fast preset",10,0.008976,0.8976
+"app.forceBudget, fast, 1 chunk",10,0.008933,0.8933
+"Model.accel, fast preset",100,0.009648,0.0965
+"Model.accel, standard preset",100,0.083587,0.8359
+"Model.budget, fast preset",100,0.009830,0.0983
+"app.forceBudget, fast, 1 chunk",100,0.011054,0.1105
+"kernel.singleEpoch (compiled)",1,0.000521,0.5214
+"app.DynamicsSource.accel (native)",1,0.000505,0.5053
