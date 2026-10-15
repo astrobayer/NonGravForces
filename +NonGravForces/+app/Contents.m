@@ -9,3 +9,5 @@
 %   Calibration          - An accelerometer calibration: scale + time-varying bias + uncertainty + gates; apply/invert/save/load
 %   fitCalibration       - The calibration estimator: CRN-filtered bias basis and model columns per axis through lsqvce.fit; VIF gate + bootstrap + EIV bound
 %   compareCalibrations  - Rank candidate calibration models per axis by blocked cross-validation; AIC/BIC as IC_unreliable
+%   perRevolution        - Bias and diagonal scale per orbital revolution; a gated window is NaN with its reason
+%   attributeRevolutions - Per-revolution scales regressed on drivers; verdict density | geometry | sensor | mixed | unresolved
