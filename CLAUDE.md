@@ -475,7 +475,7 @@ repository had written down about them.
   under `tests/fixtures/groops/` and committed; neither CI nor the host needs a
   GROOPS installation.
 
-**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-49 with an owner
+**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-50 with an owner
 and a re-entry condition each. This file deliberately does NOT list them: the copy that
 used to live here had drifted to O-15 of 21 and showed two closed items as open, and no
 check compared the two (R1). Read Part H.
@@ -640,6 +640,9 @@ Every one of these was an actual defect found in a predecessor or a dependency.
 - **Dropping a dependency leaves dead code behind it.** Removing the lsqvce row left its only
   helper unreferenced and `codeIssues` (DEFNU) caught it before any test ran. Grep for the
   helpers a removed row used, not only for the row.
+- **MATLAB's `websave` times out after 5 s by default.** A research server's first byte can take longer;
+  `setupNonGravForces` passes `weboptions('Timeout', 60)` and retries once (O-50). Any new fetch goes through
+  its `localDownload`, never a bare `websave`.
 - **A status code is not a file.** `https://www.ngdc.noaa.gov/IAGA/vmod/igrf14.f` answers `200`
   with an HTML error page. Check the content, not the response code — met twice in two days.
 - **Never claim bitwise across a change in BATCH SIZE.** Vectorised products and norms associate

@@ -228,14 +228,11 @@ for t = 1:size(targets, 1)
     cleanup = onCleanup(@() localQuietDelete(tmp));
     fprintf('setupNonGravForces: fetching %s from %s\n', targets{t, 1}, targets{t, 4});
     ok = false;
-    for attempt = 1:2                     % CelesTrak answered 503 once and 200 on the retry
-        try
-            websave(tmp, char(targets{t, 4}));
-            ok = true;
-            break
-        catch err
-            rec.action = "failed: " + string(err.message);
-        end
+    try
+        localDownload(tmp, targets{t, 4});  % CelesTrak answered 503 once and 200 on the retry
+        ok = true;
+    catch err
+        rec.action = "failed: " + string(err.message);
     end
     if ok && ~localHeadMatches(tmp, targets{t, 5})
         ok = false;
@@ -264,7 +261,7 @@ else
     cleanup = onCleanup(@() localQuietDelete(tmp));
     fprintf('setupNonGravForces: fetching GRACE-FO Level-1B %s (about 147 MB) from %s\n', l1bDay, url);
     try
-        websave(tmp, char(url));
+        localDownload(tmp, url);
         mkdir(unpack);
         tarFile = gunzip(tmp, unpack);
         localTarMembers(tarFile{1}, l1bMembers, unpack);
@@ -331,7 +328,7 @@ for k = 1:numel(files)
     cleanup = onCleanup(@() localQuietDelete(tmp));
     fprintf('setupNonGravForces: fetching %s from %s\n', files(k).name, url);
     try
-        websave(tmp, char(url));
+        localDownload(tmp, url);
         if localGroopsMagic(tmp)
             movefile(tmp, dst, 'f');
             rec.action = "fetched";
@@ -476,7 +473,7 @@ for k = 1:numel(files)
     cleanup = onCleanup(@() localQuietDelete(tmp));
     fprintf('setupNonGravForces: fetching CERES EBAF %s from %s\n', variable, url);
     try
-        websave(tmp, char(url));
+        localDownload(tmp, url);
         got = localSha256(tmp);
         if got == sha256(k)
             movefile(tmp, dst, 'f');
@@ -574,7 +571,7 @@ fprintf('setupNonGravForces: fetching %s from %s\n', name, url);
 tmp = [tempname '.tar.gz'];
 cleanup = onCleanup(@() localQuietDelete(tmp));
 try
-    websave(tmp, char(url));
+    localDownload(tmp, url);
 catch err
     rec.action = "failed"; rec.message = "download failed: " + string(err.message) + " -> fetch " + url + " by hand and unpack it into " + dst;
     fprintf('setupNonGravForces: %s\n', rec.message);
@@ -608,7 +605,7 @@ for f = files
     tmp = [tempname '.part'];
     cleanup = onCleanup(@() localQuietDelete(tmp));
     try
-        websave(tmp, char(f.url));
+        localDownload(tmp, f.url);
     catch err
         rec.action = "failed"; rec.message = f.name + ": " + string(err.message) + " -> fetch " + f.url + " by hand into " + dst;
         fprintf('setupNonGravForces: %s\n', rec.message);
@@ -624,6 +621,32 @@ for f = files
     clear cleanup
 end
 rec.action = "fetched";
+end
+
+function localDownload(tmp, url)
+%LOCALDOWNLOAD Every fetch of this file: websave with a 60 s timeout, retried once after 5 s.
+%   MATLAB's default weboptions timeout is 5 s, and with it CI run 38786016017 lost NRLMSIS 2.1 to
+%   "timed out after 5.000 seconds" from map.nrl.navy.mil; earlier that day NAIF closed a transfer
+%   mid-file (run 38733381139). 60 s is a slow research server's first byte, not a transfer limit:
+%   the timeout bounds the wait for data, and a 147 MB archive keeps data flowing. One retry covers
+%   a dropped connection or a 503; a server that fails twice is down, and the caller REPORTS it with
+%   both causes. Nothing here checks content: every caller verifies what arrives (SHA-256 pins, the
+%   product's first lines, the GROOPS magic) after this returns, retry or not.
+opts = weboptions('Timeout', 60);
+first = "";
+for attempt = 1:2
+    try
+        websave(tmp, char(url), opts);
+        return
+    catch err
+        if attempt == 1
+            first = string(err.message);
+            pause(5);
+        else
+            error('setupNonGravForces:download', '%s', "two attempts failed: (1) " + first + " (2) " + string(err.message));
+        end
+    end
+end
 end
 
 function h = localSha256(file)
