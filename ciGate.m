@@ -23,7 +23,7 @@ function ciGate(options)
 % ERRORS
 %   NonGravForces:ciGate:depMissing   a required dependency setup was not found, MICE is absent,
 %                                     gjToolbox's stepper did not build, or a MEX target did not
-%   NonGravForces:ciGate:dataMissing  a data fetch failed its SHA-256 check
+%   NonGravForces:ciGate:dataMissing  a data fetch failed: its download, or its SHA-256 check
 %   NonGravForces:ciGate:red          the gate is not GREEN; message lists why
 %   NonGravForces:buildMex:*          no compiler / missing sources (O-14)
 %
@@ -143,7 +143,7 @@ end
 % the gate deliberately does not fetch observations.
 failed = info.data.items(startsWith([info.data.items.action], "failed"));
 if ~isempty(failed)
-    error("NonGravForces:ciGate:dataMissing", "%d data fetch(es) failed their content check -> %s", ...
+    error("NonGravForces:ciGate:dataMissing", "%d data fetch(es) failed (download or content check) -> %s", ...
         numel(failed), strjoin(compose("%s: %s", [failed.name]', [failed.action]'), "; "));
 end
 req = info.dependencies([info.dependencies.required]);
