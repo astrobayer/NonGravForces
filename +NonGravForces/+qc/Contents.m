@@ -1,5 +1,5 @@
 % QC  NonGravForces.qc - L7 layer.
-% Version 0.12.0  17-Sep-2026
+% Version 0.13.0  15-Oct-2026
 %
 %   residuals            - DEPRECATED - forwards to timeSeriesPreparation.qc.residuals (N-01): Whitened residuals measured - modelled with preliminary calibration
 %   hampel               - DEPRECATED - forwards to timeSeriesPreparation.qc.hampel (N-01): Robust point-outlier detector (moving median + MAD)

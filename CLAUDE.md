@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-09-17 (LP-E delivered) by Claude Opus 5. Toolbox version 0.12.0.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-10-15 (release 0.13.0) by Claude Opus 5.5. Toolbox version 0.13.0.
 
 ---
 
@@ -172,11 +172,16 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-09-17, after LP-E)
+## 5. Current status (2026-10-15, release 0.13.0)
 
+- **2026-10-15, release 0.13.0 (O-48 closed):** version bumped; `tools/benchmark.m` re-run on Tier A and
+  `tools/benchmark_reference.csv` committed; HANDOVER's title (it said 0.11.0) now compared by audit check 5.
+  Fixed cost per call rose ~2.5 ms in both presets, marginal cost unchanged (O-48 row). **The host's own
+  `referenceSystem` gateway is stale** (built 2026-08-05; setup's rebuild fails while a MATLAB process
+  maps it): restart MATLAB, then `setupReferenceSystem`. Next: O-47 (delete the qc forwarders).
 - **2026-10-15, N-02c (#59 third PR, with N-06 #63):** `app.calibrate(acc, M | refArc)` over
   `timeSeriesPreparation.run` and `app.fitCalibration`; the 0.12.0 matrix interface is gone; A.2 reworded;
-  referenceSystem >= 2.3. ◐; prediction 414. The 0.13.0 bump waits for a Tier-A benchmark run (O-48).
+  referenceSystem >= 2.3. ☑ (merge run 38704980955: 414/414, predicted 414).
 - **2026-10-15, N-02b (#59, second of three PRs):** `app.fitCalibration`, the estimator: CRN-filtered bias basis,
   model and K2 columns per axis through `lsqvce.fit` (kind A), VIF gate, block bootstrap, EIV bound; lsqvce in
   `dependencyReport`; 60 units. ☑ (414/414 on f9587d4, predicted 414, after two fixes the first run found).
@@ -678,9 +683,10 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   differ by 4.0x — which is the real cost of a bad measurement: not the wrong digit, the conclusion
   drawn from it and written somewhere else.
 - **A per-epoch cost is mostly a property of the BATCH, not of the toolbox**, so never quote one
-  without K. `Model.accel` in the standard preset costs 15.9 ms at K=1 and 0.798 ms at K=100,
-  because one call pays ~15.2 ms of setup before any per-epoch work (fast: 4.0 ms and 0.037). A day
-  at 1 Hz through `Model.series` is 1 min 16 s. The authority is `tools/benchmark_reference.csv`,
+  without K. `Model.accel` in the standard preset costs 18.7 ms at K=1 and 0.848 ms at K=100
+  (0.13.0, 2026-10-15), because one call pays ~18 ms of setup before any per-epoch work (fast: 6.5
+  ms and 0.035). A day at 1 Hz through `Model.series` was 1 min 16 s on 2026-09-18 -- a figure
+  `tools/benchmark.m` does NOT produce, so nothing regenerates it. The authority is `tools/benchmark_reference.csv`,
   which `tools/benchmark.m` writes and `auditPackage.py` check 13 compares every quoted figure
   against; `tools/benchmark_last.txt` is the gitignored host log and is NOT the authority, because a
   check whose authority is absent in a fresh clone protects nothing.
