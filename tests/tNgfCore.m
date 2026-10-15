@@ -79,18 +79,20 @@ classdef tNgfCore < NgfTestCase
         end
         function dependencyReportContract(tc)
             d = NonGravForces.dependencyReport('Verbose', false);
-            tc.verifyEqual(numel(d), 4);
+            tc.verifyEqual(numel(d), 5);
             % lsqvce left this table on 2026-09-09 with the owner's ruling that it is overkill for
             % WP-19; app.calibrate carries its own solver now, so nothing in the toolbox calls it.
             % mice joined on 2026-09-16: the suite evaluates sun.source rs.de440, the precise preset's
             % own default, which cannot run without NAIF's toolkit. It is listed because it was
             % reachable only through this machine's saved pathdef, and an undeclared dependency that
             % happens to be present is the failure mode this project met twice that day.
-            tc.verifyEqual([d.name], ["referenceSystem","gracefoReading","gjToolbox","mice"]);
+            % timeSeriesPreparation joined on 2026-10-14 (N-04): the default Electrostatic sensor filters
+            % with its CRN kernel. Optional for the toolbox, required by the gate.
+            tc.verifyEqual([d.name], ["referenceSystem","gracefoReading","gjToolbox","timeSeriesPreparation","mice"]);
             tc.verifyTrue(all(islogical([d.present])));
-            % Only the two inviolable ones are required; the other two are the gate's business, not
-            % the toolbox's, and a user who computes forces without integrating needs neither.
-            tc.verifyEqual([d.required], [true true false false]);
+            % Only the two inviolable ones are required; the other three are the gate's business, not
+            % the toolbox's, and a user who computes forces without integrating or filtering needs none of them.
+            tc.verifyEqual([d.required], [true true false false false]);
             % A BROKEN PROBE REPORTS ABSENCE, and absence is what this unit exists to report, so the
             % two are indistinguishable from the table alone. On 2026-09-16 the mice probe passed a
             % string to a MEX that takes a char, threw, and read as "mice absent" on a machine that
@@ -99,6 +101,7 @@ classdef tNgfCore < NgfTestCase
             reachable = [~isempty(which('referenceSystem.toolboxVersion')), ...
                          ~isempty(which('gracefoReading.version')), ...
                          ~isempty(which('gjToolbox.versionInfo')), ...
+                         ~isempty(which('timeSeriesPreparation.crnKernel')), ...
                          exist('cspice_tkvrsn', 'file') ~= 0];
             tc.verifyEqual([d.present], reachable, ...
                 'a dependency whose entry point resolves must be reported present: a probe that throws is not evidence of absence');
@@ -113,7 +116,7 @@ classdef tNgfCore < NgfTestCase
             tc.verifyFalse(mice.comparable, 'CSPICE_N0067 is not a dotted version and must not be ranked');
             tc.verifyFalse(mice.belowMinimum, 'an unrankable version must never be reported below its minimum');
             numeric = d(~strcmp([d.name], "mice") & [d.present]);
-            tc.verifyTrue(all([numeric.comparable]), 'the three semantic versions must be comparable with their minimums');
+            tc.verifyTrue(all([numeric.comparable]), 'the four semantic versions must be comparable with their minimums');
             tc.verifyFalse(any([d.belowMinimum]), 'the installed dependencies satisfy their declared minimums');
             % Nothing absent may claim a comparison: a probe that failed measured nothing.
             tc.verifyFalse(any([d(~[d.present]).comparable]), 'an absent dependency cannot have been compared');

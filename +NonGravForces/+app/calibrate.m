@@ -114,7 +114,7 @@ function [cal, info] = calibrate(yMeas, aModel, epoch, options)
 %   cal = NonGravForces.app.calibrate(measured, ai.drag + ai.radiation + ai.thermal, ep, ...
 %             'Bias', "hat", 'KnotInterval_s', 3600, 'Scale', "diag");
 %   cal.scale                        % the along-track entry is the published ~1.05 for GRACE-C
-%   s = NonGravForces.sensor.Electrostatic(cal.bias(:,1), cal.scale, [0;0;0]);
+%   s = NonGravForces.sensor.Electrostatic(cal.bias(:,1), cal.scale, [0;0;0], [], 'SampleRate', 1);  % 1 Hz L1B is already CRN-filtered
 %
 % See also NonGravForces.sensor.Electrostatic, NonGravForces.qc.residuals, NonGravForces.qc.eventTable, NonGravForces.app.densityInversion.
 %

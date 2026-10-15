@@ -1,5 +1,5 @@
 classdef tNgfSensor < NgfTestCase
-%TNGFSENSOR Tests of the sensor layer (LP-7, WP-29): sensor.Electrostatic, sensor.AtomInterferometer, sensor.DragFree.
+%TNGFSENSOR Tests of the sensor layer (LP-7, WP-29; N-04 CRN default): sensor.Electrostatic, sensor.AtomInterferometer, sensor.DragFree.
 %
 %   ORACLES, none of them this class's own arithmetic:
 %     - the rotational coupling against a FINITE-DIFFERENCE of the position of the
@@ -85,7 +85,7 @@ classdef tNgfSensor < NgfTestCase
     % ===================================================================== contract
     methods (Test, TestTags = {'contract'})
         function ElectrostaticContract(tc)
-            s = NonGravForces.sensor.Electrostatic([1e-6; -3e-6; 2e-7], diag([1.05 0.96 1.01]), [2e-4; 0; -1e-4]);
+            s = NonGravForces.sensor.Electrostatic([1e-6; -3e-6; 2e-7], diag([1.05 0.96 1.01]), [2e-4; 0; -1e-4], []);
             tc.verifyEqual(s.numParameters(), 15);
             tc.verifyEqual(s.name, "electrostatic");
             tc.verifyTrue(isa(s, 'NonGravForces.sensor.Sensor'));
@@ -101,7 +101,7 @@ classdef tNgfSensor < NgfTestCase
             tc.verifySize(s.noiseModel([1e-3 1e-2 1e-1]), [3 3]);
 
             % A 3x1 scale is its diagonal, as qc.residuals also accepts.
-            s2 = NonGravForces.sensor.Electrostatic(zeros(3, 1), [1.05; 0.96; 1.01]);
+            s2 = NonGravForces.sensor.Electrostatic(zeros(3, 1), [1.05; 0.96; 1.01], zeros(3, 1), []);
             tc.verifyEqual(s2.scale, diag([1.05 0.96 1.01]));
 
             E = @NonGravForces.sensor.Electrostatic;
@@ -144,7 +144,7 @@ classdef tNgfSensor < NgfTestCase
                 acc = (p(:, k+1) - 2 * p(:, k) + p(:, k-1)) / dt^2;
                 want(:, k) = R(:, :, k)' * acc;                  % resolved back in the body frame
             end
-            s = NonGravForces.sensor.Electrostatic(zeros(3, 1), eye(3), dr);
+            s = NonGravForces.sensor.Electrostatic(zeros(3, 1), eye(3), dr, []);
             got = s.observe(struct('a', zeros(3, K), 'omega', w, 'omegaDot', wd)).value;
             idx = 4:K-3;                                         % away from the ends of both differences
             scale = max(max(abs(want(:, idx)), [], 'all'), realmin);
@@ -153,7 +153,7 @@ classdef tNgfSensor < NgfTestCase
                 "a centred second difference truncates at (omega dt)^2/12 ~ 3e-7 here; the bound is the oracle's error, not the model's");
             % The Euler term must be present, or a sign error in it would hide behind the
             % centrifugal term, which is even in omega and survives any sign convention.
-            sEuler = NonGravForces.sensor.Electrostatic(zeros(3, 1), eye(3), dr);
+            sEuler = NonGravForces.sensor.Electrostatic(zeros(3, 1), eye(3), dr, []);
             onlyEuler = sEuler.observe(struct('a', zeros(3, K), 'omega', zeros(3, K), 'omegaDot', wd)).value;
             tc.verifyBoundAndRecord("the Euler term is a real part of the reference case", ...
                 max(vecnorm(want(:, idx))) / max(max(vecnorm(onlyEuler(:, idx))), realmin), 1e6, "-", ...
@@ -173,7 +173,7 @@ classdef tNgfSensor < NgfTestCase
                 sprintf("magnitudes must match whatever the sense; the SIGN ratio measured here is %+.1f, which is the convention fact O-32 asks for", median(rel(isfinite(rel)), 'all')));
 
             % Magnitude on the real arc: the reason this term is modelled at all.
-            sReal = NonGravForces.sensor.Electrostatic(zeros(3, 1), eye(3), dr);
+            sReal = NonGravForces.sensor.Electrostatic(zeros(3, 1), eye(3), dr, []);
             yReal = sReal.observe(struct('a', zeros(3, numel(tc.ep.sec)), 'omega', tc.w, 'omegaDot', tc.wd)).value;
             tc.verifyBoundAndRecord("proof-mass coupling magnitude on the real GRACE-C arc", ...
                 max(vecnorm(yReal(:, 4:end-3))), 1e-7, "m/s^2", ...
@@ -190,7 +190,7 @@ classdef tNgfSensor < NgfTestCase
             b0 = [1e-6; -3e-6; 2e-7]; S0 = [1.05 0.01 -0.02; 0.005 0.96 0.008; -0.01 0.002 1.01];
             dr0 = [2.34e-4; -1.1e-4; 3.0e-4];
             dyn = tc.scene(25);
-            s = NonGravForces.sensor.Electrostatic(b0, S0, dr0);
+            s = NonGravForces.sensor.Electrostatic(b0, S0, dr0, []);
             [J, names] = s.partials(dyn);
             theta = [b0; S0(:); dr0];
             % THE MODEL IS EXACTLY LINEAR in all fifteen parameters, so a central difference is
@@ -223,7 +223,7 @@ classdef tNgfSensor < NgfTestCase
             % K epochs at once and K epochs one at a time are the same numbers, EXCEPT where the
             % filter is on: a filtered sample depends on its neighbours by construction, so a
             % single epoch cannot reproduce it and the mask says so. Both halves are asserted.
-            s = NonGravForces.sensor.Electrostatic([1e-6; -3e-6; 2e-7], diag([1.05 0.96 1.01]), [2e-4; 0; -1e-4]);
+            s = NonGravForces.sensor.Electrostatic([1e-6; -3e-6; 2e-7], diag([1.05 0.96 1.01]), [2e-4; 0; -1e-4], []);
             dyn = tc.scene(20);
             Y = s.observe(dyn).value;
             worst = 0;
@@ -250,7 +250,7 @@ classdef tNgfSensor < NgfTestCase
         function ElectrostaticRobustness(tc)
             dyn = tc.scene(20);
             % A zero offset removes the coupling entirely: the reading is bias plus scaled input.
-            s0 = NonGravForces.sensor.Electrostatic([1e-6; 0; 0], diag([1.05 0.96 1.01]), zeros(3, 1));
+            s0 = NonGravForces.sensor.Electrostatic([1e-6; 0; 0], diag([1.05 0.96 1.01]), zeros(3, 1), []);
             y0 = s0.observe(dyn).value;
             tc.verifyBoundAndRecord("zero proof-mass offset removes the coupling", ...
                 max(abs(y0 - ([1e-6; 0; 0] + diag([1.05 0.96 1.01]) * dyn.a)), [], 'all'), 0, "m/s^2", ...
@@ -259,7 +259,7 @@ classdef tNgfSensor < NgfTestCase
             % and omegaDot is parallel to it too. This is a rigid-body identity, not a tolerance.
             K = 12; ax = [0; 0; 1];
             spin = struct('a', zeros(3, K), 'omega', repmat(2e-3 * ax, 1, K), 'omegaDot', repmat(1e-6 * ax, 1, K));
-            sAx = NonGravForces.sensor.Electrostatic(zeros(3, 1), eye(3), 5e-4 * ax);
+            sAx = NonGravForces.sensor.Electrostatic(zeros(3, 1), eye(3), 5e-4 * ax, []);
             tc.verifyBoundAndRecord("a proof mass on the spin axis feels nothing", ...
                 max(abs(sAx.observe(spin).value), [], 'all'), 0, "m/s^2", ...
                 "omega x dr and omegaDot x dr are both zero when dr is parallel to the axis");
@@ -271,7 +271,7 @@ classdef tNgfSensor < NgfTestCase
             % The gravity gradient enters where the equation puts it and nowhere else.
             T = repmat(diag([2.7e-6, -1.35e-6, -1.35e-6]), 1, 1, 20);       % order GM/r^3 at 490 km
             dg = dyn; dg.gravityGradient = T;
-            sG = NonGravForces.sensor.Electrostatic(zeros(3, 1), eye(3), [2e-4; 0; -1e-4]);
+            sG = NonGravForces.sensor.Electrostatic(zeros(3, 1), eye(3), [2e-4; 0; -1e-4], []);
             yg = sG.observe(dg);
             tc.verifyEqual(yg.info.gradient, "supplied");
             tc.verifyBoundAndRecord("the gradient term equals -T dr exactly", ...
@@ -285,16 +285,16 @@ classdef tNgfSensor < NgfTestCase
         function ElectrostaticMetamorphic(tc)
             dyn = tc.scene(20);
             b = [1e-6; -3e-6; 2e-7]; S = diag([1.05 0.96 1.01]); dr = [2e-4; 0; -1e-4];
-            s = NonGravForces.sensor.Electrostatic(b, S, dr);
+            s = NonGravForces.sensor.Electrostatic(b, S, dr, []);
             y = s.observe(dyn).value;
             % 1. The bias is additive and nothing else: changing it shifts every sample by the same
             %    vector, whatever the dynamics.
-            s2 = NonGravForces.sensor.Electrostatic(b + [1e-5; 2e-5; -3e-5], S, dr);
+            s2 = NonGravForces.sensor.Electrostatic(b + [1e-5; 2e-5; -3e-5], S, dr, []);
             tc.verifyBoundAndRecord("a bias change is a rigid shift of the whole series", ...
                 max(abs((s2.observe(dyn).value - y) - repmat([1e-5; 2e-5; -3e-5], 1, 20)), [], 'all'), ...
                 1e-20, "m/s^2", "bias enters once, outside everything else; eps(1e-5) is 1.7e-21");
             % 2. Doubling the scale doubles the part that is not bias.
-            s3 = NonGravForces.sensor.Electrostatic(b, 2 * S, dr);
+            s3 = NonGravForces.sensor.Electrostatic(b, 2 * S, dr, []);
             % The bound is COMPUTED, not guessed. Subtracting a 3e-6 bias from a 1e-6 reading to
             % recover a 1e-7 signal cancels, and the floor is eps of the larger term over the
             % smaller one. Writing 1e-15 here from an estimate reddened the gate at 1.4e-15
@@ -306,7 +306,7 @@ classdef tNgfSensor < NgfTestCase
             % 3. The coupling is linear in dr: two offsets added give the two readings added,
             %    minus the bias counted twice.
             d1 = [3e-4; 0; 0]; d2 = [0; -2e-4; 1e-4];
-            f = @(d) NonGravForces.sensor.Electrostatic(zeros(3, 1), S, d).observe(dyn).value;
+            f = @(d) NonGravForces.sensor.Electrostatic(zeros(3, 1), S, d, []).observe(dyn).value;
             tc.verifyBoundAndRecord("the coupling is linear in the proof-mass offset", ...
                 max(abs(f(d1 + d2) - (f(d1) + f(d2) - f(zeros(3, 1)))), [], 'all') / max(abs(f(d1)), [], 'all'), ...
                 1e-14, "-", "both cross-product terms are linear operators acting on dr");
@@ -314,7 +314,7 @@ classdef tNgfSensor < NgfTestCase
             %    omega -> -omega flips omega x (omega x dr) not at all and omegaDot x dr not at all
             %    unless omegaDot flips too, so only flipping BOTH must leave the centrifugal part
             %    and reverse the Euler part. Checked by isolating each with a null input.
-            sc = NonGravForces.sensor.Electrostatic(zeros(3, 1), eye(3), dr);
+            sc = NonGravForces.sensor.Electrostatic(zeros(3, 1), eye(3), dr, []);
             zeroA = struct('a', zeros(3, 20), 'omega', dyn.omega, 'omegaDot', zeros(3, 20));
             flipW = zeroA; flipW.omega = -dyn.omega;
             tc.verifyBoundAndRecord("the centrifugal term is even in omega", ...
@@ -334,7 +334,7 @@ classdef tNgfSensor < NgfTestCase
             % The reading is vectorised over epochs and the partials are a loop over them, which is
             % the honest shape for a 15-column Jacobian. What must hold is that neither is
             % quadratic: ten times the epochs must not cost a hundred times as much.
-            s = NonGravForces.sensor.Electrostatic([1e-6; -3e-6; 2e-7], diag([1.05 0.96 1.01]), [2e-4; 0; -1e-4]);
+            s = NonGravForces.sensor.Electrostatic([1e-6; -3e-6; 2e-7], diag([1.05 0.96 1.01]), [2e-4; 0; -1e-4], []);
             small = tc.scene(6); big = tc.scene(60);
             s.observe(big); s.partials(big);                      % warm
             tObsBig = tNgfSensor.timeIt(@() s.observe(big));
@@ -347,6 +347,176 @@ classdef tNgfSensor < NgfTestCase
                 "linear in K would be 10 and a fixed overhead pulls it below; above 10 would mean the work is not vectorised");
             tc.verifyBoundAndRecord("Electrostatic partials, 60 epochs / 6 epochs", rPar, 20, "-", ...
                 "a per-epoch loop of fixed work is linear; the allowance is generous because the loop body is tiny and the timer is not");
+        end
+    end
+
+    % ============================================== the CRN default kernel (N-04)
+    % Owner ruling 2026-10-14: the default kernel is timeSeriesPreparation.crnKernel("ACC") on a 10 Hz
+    % grid, which the sensor checks from dyn.epoch. The taps' authority is that toolbox; what is
+    % asserted here is that this class takes them unchanged, applies them as the ATBD defines the
+    % filter, refuses every input that would make it a different filter, and samples like L1B.
+    methods
+        function dyn = scene10(~, K)
+            %SCENE10 K samples on the 10 Hz grid; a slow, non-trivial signal, no rotation.
+            t = (0:K-1) / 10;
+            a = 1e-7 * [sin(2 * pi * t / 600); 0.3 * cos(2 * pi * t / 900); 0.1 * sin(2 * pi * t / 1300)] - [3e-7; 0; 0];
+            dyn = struct('a', a, 'omega', zeros(3, K), 'omegaDot', zeros(3, K), 'epoch', t);
+        end
+    end
+    methods (Test, TestTags = {'contract'})
+        function ElectrostaticCrnContract(tc)
+            E = @NonGravForces.sensor.Electrostatic;
+            s = E(zeros(3, 1), eye(3), zeros(3, 1));
+            tc.verifyEqual(s.kernelSource, "crn ACC");
+            tc.verifyEqual(s.sampleRate, 10);
+            tc.verifyEqual(numel(s.kernel), 1407, 'ATBD App. B: Nf = fs*Tf = 10 Hz * 140.7 s');
+            dyn = tc.scene10(2000);
+            y = s.observe(dyn);
+            tc.verifySize(y.value, [3 2000]);
+            tc.verifyEqual(y.info.kernel, "crn ACC"); tc.verifyEqual(y.info.outputStride, 1);
+            tc.verifyEqual(nnz(y.mask(1, :)), 2000 - 1406, 'Nh = 703 samples at each end are invalid');
+            % Every input that would make it a different filter is refused, each by name.
+            noEp = rmfield(dyn, 'epoch');
+            tc.verifyErrorId(@() s.observe(noEp), 'NonGravForces:Electrostatic:inputDyn');
+            oneHz = dyn; oneHz.epoch = 0:1999;
+            tc.verifyErrorId(@() s.observe(oneHz), 'NonGravForces:Electrostatic:inputDyn');
+            short = dyn; short.epoch = dyn.epoch(1:10);
+            tc.verifyErrorId(@() s.observe(short), 'NonGravForces:Electrostatic:inputDyn');
+            cellEp = dyn; cellEp.epoch = num2cell(dyn.epoch);
+            tc.verifyErrorId(@() s.observe(cellEp), 'NonGravForces:Electrostatic:inputDyn');
+            tc.verifyErrorId(@() s.partials(oneHz), 'NonGravForces:Electrostatic:inputDyn');
+            tc.verifyErrorId(@() E(zeros(3, 1), eye(3), zeros(3, 1), "crn", 'SampleRate', 1), 'NonGravForces:Electrostatic:inputKernel');
+            tc.verifyErrorId(@() E(zeros(3, 1), eye(3), zeros(3, 1), "boxcar"), 'NonGravForces:Electrostatic:inputKernel');
+            tc.verifyErrorId(@() E(zeros(3, 1), eye(3), zeros(3, 1), struct('taps', 1)), 'NonGravForces:Electrostatic:inputKernel');
+            tc.verifyErrorId(@() E(zeros(3, 1), eye(3), zeros(3, 1), {1}), 'NonGravForces:Electrostatic:inputKernel');
+            tc.verifyErrorId(@() E(zeros(3, 1), eye(3), zeros(3, 1), "crn", 'OutputRate', 3), 'NonGravForces:Electrostatic:inputShape');
+            % ...and the calls that must succeed beside them: unfiltered at 1 Hz without epochs, and a
+            % crnKernel struct with options, whose own rate the sensor then requires.
+            sU = E(zeros(3, 1), eye(3), zeros(3, 1), [], 'SampleRate', 1);
+            u = sU.observe(rmfield(tc.scene(20), 'epoch'));
+            tc.verifyEqual(u.info.kernel, "none");
+            k2 = timeSeriesPreparation.crnKernel("ACC", Tf = 70.7);
+            s2 = E(zeros(3, 1), eye(3), zeros(3, 1), k2);
+            tc.verifyEqual(s2.kernelSource, "crn ACC");
+            tc.verifyEqual(numel(s2.kernel), 707);
+            % THE DEPENDENCY IS REFUSED BY NAME WHEN IT IS ABSENT, provoked rather than assumed: the
+            % package is taken off the path for this call only and the path is put back whatever happens.
+            tspRoot = fileparts(fileparts(which('timeSeriesPreparation.crnKernel')));
+            saved = path; restore = onCleanup(@() path(saved));
+            rmpath(tspRoot);
+            tc.assertEmpty(which('timeSeriesPreparation.crnKernel'), 'the package must be off the path for this check');
+            tc.verifyErrorId(@() E(zeros(3, 1), eye(3), zeros(3, 1)), 'NonGravForces:Electrostatic:depMissing');
+            tc.verifyClass(E(zeros(3, 1), eye(3), zeros(3, 1), []), 'NonGravForces.sensor.Electrostatic');
+            clear restore
+            tc.verifyNotEmpty(which('timeSeriesPreparation.crnKernel'), 'the path must be restored');
+        end
+    end
+    methods (Test, TestTags = {'reference'})
+        function ElectrostaticCrnReference(tc)
+            % 1. The taps ARE timeSeriesPreparation's, unchanged: one authority (R1).
+            s = NonGravForces.sensor.Electrostatic(zeros(3, 1), eye(3), zeros(3, 1));
+            k = timeSeriesPreparation.crnKernel("ACC");
+            tc.verifyEqual(s.kernel, k.F(:)', 'the sensor must apply the toolbox kernel bit for bit');
+            % 2. Against a PUBLISHED number this class never computes: the ATBD kernel as printed has
+            %    DC gain 1 + 1.115e-7 (timeSeriesPreparation CONCEPT 8, crnKernel help). A constant
+            %    reaches the interior multiplied by exactly that. Printed to four digits: +-5e-11. An
+            %    independent Python evaluation of ATBD App. B (2026-10-14) gives 1 + 1.11516e-7.
+            K = 1600; c = 2.5e-7;
+            dyn = struct('a', repmat([c; 0; 0], 1, K), 'omega', zeros(3, K), 'omegaDot', zeros(3, K), 'epoch', (0:K-1) / 10);
+            y = s.observe(dyn);
+            gain = y.value(1, y.mask(1, :)) / c;
+            tc.verifyBoundAndRecord("CRN DC gain through the sensor vs the printed 1 + 1.115e-7", ...
+                max(abs(gain - (1 + 1.115e-7))), 5e-11, "-", "half a unit in the fourth printed digit of 1.115e-7");
+            % 3. Unit gain at f0 = 0.37 mHz, where the kernel is normalised. The kernel is symmetric,
+            %    so it has zero phase, and a sinusoid at f0 must come out of the interior unchanged.
+            %    The bound is COMPUTED: one Nf-term dot product, ten times its rounding.
+            t = (0:K-1) / 10; x = 1e-7 * cos(2 * pi * k.f0 * t + 0.3);
+            dyn.a = [x; zeros(2, K)];
+            yf = s.observe(dyn);
+            bound = 10 * numel(k.F) * eps * sum(abs(k.F));
+            tc.verifyBoundAndRecord("CRN at f0: interior output vs input, relative to the amplitude", ...
+                max(abs(yf.value(1, yf.mask(1, :)) - x(yf.mask(1, :)))) / 1e-7, bound, "-", ...
+                "normalised to unit response at f0 and zero phase by symmetry; the bound is 10x an Nf-term dot product's rounding");
+        end
+    end
+    methods (Test, TestTags = {'precision'})
+        function ElectrostaticCrnPrecision(tc)
+            % The partials go through the same kernel as the reading. The bias enters every sample
+            % as 1, so its filtered column is the kernel's sum in the interior; a scale column is
+            % the filtered input it multiplies. Bounds computed from the dot product's rounding.
+            b = [1e-6; -3e-6; 2e-7]; S = diag([1.05 0.96 1.01]);
+            s = NonGravForces.sensor.Electrostatic(b, S, zeros(3, 1));
+            dyn = tc.scene10(1600);
+            [J, names] = s.partials(dyn);
+            y = s.observe(dyn);
+            in = y.mask(1, :);
+            nf = numel(s.kernel);
+            bound = 10 * nf * eps * sum(abs(s.kernel));
+            tc.verifyBoundAndRecord("filtered bias column vs the kernel's sum", ...
+                max(abs(J(find(in) * 3 - 2, 1) - sum(s.kernel))), bound, "-", "the bias column is the step response, flat in the interior");
+            ref = conv(dyn.a(1, :), s.kernel, 'same');
+            col = J(1:3:end, strcmp(names, "scale_11"))';
+            tc.verifyBoundAndRecord("filtered scale column vs the filtered input", ...
+                max(abs(col(in) - ref(in))) / max(abs(ref(in))), bound, "-", "the same convolution, so equal to rounding");
+            % The reading is linear in theta: J*theta reproduces it in the interior.
+            theta = [b; S(:); zeros(3, 1)];
+            yJ = reshape(J * theta, 3, []);
+            tc.verifyBoundAndRecord("J*theta vs the filtered reading", ...
+                max(abs(yJ(:, in) - y.value(:, in)), [], 'all') / max(abs(y.value(:, in)), [], 'all'), 1e3 * bound, "-", ...
+                "fifteen columns summed; cancellation against a 3e-6 bias is the floor, hence the larger factor");
+        end
+    end
+    methods (Test, TestTags = {'robustness'})
+        function ElectrostaticCrnRobustness(tc)
+            s = NonGravForces.sensor.Electrostatic(zeros(3, 1), eye(3), zeros(3, 1));
+            % An arc shorter than the kernel leaves nothing valid, and says so rather than guessing.
+            y = s.observe(tc.scene10(1000));
+            tc.verifyFalse(any(y.mask(:)), 'a 1407-tap kernel on 1000 samples leaves nothing valid');
+            % One sample is a legal arc: there is no grid to check, and nothing is valid either.
+            one = tc.scene10(1);
+            tc.verifySize(s.observe(one).value, [3 1]);
+            tc.verifyFalse(any(s.observe(one).mask));
+            % The three accepted epoch forms are the same grid and give the same numbers.
+            dyn = tc.scene10(1500);
+            yNum = s.observe(dyn).value;
+            d2 = dyn; d2.epoch = datetime(2020, 1, 1) + seconds(dyn.epoch);
+            d3 = dyn; d3.epoch = struct('day', repmat(58849, 1, 1500), 'sec', 3600 + dyn.epoch);
+            tc.verifyEqual(s.observe(d2).value, yNum);
+            tc.verifyEqual(s.observe(d3).value, yNum);
+            % A grid off by one part in 1e8 per step is still the grid; one 0.2 s step is not.
+            d5 = dyn; d5.epoch = dyn.epoch * (1 + 1e-8);
+            tc.verifyEqual(s.observe(d5).value, yNum);
+            d4 = dyn; d4.epoch(800:end) = d4.epoch(800:end) + 0.1;
+            tc.verifyErrorId(@() s.observe(d4), 'NonGravForces:Electrostatic:inputDyn');
+        end
+    end
+    methods (Test, TestTags = {'metamorphic'})
+        function ElectrostaticCrnMetamorphic(tc)
+            % SAMPLED, NEVER AVERAGED: 'OutputRate' 1 is the full-rate result at every tenth sample,
+            % bit for bit, for the reading, its mask, its epochs and its partials (L1B forms ACT1B so).
+            b = [1e-6; -3e-6; 2e-7]; S = diag([1.05 0.96 1.01]); dr = [2e-4; 0; -1e-4];
+            full = NonGravForces.sensor.Electrostatic(b, S, dr);
+            one = NonGravForces.sensor.Electrostatic(b, S, dr, "crn", 'OutputRate', 1);
+            dyn = tc.scene10(1601);
+            yF = full.observe(dyn); y1 = one.observe(dyn);
+            idx = 1:10:1601;
+            tc.verifyEqual(y1.value, yF.value(:, idx));
+            tc.verifyEqual(y1.mask, yF.mask(:, idx));
+            tc.verifyEqual(y1.epoch, dyn.epoch(idx));
+            tc.verifyEqual(y1.info.outputStride, 10);
+            JF = full.partials(dyn); J1 = one.partials(dyn);
+            rows = reshape((idx - 1) * 3 + (1:3)', [], 1);
+            tc.verifyEqual(J1, JF(rows, :));
+            % Linearity of the filter: the reading of a sum is the sum of the readings, bias once.
+            d1 = dyn; d2 = dyn; d2.a = 2 * dyn.a + 1e-8;
+            ds = dyn; ds.a = d1.a + d2.a;
+            z = NonGravForces.sensor.Electrostatic(zeros(3, 1), S, zeros(3, 1));
+            ys = z.observe(ds); ya = z.observe(d1); yb = z.observe(d2);
+            m = ys.mask;
+            bound = 30 * numel(z.kernel) * eps * sum(abs(z.kernel));
+            tc.verifyBoundAndRecord("the CRN-filtered reading is linear in the acceleration", ...
+                max(abs(ys.value(m) - ya.value(m) - yb.value(m))) / max(abs(ys.value(m))), bound, "-", ...
+                "one convolution, linear by construction; the bound is computed: three Nf-term dot products, ten times their rounding each");
         end
     end
 
@@ -364,7 +534,7 @@ classdef tNgfSensor < NgfTestCase
         end
         function s = build(theta)
             %BUILD A sensor from the 15-parameter vector, in the order partials documents.
-            s = NonGravForces.sensor.Electrostatic(theta(1:3), reshape(theta(4:12), 3, 3), theta(13:15));
+            s = NonGravForces.sensor.Electrostatic(theta(1:3), reshape(theta(4:12), 3, 3), theta(13:15), []);
         end
     end
 

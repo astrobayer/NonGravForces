@@ -1,5 +1,5 @@
 function deps = dependencyReport(options)
-%DEPENDENCYREPORT Presence and version of the four ecosystem toolboxes.
+%DEPENDENCYREPORT Presence and version of the five ecosystem toolboxes.
 %
 %   deps = NonGravForces.dependencyReport
 %   deps = NonGravForces.dependencyReport('Verbose', false)
@@ -24,7 +24,7 @@ function deps = dependencyReport(options)
 % OUTPUT ARGUMENTS
 %   Name     Size   Type   Units  Description
 %   ----     ----   ----   -----  -----------
-%   deps     1x4    struct -      .name .required (logical) .present (logical)
+%   deps     1x5    struct -      .name .required (logical) .present (logical)
 %                                 .version (string, "" if absent) .minimum
 %                                 (string) .comparable (logical: the two are dotted
 %                                 numbers and can be ordered) .belowMinimum (logical:
@@ -75,6 +75,12 @@ spec = { ...
 % cspice_tkvrsn is a MEX and takes a CHAR: called with a string it throws, which this probe would
 % have reported as "mice absent" on a machine that has it. Measured 2026-09-16, when the table said
 % false while ciGate had just printed CSPICE_N0067 two lines above.
+% timeSeriesPreparation joined on 2026-10-14 with N-04: sensor.Electrostatic filters with its CRN
+% kernel by DEFAULT (owner ruling), so the default sensor cannot be built without it. It stays
+% OPTIONAL for the toolbox -- forces, torques and partials never call it -- and the sensor raises
+% Electrostatic:depMissing at the point of use. It has no version function: the version is the one
+% its own setup reads, the "% Version" line of its Contents.m, read here the same way (R1).
+  "timeSeriesPreparation", false, "1.4", "setupTimeSeriesPreparation", "CRN kernel (sensor.Electrostatic, N-04); qc and the event table (N-01)", @() localTspVersion(); ...
   "mice",            false, "N0067", "(on the MATLAB path)", "SPICE kernels for sun.source rs.de440", @() string(cspice_tkvrsn('TOOLKIT'))};
 n = size(spec,1);
 deps = repmat(struct('name',"",'required',false,'present',false,'version',"",'minimum',"", ...
@@ -149,3 +155,17 @@ end
 % Contents.m and lsqvce was its only caller, so dropping that dependency left it dead. Code
 % Analyzer caught it on the first run (DEFNU) and it is removed rather than kept "in case":
 % every other dependency publishes a version function, which is the better probe anyway.
+
+function v = localTspVersion()
+%LOCALTSPVERSION The "% Version X.Y.Z" line of timeSeriesPreparation's Contents.m, which its setup reads.
+%   Throws when the package does not resolve, which the caller reports as absence.
+f = which('timeSeriesPreparation.crnKernel');
+if isempty(f)
+    error("NonGravForces:dependencyReport:absent", "timeSeriesPreparation does not resolve");
+end
+tok = regexp(fileread(fullfile(fileparts(f), 'Contents.m')), '% Version (\d+\.\d+\.\d+)', 'tokens', 'once');
+if isempty(tok)
+    error("NonGravForces:dependencyReport:absent", "timeSeriesPreparation's Contents.m carries no version line");
+end
+v = string(tok{1});
+end

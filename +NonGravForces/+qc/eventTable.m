@@ -1,87 +1,55 @@
 function T = eventTable(varargin)
-%EVENTTABLE Canonical event table (schema authority) for quality-control results.
+%EVENTTABLE [DEPRECATED, forwards to timeSeriesPreparation.qc.eventTable] Canonical event table (schema authority) for quality-control results.
 %
 %   T = NonGravForces.qc.eventTable()                       % empty, schema only
 %   T = NonGravForces.qc.eventTable(tStart, tEnd, class, axis, amplitude, sigma, source, confidence)
 %
-%   Every detector returns THIS table so that the mask builder and the
-%   calibration bridge read one schema. Classes and their downstream use:
-%     "outlier"  isolated sample(s)          -> masked, optionally interpolated
-%     "impulse"  CRN-shaped pulse            -> masked; assigned to THR1B/twang
-%     "jump"     step in level or slope      -> Heaviside column in calibration
+%   DEPRECATED (N-01, 2026-10-14). The qc stage moved to timeSeriesPreparation
+%   (CONCEPT 10.1 N-01, X-05), which ported this schema UNCHANGED. This unit now
+%   only forwards: it warns NonGravForces:eventTable:deprecated and calls
+%   timeSeriesPreparation.qc.eventTable with the same arguments. It is deleted
+%   in the release after the one that carries the forwarding. io.readTHR1B
+%   builds its table with the target directly. The target's errors propagate
+%   unwrapped (timeSeriesPreparation:eventTable:*).
 %
-% INPUT ARGUMENTS (all 1xN or Nx1, same N)
-%   Name        Type      Units  Description
-%   ----        ----      -----  -----------
-%   tStart      datetime  -      UTC, first affected sample
-%   tEnd        datetime  -      UTC, last affected sample (== tStart for a point)
-%   class       string    -      "outlier" | "impulse" | "jump"
-%   axis        string    -      "x" | "y" | "z" | "all"
-%   amplitude   double    m/s^2  estimated size (step size for jumps); NaN means NOT ESTIMATED,
-%                                which is what io.readTHR1B writes for a thruster firing
-%   sigma       double    m/s^2  1-sigma uncertainty of amplitude, >= 0; NaN with the amplitude
-%   source      string    -      "THR1B" | "MAS1B" | "eclipse" | "heater" |
-%                                "magnetorquer" | "unassigned"
-%   confidence  double    -      in [0,1], finite (a probability, never NaN)
+% INPUT ARGUMENTS
+%   Name      Size  Type  Units Description
+%   ----      ----  ----  ----- -----------
+%   varargin  1x0 or 1x8 cell - the eight columns of timeSeriesPreparation.qc.eventTable, or none
+%
+% NAME-VALUE ARGUMENTS
+%   None.
 %
 % OUTPUT ARGUMENTS
-%   T           table   N rows, columns as above in that order.
+%   T         Nx8   table  -    the target's table, unchanged
+%
+% ACCURACY
+%   None of its own: the target's table, unchanged.
 %
 % ERRORS
-%   NonGravForces:eventTable:inputArity   not 0 or 8 arguments
-%   NonGravForces:eventTable:inputClass   class / axis / source not in set
-%   NonGravForces:eventTable:inputLength  columns of different length
-%   NonGravForces:eventTable:numericNaN   Inf amplitude or sigma, or non-finite confidence
+%   NonGravForces:eventTable:depMissing   timeSeriesPreparation is not on the path
+%   timeSeriesPreparation:eventTable:*    the target's errors, unwrapped
+%
+% WARNINGS
+%   NonGravForces:eventTable:deprecated   on every call; call timeSeriesPreparation.qc.eventTable
+%
+% REFERENCES
+%   timeSeriesPreparation docs/CONCEPT.md section 10.1 rows N-01, X-05.
 %
 % EXAMPLE
-%   T = NonGravForces.qc.eventTable(); T.Properties.VariableNames
+%   % Call the target directly; this name disappears in the release after next.
+%   T = timeSeriesPreparation.qc.eventTable();
 %
-% See also NonGravForces.qc.screen, NonGravForces.qc.hampel.
+% See also timeSeriesPreparation.qc.eventTable.
 %
-% KEYWORDS event table schema quality control
-% Created 2026-08-27 by Claude Fable 5 (Anthropic).
-if nargin == 0
-    T = table(datetime.empty(0,1), datetime.empty(0,1), string.empty(0,1), string.empty(0,1), ...
-        zeros(0,1), zeros(0,1), string.empty(0,1), zeros(0,1), ...
-        'VariableNames', {'tStart','tEnd','class','axis','amplitude','sigma','source','confidence'});
-    T.tStart.TimeZone = 'UTC'; T.tEnd.TimeZone = 'UTC';
-    return
+% KEYWORDS deprecated forwarder event table schema
+% Created 2026-09-07 by Claude Fable 5 (Anthropic); reduced to a forwarder (N-01) 2026-10-14 by Claude (Anthropic).
+arguments (Repeating)
+    varargin
 end
-if nargin ~= 8
-    NonGravForces.fail("eventTable", "inputArity", "expects 0 or 8 arguments -> got %d", nargin);
+if isempty(which('timeSeriesPreparation.qc.eventTable'))
+    NonGravForces.fail("eventTable", "depMissing", "qc.eventTable forwards to timeSeriesPreparation.qc.eventTable and timeSeriesPreparation is not on the path -> run setupTimeSeriesPreparation");
 end
-[tS, tE, cl, ax, am, sg, so, cf] = varargin{:};
-cl = string(cl(:)); ax = string(ax(:)); so = string(so(:));
-tS = tS(:); tE = tE(:); am = double(am(:)); sg = double(sg(:)); cf = double(cf(:));
-n = numel(tS);
-if any([numel(tE) numel(cl) numel(ax) numel(am) numel(sg) numel(so) numel(cf)] ~= n)
-    NonGravForces.fail("eventTable", "inputLength", "all eight columns must have %d elements -> check the inputs", n);
-end
-if ~all(ismember(cl, ["outlier","impulse","jump"]))
-    NonGravForces.fail("eventTable", "inputClass", "class must be outlier|impulse|jump -> got '%s'", cl(find(~ismember(cl,["outlier","impulse","jump"]),1)));
-end
-if ~all(ismember(ax, ["x","y","z","all"]))
-    NonGravForces.fail("eventTable", "inputClass", "axis must be x|y|z|all -> check the axis column");
-end
-if ~all(ismember(so, ["THR1B","MAS1B","eclipse","heater","magnetorquer","unassigned"]))
-    NonGravForces.fail("eventTable", "inputClass", "source not in the admissible set -> use unassigned if unknown");
-end
-% amplitude and sigma may be NaN, meaning NOT ESTIMATED: io.readTHR1B writes exactly that for a
-% thruster firing, whose epoch is certain while its size can only come from the accelerometer.
-% Inf is never meaningful, and confidence is a probability, so a NaN there is the real defect:
-% until 2026-09-07 it passed the [0,1] test below, because every comparison with NaN is false.
-if any(isinf(am)) || any(isinf(sg))
-    NonGravForces.fail("eventTable", "numericNaN", "amplitude and sigma must be finite or NaN (not estimated) -> got an Inf");
-end
-if any(~isfinite(cf))
-    NonGravForces.fail("eventTable", "numericNaN", "confidence must be finite -> a NaN confidence passed the [0,1] test silently until 2026-09-07, since every comparison with NaN is false");
-end
-if any(sg < 0)
-    NonGravForces.fail("eventTable", "inputClass", "sigma must be >= 0 -> got %g", min(sg));
-end
-if any(cf < 0 | cf > 1)
-    NonGravForces.fail("eventTable", "inputClass", "confidence must be in [0,1] -> clip or rescale");
-end
-T = table(tS, tE, cl, ax, am, sg, so, cf, ...
-    'VariableNames', {'tStart','tEnd','class','axis','amplitude','sigma','source','confidence'});
+warning("NonGravForces:eventTable:deprecated", "NonGravForces.qc.eventTable is deprecated and forwards to timeSeriesPreparation.qc.eventTable -> call that directly; this name is removed in the release after the one that carries the forwarding");
+T = timeSeriesPreparation.qc.eventTable(varargin{:});
 end

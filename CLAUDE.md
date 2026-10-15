@@ -34,7 +34,8 @@ Nine layers; a layer calls only lower layers plus the four dependencies.
 
 ```
 L8 app      calibrate, forceBudget, densityInversion, DynamicsSource (gjToolbox entry, native C)
-L7 qc       residuals, hampel, detectImpulses, detectJumps, eventTable, screen
+L7 qc       residuals, hampel, detectImpulses, detectJumps, eventTable, screen  (DEPRECATED forwarders
+            to timeSeriesPreparation.qc since N-01; deleted after the next release, O-47)
 L6 sensor   Sensor (abstract), Electrostatic, AtomInterferometer, DragFree
 L5 Model    accel | torque | series | partials | budget   <- single point of access
 L4 kernel   gsiCoefficients, accommodation, dragPanelForce, radiationPanelForce,
@@ -55,10 +56,13 @@ this file's version stamp).
 
 ### Dependencies — called by qualified name, never copied, wrapped or aliased
 
+(lsqvce re-enters with N-02/N-06; until then `ciGate` installs it and nothing calls it.)
+
 | Toolbox | Owns |
 |---|---|
 | `referenceSystem` ≥ 2.1 (2.1.216) | time scales, EOP, ITRS↔GCRS with derivatives, geodesy, quaternions, attitude interpolation, Sun/Moon states |
 | `gracefoReading` ≥ 1.0.1 (1.0.1) | L1B ASCII reading, quality flags, GROOPS instrument export/import. The PATCH minimum is deliberate and is the one exception to VERSIONING.md's MAJOR.MINOR rule (HANDOVER O-12, O-25) |
+| `timeSeriesPreparation` ≥ 1.4 (1.4.0) | The L1B CRN kernel (`crnKernel`), and after N-01 the `qc` stage. **Optional for the toolbox, required by `ciGate`**: `sensor.Electrostatic` filters with `crnKernel("ACC")` by DEFAULT (N-04, owner ruling 2026-10-14) and raises `Electrostatic:depMissing` without it. Its version is the `% Version` line of its `Contents.m` |
 | `gjToolbox` (odeSuite) ≥ 0.1 (0.1.0) | Gauss-Jackson integration. **Optional for the toolbox, required by `ciGate`**: `app.DynamicsSource` subclasses `gjToolbox.DynamicsSource` (so it cannot even load without it) and the `buildMex` target `rhs` compiles against `csrc/gj_native.h` (ABI 1). `Model.rhs` is gone — O-4 closed by removal, 2026-09-16 |
 
 ### Key design decisions
@@ -167,6 +171,12 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-09-17, after LP-E)
 
+- **2026-10-14, N-01 (#58):** the six `qc` units forward to `timeSeriesPreparation.qc` with a
+  `deprecated` warning; O-1/O-18 moved there; O-47 deletes them after the next release. ◐.
+- **2026-10-14, N-04 (#61):** `sensor.Electrostatic` filters with the L1B CRN kernel from
+  `timeSeriesPreparation.crnKernel("ACC")` by default, on 10 Hz dynamics whose grid it checks from
+  `dyn.epoch`; `'OutputRate', 1` samples like ACT1B; `[]` stays unfiltered. timeSeriesPreparation and
+  lsqvce are gate siblings since #76. ◐ until the CI gate is read.
 - **2026-09-22, N-07 (#64):** `geom.grace` (GRACE-A/B, from R-5 = Bettadpur 2012 Sec. I.5.3) delivered
   on Tier B and ☑ on the CI runner (runs 35771831961 and 35773012179: 388 passed, 0 failed, 0 incomplete, predicted 388; the second's log is `tests/last_run.txt`), 57 units. O-46 opened (classic MAS1B is spacecraft
   mass; R-5 prints no inertia). The other eleven N-issues wait on timeSeriesPreparation, lsqvce#110 and N-02.
@@ -417,7 +427,7 @@ repository had written down about them.
   under `tests/fixtures/groops/` and committed; neither CI nor the host needs a
   GROOPS installation.
 
-**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-46 with an owner
+**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-47 with an owner
 and a re-entry condition each. This file deliberately does NOT list them: the copy that
 used to live here had drifted to O-15 of 21 and showed two closed items as open, and no
 check compared the two (R1). Read Part H.
@@ -585,6 +595,11 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   in a row have lost a run to one. Where cancellation governs, COMPUTE the bound in the test from
   `eps` of the terms involved instead of writing a literal. Where the model is exactly linear, a
   LARGER finite-difference step is strictly better, the opposite of the usual rule.
+- **The CRN kernel is defined on the 10 Hz grid.** 1407 taps at 0.1 s; convolving a 1 Hz arc with them is a
+  filter of ten times the span that nothing would report. `sensor.Electrostatic` therefore requires
+  `dyn.epoch` with its default kernel and refuses any other spacing; for unfiltered 1 Hz work pass `[]`.
+  Its DC gain is 1 + 1.115e-7 (independent Python evaluation of ATBD App. B: 1 + 1.11516e-7), and it
+  is normalised at f0, NOT at DC -- never renormalise it.
 - **`skew(omega) = R' Rdot` is the sensor's convention**, and
   `referenceSystem.angularVelocityFromRotationRate(R, Rdot, 'Resolution', "reference")` returns its
   NEGATIVE (ratio -1.0, measured). Reading the skew entries off `R' Rdot` without projecting the

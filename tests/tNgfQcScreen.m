@@ -53,11 +53,11 @@ classdef tNgfQcScreen < NgfTestCase
             rd = NonGravForces.qc.residuals(y, m, 'Whitening', "difference"); tc.verifyTrue(all(isnan(rd(1, :)))); tc.verifyEqual(rd(2:end, :), diff(y - m));
             rh = NonGravForces.qc.residuals(y, m, 'Whitening', "highpass", 'Window', 11); tc.verifySize(rh, [100 3]);
             f = @(varargin) NonGravForces.qc.residuals(varargin{:});
-            tc.verifyErrorId(@() f(y, m(1:50, :)), 'NonGravForces:residuals:inputShape');
-            tc.verifyErrorId(@() f(y, m, 'Bias', [1 2]), 'NonGravForces:residuals:inputShape');
-            tc.verifyErrorId(@() f(y, m, 'Scale', eye(2)), 'NonGravForces:residuals:inputShape');
-            tc.verifyErrorId(@() f(y, m, 'Whitening', "highpass"), 'NonGravForces:residuals:inputWindow');
-            tc.verifyErrorId(@() f(y, m, 'Whitening', "highpass", 'Window', 10), 'NonGravForces:residuals:inputWindow');
+            tc.verifyErrorId(@() f(y, m(1:50, :)), 'timeSeriesPreparation:residuals:inputShape');
+            tc.verifyErrorId(@() f(y, m, 'Bias', [1 2]), 'timeSeriesPreparation:residuals:inputShape');
+            tc.verifyErrorId(@() f(y, m, 'Scale', eye(2)), 'timeSeriesPreparation:residuals:inputShape');
+            tc.verifyErrorId(@() f(y, m, 'Whitening', "highpass"), 'timeSeriesPreparation:residuals:inputWindow');
+            tc.verifyErrorId(@() f(y, m, 'Whitening', "highpass", 'Window', 10), 'timeSeriesPreparation:residuals:inputWindow');
             tc.verifyError(@() f(y, m, 'Whitening', "wavelet"), 'MATLAB:validators:mustBeMember');
         end
         function detectImpulsesContract(tc)
@@ -67,14 +67,14 @@ classdef tNgfQcScreen < NgfTestCase
             tc.verifyTrue(all(ev.class == "impulse")); tc.verifyTrue(all(ev.axis == "all")); tc.verifySize(info.score, [3000 1]); tc.verifyEqual(info.templateLength, 30);
             ev3 = NonGravForces.qc.detectImpulses([x x x], 'Epoch', t, 'Response', tc.crn); tc.verifyTrue(all(ismember(ev3.axis, ["x" "y" "z"])));
             d = @(varargin) NonGravForces.qc.detectImpulses(varargin{:});
-            tc.verifyErrorId(@() d(x, 'Response', tc.crn), 'NonGravForces:detectImpulses:inputEpoch');
-            tNo = t; tNo.TimeZone = ''; tc.verifyErrorId(@() d(x, 'Epoch', tNo, 'Response', tc.crn), 'NonGravForces:detectImpulses:inputEpoch');
-            tc.verifyErrorId(@() d(x, 'Epoch', t(1:10), 'Response', tc.crn), 'NonGravForces:detectImpulses:inputShape');
-            tc.verifyErrorId(@() d([x x], 'Epoch', t, 'Response', tc.crn), 'NonGravForces:detectImpulses:inputShape');
-            tc.verifyErrorId(@() d(x, 'Epoch', t), 'NonGravForces:detectImpulses:inputResponse');
-            tc.verifyErrorId(@() d(x, 'Epoch', t, 'Response', ones(5, 1)), 'NonGravForces:detectImpulses:inputResponse');
-            tc.verifyErrorId(@() d(x, 'Epoch', t, 'Response', tc.crn, 'Priors', table(1)), 'NonGravForces:detectImpulses:inputPriors');
-            tc.verifyErrorId(@() d(x, 'Epoch', t, 'Response', tc.crn, 'Threshold', 0), 'NonGravForces:detectImpulses:inputRange');
+            tc.verifyErrorId(@() d(x, 'Response', tc.crn), 'timeSeriesPreparation:detectImpulses:inputEpoch');
+            tNo = t; tNo.TimeZone = ''; tc.verifyErrorId(@() d(x, 'Epoch', tNo, 'Response', tc.crn), 'timeSeriesPreparation:detectImpulses:inputEpoch');
+            tc.verifyErrorId(@() d(x, 'Epoch', t(1:10), 'Response', tc.crn), 'timeSeriesPreparation:detectImpulses:inputShape');
+            tc.verifyErrorId(@() d([x x], 'Epoch', t, 'Response', tc.crn), 'timeSeriesPreparation:detectImpulses:inputShape');
+            tc.verifyErrorId(@() d(x, 'Epoch', t), 'timeSeriesPreparation:detectImpulses:inputResponse');
+            tc.verifyErrorId(@() d(x, 'Epoch', t, 'Response', ones(5, 1)), 'timeSeriesPreparation:detectImpulses:inputResponse');
+            tc.verifyErrorId(@() d(x, 'Epoch', t, 'Response', tc.crn, 'Priors', table(1)), 'timeSeriesPreparation:detectImpulses:inputPriors');
+            tc.verifyErrorId(@() d(x, 'Epoch', t, 'Response', tc.crn, 'Threshold', 0), 'timeSeriesPreparation:detectImpulses:inputRange');
         end
         function detectJumpsContract(tc)
             [x, t] = tc.synthetic(1);
@@ -83,14 +83,14 @@ classdef tNgfQcScreen < NgfTestCase
             tc.verifyTrue(all(ev.class == "jump")); tc.verifyEqual(ev.tStart, ev.tEnd); tc.verifySize(info.changePoints, [1 1]); tc.verifyEqual(info.model, "level");
             evS = NonGravForces.qc.detectJumps(x, 'Epoch', t, 'Model', "slope", 'MinSegment', 20); tc.verifyTrue(istable(evS));
             j = @(varargin) NonGravForces.qc.detectJumps(varargin{:});
-            tc.verifyErrorId(@() j(x), 'NonGravForces:detectJumps:inputEpoch');
-            tc.verifyErrorId(@() j(x, 'Epoch', t(1:5)), 'NonGravForces:detectJumps:inputShape');
-            tc.verifyErrorId(@() j([x x], 'Epoch', t), 'NonGravForces:detectJumps:inputShape');
-            tc.verifyErrorId(@() j(x, 'Epoch', t, 'Penalty', -1), 'NonGravForces:detectJumps:inputRange');
-            tc.verifyErrorId(@() j(x, 'Epoch', t, 'MinSegment', 1), 'NonGravForces:detectJumps:inputRange');
-            tc.verifyErrorId(@() j(x, 'Epoch', t, 'Model', "slope", 'MinSegment', 2), 'NonGravForces:detectJumps:inputRange');
-            tc.verifyErrorId(@() j(x, 'Epoch', t, 'Priors', table(1)), 'NonGravForces:detectJumps:inputPriors');
-            tc.verifyErrorId(@() j(x(1:3), 'Epoch', t(1:3)), 'NonGravForces:detectJumps:dataEmpty');
+            tc.verifyErrorId(@() j(x), 'timeSeriesPreparation:detectJumps:inputEpoch');
+            tc.verifyErrorId(@() j(x, 'Epoch', t(1:5)), 'timeSeriesPreparation:detectJumps:inputShape');
+            tc.verifyErrorId(@() j([x x], 'Epoch', t), 'timeSeriesPreparation:detectJumps:inputShape');
+            tc.verifyErrorId(@() j(x, 'Epoch', t, 'Penalty', -1), 'timeSeriesPreparation:detectJumps:inputRange');
+            tc.verifyErrorId(@() j(x, 'Epoch', t, 'MinSegment', 1), 'timeSeriesPreparation:detectJumps:inputRange');
+            tc.verifyErrorId(@() j(x, 'Epoch', t, 'Model', "slope", 'MinSegment', 2), 'timeSeriesPreparation:detectJumps:inputRange');
+            tc.verifyErrorId(@() j(x, 'Epoch', t, 'Priors', table(1)), 'timeSeriesPreparation:detectJumps:inputPriors');
+            tc.verifyErrorId(@() j(x(1:3), 'Epoch', t(1:3)), 'timeSeriesPreparation:detectJumps:dataEmpty');
             tc.verifyError(@() j(x, 'Epoch', t, 'Model', "quadratic"), 'MATLAB:validators:mustBeMember');
         end
         function screenContract(tc)
@@ -100,11 +100,11 @@ classdef tNgfQcScreen < NgfTestCase
             tc.verifyTrue(issorted(ev.tStart));
             [~, ~, info2] = NonGravForces.qc.screen(x, zeros(3000, 1), t); tc.verifyEqual(info2.impulses, "skipped: no Response given"); tc.verifyEqual(info2.counts.impulse, 0);
             s = @(varargin) NonGravForces.qc.screen(varargin{:});
-            tc.verifyErrorId(@() s(x, zeros(10, 1), t), 'NonGravForces:screen:inputShape');
-            tc.verifyErrorId(@() s([x x], zeros(3000, 2), t), 'NonGravForces:screen:inputShape');
-            tc.verifyErrorId(@() s(x, zeros(3000, 1), (1:3000)'), 'NonGravForces:screen:inputShape');
-            tNo = t; tNo.TimeZone = ''; tc.verifyErrorId(@() s(x, zeros(3000, 1), tNo), 'NonGravForces:screen:inputEpoch');
-            tc.verifyErrorId(@() s(x, zeros(3000, 1), t, 'Whitening', "highpass"), 'NonGravForces:residuals:inputWindow');
+            tc.verifyErrorId(@() s(x, zeros(10, 1), t), 'timeSeriesPreparation:screen:inputShape');
+            tc.verifyErrorId(@() s([x x], zeros(3000, 2), t), 'timeSeriesPreparation:screen:inputShape');
+            tc.verifyErrorId(@() s(x, zeros(3000, 1), (1:3000)'), 'timeSeriesPreparation:screen:inputShape');
+            tNo = t; tNo.TimeZone = ''; tc.verifyErrorId(@() s(x, zeros(3000, 1), tNo), 'timeSeriesPreparation:screen:inputEpoch');
+            tc.verifyErrorId(@() s(x, zeros(3000, 1), t, 'Whitening', "highpass"), 'timeSeriesPreparation:residuals:inputWindow');
         end
     end
 

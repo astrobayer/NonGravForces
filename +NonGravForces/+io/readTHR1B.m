@@ -5,7 +5,7 @@ function [events, aux] = readTHR1B(files, options)
 %   [events, aux] = NonGravForces.io.readTHR1B(files, 'TimeRange', tr)
 %
 %   Reads GRACE-FO THR1B files through gracefoReading and returns every
-%   activation as a row of the canonical event table (NonGravForces.qc.eventTable):
+%   activation as a row of the canonical event table (timeSeriesPreparation.qc.eventTable):
 %   class "impulse", source "THR1B", axis "all", confidence 1, amplitude and
 %   sigma NaN (a firing is a certain PRIOR for qc.detectImpulses, which
 %   estimates the amplitude and assigns the axis from the accelerometer data).
@@ -57,6 +57,7 @@ function [events, aux] = readTHR1B(files, options)
 %   NonGravForces:readTHR1B:dataEmpty       no record survives TimeRange
 %   NonGravForces:readTHR1B:dataColumn      no on_time_* variable in the header
 %   NonGravForces:readTHR1B:dataTimeRef     time_ref is not 'G' (GPS) for every record
+%   NonGravForces:readTHR1B:depMissing      timeSeriesPreparation (the event table's owner) not on the path
 %   gracefoReading:*, referenceSystem:*     propagated unwrapped
 %   MATLAB:badsubscript                     from gracefoReading.readL1bMulti when SEVERAL
 %                                           files are given and TimeRange excludes every
@@ -69,7 +70,7 @@ function [events, aux] = readTHR1B(files, options)
 %   f = fullfile(fileparts(fileparts(fileparts(mfilename('fullpath')))), 'data', 'samples', 'THR1B_2020-01-01_C_04.txt');
 %   [T, aux] = NonGravForces.io.readTHR1B(f); height(T), aux.thruster
 %
-% See also NonGravForces.qc.eventTable, NonGravForces.qc.detectImpulses, NonGravForces.io.readMAS1B.
+% See also timeSeriesPreparation.qc.eventTable, timeSeriesPreparation.qc.detectImpulses, NonGravForces.io.readMAS1B.
 %
 % KEYWORDS THR1B thruster impulse event table prior
 % Created 2026-09-06 by Claude Fable 5.1 (Anthropic).
@@ -113,7 +114,12 @@ t.TimeZone = 'UTC';
 t = t(any_fired(:));
 dur = max(onTime_s(:, any_fired), [], 1)';
 n = numel(t);
-events = NonGravForces.qc.eventTable(t, t + seconds(dur), repmat("impulse", n, 1), repmat("all", n, 1), ...
+% The event table belongs to timeSeriesPreparation since N-01 (2026-10-14); the deprecated forwarder
+% timeSeriesPreparation.qc.eventTable would warn on every THR1B read, so the target is called directly.
+if isempty(which('timeSeriesPreparation.qc.eventTable'))
+    NonGravForces.fail(unit, "depMissing", "the THR1B events are a timeSeriesPreparation.qc.eventTable and timeSeriesPreparation is not on the path -> run setupTimeSeriesPreparation");
+end
+events = timeSeriesPreparation.qc.eventTable(t, t + seconds(dur), repmat("impulse", n, 1), repmat("all", n, 1), ...
     nan(n, 1), nan(n, 1), repmat("THR1B", n, 1), ones(n, 1));
 aux.provenance = NonGravForces.provenance("io.readTHR1B", 'Files', aux.files, 'Options', options);
 end

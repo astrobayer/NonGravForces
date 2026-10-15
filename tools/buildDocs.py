@@ -772,7 +772,9 @@ def render_all():
          "reads and supplies partials with respect to its calibration parameters. Calibration and quality "
          "control are written against the abstract interface, so a new instrument is one new class.</p>"
          "<p>This table is generated from the catalogue. It used to be written by hand, and by 2026-09-09 it "
-         "described a filter one of these classes deliberately does not build.</p>"
+         "described a filter one of these classes did not apply. Since N-04 (2026-10-14) "
+         "<code>Electrostatic</code> applies the Level-1B CRN filter by default, with the kernel taken "
+         "from <code>timeSeriesPreparation.crnKernel</code> and never built here.</p>"
          "<table><tr><th>class</th><th>status</th><th>what it models</th></tr>"]
     for r in rows:
         if r["package"] == "sensor":
