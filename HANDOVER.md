@@ -1357,6 +1357,14 @@ The 0.12.0 matrix interface `calibrate(yMeas, aModel, epoch)` and its own QR are
   itself (O-48: the version bump needs `tools/benchmark.m` re-run on Tier A, which Tier B cannot).
 - **Decisions for the owner (Part I, 2026-10-15):** the A.2 rule's new wording; the Model evaluated
   at the orbit's epochs and interpolated, not at 10 Hz; jumps shared by the three axes.
+- **Measured on the first CI run (033ac76, cancelled by the 45-minute job timeout), and changed:** with
+  qc's jump events fitted by default, `tNgfCalibrate/calibratePrecision` ran 16.8 minutes and put the
+  scale 22.4 bootstrap sigma off the truth, and the calibration demo ran into the timeout. qc screens
+  the UNCALIBRATED residual, where a scale error and a bias drift look like level changes to PELT, and
+  every spurious jump became a parameter. `'Jumps'` is therefore OPT-IN (default false); the epochs are
+  still converted and reported in `diagnostics.jumps`. The same run measured `calibrateSpeed`'s 2x-arc
+  ratio at 4.26 against a bound of 4 whose premise ("every stage linear") was false -- qc's change-point
+  search is quadratic in the worst case; the test now asserts calibrate's own overhead against its parts.
 
 **Delivered 2026-10-15, ◐.** Prediction for the gate: 414 (after N-02b) - 7 (the old calibrate
 tests in `tNgfApp`) + 7 (`tests/tNgfCalibrate.m`: contract, reference, the real-day integration,
@@ -1577,7 +1585,7 @@ this session; the MATLAB suite runs in CI on the self-hosted runner.
 | Date | Decision | Reason |
 |---|---|---|
 | 2026-10-15 | **A.2's rule reads "NonGravForces computes forces and torques, and applies them; it implements nothing it can call"** (N-06, worded here, open to the owner) | the app layer calibrates against the forces (O-45); the old wording forbade that, the new one keeps what the old protected: no gravity, no integrator, no least squares inside |
-| 2026-10-15 | **`app.calibrate` evaluates a Model at the ORBIT's epochs and interpolates onto the 10 Hz raw grid by pchip; jumps from run's QC are steps shared by the three axes** (N-02c, open to the owner) | 10 Hz evaluation costs ten times as much for content above the CRN band; pchip does not overshoot an eclipse transition. A jump on one axis costs the others one parameter each, which is cheaper than a per-axis basis |
+| 2026-10-15 | **`app.calibrate` evaluates a Model at the ORBIT's epochs and interpolates onto the 10 Hz raw grid by pchip; jumps from run's QC are steps shared by the three axes, fitted only on request ('Jumps' true; measured: by default they were spurious)** (N-02c, open to the owner) | 10 Hz evaluation costs ten times as much for content above the CRN band; pchip does not overshoot an eclipse transition. A jump on one axis costs the others one parameter each, which is cheaper than a per-axis basis |
 | 2026-10-15 | **Release 0.13.0 is its own PR, after N-02c** (O-48) | the audit refuses a version whose `tools/benchmark_reference.csv` was measured against another, and that file is written by MATLAB only |
 | 2026-10-15 | **N-02b's estimator is its own unit, `app.fitCalibration(obs, ref)`; its noise default is WHITE with a moving-block bootstrap, not an estimated law** (taken in N-02b, open to the owner) | a separate unit lets N-02c wrap the numerics without re-opening them. The CRN-filtered residual is band-limited at 0.035 Hz, so a whitening law estimated from it (lsqvce's `Estimate "noise"` or an ARMA from `timeSeriesPreparation.noise`) is ill-conditioned above the band, while the pairs block bootstrap needs no law; both laws stay available as `'Noise'` options. The Calibration carries the bootstrap covariance |
 | 2026-10-15 | **lsqvce re-enters the dependency table at minimum 6.22, optional for the toolbox** (N-02b) | CONCEPT Q2: the one estimator. 6.22 is the version read and gated when N-02b was written; MAJOR.MINOR per VERSIONING.md |

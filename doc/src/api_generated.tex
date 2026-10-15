@@ -3872,7 +3872,7 @@ Attitude & 1x1 & struct & - & geom.AttitudeProvider for the orbit epochs; [] (de
 Config & 1x1 & struct & - & timeSeriesPreparation.Config; default Config(acc), with run.filterReference set true \\
 QualFlags & 1x1 & struct & - & Passed to run's mask stage; default none \\
 Thrusters & 1x1 & struct & - & THR1B Arc, passed to run's mask stage; default none \\
-Jumps & 1x1 & logical & - & Turn run's "jump" events into bias steps; default true \\
+Jumps & 1x1 & logical & - & Turn run's "jump" events into bias steps; default false (they are reported in diagnostics.jumps either way) \\
 VifMax & 1x1 & double & - & Attribution's VIF gate; default 10 \\
 Fit & 1xN & cell & - & Name-value pairs for app.fitCalibration (BiasBasis, Scale, Noise, NBoot, ...); default \{\} \\
 \end{longtable}
@@ -3891,7 +3891,7 @@ Fit & 1xN & cell & - & Name-value pairs for app.fitCalibration (BiasBasis, Scale
 \endfoot
 \bottomrule
 \endlastfoot
-res & 1x1 & struct & - & timeSeriesPreparation.run's fields (arc, reference, diagnostics, correlation, flags, config, provenance), diagnostics.fit (fitCalibration's info) and diagnostics.rawReference (the reference on the raw grid, as fitted), then .calibration (app.Calibration) and .attribution (.effects 1xE string, .rms ExE3 a priori RMS of the filtered effects over the fitted rows, .share, .relativeCorrection Ex3, .sigma Ex3, .vif Ex3, .verdict 1x3 "resolved" \textbar{} "unresolved" \textbar{} "unavailable", .note) \\
+res & 1x1 & struct & - & timeSeriesPreparation.run's fields (arc, reference, diagnostics, correlation, flags, config, provenance), diagnostics.fit (fitCalibration's info), diagnostics.rawReference (the reference on the raw grid, as fitted) and diagnostics.jumps (1xJ int64, qc's jump epochs in GPS ns, fitted only with 'Jumps' true), then .calibration (app.Calibration) and .attribution (.effects 1xE string, .rms ExE3 a priori RMS of the filtered effects over the fitted rows, .share, .relativeCorrection Ex3, .sigma Ex3, .vif Ex3, .verdict 1x3 "resolved" \textbar{} "unresolved" \textbar{} "unavailable", .note) \\
 \end{longtable}
 
 \subsubsection*{ERRORS}

@@ -19,7 +19,7 @@
 %
 % Created 2026-09-09 by Claude Opus 5 (Anthropic); rewritten 2026-10-15 by Claude (Anthropic) for N-02c.
 [obs, ref, truth] = NonGravForces.app.syntheticPair('Days', 0.25, 'Seed', 3);
-res = NonGravForces.app.calibrate(obs, ref, 'Fit', {'FixCrossTrack', false, 'NBoot', 100});
+res = NonGravForces.app.calibrate(obs, ref, 'Fit', {'FixCrossTrack', false, 'NBoot', 50});
 cal = res.calibration;
 
 fprintf('\n            planted      recovered    bootstrap sigma   formal sigma\n');

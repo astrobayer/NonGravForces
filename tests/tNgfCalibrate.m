@@ -136,6 +136,18 @@ classdef tNgfCalibrate < NgfTestCase
             [o2, r2] = NonGravForces.app.syntheticPair('Days', 0.05, 'Seed', 3);
             res2 = NonGravForces.app.calibrate(o2, r2, 'Fit', {'NBoot', 0});
             tc.verifyFalse(any(res2.diagnostics.fit.rows(res2.arc.weights == 0, :), 'all'));
+            % qc's jump events are reported in GPS ns and NOT fitted by default. The oracle for the
+            % conversion is plain arithmetic: elapsed UTC seconds since 2000-01-01 12:00 UTC (datetime
+            % ignores leap seconds) plus GPS-UTC of the date (18 s) minus GPS-UTC at J2000 (13 s).
+            ev = res2.flags.events;
+            expected = zeros(1, 0, 'int64');
+            if istable(ev) && height(ev) > 0 && any(ev.class == "jump")
+                tj = ev.tStart(ev.class == "jump");
+                if isempty(tj.TimeZone), tj.TimeZone = 'UTC'; end
+                expected = reshape(unique(int64(round((seconds(tj - datetime(2000, 1, 1, 12, 0, 0, 'TimeZone', 'UTC')) + 5) * 1e9))), 1, []);
+            end
+            tc.verifyEqual(res2.diagnostics.jumps, expected);
+            tc.verifyEmpty(res2.calibration.bias.jumps, 'jumps are fitted only when asked for');
         end
     end
 
@@ -157,17 +169,24 @@ classdef tNgfCalibrate < NgfTestCase
     % ===================================================================== speed
     methods (Test, TestTags = {'speed'})
         function calibrateSpeed(tc)
-            [o1, r1] = NonGravForces.app.syntheticPair('Days', 0.05);
-            [o2, r2] = NonGravForces.app.syntheticPair('Days', 0.1);
-            f = {'Fit', {'NBoot', 0}};
-            for k = 1:2, NonGravForces.app.calibrate(o1, r1, f{:}); NonGravForces.app.calibrate(o2, r2, f{:}); end
+            % calibrate's OWN cost: its parts are run (whose change-point QC is quadratic in the worst
+            % case) and fitCalibration, each with its own speed claim; what calibrate adds -- the
+            % jump conversion, the merge of options, the attribution -- must stay small beside them.
+            % A ratio of three timings on the same host (rule T5).
+            [obs, ref] = NonGravForces.app.syntheticPair('Days', 0.05, 'Seed', 8);
+            K = timeSeriesPreparation.crnKernel("ACC");
+            cfg = set(timeSeriesPreparation.Config(obs), "run", "filterReference", true);
+            calib = @() NonGravForces.app.calibrate(obs, ref, 'Fit', {'NBoot', 0});
+            parts = @() NonGravForces.app.fitCalibration(timeSeriesPreparation.run(obs, Reference = ref, Config = cfg).arc, ...
+                ref, 'Kernel', K, 'NBoot', 0);
+            for k = 1:2, calib(); parts(); end
             t1 = zeros(1, 3); t2 = zeros(1, 3);
             for k = 1:3
-                t0 = tic; NonGravForces.app.calibrate(o1, r1, f{:}); t1(k) = toc(t0);
-                t0 = tic; NonGravForces.app.calibrate(o2, r2, f{:}); t2(k) = toc(t0);
+                t0 = tic; calib(); t1(k) = toc(t0);
+                t0 = tic; parts(); t2(k) = toc(t0);
             end
-            tc.verifyBoundAndRecord("calibrate, 2x arc / 1x arc", median(t2) / median(t1), 4, "-", ...
-                "every stage is linear or n log n in the arc; quadratic would be 4");
+            tc.verifyBoundAndRecord("calibrate / (run + fitCalibration)", median(t1) / median(t2), 1.5, "-", ...
+                "calibrate adds conversions and a merge; an Arc reference has no attribution to fit");
         end
     end
 end

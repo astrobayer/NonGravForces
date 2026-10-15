@@ -22,10 +22,17 @@ function res = calibrate(acc, reference, options)
 %      already lie on the raw grid.
 %   2. INSTRUMENT STAGES. timeSeriesPreparation.run(acc, Reference = ref):
 %      mask, crn (the reference filtered like the L1B data), align, qc. Its
-%      layers become zero weights of the arc the fit sees; its "jump" events
-%      become step parameters of the bias (CONCEPT 6.1 row 2: a jump is a
-%      Heaviside column, never a mask), converted from UTC to GPS ns through
-%      referenceSystem.
+%      layers become zero weights of the arc the fit sees. Its "jump" events
+%      are converted from UTC to GPS ns through referenceSystem and reported
+%      in diagnostics.jumps; with 'Jumps' true they become step parameters of
+%      the bias (CONCEPT 6.1 row 2: a jump is a Heaviside column, never a
+%      mask). THAT IS OPT-IN, measured: qc screens the UNCALIBRATED residual,
+%      obs minus model, where a scale error and a bias drift look like level
+%      changes to the change-point detector. On a 0.25-day synthetic arc the
+%      spurious jumps it found, fitted as steps, put the scale 22 bootstrap
+%      sigma off the truth and the fit took 17 minutes (CI run of 033ac76).
+%      Declare the jumps you trust with 'Fit', {'Jumps', t}, or pass 'Jumps'
+%      true after reading diagnostics.jumps.
 %   3. ESTIMATION. app.fitCalibration(run's arc, raw reference) with the
 %      kernel of the run's crn preset and the jumps; 'Fit' passes any of its
 %      name-value arguments on.
@@ -58,7 +65,8 @@ function res = calibrate(acc, reference, options)
 %                                   run.filterReference set true
 %   QualFlags  1x1   struct  -      Passed to run's mask stage; default none
 %   Thrusters  1x1   struct  -      THR1B Arc, passed to run's mask stage; default none
-%   Jumps      1x1   logical -      Turn run's "jump" events into bias steps; default true
+%   Jumps      1x1   logical -      Turn run's "jump" events into bias steps; default false
+%                                   (they are reported in diagnostics.jumps either way)
 %   VifMax     1x1   double  -      Attribution's VIF gate; default 10
 %   Fit        1xN   cell    -      Name-value pairs for app.fitCalibration (BiasBasis, Scale, Noise,
 %                                   NBoot, ...); default {}
@@ -68,8 +76,9 @@ function res = calibrate(acc, reference, options)
 %   ----  ----  ----    -----  -----------
 %   res   1x1   struct  -      timeSeriesPreparation.run's fields (arc, reference, diagnostics,
 %                              correlation, flags, config, provenance), diagnostics.fit
-%                              (fitCalibration's info) and diagnostics.rawReference (the reference
-%                              on the raw grid, as fitted), then .calibration (app.Calibration) and
+%                              (fitCalibration's info), diagnostics.rawReference (the reference
+%                              on the raw grid, as fitted) and diagnostics.jumps (1xJ int64, qc's
+%                              jump epochs in GPS ns, fitted only with 'Jumps' true), then .calibration (app.Calibration) and
 %                              .attribution (.effects 1xE string, .rms ExE3 a priori RMS of the
 %                              filtered effects over the fitted rows, .share, .relativeCorrection
 %                              Ex3, .sigma Ex3, .vif Ex3, .verdict 1x3 "resolved" | "unresolved" |
@@ -119,7 +128,7 @@ arguments
     options.Config = []
     options.QualFlags = []
     options.Thrusters = []
-    options.Jumps (1,1) logical = true
+    options.Jumps (1,1) logical = false
     options.VifMax (1,1) double {mustBePositive} = 10
     options.Fit cell = {}
 end
@@ -154,7 +163,7 @@ res = timeSeriesPreparation.run(acc, runArgs{:});
 
 jumps = zeros(1, 0, 'int64');
 ev = res.flags.events;
-if options.Jumps && ~isempty(ev) && height(ev) > 0
+if ~isempty(ev) && height(ev) > 0
     isJump = ev.class == "jump";
     if any(isJump)
         e = referenceSystem.convertTimeScale(referenceSystem.datetimeToEpoch(ev.tStart(isJump), "UTC"), "GPS");
@@ -163,9 +172,12 @@ if options.Jumps && ~isempty(ev) && height(ev) > 0
 end
 
 % --- 3. the estimate -----------------------------------------------------------------------
-fitArgs = localMerge({'Kernel', K, 'Jumps', jumps}, options.Fit);
+fitJumps = zeros(1, 0, 'int64');
+if options.Jumps, fitJumps = jumps; end
+fitArgs = localMerge({'Kernel', K, 'Jumps', fitJumps}, options.Fit);
 [cal, info] = NonGravForces.app.fitCalibration(res.arc, ref, fitArgs{:});
 res.diagnostics.fit = info;
+res.diagnostics.jumps = jumps;
 res.diagnostics.rawReference = ref;
 res.calibration = cal;
 
