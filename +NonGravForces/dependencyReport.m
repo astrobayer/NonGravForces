@@ -24,7 +24,7 @@ function deps = dependencyReport(options)
 % OUTPUT ARGUMENTS
 %   Name     Size   Type   Units  Description
 %   ----     ----   ----   -----  -----------
-%   deps     1x5    struct -      .name .required (logical) .present (logical)
+%   deps     1x6    struct -      .name .required (logical) .present (logical)
 %                                 .version (string, "" if absent) .minimum
 %                                 (string) .comparable (logical: the two are dotted
 %                                 numbers and can be ordered) .belowMinimum (logical:
@@ -81,6 +81,12 @@ spec = { ...
 % Electrostatic:depMissing at the point of use. It has no version function: the version is the one
 % its own setup reads, the "% Version" line of its Contents.m, read here the same way (R1).
   "timeSeriesPreparation", false, "1.4", "setupTimeSeriesPreparation", "CRN kernel (sensor.Electrostatic, N-04); qc and the event table (N-01)", @() localTspVersion(); ...
+% lsqvce came back on 2026-10-15 with N-02b, under the re-entry condition the 2026-09-09 removal
+% wrote above: app.fitCalibration solves through lsqvce.fit (CONCEPT Q2: the one estimator,
+% called by each application; the toolbox's own QR is retired with N-02c). Optional for the
+% toolbox -- only the calibration estimator calls it -- and the minimum is the version read and
+% gated when N-02b was written. Its version is read by its own util.toolboxVersion.
+  "lsqvce",          false, "6.22", "lsqvce_setup", "least squares: app.fitCalibration (N-02b)", @() string(lsqvce.util.toolboxVersion()); ...
   "mice",            false, "N0067", "(on the MATLAB path)", "SPICE kernels for sun.source rs.de440", @() string(cspice_tkvrsn('TOOLKIT'))};
 n = size(spec,1);
 deps = repmat(struct('name',"",'required',false,'present',false,'version',"",'minimum',"", ...

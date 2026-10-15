@@ -58,3 +58,4 @@ app,forceBudget,function,L8,WP-30,done,Per-effect per-axis acceleration budget o
 app,densityInversion,function,L8,WP-32,done,Thermosphere density from calibrated accelerations; the inversion is a division
 app,syntheticPair,function,L8,N-02,done,Truth generator: a 10 Hz model arc and its CRN-filtered 1 Hz observation with every planted value
 app,Calibration,class,L8,N-02,done,An accelerometer calibration: scale + time-varying bias + uncertainty + gates; apply/invert/save/load
+app,fitCalibration,function,L8,N-02,done,The calibration estimator: CRN-filtered bias basis and model columns per axis through lsqvce.fit; VIF gate + bootstrap + EIV bound
