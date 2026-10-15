@@ -3,6 +3,8 @@ classdef Calibration
 %
 %   cal = NonGravForces.app.Calibration(fit)
 %   b   = cal.biasAt(t)                 % 3xK bias at int64 GPS-ns epochs
+%   S   = cal.scaleAt(t)                % 3x3xK scale at int64 GPS-ns epochs (N-03a)
+%   d   = cal.drift()                   % Wald test of a time-varying scale against a constant
 %   a   = cal.apply(obsArc)             % calibrated accelerations, a timeSeriesPreparation.Arc
 %   inv = cal.invert()                  % the same calibration in the correction direction
 %   T   = cal.summaryTable()
@@ -38,7 +40,23 @@ classdef Calibration
 %   Knots and t0 are int64 GPS ns, exactly as timeSeriesPreparation.Arc stores
 %   time, so no epoch is rounded through a double before it is differenced.
 %
-%   APPLY inverts the observation equation per epoch: a = S \ (y - b(t)). The
+%   THE SCALE MAY BE A CURVE TOO (N-03a; CONCEPT 6.2 "time-varying s(t) only
+%   with its pointwise sigma band and an isDriftSignificant flag"). Then
+%   scaleCurve holds S_ij(t) = B_s(t) g_ij on a basis of the same four kinds,
+%   evaluated by the same `basis` method, with g_ij in row (j-1)*3+i of
+%   scaleCurve.coef (the order of S(:)); an entry the fit held fixed carries
+%   its constant value and an empty covariance. `scale` is then S at
+%   scaleCurve.tRef, the middle of the fitted span, and must agree with the
+%   curve there: one authority, checked at construction. `scaleSigmaAt`
+%   gives the pointwise band sqrt(B_s C B_s') and `drift` a Wald test of
+%   "the curve is constant": W = (D g)' (D C D')^+ (D g) with D the first
+%   differences of g (partition-of-unity bases, where a constant curve is
+%   equal coefficients) or the slope ("linear"), chi-square with rank(D C D')
+%   degrees of freedom. The test is the band made into one number: it asks
+%   whether the band excludes every constant, jointly over the curve.
+%
+%   APPLY inverts the observation equation per epoch: a = S \ (y - b(t)), with
+%   S = S(t) when the scale is a curve. The
 %   bias is evaluated, not filtered: the estimator fits H*b, and for a bias
 %   that varies slower than the 140.7 s CRN window H*b = dcGain * b to within
 %   the curvature of b over that window (exactly so for "constant" and
@@ -51,7 +69,9 @@ classdef Calibration
 %   and b' = -S^-1 b, and propagates the covariance to first order. It is NOT
 %   the regression of a on y: inverting an estimate is not estimating the
 %   inverse, and with noise in the model (errors in variables) the two differ
-%   by the attenuation the EIV bound reports. The bias covariance of the
+%   by the attenuation the EIV bound reports. A time-varying scale is NOT
+%   inverted: S(t)^-1 is no curve on the same basis, so `invert` refuses
+%   rather than return an approximation it does not name. The bias covariance of the
 %   inverted calibration ignores the scale's uncertainty and the bias-scale
 %   cross-covariance, which this class does not hold; the help says so
 %   instead of returning a number that looks complete.
@@ -64,13 +84,17 @@ classdef Calibration
 %                              steps, optional .cov 1x3 cell of PxP); optional .covScale
 %                              9x9 (cov of scale(:)), .quadratic 3x1, .uncertainty struct,
 %                              .gates struct, .convention "observation"|"correction",
-%                              .provenance struct
+%                              .provenance struct; optional .scaleCurve struct (.basis,
+%                              .t0, .knots, .tRef int64, .coef 9xQ, .cov 1x9 cell of QxQ,
+%                              [] where not estimated) for a time-varying scale
 %
 % NAME-VALUE ARGUMENTS
 %   None.
 %
 % PROPERTIES (read-only)
-%   scale        3x3  double  -      S
+%   scale        3x3  double  -      S; for a time-varying scale, S(scaleCurve.tRef)
+%   scaleCurve   1x1  struct  -      .basis ("constant" when the scale is not a curve) .t0
+%                                    .knots .tRef .coef (9xQ) .cov (1x9 cell)
 %   covScale     9x9  double  -      covariance of scale(:), NaN where not estimated
 %   bias         1x1  struct  m/s^2  .basis .t0 .knots .jumps .coef (3xP) .cov (1x3 cell)
 %   quadratic    3x1  double  s^2/m  K2 per axis; NaN = not estimated
@@ -81,11 +105,18 @@ classdef Calibration
 %
 % METHODS
 %   b = biasAt(obj, t)          t Kx1 int64 GPS ns; b 3xK in m/s^2
+%   S = scaleAt(obj, t)         3x3xK; the constant S repeated when not time-varying
+%   s = scaleSigmaAt(obj, t)    3x3xK pointwise sigma of S(t); NaN where not estimated
+%   tf = isTimeVarying(obj)     scaleCurve.basis is not "constant"
+%   d = drift(obj, alpha)       .statistic .dof .pValue (3x3, NaN where not tested)
+%                               .significant (3x3 logical) .alpha; alpha default 0.05
+%   tf = isDriftSignificant(obj, alpha)   drift(obj, alpha).significant
 %   out = apply(obj, arc)       arc: timeSeriesPreparation.Arc with 3 columns in m/s2; out: the
 %                               calibrated arc (derive: same epochs, provenance appended)
 %   inv = invert(obj)           the other convention, first-order covariance
-%   T = summaryTable(obj)       one row per scale entry and bias coefficient
-%   save(obj, file)             versioned MAT file (schemaVersion "1")
+%   T = summaryTable(obj)       one row per scale entry and bias coefficient, plus one per
+%                               scale-curve coefficient when time-varying
+%   save(obj, file)             versioned MAT file (schemaVersion "2"; "1" files still load)
 %   cal = Calibration.load(file)
 %   B = Calibration.basis(bias, t)   KxP basis matrix at int64 epochs
 %
@@ -96,7 +127,10 @@ classdef Calibration
 %   apply/invert are exact algebra to rounding (cond(S) * eps of the reading);
 %   biasAt is the basis evaluation, exact to rounding (partition of unity of the
 %   B-splines holds to ~1e-15). The approximation of `apply` is the one named
-%   above: the bias is evaluated where the fit used it filtered.
+%   above: the bias is evaluated where the fit used it filtered. The p-value of
+%   `drift` is gammainc(W/2, dof/2, 'upper'), exact for the chi-square law;
+%   the law itself is the large-sample one of the estimate, and holds for the
+%   bootstrap covariance only as well as that covariance is estimated.
 %
 % ERRORS
 %   NonGravForces:Calibration:inputFit       the fit struct lacks a field, or one has the wrong size
@@ -105,16 +139,22 @@ classdef Calibration
 %   NonGravForces:Calibration:unsupportedQuadratic  apply with a non-zero K2
 %   NonGravForces:Calibration:dataSchema     load: not a calibration file, or no schemaVersion
 %   NonGravForces:Calibration:numericSingular invert/apply: S is singular to working precision
+%                                            (at some epoch, for a time-varying scale)
+%   NonGravForces:Calibration:unsupportedTimeVarying  invert of a time-varying scale
 %
 % WARNINGS
 %   NonGravForces:Calibration:newerSchema    load: written by a newer schema; read field by field
+%   NonGravForces:Calibration:formalDrift    drift: the covariance is the formal white-noise one
+%                                            (NBoot 0, Noise "white"), which a CRN-filtered
+%                                            residual violates; the test is then far too liberal
 %
 % REFERENCES
 %   Bettadpur S. (2009) GRACE TN-02 (correction direction, a = b + S f);
 %   Woeske F. et al. (2024) Adv. Space Res. 74:4517 (ZARM direction);
 %   Fuller W. (1987) Measurement Error Models, sect. 1.1 (why an inverted
 %   regression is not the reverse regression); de Boor C. (1978) A Practical
-%   Guide to Splines, ch. IX (Cox-de Boor recursion).
+%   Guide to Splines, ch. IX (Cox-de Boor recursion); Wald A. (1943) Trans.
+%   Amer. Math. Soc. 54:426 (the test of a linear hypothesis on an estimate).
 %
 % EXAMPLE
 %   [obs, ref, truth] = NonGravForces.app.syntheticPair('Days', 0.25, 'Spikes', 0, 'Gap_s', 0);
@@ -128,10 +168,11 @@ classdef Calibration
 % KEYWORDS calibration accelerometer bias scale apply invert spline provenance
 % Created 2026-10-14 by Claude (Anthropic) for Matthias Weigelt.
     properties (Constant)
-        SchemaVersion = "1"
+        SchemaVersion = "2"
     end
     properties (SetAccess = private)
         scale (3,3) double = eye(3)
+        scaleCurve (1,1) struct = struct('basis', "constant", 't0', int64(0), 'knots', int64([]), 'tRef', int64(0), 'coef', zeros(9, 0), 'cov', {cell(1, 9)})
         covScale (9,9) double = nan(9)
         bias (1,1) struct = struct('basis', "constant", 't0', int64(0), 'knots', int64([]), 'jumps', zeros(1, 0, 'int64'), 'coef', zeros(3, 1), 'cov', {{[], [], []}})
         quadratic (3,1) double = nan(3, 1)
@@ -165,6 +206,9 @@ classdef Calibration
             obj.bias = struct('basis', string(b.basis), 't0', int64(b.t0), 'knots', int64(b.knots(:)'), ...
                 'jumps', jumps, 'coef', b.coef, 'cov', {b.cov});
             obj.scale = fit.scale;
+            if isfield(fit, 'scaleCurve') && ~isempty(fit.scaleCurve)
+                obj.scaleCurve = NonGravForces.app.Calibration.checkScaleCurve(fit.scaleCurve, fit.scale);
+            end
             if isfield(fit, 'covScale') && ~isempty(fit.covScale)
                 if ~isequal(size(fit.covScale), [9 9])
                     NonGravForces.fail(unit, "inputFit", ".covScale must be 9x9 (the covariance of scale(:)) -> got %s", mat2str(size(fit.covScale)));
@@ -212,7 +256,17 @@ classdef Calibration
             end
             y = arc.obs.';                                     % 3xK
             b = obj.biasAt(arc.t);
-            if obj.convention == "observation"
+            if obj.isTimeVarying()
+                % One 3x3 solve per epoch, as pages: the curve gives every epoch its own S.
+                S3 = obj.scaleAt(arc.t);
+                K = size(y, 2);
+                if obj.convention == "observation"
+                    obj.requireRegularPages(S3);
+                    a = reshape(pagemldivide(S3, reshape(y - b, 3, 1, K)), 3, K);
+                else
+                    a = b + reshape(pagemtimes(S3, reshape(y, 3, 1, K)), 3, K);
+                end
+            elseif obj.convention == "observation"
                 obj.requireRegular();
                 a = obj.scale \ (y - b);
             else
@@ -224,6 +278,9 @@ classdef Calibration
 
         function out = invert(obj)
             %INVERT The same calibration in the other convention; covariance to first order.
+            if obj.isTimeVarying()
+                NonGravForces.fail("Calibration", "unsupportedTimeVarying", "S(t)^-1 is not a curve on the scale basis, so a time-varying scale has no exact inverse here -> apply it to the arc instead, or refit with 'ScaleBasis' ""constant""");
+            end
             obj.requireRegular();
             Si = inv3(obj.scale);
             fit = struct('scale', Si, 'quadratic', obj.quadratic, 'uncertainty', obj.uncertainty, ...
@@ -264,7 +321,92 @@ classdef Calibration
                 if isempty(obj.bias.cov{i}), s = nan(P, 1); else, s = sqrt(diag(obj.bias.cov{i})); end
                 sig = [sig; s]; %#ok<AGROW>
             end
+            if obj.isTimeVarying()
+                Q = size(obj.scaleCurve.coef, 2);
+                for k = 1:9
+                    if isempty(obj.scaleCurve.cov{k}), continue; end
+                    names = [names; compose("s_%d%d_%d", ii(k), jj(k), (1:Q)')]; %#ok<AGROW>
+                    vals = [vals; obj.scaleCurve.coef(k, :).']; %#ok<AGROW>
+                    sig = [sig; sqrt(diag(obj.scaleCurve.cov{k}))]; %#ok<AGROW>
+                end
+            end
             T = table(names, vals, sig, 'VariableNames', {'parameter', 'value', 'sigma'});
+        end
+
+        function tf = isTimeVarying(obj)
+            %ISTIMEVARYING Whether the scale is a curve rather than a constant matrix.
+            tf = obj.scaleCurve.basis ~= "constant";
+        end
+
+        function S = scaleAt(obj, t)
+            %SCALEAT The scale at int64 GPS-ns epochs, 3x3xK.
+            K = numel(t);
+            if ~obj.isTimeVarying()
+                S = repmat(obj.scale, 1, 1, K);
+                return
+            end
+            B = NonGravForces.app.Calibration.basis(obj.scaleCurve, t);
+            S = reshape(obj.scaleCurve.coef * B.', 3, 3, K);
+        end
+
+        function s = scaleSigmaAt(obj, t)
+            %SCALESIGMAAT The pointwise sigma of S(t), 3x3xK; NaN where the entry was not estimated.
+            K = numel(t);
+            if ~obj.isTimeVarying()
+                s = repmat(reshape(sqrt(diag(obj.covScale)), 3, 3), 1, 1, K);
+                return
+            end
+            B = NonGravForces.app.Calibration.basis(obj.scaleCurve, t);
+            s = nan(9, K);
+            for k = 1:9
+                C = obj.scaleCurve.cov{k};
+                if isempty(C), continue; end
+                s(k, :) = sqrt(max(sum((B * C) .* B, 2), 0)).';
+            end
+            s = reshape(s, 3, 3, K);
+        end
+
+        function d = drift(obj, alpha)
+            %DRIFT Wald test, per entry, of the hypothesis that the scale curve is constant.
+            arguments
+                obj (1,1) NonGravForces.app.Calibration
+                alpha (1,1) double {mustBePositive, mustBeLessThan(alpha, 1)} = 0.05
+            end
+            d = struct('statistic', nan(3), 'dof', nan(3), 'pValue', nan(3), 'significant', false(3), 'alpha', alpha);
+            if ~obj.isTimeVarying(), return; end
+            u = obj.uncertainty;
+            if isfield(u, 'nBoot') && isfield(u, 'noise') && u.nBoot == 0 && string(u.noise) == "white"
+                % Measured (N-03a): on a CRN-filtered residual the bootstrap sigma is ~26x the formal
+                % white one, and the formal test flagged a planted-zero drift at p = 1e-18.
+                warning("NonGravForces:Calibration:formalDrift", "the scale covariance is the formal white-noise one, which the filtered residual violates by an order of magnitude -> refit with 'NBoot' > 0 before reading the drift test");
+            end
+            Q = size(obj.scaleCurve.coef, 2);
+            if obj.scaleCurve.basis == "linear"
+                D = [0 1];                          % c1 + c2 * days is constant iff c2 = 0
+            else
+                D = diff(eye(Q));                   % partition of unity: constant iff all equal
+            end
+            for k = 1:9
+                C = obj.scaleCurve.cov{k};
+                if isempty(C), continue; end
+                g = obj.scaleCurve.coef(k, :).';
+                M = D * C * D.';
+                r = rank(M);
+                if r == 0, continue; end
+                W = (D * g).' * pinv(M) * (D * g);
+                d.statistic(k) = W; d.dof(k) = r;
+                d.pValue(k) = gammainc(W / 2, r / 2, 'upper');
+                d.significant(k) = d.pValue(k) < alpha;
+            end
+        end
+
+        function tf = isDriftSignificant(obj, alpha)
+            %ISDRIFTSIGNIFICANT 3x3 logical: entries whose curve the Wald test says is not constant.
+            arguments
+                obj (1,1) NonGravForces.app.Calibration
+                alpha (1,1) double {mustBePositive, mustBeLessThan(alpha, 1)} = 0.05
+            end
+            tf = obj.drift(alpha).significant;
         end
 
         function save(obj, file)
@@ -336,8 +478,21 @@ classdef Calibration
             end
         end
 
+        function requireRegularPages(~, S3)
+            % Every page at once, closed form: |det| over the product of the row norms is 0 for a
+            % singular page and 1 for an orthogonal one (Hadamard), with no per-epoch call.
+            c = @(i, j) reshape(S3(i, j, :), 1, []);
+            dt = c(1,1) .* (c(2,2) .* c(3,3) - c(2,3) .* c(3,2)) - c(1,2) .* (c(2,1) .* c(3,3) - c(2,3) .* c(3,1)) ...
+                + c(1,3) .* (c(2,1) .* c(3,2) - c(2,2) .* c(3,1));
+            rn = sqrt(sum(S3.^2, 2));
+            q = abs(dt) ./ reshape(prod(rn, 1), 1, []);
+            if any(~(q >= eps))
+                NonGravForces.fail("Calibration", "numericSingular", "the scale curve is singular to working precision at %d of %d epochs -> the calibration cannot be applied there", nnz(~(q >= eps)), numel(q));
+            end
+        end
+
         function s = toStruct(obj)
-            s = struct('schemaVersion', NonGravForces.app.Calibration.SchemaVersion, 'scale', obj.scale, ...
+            s = struct('schemaVersion', NonGravForces.app.Calibration.SchemaVersion, 'scale', obj.scale, 'scaleCurve', obj.scaleCurve, ...
                 'covScale', obj.covScale, 'bias', obj.bias, 'quadratic', obj.quadratic, ...
                 'uncertainty', obj.uncertainty, 'gates', obj.gates, 'convention', obj.convention, ...
                 'provenance', obj.provenance);
@@ -345,6 +500,33 @@ classdef Calibration
     end
 
     methods (Static, Access = private)
+        function sc = checkScaleCurve(sc, scale)
+            %CHECKSCALECURVE Validate a scale curve and its agreement with S at tRef.
+            unit = "Calibration";
+            if ~isstruct(sc) || ~isscalar(sc) || ~all(isfield(sc, {'basis', 't0', 'knots', 'coef'}))
+                NonGravForces.fail(unit, "inputFit", ".scaleCurve must be a struct with basis, t0, knots and coef -> see the help");
+            end
+            if string(sc.basis) == "constant" && isempty(sc.coef)
+                sc = struct('basis', "constant", 't0', int64(0), 'knots', int64([]), 'tRef', int64(0), 'coef', zeros(9, 0), 'cov', {cell(1, 9)});
+                return
+            end
+            Q = NonGravForces.app.Calibration.numBasis(sc.basis, sc.knots);
+            if ~isequal(size(sc.coef), [9 Q]) || ~all(isfinite(sc.coef(:)))
+                NonGravForces.fail(unit, "inputFit", ".scaleCurve.coef must be a finite 9x%d for basis %s -> got %s", Q, string(sc.basis), mat2str(size(sc.coef)));
+            end
+            if ~isfield(sc, 'cov') || isempty(sc.cov), sc.cov = cell(1, 9); end
+            if ~iscell(sc.cov) || numel(sc.cov) ~= 9 || any(cellfun(@(c) ~isempty(c) && ~isequal(size(c), [Q Q]), sc.cov))
+                NonGravForces.fail(unit, "inputFit", ".scaleCurve.cov must be a 1x9 cell of %dx%d or [] -> got another shape", Q, Q);
+            end
+            if ~isfield(sc, 'tRef') || isempty(sc.tRef), sc.tRef = sc.t0; end
+            sc = struct('basis', string(sc.basis), 't0', int64(sc.t0), 'knots', int64(sc.knots(:)'), ...
+                'tRef', int64(sc.tRef), 'coef', sc.coef, 'cov', {reshape(sc.cov, 1, 9)});
+            Sref = reshape(sc.coef * NonGravForces.app.Calibration.basis(sc, sc.tRef).', 3, 3);
+            if any(abs(Sref(:) - scale(:)) > 1e-12 * max(1, abs(scale(:))))
+                NonGravForces.fail(unit, "inputFit", ".scale must be the curve at .scaleCurve.tRef (one authority) -> they differ by %g", max(abs(Sref(:) - scale(:))));
+            end
+        end
+
         function jumps = jumpsOf(bias)
             %JUMPSOF The jump epochs of a bias struct as a strictly increasing int64 row (none: 1x0).
             jumps = zeros(1, 0, 'int64');

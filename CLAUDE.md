@@ -171,8 +171,14 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-15, release 0.14.0)
+## 5. Current status (2026-10-15, N-03a)
 
+- **2026-10-15, N-03a (#60, first of three PRs):** time-varying scale. `app.fitCalibration` takes
+  `'ScaleBasis'`/`'ScaleKnotSpacing_s'`; `app.Calibration` carries `scaleCurve` with `scaleAt`, `scaleSigmaAt`,
+  `drift` (Wald test) and `isDriftSignificant`, schema "2"; `syntheticPair` plants `'ScaleDrift'`. A knotted
+  scale finer than the bias is refused; `drift` WARNS on the formal white covariance (it flagged a planted-zero
+  drift at p = 1e-18; the bootstrap gave 0.72). ☑ on Tier A: 383/383, predicted 383. Next: N-03b (model
+  comparison), N-03c (per-revolution and attribution).
 - **2026-10-15, release 0.14.0 (O-47 closed):** the six deprecated `qc` forwarders are deleted with
   `tests/tNgfQc*.m` (39 tests), their catalogue rows, hushes and exemptions, and the hampel/PELT oracles
   (timeSeriesPreparation carries its own); L7 is left vacant; 54 units; quality control is

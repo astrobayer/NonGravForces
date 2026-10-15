@@ -44,6 +44,10 @@ classdef tNgfFitCalibration < NgfTestCase
             for k = 1:numel(names)
                 nm = names(k);
                 if startsWith(nm, "b_"), x(k) = cal.bias.coef(i, str2double(extractAfter(nm, "b_")));
+                elseif startsWith(nm, "S_") && strlength(nm) > 4
+                    % a scale-curve coefficient S_ij_q (N-03a): row (j-1)*3+i of scaleCurve.coef
+                    j = find(ax == extractBetween(nm, 4, 4));
+                    x(k) = cal.scaleCurve.coef((j - 1) * 3 + i, str2double(extractAfter(nm, 5)));
                 elseif startsWith(nm, "S_"), x(k) = cal.scale(i, find(ax == extractAfter(nm, 3)));
                 else, x(k) = cal.quadratic(i);
                 end
@@ -82,6 +86,29 @@ classdef tNgfFitCalibration < NgfTestCase
             tc.verifyWarning(@() NonGravForces.app.fitCalibration(obs, ref, 'BiasBasis', "hat", 'BiasKnotSpacing_s', 100, 'NBoot', 0), ...
                 "NonGravForces:fitCalibration:knotsBelowFilterSpan");
         end
+
+        function fitCalibrationTimeVaryingContract(tc)
+            % N-03a: 'ScaleBasis' makes every estimated entry a curve the Calibration carries.
+            [obs, ref] = NonGravForces.app.syntheticPair('Days', 0.05, 'Seed', 2);
+            [cal, info] = NonGravForces.app.fitCalibration(obs, ref, 'ScaleBasis', "linear", 'NBoot', 0);
+            tc.verifyTrue(cal.isTimeVarying());
+            tc.verifyEqual(cal.scaleCurve.basis, "linear");
+            tc.verifySize(cal.scaleCurve.coef, [9 2]);
+            tc.verifyEqual(info.names{1}, ["b_1" "b_2" "S_xx_1" "S_xx_2"]);
+            tc.verifyEqual(find(~cellfun(@isempty, cal.scaleCurve.cov)), [1 9], 'only the estimated S_xx and S_zz carry a curve covariance');
+            tc.verifyEqual(cal.scaleCurve.coef(5, :), [1 0], 'a fixed entry is its constant a priori on the linear basis');
+            tc.verifyEqual(cal.scale, cal.scaleAt(cal.scaleCurve.tRef), 'AbsTol', 1e-15, 'scale is the curve at tRef');
+            tc.verifyTrue(cal.scaleCurve.tRef > obs.t(1) && cal.scaleCurve.tRef < obs.t(end));
+            tc.verifySize(cal.scaleSigmaAt(obs.t(1:5)), [3 3 5]);
+            % the formal white covariance is refused as a basis for the drift test -- by a warning
+            tc.verifyWarning(@() cal.drift(), "NonGravForces:Calibration:formalDrift");
+            % a knotted scale finer than a knotted bias is refused; equal spacing is accepted
+            tc.verifyErrorId(@() NonGravForces.app.fitCalibration(obs, ref, 'BiasBasis', "hat", 'BiasKnotSpacing_s', 3600, ...
+                'ScaleBasis', "hat", 'ScaleKnotSpacing_s', 1800, 'NBoot', 0), "NonGravForces:fitCalibration:inputScaleBasis");
+            ok = NonGravForces.app.fitCalibration(obs, ref, 'BiasBasis', "hat", 'BiasKnotSpacing_s', 3600, ...
+                'ScaleBasis', "hat", 'ScaleKnotSpacing_s', 3600, 'NBoot', 0);
+            tc.verifyTrue(ok.isTimeVarying());
+        end
     end
 
     % ===================================================================== reference
@@ -115,6 +142,21 @@ classdef tNgfFitCalibration < NgfTestCase
         end
     end
 
+    methods (Test, TestTags = {'reference'})
+        function fitCalibrationTimeVaryingReference(tc)
+            % Noise-free with a planted linear scale drift: S(t) a is exactly in the span of the
+            % columns H([1, t] .* a), so the curve returns to the same computed rounding bound.
+            D = diag([0.01 0 -0.02]);
+            [obs, ref, truth] = NonGravForces.app.syntheticPair('Days', 0.1, 'ScaleDrift', D, ...
+                'NoiseAsd', tc.Quiet, 'Spikes', 0, 'Gap_s', 0);
+            [cal, info] = NonGravForces.app.fitCalibration(obs, ref, 'ScaleBasis', "linear", 'NBoot', 0);
+            for i = [1 3]
+                tc.verifyRecovered(cal, info, truth, ref, obs, i, ...
+                    [truth.bias0(i), truth.biasDrift_per_day(i), truth.scale(i, i), D(i, i)], "fitCalibration S(t) linear");
+            end
+        end
+    end
+
     % ===================================================================== precision
     methods (Test, TestTags = {'precision'})
         function fitCalibrationPrecision(tc)
@@ -128,6 +170,26 @@ classdef tNgfFitCalibration < NgfTestCase
             tc.verifyBoundAndRecord("fitCalibration scale error in bootstrap sigma", max(z), 5, "sigma", "seeded noise, 100 replicates");
             tc.verifyGreaterThan(min(diag(cal.uncertainty.inflation)), 0.5);
             tc.verifyTrue(all(isfinite(cal.covScale(logical(eye(9))))));
+        end
+
+        function fitCalibrationTimeVaryingPrecision(tc)
+            % Coloured noise and a 1 %/day along-track drift (v3 WP-14's case): the recovered slope
+            % within 4 bootstrap sigma, the drift flagged, and the pointwise 2-sigma band covering
+            % the true S_xx(t) at more than 90 % of the fitted epochs.
+            D = zeros(3); D(1, 1) = 0.01;
+            [obs, ref, truth] = NonGravForces.app.syntheticPair('Days', 0.5, 'Seed', 4, 'ScaleDrift', D);
+            [cal, info] = NonGravForces.app.fitCalibration(obs, ref, 'ScaleBasis', "linear", 'NBoot', 40, 'Seed', 1);
+            g = cal.scaleCurve.coef(1, 2); sg = sqrt(cal.scaleCurve.cov{1}(2, 2));
+            tc.verifyBoundAndRecord("fitCalibration scale drift error in bootstrap sigma", abs(g - D(1, 1)) / sg, 4, "sigma", ...
+                "seeded noise, 40 replicates; the slope of a linear S_xx(t)");
+            tc.verifyEqual(cal.isDriftSignificant(), logical(diag([1 0 0])), ...
+                'the planted 1 %/day drift on S_xx is detected and the undrifted S_zz is not');
+            t = obs.t(info.rows(:, 1));
+            days = double(t - obs.t(1)) / 86400e9;
+            S = squeeze(cal.scaleAt(t)); s = squeeze(cal.scaleSigmaAt(t));
+            cover = mean(abs(squeeze(S(1, 1, :)) - (truth.scale(1, 1) + D(1, 1) * days)) <= 2 * squeeze(s(1, 1, :)));
+            tc.verifyBoundAndRecord("fitCalibration S(t) outside its 2-sigma band, fraction of epochs", 1 - cover, 0.1, "-", ...
+                "the v3 WP-14 criterion: the band covers the truth at more than 90 % of epochs");
         end
     end
 
@@ -159,6 +221,24 @@ classdef tNgfFitCalibration < NgfTestCase
         end
     end
 
+    methods (Test, TestTags = {'robustness'})
+        function fitCalibrationTimeVaryingRobustness(tc)
+            % Knotted scale bases over a gap and spikes: every curve finite where it is evaluated,
+            % and a cubic B-spline curve on an arc shorter than its knot spacing still solves.
+            [obs, ref] = NonGravForces.app.syntheticPair('Days', 0.1, 'Seed', 5);
+            for b = ["hat" "pspline"]
+                cal = NonGravForces.app.fitCalibration(obs, ref, 'ScaleBasis', b, 'ScaleKnotSpacing_s', 3600, 'NBoot', 0);
+                tc.verifyTrue(all(isfinite(cal.scaleAt(obs.t)), 'all'), b + " curve finite over the arc");
+                tc.verifyTrue(all(isfinite(cal.scaleCurve.coef), 'all'));
+            end
+            c = NonGravForces.app.fitCalibration(obs, ref, 'ScaleBasis', "pspline", 'NBoot', 0);   % 43200 s > 0.1 day
+            tc.verifyTrue(all(isfinite(c.scale), 'all'));
+            % a calibration with a curve applies to the arc it came from without a singular page
+            a = c.apply(obs);
+            tc.verifyEqual(isnan(a.obs), isnan(obs.obs), 'apply adds no NaN and removes none');
+        end
+    end
+
     % ===================================================================== metamorphic
     methods (Test, TestTags = {'metamorphic'})
         function fitCalibrationMetamorphic(tc)
@@ -176,6 +256,27 @@ classdef tNgfFitCalibration < NgfTestCase
             c3 = NonGravForces.app.fitCalibration(obs2, ref, 'NBoot', 0);
             tc.verifyEqual(c3.scale([1 3], [1 3]) .* eye(2), 2 * c1.scale([1 3], [1 3]) .* eye(2));
             tc.verifyEqual(c3.bias.coef([1 3], :), 2 * c1.bias.coef([1 3], :));
+        end
+
+        function fitCalibrationTimeVaryingMetamorphic(tc)
+            [obs, ref] = NonGravForces.app.syntheticPair('Days', 0.05, 'Seed', 6);
+            % 'ScaleBasis' "constant" IS the default path: bitwise, scale and bias alike.
+            c0 = NonGravForces.app.fitCalibration(obs, ref, 'NBoot', 0);
+            c1 = NonGravForces.app.fitCalibration(obs, ref, 'ScaleBasis', "constant", 'NBoot', 0);
+            tc.verifyEqual(c1.scale, c0.scale);
+            tc.verifyEqual(c1.bias.coef, c0.bias.coef);
+            tc.verifyEqual(c1.covScale, c0.covScale);
+            tc.verifyFalse(c1.isTimeVarying());
+            % A hat basis with one span (two knots) spans the same functions as "linear": the two
+            % fits are one least-squares problem in two parameterisations, so the curves agree to
+            % the solve's rounding, cond * eps of the curve.
+            cl = NonGravForces.app.fitCalibration(obs, ref, 'ScaleBasis', "linear", 'NBoot', 0);
+            ch = NonGravForces.app.fitCalibration(obs, ref, 'ScaleBasis', "hat", 'ScaleKnotSpacing_s', 86400, 'NBoot', 0);
+            tc.verifySize(ch.scaleCurve.coef, [9 2]);
+            Sl = cl.scaleAt(obs.t); Sh = ch.scaleAt(obs.t);
+            bound = 100 * eps * max([cl.gates.cond([1 3]), ch.gates.cond([1 3])]) * max(abs(Sl(:)));
+            tc.verifyBoundAndRecord("fitCalibration S(t), hat with one span vs linear", max(abs(Sh(:) - Sl(:))) / bound, 1, "-", ...
+                "two parameterisations of one column space; bound 100 eps cond max|S|");
         end
     end
 

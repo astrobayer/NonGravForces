@@ -3,6 +3,7 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %
 %   cal = NonGravForces.app.fitCalibration(obs, ref)
 %   [cal, info] = NonGravForces.app.fitCalibration(obs, ref, 'Scale', "full", 'BiasBasis', "pspline", 'NBoot', 0)
+%   cal = NonGravForces.app.fitCalibration(obs, ref, 'ScaleBasis', "linear")   % S(t), N-03a
 %
 %   The estimator of the calibration (N-02b; CONCEPT 6.2). Per axis i, with H
 %   the CRN kernel of timeSeriesPreparation.crnKernel:
@@ -36,6 +37,21 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %   model column is GATED: when the variance inflation factor of any of its
 %   model columns (timeSeriesPreparation.observability) exceeds 'VifMax', the
 %   call refuses rather than report a shear the data cannot separate (v3 I.5-3).
+%
+%   TIME-VARYING SCALE (N-03a; CONCEPT 6.2, the v3 plan's WP-14). With
+%   'ScaleBasis' other than "constant" every estimated entry becomes a curve,
+%   S_ij(t) = B_s(t) g_ij, on the basis NonGravForces.app.Calibration.basis
+%   evaluates, and its Q columns are H(B_s,q .* a_j): the scale multiplies the
+%   RAW signal, before the filter, exactly as the bias curve does. The
+%   Calibration then carries the curve (scaleCurve), its pointwise sigma band
+%   and a Wald test of constancy (drift, isDriftSignificant); `scale` is the
+%   curve at the middle of the fitted span. Identifiability against the bias is
+%   by BASIS SIZE, not by a penalty: the scale must vary no faster than the
+%   bias, so a hat or B-spline scale with a knot spacing below the bias's is
+%   refused (v3 WP-14 asked the same asymmetry of a smoothness prior with
+%   lambdas by blocked CV; a coarse basis states it without a weight to tune,
+%   and lsqvce priors remain the route if a penalty is ever needed). Entries
+%   held fixed stay constant.
 %
 %   NOISE. "white" (default) solves under unit weights; the formal sigmas
 %   then assume white noise, which the CRN-filtered residual is not. That is
@@ -78,6 +94,10 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %   BiasKnotSpacing_s  1x1   double  s      Knot spacing of "hat" and "pspline"; default 10800.
 %                                           Below the kernel span Tf it warns
 %   Scale              3x3   string  -      "diag" (default) | "full" | a 3x3 logical mask
+%   ScaleBasis         1x1   string  -      "constant" (default) | "linear" | "hat" | "pspline":
+%                                           the time dependence of every estimated entry
+%   ScaleKnotSpacing_s 1x1   double  s      Knot spacing of a "hat" or "pspline" scale; default
+%                                           43200, at least the bias's when both are knotted
 %   FixCrossTrack      1x1   logical -      Hold S_yy at its a-priori value; default true
 %   ScaleApriori       3x3   double  -      Values of the entries not estimated; default eye(3)
 %   Quadratic          1x1   logical -      Estimate K2 per axis; default false
@@ -96,7 +116,8 @@ function [cal, info] = fitCalibration(obs, ref, options)
 % OUTPUT ARGUMENTS
 %   Name  Size  Type                            Units  Description
 %   ----  ----  ----                            -----  -----------
-%   cal   1x1   NonGravForces.app.Calibration   -      Convention "observation"; covScale and bias
+%   cal   1x1   NonGravForces.app.Calibration   -      Convention "observation"; scaleCurve when
+%                                                      'ScaleBasis' is not "constant"; covScale and bias
 %                                                      cov from the bootstrap when NBoot > 0, else
 %                                                      formal; .uncertainty (.sigmaScaleFormal,
 %                                                      .sigmaScaleBootstrap, .inflation 3x3,
@@ -130,6 +151,8 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %   NonGravForces:fitCalibration:inputGrid         'Kernel' [] and an obs epoch ref does not carry
 %   NonGravForces:fitCalibration:inputKernel       a kernel that is neither "crn", a struct nor []
 %   NonGravForces:fitCalibration:inputJumps        'Jumps' not int64
+%   NonGravForces:fitCalibration:inputScaleBasis   a knotted scale basis finer than the knotted
+%                                                  bias basis
 %   NonGravForces:fitCalibration:numericCollinear  the VIF gate refused a row with several model
 %                                                  columns
 %   NonGravForces:Calibration:inputBasis           knots the basis refuses
@@ -145,7 +168,7 @@ function [cal, info] = fitCalibration(obs, ref, options)
 % REFERENCES
 %   timeSeriesPreparation docs/CONCEPT.md 6.2 (the observation equation, the
 %   gates, the EIV bound) and 6.6 (three axes, three problems); the v3 plan
-%   (docs/inputs/HANDOVER_AccelCal_v3.md) D4, I.5-3, WP-08, WP-09, WP-13;
+%   (docs/inputs/HANDOVER_AccelCal_v3.md) D4, I.5-3, WP-08, WP-09, WP-13, WP-14;
 %   Fuller W. (1987) Measurement Error Models, Wiley, sect. 1.1 (attenuation);
 %   Kuensch H. (1989) Ann. Statist. 17:1217 (moving-block bootstrap);
 %   Kutner M. et al. (2005) Applied Linear Statistical Models, ch. 10 (VIF);
@@ -167,6 +190,8 @@ arguments
     options.BiasBasis (1,1) string {mustBeMember(options.BiasBasis, ["constant" "linear" "hat" "pspline"])} = "linear"
     options.BiasKnotSpacing_s (1,1) double {mustBePositive, mustBeFinite} = 10800
     options.Scale = "diag"
+    options.ScaleBasis (1,1) string {mustBeMember(options.ScaleBasis, ["constant" "linear" "hat" "pspline"])} = "constant"
+    options.ScaleKnotSpacing_s (1,1) double {mustBePositive, mustBeFinite} = 43200
     options.FixCrossTrack (1,1) logical = true
     options.ScaleApriori (3,3) double = eye(3)
     options.Quadratic (1,1) logical = false
@@ -206,6 +231,12 @@ t1 = obs.t(1);
 live = find(obs.weights > 0 & ~obs.filled & any(isfinite(obs.obs), 2));
 if isempty(live), live = 1:numel(obs.t); end
 tA = obs.t(live(1)); tB = obs.t(live(end));
+tA0 = tA; tB0 = tB;                                % the usable span itself, before any widening
+knotted = ["hat" "pspline"];
+if ismember(options.ScaleBasis, knotted) && ismember(options.BiasBasis, knotted) && options.ScaleKnotSpacing_s < options.BiasKnotSpacing_s
+    NonGravForces.fail(unit, "inputScaleBasis", "a scale knot spacing of %g s is finer than the bias's %g s: a scale that varies faster than the bias is not separable from it -> raise 'ScaleKnotSpacing_s' to at least 'BiasKnotSpacing_s'", ...
+        options.ScaleKnotSpacing_s, options.BiasKnotSpacing_s);
+end
 if ~isempty(K) && options.BiasBasis == "pspline"
     % B-splines are a partition of unity only between knot 4 and knot end-3, so their span is
     % widened to every raw sample a window reads. Hats are not widened: their linear extension
@@ -231,6 +262,22 @@ if ismember(options.BiasBasis, ["hat" "pspline"]) && ~isempty(K) && options.Bias
         "knot spacing %g s is below the kernel span %g s: the filtered basis columns are nearly dependent -> raise 'BiasKnotSpacing_s'", options.BiasKnotSpacing_s, K.Tf);
 end
 
+% --- the scale basis (N-03a): the same construction on the same span -----------------------
+sc = struct('basis', options.ScaleBasis, 't0', t1, 'knots', int64([]), 'tRef', tA0 + (tB0 - tA0) / 2);
+hs = int64(round(options.ScaleKnotSpacing_s * 1e9));
+switch options.ScaleBasis
+    case "hat"
+        sc.knots = tA0 + int64(0:ceil(double(tB0 - tA0) / double(hs))) * hs;
+    case "pspline"
+        sA = tA0; sB = tB0;
+        if ~isempty(K)
+            sA = sA - int64(K.Nh) * int64(round(1e9 / K.fs)); sB = sB + int64(K.Nh) * int64(round(1e9 / K.fs));
+        end
+        sc.knots = sA + int64(-3:ceil(double(sB - sA) / double(hs)) + 3) * hs;
+end
+Q = size(NonGravForces.app.Calibration.basis(sc, t1), 2);    % 1 for a constant scale
+varying = options.ScaleBasis ~= "constant";
+
 % --- the filtered columns at the observation epochs ----------------------------------------
 if isempty(K)
     [found, at] = ismember(obs.t, ref.t);
@@ -247,6 +294,18 @@ else
     Hq = [];
     if options.Quadratic
         Hq = timeSeriesPreparation.crnApply(localArc(ref.t, ref.obs.^2, "q"), K, OutputEpochs = obs.t).obs;
+    end
+end
+% The scale-curve columns H(B_s,q .* a_j), one block of Q per model axis an entry needs.
+HaS = cell(1, 3);
+if varying
+    for j = find(any(mask, 1))
+        if isempty(K)
+            HaS{j} = NonGravForces.app.Calibration.basis(sc, obs.t) .* ref.obs(at, j);
+        else
+            Braw = NonGravForces.app.Calibration.basis(sc, ref.t) .* ref.obs(:, j);
+            HaS{j} = timeSeriesPreparation.crnApply(localArc(ref.t, Braw, "s"), K, OutputEpochs = obs.t).obs;
+        end
     end
 end
 % A jump whose filtered step is the same on every usable row -- all of them before it (0) or all
@@ -278,6 +337,9 @@ axisNames = ["x" "y" "z"];
 N = numel(obs.t);
 usable = obs.weights > 0 & ~obs.filled;
 scale = S0; covScale = zeros(9); coefB = zeros(3, P); covB = cell(1, 3);
+constRow = ones(1, Q); if options.ScaleBasis == "linear", constRow = [1 0]; end
+coefS = S0(:) * constRow; covS = cell(1, 9);            % a fixed entry is its constant a priori
+Bref = NonGravForces.app.Calibration.basis(sc, sc.tRef);
 quad = nan(3, 1);
 sigF = nan(3); sigB = nan(3); resRms = nan(1, 3); stopReason = strings(1, 3);
 res = nan(N, 3); rowsUsed = false(N, 3);
@@ -288,12 +350,19 @@ gates = struct('vif', {cell(1, 3)}, 'cond', nan(1, 3), 'maxAbsCorr', nan(1, 3), 
 blockLen = nan(1, 3);
 for i = 1:3
     est = find(mask(i, :)); fix = find(~mask(i, :));
-    if options.Quadratic
-        X = [HB, Ha(:, est), Hq(:, i)];
-        names = [bNames, "S_" + axisNames(i) + axisNames(est), "K2_" + axisNames(i)];
+    if varying
+        Xs = [HaS{est}];
+        sNames = reshape(("S_" + axisNames(i) + axisNames(est)) + "_" + string((1:Q)'), 1, []);
     else
-        X = [HB, Ha(:, est)];
-        names = [bNames, "S_" + axisNames(i) + axisNames(est)];
+        Xs = Ha(:, est);
+        sNames = "S_" + axisNames(i) + axisNames(est);
+    end
+    if options.Quadratic
+        X = [HB, Xs, Hq(:, i)];
+        names = [bNames, sNames, "K2_" + axisNames(i)];
+    else
+        X = [HB, Xs];
+        names = [bNames, sNames];
     end
     l = obs.obs(:, i) - Ha(:, fix) * S0(i, fix).';
     ok = usable & isfinite(l) & all(isfinite(X), 2);
@@ -309,7 +378,7 @@ for i = 1:3
     info.observability{i} = rep;
     gates.vif{i} = rep.vif(:, 1).'; gates.cond(i) = rep.cond(1);
     gates.maxAbsCorr(i) = rep.maxAbsCorr(1); gates.weightFraction(i) = rep.weightFraction(1);
-    modelVif = rep.vif(P + (1:numel(est)), 1);
+    modelVif = rep.vif(P + (1:numel(est) * Q), 1);
     if numel(est) > 1 && any(~(modelVif <= options.VifMax))
         NonGravForces.fail(unit, "numericCollinear", "axis %s estimates %d model columns and their VIF reaches %.3g > %g: the shear is not separable on this arc -> use 'Scale' ""diag"" or a longer arc", ...
             axisNames(i), numel(est), max(modelVif), options.VifMax);
@@ -341,12 +410,22 @@ for i = 1:3
 
     coefB(i, :) = x(1:P).';
     covB{i} = Cuse(1:P, 1:P);
-    sIdx = P + (1:numel(est));
-    scale(i, est) = x(sIdx).';
+    sIdx = P + (1:numel(est) * Q);
     lin = (est - 1) * 3 + i;                         % positions of S(i, est) in S(:)
-    covScale(lin, lin) = Cuse(sIdx, sIdx);
-    sigF(i, est) = sqrt(diag(Cxx(sIdx, sIdx))).';
-    if options.NBoot > 0, sigB(i, est) = sqrt(diag(Cuse(sIdx, sIdx))).'; end
+    % J maps the curve coefficients of row i to S(i, est) at tRef; for a constant scale it is the
+    % identity and every line below reduces to what it was before N-03a.
+    J = kron(eye(numel(est)), Bref);
+    scale(i, est) = (J * x(sIdx)).';
+    covScale(lin, lin) = J * Cuse(sIdx, sIdx) * J.';
+    sigF(i, est) = sqrt(diag(J * Cxx(sIdx, sIdx) * J.')).';
+    if options.NBoot > 0, sigB(i, est) = sqrt(diag(J * Cuse(sIdx, sIdx) * J.')).'; end
+    if varying
+        for e = 1:numel(est)
+            q = sIdx((e - 1) * Q + (1:Q));
+            coefS(lin(e), :) = x(q).';
+            covS{lin(e)} = Cuse(q, q);
+        end
+    end
     if options.Quadratic, quad(i) = x(end); end
 end
 
@@ -365,7 +444,9 @@ uncertainty = struct('sigmaScaleFormal', sigF, 'sigmaScaleBootstrap', sigB, 'inf
     'noise', localNoiseName(options.Noise), 'nBoot', options.NBoot, 'blockLength', blockLen, 'stopReason', stopReason);
 prov = NonGravForces.provenance("app.fitCalibration", 'Options', localHashable(options), ...
     'Note', "obs " + obs.product + ", ref " + ref.product + ", kernel " + localKernelName(K));
-cal = NonGravForces.app.Calibration(struct('scale', scale, 'covScale', covScale, 'bias', bias, ...
+sc.coef = coefS; sc.cov = covS;
+if ~varying, sc = struct('basis', "constant", 't0', int64(0), 'knots', int64([]), 'tRef', int64(0), 'coef', zeros(9, 0), 'cov', {cell(1, 9)}); end
+cal = NonGravForces.app.Calibration(struct('scale', scale, 'scaleCurve', sc, 'covScale', covScale, 'bias', bias, ...
     'quadratic', quad, 'uncertainty', uncertainty, 'gates', gates, 'convention', "observation", 'provenance', prov));
 info.residual = obs.derive(obs.t, res, "NonGravForces.app.fitCalibration", struct('basis', options.BiasBasis));
 info.rows = rowsUsed;
