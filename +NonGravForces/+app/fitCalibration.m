@@ -54,6 +54,23 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %   and lsqvce priors remain the route if a penalty is ever needed). Entries
 %   held fixed stay constant.
 %
+%   MEASURED REGRESSORS (N-11a; CONCEPT 6.2). 'Regressors' is an Arc of K
+%   measured series -- accelerometer temperatures from AHK1B, magnetorquer
+%   currents from MAG1B, any housekeeping -- on its own grid. Each is
+%   interpolated LINEARLY onto the kernel's raw grid (no overshoot between
+%   housekeeping samples; NaN outside its span, so those rows are not fitted),
+%   demeaned over that span, filtered by H like the bias, and enters every axis
+%   as y_i += c_ik (z_k - m_k). With one arc its columns join the bias block;
+%   with several in common mode its coefficients are COMMON, a physical coupling
+%   not changing from day to day, and each day keeps its own mean m_k. A series
+%   with no finite value or no variation on the raw span is refused. That check
+%   does NOT catch every dead channel: TICUR reads -273.205 to -273.202 on
+%   2020-01-01 -- absolute zero plus a 3 mK quantisation wobble -- so it varies
+%   and would be fitted; choosing live channels is the caller's. MEASURED: the GRACE-FO sensor-unit
+%   temperatures span 0.022 C over that whole day (thermal control), so within
+%   one day a temperature column is nearly the constant bias column and its
+%   coefficient is weak; it is a campaign quantity.
+%
 %   MANY ARCS, ONE SCALE (N-09; CONCEPT 6.6). With obs a 1xN Arc array (one
 %   arc per day, in time order, not overlapping) and ref 1xN or one arc
 %   covering them all, 'ScaleMode' "common" (the default for N > 1) solves,
@@ -121,6 +138,8 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %   ScaleKnotSpacing_s 1x1   double  s      Knot spacing of a "hat" or "pspline" scale; default
 %                                           43200, at least the bias's when both are knotted
 %   ScaleMode          1x1   string  -      With several arcs: "common" (default) or "perArc"
+%   Regressors         1xN   Arc     -      Measured series, one Arc of K columns (one per obs arc,
+%                                           or one covering all); default none
 %   Span               1x2   int64   ns     [first last] epoch the bias and scale bases must cover;
 %                                           default [] = the first and last usable observation epoch.
 %                                           Cross-validation passes the WHOLE arc's span, so that a
@@ -189,6 +208,9 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %   NonGravForces:fitCalibration:inputScaleBasis   a knotted scale basis finer than the knotted
 %                                                  bias basis
 %   NonGravForces:fitCalibration:inputSpan         'Span' not an increasing int64 pair
+%   NonGravForces:fitCalibration:inputRegressors   'Regressors' not an Arc (or one per arc), or a
+%                                                  series with no finite value or no variation on
+%                                                  the arc
 %   NonGravForces:fitCalibration:unsupportedMultiArc  common mode with a knotted bias, 'Jumps' or a
 %                                                  time-varying scale
 %   NonGravForces:fitCalibration:numericCollinear  the VIF gate refused a row with several model
@@ -233,6 +255,7 @@ arguments
     options.ScaleKnotSpacing_s (1,1) double {mustBePositive, mustBeFinite} = 43200
     options.Span = int64([])
     options.ScaleMode (1,1) string {mustBeMember(options.ScaleMode, ["common" "perArc"])} = "common"
+    options.Regressors = []
     options.FixCrossTrack (1,1) logical = true
     options.ScaleApriori (3,3) double = eye(3)
     options.Quadratic (1,1) logical = false
@@ -387,6 +410,9 @@ end
 P = size(HB, 2);
 nJ = numel(jumps);
 bNames = ["b_" + string(1:P - nJ), "jump_" + string(1:nJ)];
+if isempty(K), gridT = obs.t; else, gridT = ref.t; end
+[HR, reg] = localRegressors(options.Regressors, gridT, obs.t, K, unit);
+Kr = size(HR, 2); rNames = "r_" + reg.names;
 axisNames = ["x" "y" "z"];
 
 % --- three problems ----------------------------------------------------------------------
@@ -414,11 +440,11 @@ for i = 1:3
         sNames = "S_" + axisNames(i) + axisNames(est);
     end
     if options.Quadratic
-        X = [HB, Xs, Hq(:, i)];
-        names = [bNames, sNames, "K2_" + axisNames(i)];
+        X = [HB, HR, Xs, Hq(:, i)];
+        names = [bNames, rNames, sNames, "K2_" + axisNames(i)];
     else
-        X = [HB, Xs];
-        names = [bNames, sNames];
+        X = [HB, HR, Xs];
+        names = [bNames, rNames, sNames];
     end
     l = obs.obs(:, i) - Ha(:, fix) * S0(i, fix).';
     ok = usable & isfinite(l) & all(isfinite(X), 2);
@@ -434,7 +460,7 @@ for i = 1:3
     info.observability{i} = rep;
     gates.vif{i} = rep.vif(:, 1).'; gates.cond(i) = rep.cond(1);
     gates.maxAbsCorr(i) = rep.maxAbsCorr(1); gates.weightFraction(i) = rep.weightFraction(1);
-    modelVif = rep.vif(P + (1:numel(est) * Q), 1);
+    modelVif = rep.vif(P + Kr + (1:numel(est) * Q), 1);
     if numel(est) > 1 && any(~(modelVif <= options.VifMax))
         NonGravForces.fail(unit, "numericCollinear", "axis %s estimates %d model columns and their VIF reaches %.3g > %g: the shear is not separable on this arc -> use 'Scale' ""diag"" or a longer arc", ...
             axisNames(i), numel(est), max(modelVif), options.VifMax);
@@ -469,7 +495,8 @@ for i = 1:3
 
     coefB(i, :) = x(1:P).';
     covB{i} = Cuse(1:P, 1:P);
-    sIdx = P + (1:numel(est) * Q);
+    reg.coef(i, :) = reshape(x(P + (1:Kr)), 1, []); reg.cov{i} = Cuse(P + (1:Kr), P + (1:Kr));
+    sIdx = P + Kr + (1:numel(est) * Q);
     lin = (est - 1) * 3 + i;                         % positions of S(i, est) in S(:)
     % J maps the curve coefficients of row i to S(i, est) at tRef; for a constant scale it is the
     % identity and every line below reduces to what it was before N-03a.
@@ -507,11 +534,40 @@ prov = NonGravForces.provenance("app.fitCalibration", 'Options', localHashable(o
     'Note', "obs " + obs.product + ", ref " + ref.product + ", kernel " + localKernelName(K));
 sc.coef = coefS; sc.cov = covS;
 if ~varying, sc = struct('basis', "constant", 't0', int64(0), 'knots', int64([]), 'tRef', int64(0), 'coef', zeros(9, 0), 'cov', {cell(1, 9)}); end
-cal = NonGravForces.app.Calibration(struct('scale', scale, 'scaleCurve', sc, 'covScale', covScale, 'bias', bias, ...
+if Kr == 0, reg = []; end
+cal = NonGravForces.app.Calibration(struct('scale', scale, 'scaleCurve', sc, 'covScale', covScale, 'bias', bias, 'regressors', reg, ...
     'quadratic', quad, 'uncertainty', uncertainty, 'gates', gates, 'convention', "observation", 'provenance', prov));
 info.residual = obs.derive(obs.t, res, "NonGravForces.app.fitCalibration", struct('basis', options.BiasBasis));
 info.rows = rowsUsed;
 info.prediction = obs.derive(obs.t, pred, "NonGravForces.app.fitCalibration.prediction", struct('basis', options.BiasBasis));
+end
+
+% =========================================================================================
+function [HR, reg] = localRegressors(R, gridT, outT, K, unit)
+%LOCALREGRESSORS The measured series on the raw grid, demeaned, filtered like the bias (N-11a).
+reg = struct('names', strings(1, 0), 'units', strings(1, 0), 'mean', zeros(1, 0), 'coef', zeros(3, 0), 'cov', {cell(1, 3)});
+HR = zeros(numel(outT), 0);
+if isempty(R), return, end
+if ~isa(R, 'timeSeriesPreparation.Arc') || ~isscalar(R)
+    NonGravForces.fail(unit, "inputRegressors", "'Regressors' must be a timeSeriesPreparation.Arc of measured series -> got a %s", class(R));
+end
+Kr = numel(R.names);
+Z = NonGravForces.app.Calibration.interpolateSeries(R, 1:Kr, gridT);
+for k = 1:Kr
+    z = Z(isfinite(Z(:, k)), k);
+    if isempty(z) || all(z == z(1))
+        NonGravForces.fail(unit, "inputRegressors", "regressor %s has no finite value or no variation over the arc -> remove it from 'Regressors'", R.names(k));
+    end
+end
+m = mean(Z, 1, "omitnan");
+Zc = Z - m;
+if isempty(K)
+    HR = Zc;
+else
+    HR = timeSeriesPreparation.crnApply(localArc(gridT, Zc, "r"), K, OutputEpochs = outT).obs;
+end
+reg.names = reshape(string(R.names), 1, []); reg.units = reshape(string(R.units), 1, []); reg.mean = m;
+reg.coef = zeros(3, Kr);
 end
 
 % =========================================================================================
@@ -532,6 +588,7 @@ if options.ScaleMode == "perArc"
     c = cell(1, N); infos = cell(1, N);
     for k = 1:N
         o = rmfield(options, 'ScaleMode'); o.Seed = options.Seed + k - 1;
+        if numel(options.Regressors) == N, o.Regressors = options.Regressors(k); end
         nv = namedargs2cell(o);
         [c{k}, infos{k}] = NonGravForces.app.fitCalibration(obs(k), refs(k), nv{:});
     end
@@ -554,7 +611,10 @@ if options.NBoot > 0 && N < 10
 end
 
 % --- per arc: the filtered columns at the observation epochs (as the single-arc path) ----------
-arcs = struct('t', cell(1, N), 'y', [], 'usable', [], 'Ha', [], 'HB', [], 'Hq', [], 'bias', []);
+if ~(isempty(options.Regressors) || isscalar(options.Regressors) || numel(options.Regressors) == N)
+    NonGravForces.fail(unit, "inputRegressors", "'Regressors' must be one Arc covering every arc or one per arc -> got %d for %d", numel(options.Regressors), N);
+end
+arcs = struct('t', cell(1, N), 'y', [], 'usable', [], 'Ha', [], 'HB', [], 'Hq', [], 'bias', [], 'HR', [], 'reg', []);
 for k = 1:N
     o = obs(k); r = refs(k);
     b = struct('basis', options.BiasBasis, 't0', o.t(1), 'knots', int64([]), 'jumps', zeros(1, 0, 'int64'), 'coef', [], 'cov', {{[], [], []}});
@@ -572,8 +632,13 @@ for k = 1:N
             Hq = timeSeriesPreparation.crnApply(localArc(r.t, r.obs.^2, "q"), K, OutputEpochs = o.t).obs;
         end
     end
-    arcs(k) = struct('t', o.t, 'y', o.obs, 'usable', o.weights > 0 & ~o.filled, 'Ha', Ha, 'HB', HB, 'Hq', Hq, 'bias', b);
+    if numel(options.Regressors) > 1, Rk = options.Regressors(k); else, Rk = options.Regressors; end
+    if isempty(K), gridT = o.t; else, gridT = r.t; end
+    [HR, regk] = localRegressors(Rk, gridT, o.t, K, unit);
+    arcs(k) = struct('t', o.t, 'y', o.obs, 'usable', o.weights > 0 & ~o.filled, 'Ha', Ha, 'HB', HB, 'Hq', Hq, 'bias', b, 'HR', HR, 'reg', regk);
 end
+Kr = size(arcs(1).HR, 2); rNames = "r_" + arcs(1).reg.names;
+regCoef = zeros(3, Kr); regCov = cell(1, 3);
 P = size(arcs(1).HB, 2);
 axisNames = ["x" "y" "z"];
 bNames = "b_" + string(1:P);
@@ -592,6 +657,7 @@ for i = 1:3
     est = find(mask(i, :)); fix = find(~mask(i, :));
     sNames = "S_" + axisNames(i) + axisNames(est);
     if options.Quadratic, sNames = [sNames, "K2_" + axisNames(i)]; end %#ok<AGROW>
+    sNames = [sNames, rNames]; %#ok<AGROW>
     names{i} = [bNames, sNames];
     % the per-arc rows of this axis: common columns A, local columns B, observation l
     A = cell(1, N); B = cell(1, N); L = cell(1, N); ok = cell(1, N); tS = cell(1, N);
@@ -599,6 +665,7 @@ for i = 1:3
         a = arcs(k);
         A{k} = a.Ha(:, est);
         if options.Quadratic, A{k} = [A{k}, a.Hq(:, i)]; end
+        A{k} = [A{k}, a.HR];
         B{k} = a.HB;
         L{k} = a.y(:, i) - a.Ha(:, fix) * S0(i, fix).';
         ok{k} = a.usable & isfinite(L{k}) & all(isfinite(A{k}), 2) & all(isfinite(B{k}), 2);
@@ -606,8 +673,9 @@ for i = 1:3
         rowsUsed{k}(:, i) = ok{k};
     end
     if options.Quadratic                                   % K2 demeaned over every fitted row
-        q = cell2mat(cellfun(@(Ak, okk) Ak(okk, end), A, ok, 'UniformOutput', false)');
-        for k = 1:N, A{k}(:, end) = A{k}(:, end) - mean(q); end
+        qc = numel(est) + 1;
+        q = cell2mat(cellfun(@(Ak, okk) Ak(okk, qc), A, ok, 'UniformOutput', false)');
+        for k = 1:N, A{k}(:, qc) = A{k}(:, qc) - mean(q); end
     end
 
     % gate: the common columns with each day's bias basis projected out
@@ -642,7 +710,7 @@ for i = 1:3
     end
     allv = cell2mat(cellfun(@(r) r(:, i), res, 'UniformOutput', false)');
     resRms(i) = sqrt(mean(allv(isfinite(allv)).^2));
-    if options.NBoot > 0 && ~isempty(est) || options.NBoot > 0 && options.Quadratic
+    if options.NBoot > 0 && (~isempty(est) || options.Quadratic || Kr > 0)
         [~, bi] = timeSeriesPreparation.bootstrap((1:N)', ...
             @(ii) localJoint(A, B, L, ok, tS, ii(:)', options.Noise, options.Robust).', ...
             NBoot = options.NBoot, BlockLength = 1, Seed = options.Seed, Stage = "fitCalibration.days." + axisNames(i));
@@ -657,7 +725,9 @@ for i = 1:3
     covScale(lin, lin) = Cuse(sIdx, sIdx);
     sigF(i, est) = sqrt(diag(Cxx(sIdx, sIdx))).';
     if options.NBoot > 0, sigB(i, est) = sqrt(diag(Cuse(sIdx, sIdx))).'; end
-    if options.Quadratic, quad(i) = x(end); end
+    if options.Quadratic, quad(i) = x(numel(est) + 1); end
+    rIdx = numel(est) + options.Quadratic + (1:Kr);
+    regCoef(i, :) = reshape(x(rIdx), 1, []); regCov{i} = Cuse(rIdx, rIdx);
 end
 
 % --- the EIV bound per model axis, over every fitted row ----------------------------------------
@@ -678,9 +748,11 @@ uncertainty = struct('sigmaScaleFormal', sigF, 'sigmaScaleBootstrap', sigB, 'inf
 c = cell(1, N); infoRes = cell(1, N);
 for k = 1:N
     b = arcs(k).bias; b.coef = coefB{k}; b.cov = covB{k};
+    regk = [];
+    if Kr > 0, regk = arcs(k).reg; regk.coef = regCoef; regk.cov = regCov; end
     prov = NonGravForces.provenance("app.fitCalibration", 'Options', localHashable(options), ...
         'Note', sprintf("arc %d of %d, common scale; obs %s, ref %s, kernel %s", k, N, obs(k).product, refs(k).product, localKernelName(K)));
-    c{k} = NonGravForces.app.Calibration(struct('scale', scale, 'covScale', covScale, 'bias', b, ...
+    c{k} = NonGravForces.app.Calibration(struct('scale', scale, 'covScale', covScale, 'bias', b, 'regressors', regk, ...
         'quadratic', quad, 'uncertainty', uncertainty, 'gates', gates, 'convention', "observation", 'provenance', prov));
     infoRes{k} = obs(k).derive(obs(k).t, res{k}, "NonGravForces.app.fitCalibration", struct('basis', options.BiasBasis, 'arc', k));
 end
@@ -869,4 +941,5 @@ function o = localHashable(options)
 o = options;
 if isstruct(o.Kernel), o.Kernel = "struct " + string(o.Kernel.preset); end
 if isstruct(o.Noise), o.Noise = "declared " + string(o.Noise(1).type); end
+if ~isempty(o.Regressors), o.Regressors = "regressors " + strjoin(unique([o.Regressors.names]), " "); end
 end

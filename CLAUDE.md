@@ -171,8 +171,13 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-15, N-09)
+## 5. Current status (2026-10-15, N-11a)
 
+- **2026-10-15, N-11a (#68, first of two PRs):** 'Regressors' in `fitCalibration` (measured series, linear onto
+  the raw grid, demeaned, filtered like the bias; common over days) carried by `Calibration` (schema "3";
+  `apply` refuses without the series). Measured: GRACE-FO TSU temperatures span 0.022 C per day (thermal
+  control), TICUR is dead at -273.2 C. ☑ on Tier A: 427/427, predicted 427. Next: N-11b (temperature-
+  dependent full scale).
 - **2026-10-15, N-09 (#66):** `fitCalibration` and `calibrate` take Arc arrays: one COMMON scale, per-day biases
   as lsqvce 'day' locals (pre-eliminated), uncertainty by a bootstrap over days; 'ScaleMode' "perArc" = N
   single fits. Real fixtures: 30 min of ACT1B/GNV1B/SCA1B for 2020-01-01..03 C in `data/samples/multiday`.
@@ -605,6 +610,8 @@ Every one of these was an actual defect found in a predecessor or a dependency.
 - **A SCALAR indexed by an empty index is 1x0, a column indexed by it is 0x1.** `x(sIdx)` with `sIdx = P + (1:0)`
   breaks `J * x(sIdx)` only when x happens to be a scalar -- in `fitCalibration`, a constant bias on an axis
   with no estimated scale. Shipped in N-03a, found by N-03b. Force the shape: `reshape(x(sIdx), [], 1)`.
+- **A dead housekeeping channel need not be constant**: AHK1B's TICUR reads -273.2 C with a 3 mK wobble, so a
+  constancy check passes it. Look at the values before choosing a regressor (N-11a).
 - **lsqvce's `B` spans every local column of the system**, not just the arc's own day: m_a x nl over all days,
   the day's block in place (sparse). And a system needs at least one COMMON column (N-09).
 - **A title's text object hides its handle from `findobj`**; a test reading back a Tagged title needs `findall`.

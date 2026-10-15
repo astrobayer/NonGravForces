@@ -153,6 +153,46 @@ classdef tNgfCalibrate < NgfTestCase
             tc.verifyBoundAndRecord("calibrate campaign, real x bias day-to-day spread / mean", (max(bx) - min(bx)) / abs(mean(bx)), 0.2, "-", ...
                 "three consecutive days of one instrument; measured 0.08 when written (-3.38, -3.32, -3.12e-7)");
         end
+
+        function calibrateRegressorsRealDay(tc)
+            % N-11a on real data: 30 min of 2020-01-01 GRACE-C, ACT1B against the fast Model, with the
+            % sensor-unit temperature TSU_Y+ (AHK1B) and the three net magnetorquer currents (MAG1B) as
+            % measured regressors, both on the MAG1B grid (the temperature linearly). Completion and finite
+            % coefficients. TICUR is recorded, not refused: it reads absolute zero with a 3 mK quantisation
+            % wobble, so the constancy check cannot tell it dead (found writing this test).
+            f = @(varargin) fullfile(tc.root, 'data', 'samples', 'multiday', varargin{:});
+            [epM, fld] = NonGravForces.io.readMAG1B(f('MAG1B_2020-01-01_C_04.txt'));
+            tM = referenceSystem.epochTo(epM, "gpsNanoseconds");
+            [tA, hk, hkAux] = gracefoReading.readL1b(f('AHK1B_2020-01-01_C_04.txt'), 'TimeFormat', "gpsns");
+            nms = string(hkAux.obsNames);
+            tsu = hk(:, nms == "TSU_Y+"); ok = isfinite(tsu);
+            temp = interp1(double(tA(ok) - tM(1)) / 1e9, tsu(ok), double(tM - tM(1)) / 1e9, 'linear', NaN);
+            cn = {'TSU_Y', 'MTQ_x', 'MTQ_y', 'MTQ_z'}; cu = struct('TSU_Y', 'C', 'MTQ_x', 'A', 'MTQ_y', 'A', 'MTQ_z', 'A');
+            R = timeSeriesPreparation.Arc(tM, [temp(:), fld.torquerNet_A.'], struct("obsNames", {cn}, "variableNames", {cn}, ...
+                "variableFieldNames", {cn}, "variableUnits", cu, "fileName", "MAG1B+AHK1B", "product", "REGRESSORS"));
+            ticur = hk(isfinite(hk(:, nms == "TICUR")), nms == "TICUR");
+            tc.verifyBoundAndRecord("calibrate real day, TICUR distance from absolute zero", max(abs(ticur + 273.15)), 0.1, "C", ...
+                "a dead channel: -273.2 C on every record, varying by its 3 mK quantisation (choose live channels)");
+            [ep, r, v] = NonGravForces.io.readGNV1B(f('GNV1B_2020-01-01_C_04.txt'), 'Eop', tc.eop);
+            [e, q] = NonGravForces.io.readSCA1B(f('SCA1B_2020-01-01_C_04.txt'));
+            attP = NonGravForces.geom.AttitudeProvider(e, q);
+            [epC, a] = NonGravForces.io.readACC1B(f('ACT1B_2020-01-01_C_04.txt'));
+            names = {'lin_accl_x', 'lin_accl_y', 'lin_accl_z'};
+            units = struct('lin_accl_x', 'm/s2', 'lin_accl_y', 'm/s2', 'lin_accl_z', 'm/s2');
+            accR = timeSeriesPreparation.Arc(referenceSystem.epochTo(epC, "gpsNanoseconds"), a.', struct("obsNames", {names}, ...
+                "variableNames", {names}, "variableFieldNames", {names}, "variableUnits", units, "fileName", "ACT1B_2020-01-01_C_04.txt", "product", "ACT1B"));
+            M = NonGravForces.Model(NonGravForces.geom.graceFO("C"), NonGravForces.Options("fast"), 'Attitude', attP, ...
+                'Eop', tc.eop, 'SpaceWeather', tc.sw, 'Exponential', struct('rho0_kg_m3', 3e-12, 'h0_m', 450e3, 'H_m', 60e3));
+            orbs = struct('epoch', ep, 'r', r, 'v', v);
+            res = NonGravForces.app.calibrate(accR, M, 'Orbit', orbs, 'Attitude', attP, 'Fit', {'NBoot', 0, 'Regressors', R});
+            c = res.calibration;
+            tc.verifyEqual(c.regressors.names, ["TSU_Y" "MTQ_x" "MTQ_y" "MTQ_z"]);
+            tc.verifyTrue(all(isfinite(c.regressors.coef), 'all'));
+            tc.verifyBoundAndRecord("calibrate real day, TSU_Y+ span over the 30 min", max(temp) - min(temp), 0.05, "C", ...
+                "recorded: the thermally controlled sensor unit barely moves (0.022 C over the whole day)");
+            out = c.apply(accR, 'Regressors', R);
+            tc.verifySize(out.obs, size(accR.obs));
+        end
     end
 
     % ===================================================================== precision
