@@ -5,7 +5,7 @@
 %
 % \input-able from a report-class document; it opens no document and no chapter.
 
-\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 55 units, toolbox version 0.14.0.
+\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 57 units, toolbox version 0.14.0.
 
 \section{L0 \texttt{core} --- constants, options, provenance, uniform errors and the MEX build}
 
@@ -4121,4 +4121,159 @@ info & 1x1 & struct & - & .foldLoss (1xC cell of Folds x 3) .testRows (Folds x 2
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}*}] a candidate the estimator refuses
 \item[\texttt{timeSeriesPreparation:\allowbreak{}crossval:\allowbreak{}*}] folds that leave no training or test row
 \item[\texttt{timeSeriesPreparation:\allowbreak{}blockLength:\allowbreak{}tooShort}] the automatic gap on too short an arc
+\end{description}
+
+\subsection{\texttt{NonGravForces.app.perRevolution}}
+\label{api:app.perRevolution}
+\noindent Accelerometer bias and diagonal scale fitted per orbital revolution, gated per window.
+
+\begin{lstlisting}
+T = NonGravForces.app.perRevolution(obs, ref)
+[T, info] = NonGravForces.app.perRevolution(obs, ref, 'Period_s', 5640, 'NBoot', 50, 'Effects', effects)
+\end{lstlisting}
+
+\subsubsection*{INPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+obs & 1x1 & timeSeriesPreparation.\allowbreak{}Arc & m/\allowbreak{}s\textasciicircum{}2 & Observation, as for app.fitCalibration \\
+ref & 1x1 & timeSeriesPreparation.\allowbreak{}Arc & m/\allowbreak{}s\textasciicircum{}2 & Model on the kernel's raw grid, as for app.fitCalibration \\
+\end{longtable}
+
+\subsubsection*{NAME-VALUE ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+Period\_\allowbreak{}s & 1x1 & double & s & Window length, the orbital period; default 5640 (\textasciitilde{}490 km) \\
+MinWindowFraction & 1x1 & double & - & Usable share of a window's rows below which it is gated; default 0.8 \\
+NBoot & 1x1 & double & - & Bootstrap replicates per window, 0 for formal sigmas; default 50 \\
+Seed & 1x1 & double & - & Bootstrap seed; window w uses Seed + w; default 0 \\
+Fit & 1xN & cell & - & Further app.fitCalibration name-value pairs (Kernel, FixCrossTrack, Noise, Robust, ...); 'BiasBasis', 'ScaleBasis', 'Span', 'NBoot' and 'Seed' are this unit's \\
+Effects & 1xE & struct & m/\allowbreak{}s\textasciicircum{}2 & .name (string) .arc (timeSeriesPreparation.Arc, 3 axes, any epochs); default none \\
+\end{longtable}
+
+\subsubsection*{OUTPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+T & RxN & table & - & One row per window: window, t0, t1, tMid (int64 GPS ns), usable (share of the window's rows), scale, sigmaScale (Rx3, NaN where held or gated), bias, sigmaBias (Rx3, m/s\textasciicircum{}2), gate (Rx3 string: "pass", "warn" -- fitted with a VIF above VifMax on one model column -- or the reason it is NaN), and amp\_\textless{}name\textgreater{} (Rx3, m/s\textasciicircum{}2) per effect. UserData: .period\_s .nBoot .sigma ("bootstrap" or "formal") \\
+info & 1x1 & struct & - & .calibrations (1xR cell of app.Calibration, [] where gated) .messages (Rx1 string, the gate's message where gated) \\
+\end{longtable}
+
+\subsubsection*{ERRORS}
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
+\item[\texttt{NonGravForces:\allowbreak{}perRevolution:\allowbreak{}inputArc}] obs is not a timeSeriesPreparation.Arc
+\item[\texttt{NonGravForces:\allowbreak{}perRevolution:\allowbreak{}inputFit}] 'Fit' sets a pair this unit owns, or is not name-value
+\item[\texttt{NonGravForces:\allowbreak{}perRevolution:\allowbreak{}inputEffects}] an effect without .name and a 3-axis .arc
+\item[\texttt{NonGravForces:\allowbreak{}perRevolution:\allowbreak{}dataEmpty}] no usable observation epoch
+\item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}*}] an estimator error that is not a gate
+\item[\texttt{timeSeriesPreparation:\allowbreak{}*, lsqvce:\allowbreak{}*}] as app.fitCalibration
+\end{description}
+
+\subsection{\texttt{NonGravForces.app.attributeRevolutions}}
+\label{api:app.attributeRevolutions}
+\noindent Attribute per-revolution scale variations to drivers: density, geometry or sensor.
+
+\begin{lstlisting}
+A = NonGravForces.app.attributeRevolutions(T, 'Orbit', orb, 'SpaceWeather', sw)
+[A, info] = NonGravForces.app.attributeRevolutions(T, 'Drivers', D, 'Families', struct('myDriver', "geometry"))
+\end{lstlisting}
+
+\subsubsection*{INPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+T & RxN & table & - & app.perRevolution's table (t0, t1, tMid, scale, optional amp\_*) \\
+\end{longtable}
+
+\subsubsection*{NAME-VALUE ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+Orbit & 1x1 & struct & m & .epoch .r .v (GCRS, as io.readGNV1B gives them); adds betaPrime and eclipseFraction; default none \\
+SpaceWeather & 1x1 & NonGravForces.\allowbreak{}io.\allowbreak{}spaceWeather & - & Adds f107, f107a, ap; default none \\
+Drivers & RxN & table & - & Further drivers, one numeric column each; default none \\
+Families & 1x1 & struct & - & Field = driver name, value = family; overrides and extends the defaults above \\
+Significance & 1x1 & double & - & \textbar{}coef/sigma\textbar{} above which a driver counts; default 3 \\
+MaxVif & 1x1 & double & - & regressDrivers' VIF gate; default 10 \\
+NBoot & 1x1 & double & - & regressDrivers' replicates; default 1000 \\
+Seed & 1x1 & double & - & regressDrivers' seed; default 0 \\
+\end{longtable}
+
+\subsubsection*{OUTPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+A & Jx6 & table & - & One row per estimated per-revolution scale: parameter ("S\_xx", ...), verdict, reason, significant (string, the significant drivers), r2, nRows \\
+info & 1x1 & struct & - & .drivers (R-row table of every driver offered) .families (struct) .dropped (string) .regression (1xJ cell of regressDrivers results, [] where it refused) \\
+\end{longtable}
+
+\subsubsection*{ERRORS}
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
+\item[\texttt{NonGravForces:\allowbreak{}attributeRevolutions:\allowbreak{}inputTable}] T lacks t0, t1, tMid or scale
+\item[\texttt{NonGravForces:\allowbreak{}attributeRevolutions:\allowbreak{}inputOrbit}] 'Orbit' without .epoch, .r, .v of matching size
+\item[\texttt{NonGravForces:\allowbreak{}attributeRevolutions:\allowbreak{}inputDrivers}] 'Drivers' without one numeric row per revolution
+\item[\texttt{NonGravForces:\allowbreak{}attributeRevolutions:\allowbreak{}dataNoDriver}] no driver varies over the usable revolutions
+\item[\texttt{timeSeriesPreparation:\allowbreak{}regressDrivers:\allowbreak{}tooFewRows}] fewer revolutions than drivers + 2
+\item[\texttt{referenceSystem:\allowbreak{}*, NonGravForces:\allowbreak{}spaceWeather:\allowbreak{}*}] from the geometry and the index lookup
 \end{description}

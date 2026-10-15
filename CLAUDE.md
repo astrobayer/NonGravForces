@@ -35,7 +35,7 @@ Eight layers; a layer calls only lower layers plus the four dependencies. L7 is 
 control moved to `timeSeriesPreparation.qc` (N-01) and its forwarders were deleted in 0.14.0 (O-47).
 
 ```
-L8 app      calibrate, fitCalibration, compareCalibrations, Calibration, syntheticPair, forceBudget, densityInversion, DynamicsSource (gjToolbox entry, native C)
+L8 app      calibrate, fitCalibration, compareCalibrations, perRevolution, attributeRevolutions, Calibration, syntheticPair, forceBudget, densityInversion, DynamicsSource (gjToolbox entry, native C)
 L6 sensor   Sensor (abstract), Electrostatic, AtomInterferometer, DragFree
 L5 Model    accel | torque | series | partials | budget   <- single point of access
 L4 kernel   gsiCoefficients, accommodation, dragPanelForce, radiationPanelForce,
@@ -48,7 +48,7 @@ L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
 L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options, buildMex
 ```
 
-55 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
+57 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
 both directions against the files on disk, and this sentence's number against it
 — which it genuinely did not until 2026-09-16, when the sentence said 53 and the
 catalogue held 55; `auditPackage.py` check 5 now compares both this number and
@@ -171,8 +171,13 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-15, N-03b)
+## 5. Current status (2026-10-15, N-03c; N-03 complete)
 
+- **2026-10-15, N-03c (#60, third of three PRs):** `app.perRevolution` (bias + diagonal scale per window through
+  `fitCalibration`; a gated window is NaN with its reason) and `app.attributeRevolutions` (drivers beta',
+  eclipse fraction, F10.7/Ap, effect amplitudes, time -> `timeSeriesPreparation.regressDrivers`; verdict at
+  3 bootstrap sigma). 57 units. ☑ on Tier A: 405/405, predicted 405. **N-03 is complete; release 0.15.0 is
+  O-49.** Every decision the owner had open was ratified on 2026-10-15 (HANDOVER Part I).
 - **2026-10-15, N-03b (#60, second of three PRs):** `app.compareCalibrations` ranks candidate models per axis by
   blocked CV (`timeSeriesPreparation.crossval`), AIC/BIC as IC_unreliable columns; `fitCalibration` gains
   `'Span'` and `info.prediction`. Fixed an N-03a defect (constant bias + held S_yy). 55 units. ☑ on Tier A:
@@ -459,7 +464,7 @@ repository had written down about them.
   under `tests/fixtures/groops/` and committed; neither CI nor the host needs a
   GROOPS installation.
 
-**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-48 with an owner
+**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-49 with an owner
 and a re-entry condition each. This file deliberately does NOT list them: the copy that
 used to live here had drifted to O-15 of 21 and showed two closed items as open, and no
 check compared the two (R1). Read Part H.
