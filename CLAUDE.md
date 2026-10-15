@@ -35,7 +35,7 @@ Eight layers; a layer calls only lower layers plus the four dependencies. L7 is 
 control moved to `timeSeriesPreparation.qc` (N-01) and its forwarders were deleted in 0.14.0 (O-47).
 
 ```
-L8 app      calibrate, fitCalibration, compareCalibrations, perRevolution, attributeRevolutions, Calibration, syntheticPair, forceBudget, densityInversion, DynamicsSource (gjToolbox entry, native C)
+L8 app      calibrate, fitCalibration, compareCalibrations, perRevolution, attributeRevolutions, plotCalibration, plotAttribution, Calibration, syntheticPair, forceBudget, densityInversion, DynamicsSource (gjToolbox entry, native C)
 L6 sensor   Sensor (abstract), Electrostatic, AtomInterferometer, DragFree
 L5 Model    accel | torque | series | partials | budget   <- single point of access
 L4 kernel   gsiCoefficients, accommodation, dragPanelForce, radiationPanelForce,
@@ -48,7 +48,7 @@ L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
 L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options, buildMex
 ```
 
-57 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
+59 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
 both directions against the files on disk, and this sentence's number against it
 — which it genuinely did not until 2026-09-16, when the sentence said 53 and the
 catalogue held 55; `auditPackage.py` check 5 now compares both this number and
@@ -171,8 +171,12 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-15, release 0.15.0)
+## 5. Current status (2026-10-15, N-05)
 
+- **2026-10-15, N-05 (#62):** `app.plotCalibration` (scale/bias with bands, residual ACF before and after AR
+  whitening) and `app.plotAttribution` (per-revolution scales vs time and drivers, verdict banner); tests
+  assert the figures draw their source bitwise. Found: `attributeRevolutions` needs >= 20 revolutions
+  (documented; 'BlockLength' added). 59 units. ☑ on Tier A: 413/413, predicted 413.
 - **2026-10-15, release 0.15.0 (O-49 closed):** N-03 released; benchmark re-run on Tier A (standard 17.0 ms at
   K=1, 0.836 at K=100), 405/405 on Tier A, predicted 405. Also on `main`: #86, a failed kernel download now
   names its cause in ciGate's message. Open N-issues: N-05 (figures, needs N-03 -- now unblocked), N-08..N-12.
@@ -597,6 +601,9 @@ Every one of these was an actual defect found in a predecessor or a dependency.
 - **A SCALAR indexed by an empty index is 1x0, a column indexed by it is 0x1.** `x(sIdx)` with `sIdx = P + (1:0)`
   breaks `J * x(sIdx)` only when x happens to be a scalar -- in `fitCalibration`, a constant bias on an axis
   with no estimated scale. Shipped in N-03a, found by N-03b. Force the shape: `reshape(x(sIdx), [], 1)`.
+- **A title's text object hides its handle from `findobj`**; a test reading back a Tagged title needs `findall`.
+- **`tsFitAR`'s default exact method is too slow for anything drawn**: over a minute for 4000 samples with a
+  gap. Fit Yule-Walker (`Method = "yw"`) on a gap-free run and filter (N-05).
 - **`struct('a', {})` builds a 0x0 struct ARRAY**, not a scalar with an empty field; only cell
   values distribute. Assignment into an element of a struct array also needs the same fields in
   the same ORDER, which is why `buildMex/localState` rebuilds the record instead of extending it.

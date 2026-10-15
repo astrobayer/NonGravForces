@@ -239,6 +239,13 @@ classdef tNgfRevolutions < NgfTestCase
             tc.verifyEqual(info.dropped, "c");
             tc.verifyEqual(A2.nRows, 38);
             tc.verifyEqual(A2.verdict, "density");
+            % Fewer than 20 revolutions: the automatic block length refuses (found by N-05, which first
+            % tried one day = 16); an explicit 'BlockLength' is accepted.
+            short = T(1:16, :);
+            tc.verifyErrorId(@() NonGravForces.app.attributeRevolutions(short, 'Drivers', D(1:16, :), 'NBoot', 50), ...
+                "timeSeriesPreparation:blockLength:tooShort");
+            A3 = NonGravForces.app.attributeRevolutions(short, 'Drivers', D(1:16, :), 'NBoot', 50, 'BlockLength', 3);
+            tc.verifyEqual(A3.nRows, 14, "16 revolutions less the two gated above");
         end
     end
 

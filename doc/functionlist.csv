@@ -56,3 +56,5 @@ app,fitCalibration,function,L8,N-02,done,The calibration estimator: CRN-filtered
 app,compareCalibrations,function,L8,N-03,done,Rank candidate calibration models per axis by blocked cross-validation (timeSeriesPreparation.crossval); AIC/BIC reported as IC_unreliable
 app,perRevolution,function,L8,N-03,done,Accelerometer bias and diagonal scale per orbital revolution through fitCalibration; a gated window is NaN with its reason
 app,attributeRevolutions,function,L8,N-03,done,Per-revolution scales regressed on drivers (beta prime + eclipse + space weather + effects + time) via regressDrivers; verdict density | geometry | sensor | mixed | unresolved
+app,plotCalibration,function,L8,N-05,done,Figure of a calibration: scale and bias with their bands and the residual ACF before and after whitening
+app,plotAttribution,function,L8,N-05,done,Figure of the attribution: per-revolution scales over time and against their strongest drivers; verdict banner

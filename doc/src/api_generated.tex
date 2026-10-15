@@ -5,7 +5,7 @@
 %
 % \input-able from a report-class document; it opens no document and no chapter.
 
-\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 57 units, toolbox version 0.15.0.
+\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 59 units, toolbox version 0.15.0.
 
 \section{L0 \texttt{core} --- constants, options, provenance, uniform errors and the MEX build}
 
@@ -4248,6 +4248,7 @@ Significance & 1x1 & double & - & \textbar{}coef/sigma\textbar{} above which a d
 MaxVif & 1x1 & double & - & regressDrivers' VIF gate; default 10 \\
 NBoot & 1x1 & double & - & regressDrivers' replicates; default 1000 \\
 Seed & 1x1 & double & - & regressDrivers' seed; default 0 \\
+BlockLength & 1x1 & double & - & regressDrivers' block length in revolutions; default [] = automatic (needs \textgreater{}= 20 rows) \\
 \end{longtable}
 
 \subsubsection*{OUTPUT ARGUMENTS}
@@ -4275,5 +4276,153 @@ info & 1x1 & struct & - & .drivers (R-row table of every driver offered) .famili
 \item[\texttt{NonGravForces:\allowbreak{}attributeRevolutions:\allowbreak{}inputDrivers}] 'Drivers' without one numeric row per revolution
 \item[\texttt{NonGravForces:\allowbreak{}attributeRevolutions:\allowbreak{}dataNoDriver}] no driver varies over the usable revolutions
 \item[\texttt{timeSeriesPreparation:\allowbreak{}regressDrivers:\allowbreak{}tooFewRows}] fewer revolutions than drivers + 2
+\item[\texttt{timeSeriesPreparation:\allowbreak{}blockLength:\allowbreak{}tooShort}] fewer than 20 revolutions and no 'BlockLength'
 \item[\texttt{referenceSystem:\allowbreak{}*, NonGravForces:\allowbreak{}spaceWeather:\allowbreak{}*}] from the geometry and the index lookup
+\end{description}
+
+\subsection{\texttt{NonGravForces.app.plotCalibration}}
+\label{api:app.plotCalibration}
+\noindent Figure of an accelerometer calibration: scale and bias with their bands, residual ACF.
+
+\begin{lstlisting}
+f = NonGravForces.app.plotCalibration(cal, t)
+[f, files] = NonGravForces.app.plotCalibration(cal, t, 'Residual', info.residual, 'Visible', "off", 'ExportTo', folder)
+\end{lstlisting}
+
+\subsubsection*{INPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+cal & 1x1 & NonGravForces.\allowbreak{}app.\allowbreak{}Calibration & - & The calibration to draw \\
+t & Kx1 & int64 & ns & Epochs to draw the curves at, GPS ns \\
+\end{longtable}
+
+\subsubsection*{NAME-VALUE ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+Residual & 1x1 & timeSeriesPreparation.\allowbreak{}Arc & m/\allowbreak{}s\textasciicircum{}2 & app.fitCalibration's info.residual; default none \\
+Order & 1x1 & double & - & AR order of the whitening; default 5 \\
+MaxLag & 1x1 & double & - & ACF lags drawn; default 300 (samples) \\
+Visible & 1x1 & string & - & "on" (default) or "off" \\
+ExportTo & 1x1 & string & - & Folder: writes calibration.png at 200 dpi; default "" \\
+\end{longtable}
+
+\subsubsection*{OUTPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+f & 1x1 & figure & - & The figure \\
+files & 1xF & string & - & Files written ("" entries none) \\
+\end{longtable}
+
+\subsubsection*{ERRORS}
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
+\item[\texttt{NonGravForces:\allowbreak{}plotCalibration:\allowbreak{}inputCalibration}] cal is not an app.Calibration
+\item[\texttt{NonGravForces:\allowbreak{}plotCalibration:\allowbreak{}inputEpochs}] t is not a non-empty int64 vector
+\item[\texttt{NonGravForces:\allowbreak{}plotCalibration:\allowbreak{}inputResidual}] 'Residual' is not a 3-column Arc
+\item[\texttt{NonGravForces:\allowbreak{}plotCalibration:\allowbreak{}inputExport}] 'ExportTo' is not an existing folder
+\item[\texttt{timeSeriesPreparation:\allowbreak{}*}] from tsAcf and tsFitAR (Yule-Walker)
+\end{description}
+
+\subsection{\texttt{NonGravForces.app.plotAttribution}}
+\label{api:app.plotAttribution}
+\noindent Figure of the per-revolution attribution: scales over time, scales against drivers, verdict.
+
+\begin{lstlisting}
+f = NonGravForces.app.plotAttribution(T, A, info)
+[f, files] = NonGravForces.app.plotAttribution(T, A, info, 'MaxDrivers', 3, 'Visible', "off", 'ExportTo', folder)
+\end{lstlisting}
+
+\subsubsection*{INPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+T & RxN & table & - & app.perRevolution's table (tMid, scale, optional sigmaScale) \\
+A & Jx6 & table & - & app.attributeRevolutions' verdicts \\
+info & 1x1 & struct & - & app.attributeRevolutions' info (.drivers, .regression) \\
+\end{longtable}
+
+\subsubsection*{NAME-VALUE ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+MaxDrivers & 1x1 & double & - & Driver panels per parameter, the strongest first; default 3 \\
+Visible & 1x1 & string & - & "on" (default) or "off" \\
+ExportTo & 1x1 & string & - & Folder: writes attribution.png at 200 dpi; default "" \\
+\end{longtable}
+
+\subsubsection*{OUTPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+f & 1x1 & figure & - & The figure \\
+files & 1xF & string & - & Files written \\
+\end{longtable}
+
+\subsubsection*{ERRORS}
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
+\item[\texttt{NonGravForces:\allowbreak{}plotAttribution:\allowbreak{}inputTable}] T lacks tMid or scale, or A lacks parameter or verdict
+\item[\texttt{NonGravForces:\allowbreak{}plotAttribution:\allowbreak{}inputInfo}] info lacks drivers or regression, or does not match A
+\item[\texttt{NonGravForces:\allowbreak{}plotAttribution:\allowbreak{}inputExport}] 'ExportTo' is not an existing folder
 \end{description}

@@ -61,6 +61,8 @@ function [A, info] = attributeRevolutions(T, options)
 %   MaxVif        1x1   double                    -      regressDrivers' VIF gate; default 10
 %   NBoot         1x1   double                    -      regressDrivers' replicates; default 1000
 %   Seed          1x1   double                    -      regressDrivers' seed; default 0
+%   BlockLength   1x1   double                    -      regressDrivers' block length in revolutions;
+%                                                        default [] = automatic (needs >= 20 rows)
 %
 % OUTPUT ARGUMENTS
 %   Name  Size  Type    Units  Description
@@ -76,9 +78,13 @@ function [A, info] = attributeRevolutions(T, options)
 %   The regression's: OLS by QR, sigmas by moving-block bootstrap over
 %   revolutions (regressDrivers). A verdict is a statement at 'Significance'
 %   bootstrap sigmas about THIS arc; with R revolutions and K drivers it rests
-%   on R - K - 1 degrees of freedom, so a day (15 revolutions) supports a few
-%   drivers at most. betaPrime and eclipseFraction are window means of exact
-%   geometry; the eclipse model is conical.
+%   on R - K - 1 degrees of freedom. THE AUTOMATIC BLOCK LENGTH NEEDS AT LEAST 20
+%   REVOLUTIONS (about 1.3 days; timeSeriesPreparation's Politis-White rule):
+%   one day (16) is refused with timeSeriesPreparation:blockLength:tooShort --
+%   found by N-05, after this help had claimed a day supports a few drivers.
+%   Below 20, pass 'BlockLength' explicitly and own that choice. betaPrime and
+%   eclipseFraction are window means of exact geometry; the eclipse model is
+%   conical.
 %   DAILY INDICES NEED MANY DAYS. f107, f107a and ap change once a day, so over
 %   a few days they are step functions with a few distinct values; a bootstrap
 %   replicate built from blocks inside one day sees them constant, and its solve
@@ -92,6 +98,7 @@ function [A, info] = attributeRevolutions(T, options)
 %   NonGravForces:attributeRevolutions:inputDrivers  'Drivers' without one numeric row per revolution
 %   NonGravForces:attributeRevolutions:dataNoDriver  no driver varies over the usable revolutions
 %   timeSeriesPreparation:regressDrivers:tooFewRows  fewer revolutions than drivers + 2
+%   timeSeriesPreparation:blockLength:tooShort       fewer than 20 revolutions and no 'BlockLength'
 %   referenceSystem:*, NonGravForces:spaceWeather:*  from the geometry and the index lookup
 %
 % REFERENCES
@@ -121,6 +128,7 @@ arguments
     options.MaxVif (1,1) double {mustBeGreaterThanOrEqual(options.MaxVif, 1)} = 10
     options.NBoot (1,1) double {mustBeInteger, mustBePositive} = 1000
     options.Seed (1,1) double {mustBeInteger, mustBeNonnegative} = 0
+    options.BlockLength double {mustBeScalarOrEmpty, mustBeInteger, mustBePositive} = []
 end
 unit = "attributeRevolutions";
 if ~all(ismember(["t0" "t1" "tMid" "scale"], string(T.Properties.VariableNames))) || size(T.scale, 2) ~= 3
@@ -178,7 +186,7 @@ for jj = 1:J
     names = names(keep); Z = Z(:, keep);
     try
         res = timeSeriesPreparation.regressDrivers(P, Z, Names = param(jj), DriverNames = names, MaxVif = options.MaxVif, ...
-            NBoot = options.NBoot, Seed = options.Seed, Stage = "attributeRevolutions." + param(jj));
+            NBoot = options.NBoot, Seed = options.Seed, Stage = "attributeRevolutions." + param(jj), BlockLength = options.BlockLength);
     catch err
         if err.identifier ~= "timeSeriesPreparation:regressDrivers:collinear", rethrow(err); end
         verdict(jj) = "unresolved"; reason(jj) = "collinear: " + string(err.message);
