@@ -102,6 +102,12 @@ else:
     readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").readline().strip()
     if readme != f"# NonGravForces {version}":
         note(f"README.md: first line '{readme}' does not name version {version}")
+    # HANDOVER.md's title names the version too, and nothing compared it: it said 0.11.0 through
+    # the whole of 0.12.0 until release 0.13.0 found it (2026-10-15).
+    hand = open(os.path.join(ROOT, "HANDOVER.md"), encoding="utf-8").readline().strip()
+    hm = re.match(r"# HANDOVER — NonGravForces (\S+) ", hand)
+    if not hm or hm.group(1) != version:
+        note(f"HANDOVER.md: title '{hand}' does not name version {version}")
     for h in sorted(glob.glob(os.path.join(ROOT, "doc", "html", "*.html"))):
         txt = open(h, encoding="utf-8").read()
         for v in set(re.findall(r"NonGravForces (\d+\.\d+\.\d+)", txt)):
