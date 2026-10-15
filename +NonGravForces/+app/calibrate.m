@@ -86,10 +86,12 @@ function res = calibrate(acc, reference, options)
 %
 % ACCURACY
 %   The interpolation of the Model from the orbit epochs (1 s for GNV1B) to
-%   the 10 Hz raw grid is pchip, third order in the step on smooth stretches;
-%   a non-gravitational signal varies on orbital and eclipse time scales (tens
-%   of seconds and longer), so the error it adds inside the CRN band is far
-%   below the Model's own (density, 10-30 %). The estimation accuracy is
+%   the 10 Hz raw grid is pchip, third order in the step on smooth stretches.
+%   MEASURED across a shadow entry (standard preset, 490 km, against the Model
+%   evaluated at 10 Hz; tNgfCalibrate/calibrateReferenceInterpolationPrecision):
+%   1.1e-10 m/s^2 on the raw grid at the shadow boundary, 9.3e-13 m/s^2 after
+%   the CRN filter, 3e-5 of the filtered signal -- far below the Model's own
+%   error (density, 10-30 %). The estimation accuracy is
 %   app.fitCalibration's; the stages' are timeSeriesPreparation's.
 %
 % ERRORS
