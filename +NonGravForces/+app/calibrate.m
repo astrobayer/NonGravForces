@@ -4,6 +4,19 @@ function res = calibrate(acc, reference, options)
 %   res = NonGravForces.app.calibrate(acc, M, 'Orbit', orb, 'Attitude', att)   % a priori from the Model
 %   res = NonGravForces.app.calibrate(acc, refArc)                              % an external reference
 %   res = NonGravForces.app.calibrate(acc, M, 'Orbit', orb, 'Fit', {'BiasBasis', "pspline", 'Scale', "full"})
+%   res = NonGravForces.app.calibrate(accDays, M, 'Orbit', orbDays)            % N days, one scale (N-09)
+%
+%   A CAMPAIGN (N-09; CONCEPT 6.6). With acc a 1xN Arc array (one per day, in
+%   time order), run runs in campaign mode (one result per day; a refused
+%   day keeps its MException and the campaign continues), each day gets its
+%   own reference (the Model along 'Orbit' -- a 1xN struct array, or one orbit
+%   covering every day -- or a 1xN reference Arc array, or one Arc covering
+%   all), and app.fitCalibration fits the days that ran JOINTLY: one common
+%   scale, one bias per day ('Fit', {'ScaleMode', "perArc"} for N independent
+%   fits). res is then run's campaign struct plus .calibration (1xN cell,
+%   [] for a day run refused), .used (1xN logical), .fit (fitCalibration's
+%   info) and .attribution (1xN cell). 'Jumps' true is refused in common mode,
+%   as fitCalibration refuses it.
 %
 %   THE APPLICATION OF CONCEPT 4 AND 6.2: one call from an observation arc to
 %   a calibration, with every instrument stage on the one code path of
@@ -48,7 +61,7 @@ function res = calibrate(acc, reference, options)
 % INPUT ARGUMENTS
 %   Name       Size  Type                          Units  Description
 %   ----       ----  ----                          -----  -----------
-%   acc        1x1   timeSeriesPreparation.Arc     m/s^2  Observation, three axes in m/s2 (e.g. ACT1B,
+%   acc        1xN   timeSeriesPreparation.Arc     m/s^2  Observation, three axes in m/s2 (e.g. ACT1B,
 %                                                         lin_accl_x/y/z); its product selects the preset
 %   reference  1x1   NonGravForces.Model or Arc    m/s^2  The a priori: a Model (needs 'Orbit'), or an
 %                                                         Arc with acc's three columns on the raw grid
@@ -56,7 +69,7 @@ function res = calibrate(acc, reference, options)
 % NAME-VALUE ARGUMENTS
 %   Name       Size  Type    Units  Description
 %   ----       ----  ----    -----  -----------
-%   Orbit      1x1   struct  -      .epoch (referenceSystem epoch, GPS), .r and .v (3xK, GCRS, m and
+%   Orbit      1xN   struct  -      .epoch (referenceSystem epoch, GPS), .r and .v (3xK, GCRS, m and
 %                                   m/s), e.g. from io.readGNV1B; required with a Model, covering the
 %                                   arc plus half a CRN window
 %   Attitude   1x1   struct  -      geom.AttitudeProvider for the orbit epochs; [] (default) uses the
@@ -100,6 +113,8 @@ function res = calibrate(acc, reference, options)
 %   NonGravForces:calibrate:inputOrbit       a Model without 'Orbit', a malformed Orbit, or an orbit
 %                                            that does not cover the arc
 %   NonGravForces:calibrate:inputConfig      the Config names no CRN preset
+%   NonGravForces:calibrate:dataEmpty        a campaign in which run refused every day
+%   NonGravForces:calibrate:unsupportedMultiArc  'Jumps' true in a campaign
 %   NonGravForces:fitCalibration:*           the estimate
 %   NonGravForces:Model:*                    the Model evaluation
 %   timeSeriesPreparation:*, lsqvce:*, referenceSystem:*   propagated unwrapped
@@ -123,8 +138,8 @@ function res = calibrate(acc, reference, options)
 % KEYWORDS calibration accelerometer application run lsqvce Model reference attribution jumps
 % Created 2026-09-09 by Claude Opus 5 (Anthropic); rewritten 2026-10-15 by Claude (Anthropic) for Matthias Weigelt (N-02c).
 arguments
-    acc (1,1)
-    reference (1,1)
+    acc (1,:)
+    reference (1,:)
     options.Orbit = []
     options.Attitude = []
     options.Config = []
@@ -135,6 +150,13 @@ arguments
     options.Fit cell = {}
 end
 unit = "calibrate";
+if isa(acc, 'timeSeriesPreparation.Arc') && numel(acc) > 1
+    res = localCampaign(acc, reference, options, unit);
+    return
+end
+if numel(reference) ~= 1
+    NonGravForces.fail(unit, "inputReference", "one arc takes one reference -> got %d", numel(reference));
+end
 if ~isa(acc, 'timeSeriesPreparation.Arc') || size(acc.obs, 2) ~= 3 || any(acc.units ~= "m/s2")
     NonGravForces.fail(unit, "inputArc", "acc must be one timeSeriesPreparation.Arc with three acceleration columns in m/s2 -> got a %s", class(acc));
 end
@@ -185,6 +207,78 @@ res.calibration = cal;
 
 % --- 4. attribution ------------------------------------------------------------------------
 res.attribution = localAttribution(effects, cal, info, res.arc, K, options.VifMax);
+end
+
+% =========================================================================================
+function res = localCampaign(acc, reference, options, unit)
+%LOCALCAMPAIGN N days: run in campaign mode, a reference per day, one joint fit (N-09).
+N = numel(acc);
+for k = 1:N
+    if size(acc(k).obs, 2) ~= 3 || any(acc(k).units ~= "m/s2")
+        NonGravForces.fail(unit, "inputArc", "every arc must have three acceleration columns in m/s2 -> arc %d has %d", k, size(acc(k).obs, 2));
+    end
+end
+cfg = options.Config;
+if isempty(cfg), cfg = timeSeriesPreparation.Config(acc(1)); end
+c = toStruct(cfg);
+if ~isfield(c, 'crn') || ~isfield(c.crn, 'preset') || isempty(c.crn.preset) || strlength(string(c.crn.preset)) == 0
+    NonGravForces.fail(unit, "inputConfig", "the Config names no CRN preset, so the reference cannot be filtered like the L1B data -> set(cfg, ""crn"", ""preset"", ""ACC"")");
+end
+K = timeSeriesPreparation.crnKernel(string(c.crn.preset));
+cfg = set(cfg, "run", "filterReference", true);
+
+% --- 1. a reference per day ----------------------------------------------------------------
+refs = cell(1, N); effects = cell(1, N);
+if isscalar(reference) && isa(reference, 'NonGravForces.Model')
+    orb = options.Orbit;
+    if ~(isstruct(orb) && (isscalar(orb) || numel(orb) == N))
+        NonGravForces.fail(unit, "inputOrbit", "a campaign against a Model needs 'Orbit' as one struct covering every day or a 1x%d struct array -> got %d", N, numel(orb));
+    end
+    for k = 1:N
+        [refs{k}, effects{k}] = localModelReference(reference, acc(k), K, orb(min(k, numel(orb))), options.Attitude, unit);
+    end
+elseif isa(reference, 'timeSeriesPreparation.Arc') && (isscalar(reference) || numel(reference) == N)
+    for k = 1:N
+        refs{k} = reference(min(k, numel(reference)));
+        effects{k} = struct('name', {}, 'arc', {});
+    end
+else
+    NonGravForces.fail(unit, "inputReference", "a campaign's reference is a Model, one Arc covering every day, or one Arc per day -> got %d of %s", numel(reference), class(reference));
+end
+refArr = [refs{:}];
+
+% --- 2. the instrument stages, campaign mode -------------------------------------------------
+runArgs = {'Reference', refArr, 'Config', cfg};
+if ~isempty(options.QualFlags), runArgs = [runArgs, {'QualFlags', options.QualFlags}]; end
+if ~isempty(options.Thrusters), runArgs = [runArgs, {'Thrusters', options.Thrusters}]; end
+res = timeSeriesPreparation.run(acc, runArgs{:});
+used = ~cellfun(@isempty, res.results(:)');
+if ~any(used)
+    NonGravForces.fail(unit, "dataEmpty", "run refused every day of the campaign -> read res.summary and res.errors of timeSeriesPreparation.run");
+end
+if options.Jumps
+    NonGravForces.fail(unit, "unsupportedMultiArc", "'Jumps' are per day and a joint fit takes one bias block per day -> calibrate each day alone, or leave 'Jumps' false");
+end
+
+% --- 3. the joint estimate ---------------------------------------------------------------------
+arcs = cellfun(@(r) r.arc, res.results(used));
+fitArgs = localMerge({'Kernel', K}, options.Fit);
+[cal, info] = NonGravForces.app.fitCalibration(arcs, refArr(used), fitArgs{:});
+res.used = used;
+res.fit = info;
+res.calibration = cell(1, N);
+res.attribution = cell(1, N);
+idx = find(used);
+for j = 1:numel(idx)
+    k = idx(j);
+    res.calibration{k} = cal(j);
+    if isfield(info, 'residual') && iscell(info.residual)
+        dayInfo = struct('residual', info.residual{j}, 'rows', info.rows{j});
+    else
+        dayInfo = info.arcs{j};
+    end
+    res.attribution{k} = localAttribution(effects{k}, cal(j), dayInfo, arcs(j), K, options.VifMax);
+end
 end
 
 % =========================================================================================

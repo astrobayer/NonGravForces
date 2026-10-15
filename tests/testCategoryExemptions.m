@@ -34,7 +34,6 @@ ex.graceFO.speed                = "no numerical work";
 ex.grace.vectorization          = "factory returns one object";
 ex.grace.speed                  = "no numerical work";
 ex.MacroModel.vectorization     = "constructor of one object";
-ex.fitCalibration.vectorization = "one call fits one arc; a campaign of arcs is a different estimator (N-09), and the three axes are asserted independent under metamorphic";
 ex.calibrate.vectorization    = "one call calibrates one arc; a campaign of arcs is N-09, and its parts (run, fitCalibration) carry their own vectorization claims";
 ex.plotCalibration.reference      = "no authority outside the project draws this figure; v3 WP-20: no precision refval -- precision asserts instead that it draws its source bitwise";
 ex.plotCalibration.vectorization  = "one figure per call; a batch of figures has no meaning beyond one call each";

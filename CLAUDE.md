@@ -171,8 +171,12 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-15, N-05)
+## 5. Current status (2026-10-15, N-09)
 
+- **2026-10-15, N-09 (#66):** `fitCalibration` and `calibrate` take Arc arrays: one COMMON scale, per-day biases
+  as lsqvce 'day' locals (pre-eliminated), uncertainty by a bootstrap over days; 'ScaleMode' "perArc" = N
+  single fits. Real fixtures: 30 min of ACT1B/GNV1B/SCA1B for 2020-01-01..03 C in `data/samples/multiday`.
+  ☑ on Tier A: 421/421, predicted 421. Unblocks N-10 (the month baseline; needs a runner `DATAPOOL`).
 - **2026-10-15, N-05 (#62):** `app.plotCalibration` (scale/bias with bands, residual ACF before and after AR
   whitening) and `app.plotAttribution` (per-revolution scales vs time and drivers, verdict banner); tests
   assert the figures draw their source bitwise. Found: `attributeRevolutions` needs >= 20 revolutions
@@ -601,6 +605,8 @@ Every one of these was an actual defect found in a predecessor or a dependency.
 - **A SCALAR indexed by an empty index is 1x0, a column indexed by it is 0x1.** `x(sIdx)` with `sIdx = P + (1:0)`
   breaks `J * x(sIdx)` only when x happens to be a scalar -- in `fitCalibration`, a constant bias on an axis
   with no estimated scale. Shipped in N-03a, found by N-03b. Force the shape: `reshape(x(sIdx), [], 1)`.
+- **lsqvce's `B` spans every local column of the system**, not just the arc's own day: m_a x nl over all days,
+  the day's block in place (sparse). And a system needs at least one COMMON column (N-09).
 - **A title's text object hides its handle from `findobj`**; a test reading back a Tagged title needs `findall`.
 - **`tsFitAR`'s default exact method is too slow for anything drawn**: over a minute for 4000 samples with a
   gap. Fit Yule-Walker (`Method = "yw"`) on a gap-free run and filter (N-05).
