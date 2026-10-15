@@ -17,7 +17,7 @@ classdef Electrostatic < NonGravForces.sensor.Sensor
 %   dr is the offset of the proof mass from the CoM in the BODY frame, R takes
 %   the body frame to the accelerometer frame, S is the 3x3 scale matrix (its
 %   off-diagonal entries are the axis couplings, not a rotation) and bias is in
-%   the accelerometer frame. The convention is the one qc.residuals already
+%   the accelerometer frame. The convention is the one timeSeriesPreparation.qc.residuals
 %   applies, `y = b + S a`, so a calibration estimated once fits both.
 %
 %   THE SIGN OF omega IS PART OF THIS CONTRACT, because it is the one place a
@@ -144,9 +144,9 @@ classdef Electrostatic < NonGravForces.sensor.Sensor
 %           [2e-4; 0; -1e-4], "crn", 'OutputRate', 1);
 %   dyn = struct('a', aBody, 'omega', w, 'omegaDot', wdot, 'epoch', t10Hz_s);
 %   y = s.observe(dyn);
-%   r = NonGravForces.qc.residuals(measured', y.value', 'Whitening', "highpass", 'Window', 601);
+%   r = timeSeriesPreparation.qc.residuals(measured', y.value', 'Whitening', "highpass", 'Window', 601);
 %
-% See also timeSeriesPreparation.crnKernel, NonGravForces.sensor.Sensor, NonGravForces.qc.residuals, NonGravForces.app.calibrate, referenceSystem.angularVelocityFromRotationRate.
+% See also timeSeriesPreparation.crnKernel, NonGravForces.sensor.Sensor, timeSeriesPreparation.qc.residuals, NonGravForces.app.calibrate, referenceSystem.angularVelocityFromRotationRate.
 %
 % KEYWORDS accelerometer electrostatic bias scale factor centre of mass offset calibration
 % Created 2026-09-08 by Claude Opus 5 (Anthropic); CRN default kernel (N-04) 2026-10-14 by Claude (Anthropic).
@@ -181,7 +181,7 @@ classdef Electrostatic < NonGravForces.sensor.Sensor
                 NonGravForces.fail(unit, "inputShape", "bias must be 3x1 -> got %s", mat2str(size(bias)));
             end
             if isvector(S) && numel(S) == 3
-                S = diag(S(:));                 % a 3x1 is the diagonal, as qc.residuals also accepts
+                S = diag(S(:));                 % a 3x1 is the diagonal, as timeSeriesPreparation.qc.residuals also accepts
             end
             if ~isequal(size(S), [3 3])
                 NonGravForces.fail(unit, "inputShape", "S must be 3x3 or 3x1 (its diagonal) -> got %s", mat2str(size(S)));

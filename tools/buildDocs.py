@@ -171,7 +171,6 @@ LAYERS = [("L0", "core", "constants, options, provenance, uniform errors and the
           ("L4", "kernel", "per-panel forces, their derivatives and their reductions"),
           ("L5", "Model", "the single point of access"),
           ("L6", "sensor", "instrument models: true dynamics mapped to what one instrument reads"),
-          ("L7", "qc", "quality control of a residual series"),
           ("L8", "app", "applications built from the layers below")]
 
 # The sections of a help block that describe the API. ACCURACY, REFERENCES and EXAMPLE are
@@ -802,7 +801,8 @@ def render_all():
     for r in rows:
         if r["package"] not in pkgs:
             pkgs.append(r["package"])
-    p = ["<p>Nine layers, each depending only on those below it. The kernel returns per-panel forces and never "
+    p = ["<p>Eight layers, each depending only on those below it (L7, quality control, moved to "
+         "<code>timeSeriesPreparation.qc</code> and was deleted in 0.14.0). The kernel returns per-panel forces and never "
          "sums internally; the environment computes no geometry; <code>NonGravForces.Model</code> is the single "
          "point of access and composes the rest.</p><table><tr><th>package</th><th>units</th></tr>"]
     for pk in pkgs:

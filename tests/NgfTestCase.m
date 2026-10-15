@@ -29,15 +29,6 @@ classdef NgfTestCase < matlab.unittest.TestCase
             st = warning('off', 'NonGravForces:accommodation:outsideFit');
             tc.addTeardown(@() warning(st));
         end
-        function hushQcDeprecation(tc)
-            %HUSHQCDEPRECATION Silence the six qc forwarders' deprecation warnings (N-01) by default.
-            %   tNgfQc and tNgfQcScreen run the pre-move suite through the forwarders on purpose,
-            %   hundreds of calls; tNgfQc/qcForwardingContract turns them on where they are the subject.
-            for u = ["hampel", "residuals", "detectImpulses", "detectJumps", "eventTable", "screen"]
-                st = warning('off', "NonGravForces:" + u + ":deprecated");
-                tc.addTeardown(@() warning(st));
-            end
-        end
     end
 
     methods

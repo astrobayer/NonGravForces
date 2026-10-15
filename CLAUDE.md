@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-10-15 (release 0.13.0) by Claude Opus 5.5. Toolbox version 0.13.0.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-10-15 (O-47, release 0.14.0) by Claude Opus 5.5. Toolbox version 0.14.0.
 
 ---
 
@@ -31,12 +31,11 @@ composes (calibration through `timeSeriesPreparation.run` and `lsqvce.fit`); it 
 
 ## 2. Architecture
 
-Nine layers; a layer calls only lower layers plus the four dependencies.
+Eight layers; a layer calls only lower layers plus the four dependencies. L7 is vacant: quality
+control moved to `timeSeriesPreparation.qc` (N-01) and its forwarders were deleted in 0.14.0 (O-47).
 
 ```
 L8 app      calibrate, fitCalibration, Calibration, syntheticPair, forceBudget, densityInversion, DynamicsSource (gjToolbox entry, native C)
-L7 qc       residuals, hampel, detectImpulses, detectJumps, eventTable, screen  (DEPRECATED forwarders
-            to timeSeriesPreparation.qc since N-01; deleted after the next release, O-47)
 L6 sensor   Sensor (abstract), Electrostatic, AtomInterferometer, DragFree
 L5 Model    accel | torque | series | partials | budget   <- single point of access
 L4 kernel   gsiCoefficients, accommodation, dragPanelForce, radiationPanelForce,
@@ -49,7 +48,7 @@ L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
 L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options, buildMex
 ```
 
-60 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
+54 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
 both directions against the files on disk, and this sentence's number against it
 — which it genuinely did not until 2026-09-16, when the sentence said 53 and the
 catalogue held 55; `auditPackage.py` check 5 now compares both this number and
@@ -172,8 +171,14 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-15, release 0.13.0)
+## 5. Current status (2026-10-15, release 0.14.0)
 
+- **2026-10-15, release 0.14.0 (O-47 closed):** the six deprecated `qc` forwarders are deleted with
+  `tests/tNgfQc*.m` (39 tests), their catalogue rows, hushes and exemptions, and the hampel/PELT oracles
+  (timeSeriesPreparation carries its own); L7 is left vacant; 54 units; quality control is
+  `timeSeriesPreparation.qc`. MINOR at 0.y.z per VERSIONING.md. ☑ on Tier A:
+  375/375, predicted 375 (414 minus MATLAB's count of the two deleted classes, 11 + 28); benchmark re-run
+  on a loaded host (compiled path 0.497 ms vs 0.457).
 - **2026-10-15, release 0.13.0 (O-48 closed):** version bumped; `tools/benchmark.m` re-run on Tier A and
   `tools/benchmark_reference.csv` committed; HANDOVER's title (it said 0.11.0) now compared by audit check 5.
   Fixed cost per call rose ~2.5 ms in both presets, marginal cost unchanged (O-48 row). **The host's own
@@ -683,9 +688,9 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   differ by 4.0x — which is the real cost of a bad measurement: not the wrong digit, the conclusion
   drawn from it and written somewhere else.
 - **A per-epoch cost is mostly a property of the BATCH, not of the toolbox**, so never quote one
-  without K. `Model.accel` in the standard preset costs 18.7 ms at K=1 and 0.848 ms at K=100
-  (0.13.0, 2026-10-15), because one call pays ~18 ms of setup before any per-epoch work (fast: 6.5
-  ms and 0.035). A day at 1 Hz through `Model.series` was 1 min 16 s on 2026-09-18 -- a figure
+  without K. `Model.accel` in the standard preset costs 20.0 ms at K=1 and 1.08 ms at K=100
+  (0.14.0, 2026-10-15, a shared host), because one call pays ~19 ms of setup before any per-epoch work (fast: 7.6
+  ms and 0.042). A day at 1 Hz through `Model.series` was 1 min 16 s on 2026-09-18 -- a figure
   `tools/benchmark.m` does NOT produce, so nothing regenerates it. The authority is `tools/benchmark_reference.csv`,
   which `tools/benchmark.m` writes and `auditPackage.py` check 13 compares every quoted figure
   against; `tools/benchmark_last.txt` is the gitignored host log and is NOT the authority, because a

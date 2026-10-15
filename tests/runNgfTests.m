@@ -2,7 +2,7 @@ function result = runNgfTests(options)
 %RUNNGFTESTS The one runner: discover, run, report, and write tests/last_run.txt.
 %
 %   result = runNgfTests
-%   result = runNgfTests('ExcludeSlow', false, 'Name', "tNgfQc*")
+%   result = runNgfTests('ExcludeSlow', false, 'Name', "tNgfIo*")
 %
 %   GREEN means: every discovered class loaded, nothing failed, nothing
 %   incomplete, the category audit found no public unit short of a category

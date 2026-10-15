@@ -1,5 +1,5 @@
 % NONGRAVFORCES  Non-gravitational forces, torques and partials for LEO satellites.
-% Version 0.13.0  15-Oct-2026
+% Version 0.14.0  15-Oct-2026
 %
 % Single point of access
 %   Model              - Configure once, evaluate many: accel | torque | series |
@@ -23,7 +23,6 @@
 %   kernel  - per-panel gas-surface and radiation forces, body torques,
 %             partials, and the compiled single-epoch path
 %   sensor  - measurement models: electrostatic, atom interferometer, drag-free
-%   qc      - outlier, impulse and jump detection on residuals
 %   app     - calibration (own linear solver), force budget, density inversion
 %
 % Dependencies (called by qualified name, never copied or wrapped)

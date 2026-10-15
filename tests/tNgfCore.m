@@ -11,7 +11,10 @@ classdef tNgfCore < NgfTestCase
             % Every Contents.m carries a copy of the version; the copies must agree (R1, mechanical).
             here = fileparts(mfilename('fullpath'));
             cfiles = dir(fullfile(fileparts(here), '+NonGravForces', '**', 'Contents.m'));
-            tc.verifyGreaterThanOrEqual(numel(cfiles), 8);
+            % One per package folder plus the root, derived rather than written down: a literal 8
+            % here went stale the day O-47 deleted +qc (2026-10-15).
+            pkgs = dir(fullfile(fileparts(here), '+NonGravForces', '+*'));
+            tc.verifyEqual(numel(cfiles), 1 + nnz([pkgs.isdir]));
             for k = 1:numel(cfiles)
                 txt = fileread(fullfile(cfiles(k).folder, cfiles(k).name));
                 tok = regexp(txt, '^% Version (\S+)', 'tokens', 'once', 'lineanchors');
