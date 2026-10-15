@@ -1385,6 +1385,12 @@ untouched until N-02c replaces it; the new estimator is its own public unit so t
 - **Deviation from the concept text, argued:** the K2 column is H(a_i^2), not (H a_i)^2 as CONCEPT
   6.2 writes it, because the nonlinearity acts on the instrument's raw signal before the filter.
 - **Decisions taken here, for the owner to overrule:** see Part I, 2026-10-15.
+- **Measured on the first CI run (38690853810), and kept as evidence for the white default:**
+  `'Noise', "estimate"` on a 0.05-day synthetic arc ran lsqvce's joint estimator to its 10-pass budget
+  without settling (last max|alpha^2 - 1| = 6.4, 6.8 and 6.4 on the three axes): the law estimated
+  from a CRN-band-limited residual does not converge. The same run found two defects of this PR's
+  own: the cofactor was scaled back with the observation scale (a bound 5e6 too tight), and the
+  knots spanned the whole arc (a hat outside every fitted window, refused as singular). Both fixed.
 
 **Delivered 2026-10-15, ◐.** Prediction for the gate: 408 (after N-02a) + 6 = **414**
 (`tests/tNgfFitCalibration.m`: contract, reference, precision, robustness, metamorphic, speed;
