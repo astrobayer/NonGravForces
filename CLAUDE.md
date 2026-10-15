@@ -33,7 +33,7 @@ No gravity field, no equations of motion, no integrator, no least-squares code.
 Nine layers; a layer calls only lower layers plus the four dependencies.
 
 ```
-L8 app      calibrate, forceBudget, densityInversion, DynamicsSource (gjToolbox entry, native C)
+L8 app      calibrate, Calibration, syntheticPair, forceBudget, densityInversion, DynamicsSource (gjToolbox entry, native C)
 L7 qc       residuals, hampel, detectImpulses, detectJumps, eventTable, screen  (DEPRECATED forwarders
             to timeSeriesPreparation.qc since N-01; deleted after the next release, O-47)
 L6 sensor   Sensor (abstract), Electrostatic, AtomInterferometer, DragFree
@@ -48,7 +48,7 @@ L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
 L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options, buildMex
 ```
 
-57 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
+59 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
 both directions against the files on disk, and this sentence's number against it
 — which it genuinely did not until 2026-09-16, when the sentence said 53 and the
 catalogue held 55; `auditPackage.py` check 5 now compares both this number and
@@ -171,12 +171,14 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-09-17, after LP-E)
 
+- **2026-10-14, N-02a (#59, first of three PRs):** `app.syntheticPair` (the calibration truth through the real
+  CRN chain) and `app.Calibration` (scale + bias curve, apply/invert/save/load); 59 units. ◐; prediction 408.
 - **2026-10-14, N-01 (#58):** the six `qc` units forward to `timeSeriesPreparation.qc` with a
-  `deprecated` warning; O-1/O-18 moved there; O-47 deletes them after the next release. ◐.
+  `deprecated` warning; O-1/O-18 moved there; O-47 deletes them after the next release. ☑ with N-04 (run 38636885801: 394/394, predicted 394).
 - **2026-10-14, N-04 (#61):** `sensor.Electrostatic` filters with the L1B CRN kernel from
   `timeSeriesPreparation.crnKernel("ACC")` by default, on 10 Hz dynamics whose grid it checks from
   `dyn.epoch`; `'OutputRate', 1` samples like ACT1B; `[]` stays unfiltered. timeSeriesPreparation and
-  lsqvce are gate siblings since #76. ◐ until the CI gate is read.
+  lsqvce are gate siblings since #76. ☑ (run 38636885801: 394/394, predicted 394).
 - **2026-09-22, N-07 (#64):** `geom.grace` (GRACE-A/B, from R-5 = Bettadpur 2012 Sec. I.5.3) delivered
   on Tier B and ☑ on the CI runner (runs 35771831961 and 35773012179: 388 passed, 0 failed, 0 incomplete, predicted 388; the second's log is `tests/last_run.txt`), 57 units. O-46 opened (classic MAS1B is spacecraft
   mass; R-5 prints no inertia). The other eleven N-issues wait on timeSeriesPreparation, lsqvce#110 and N-02.

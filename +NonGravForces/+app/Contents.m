@@ -5,3 +5,5 @@
 %   calibrate            - Accelerometer calibration: bias basis + 3x3 scale + jumps by separable weighted least squares
 %   forceBudget          - Per-effect per-axis acceleration budget over an arc; chunked and across models
 %   densityInversion     - Thermosphere density from calibrated accelerations; the inversion is a division
+%   syntheticPair        - Truth generator: a 10 Hz model arc and its CRN-filtered 1 Hz observation with every planted value
+%   Calibration          - An accelerometer calibration: scale + time-varying bias + uncertainty + gates; apply/invert/save/load

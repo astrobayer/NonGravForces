@@ -5,7 +5,7 @@
 %
 % \input-able from a report-class document; it opens no document and no chapter.
 
-\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 57 units, toolbox version 0.12.0.
+\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 59 units, toolbox version 0.12.0.
 
 \section{L0 \texttt{core} --- constants, options, provenance, uniform errors and the MEX build}
 
@@ -4135,4 +4135,164 @@ info & 1x1 & struct & - & .K .chunks .frame .usable (count) .provenance \\
 \item[\texttt{NonGravForces:\allowbreak{}densityInversion:\allowbreak{}inputRange}] Chunk \textless{} 1, or MinDrag \textless{} 0, or not finite
 \item[\texttt{NonGravForces:\allowbreak{}densityInversion:\allowbreak{}numericNaN}] aMeasured contains NaN or Inf
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}*}] propagated from the evaluation
+\end{description}
+
+\subsection{\texttt{NonGravForces.app.syntheticPair}}
+\label{api:app.syntheticPair}
+\noindent Truth generator: a 10 Hz model arc and its CRN-filtered 1 Hz observation, with every planted value.
+
+\begin{lstlisting}
+[obs, ref, truth] = NonGravForces.app.syntheticPair()
+[obs, ref, truth] = NonGravForces.app.syntheticPair('Days', 0.25, 'Seed', 7, 'Scale', S, 'Quadratic', k2)
+\end{lstlisting}
+
+\subsubsection*{INPUT ARGUMENTS}
+None.
+
+
+\subsubsection*{NAME-VALUE ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+Days & 1x1 & double & day & Arc length, \textgreater{} 0; default 1 \\
+Start & 1x1 & int64 & ns & First epoch, GPS ns past 2000-01-01 12:00:00; default 2020-01-01 00:00:18 GPS \\
+Seed & 1x1 & double & - & Seed of every random draw; default 1 \\
+Scale & 3x3 & double & - & True scale matrix S (a 3x1 is its diagonal); default diag([0.96 0.98 0.95]) \\
+Bias & 3x1 & double & m/\allowbreak{}s\textasciicircum{}2 & True bias at Start; default [2e-7; -1e-7; 5e-8] \\
+BiasDrift & 3x1 & double & m/\allowbreak{}s\textasciicircum{}2/\allowbreak{}day & True linear bias drift; default [1e-9; 0; -5e-10] \\
+Quadratic & 3x1 & double & s\textasciicircum{}2/\allowbreak{}m & True K2 per axis; default zeros \\
+NoiseAsd & 3x1 & double & m/\allowbreak{}s\textasciicircum{}2/\allowbreak{}rtHz & White noise floor per axis; default [1e-10; 1e-9; 1e-10] \\
+NoiseCorner & 1x1 & double & Hz & 1/f corner of the noise; default 5e-3 \\
+Spikes & 1x1 & double & - & Number of planted 1 s spikes; default 3 \\
+SpikeAmplitude & 1x1 & double & m/\allowbreak{}s\textasciicircum{}2 & Their amplitude; default 5e-8 \\
+Gap\_\allowbreak{}s & 1x1 & double & s & Length of the one planted gap, 0 for none; default 30 \\
+OrbitPeriod\_\allowbreak{}s & 1x1 & double & s & Orbital period; default 5640 (\textasciitilde{}490 km) \\
+\end{longtable}
+
+\subsubsection*{OUTPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+obs & 1x1 & timeSeriesPreparation.\allowbreak{}Arc & m/\allowbreak{}s\textasciicircum{}2 & CRN-filtered observation at 1 Hz, columns lin\_accl\_x/y/z; NaN where the filter window met an edge or the gap \\
+ref & 1x1 & timeSeriesPreparation.\allowbreak{}Arc & m/\allowbreak{}s\textasciicircum{}2 & The model at 10 Hz, same column names \\
+truth & 1x1 & struct & - & .scale .bias0 .biasDrift\_per\_day .quadratic .bias (3xK1 at obs.t) .noise (.asd .corner .seeds) .spikes (table: t int64, axis, amplitude) .gap (int64 [first last] on the 10 Hz grid, or empty) .kernel (crnKernel struct) .orbitPeriod\_s .seed .provenance \\
+\end{longtable}
+
+\subsubsection*{ERRORS}
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
+\item[\texttt{NonGravForces:\allowbreak{}syntheticPair:\allowbreak{}depMissing}] timeSeriesPreparation is not on the path
+\item[\texttt{NonGravForces:\allowbreak{}syntheticPair:\allowbreak{}inputShape}] Scale, Bias, BiasDrift, Quadratic or NoiseAsd of the wrong size, or not finite
+\item[\texttt{NonGravForces:\allowbreak{}syntheticPair:\allowbreak{}inputRange}] the arc is too short for the CRN window plus the spikes and the gap, or the spikes find no room clear of each other
+\item[\texttt{timeSeriesPreparation:\allowbreak{}*}] from crnKernel, crnApply, synthTimeSeries, Arc
+\end{description}
+
+\subsection{\texttt{NonGravForces.app.Calibration}}
+\label{api:app.Calibration}
+\noindent An accelerometer calibration: scale, time-varying bias, uncertainty, gates and provenance, applicable to an arc.
+
+\begin{lstlisting}
+cal = NonGravForces.app.Calibration(fit)
+b   = cal.biasAt(t)                 % 3xK bias at int64 GPS-ns epochs
+a   = cal.apply(obsArc)             % calibrated accelerations, a timeSeriesPreparation.Arc
+inv = cal.invert()                  % the same calibration in the correction direction
+T   = cal.summaryTable()
+cal.save(file);  cal = NonGravForces.app.Calibration.load(file)
+B   = NonGravForces.app.Calibration.basis(bias, t)   % the bias basis, shared with the estimator
+\end{lstlisting}
+
+\subsubsection*{CONSTRUCTOR ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+fit & 1x1 & struct & - & .scale 3x3; .bias struct (.basis, .t0 int64, .knots int64 1xQ, .coef 3xP, optional .cov 1x3 cell of PxP); optional .covScale 9x9 (cov of scale(:)), .quadratic 3x1, .uncertainty struct, .gates struct, .convention "observation"\textbar{}"correction", .provenance struct \\
+\end{longtable}
+
+\subsubsection*{NAME-VALUE ARGUMENTS}
+None.
+
+
+\subsubsection*{PROPERTIES (read-only)}
+\begin{lstlisting}
+scale        3x3  double  -      S
+covScale     9x9  double  -      covariance of scale(:), NaN where not estimated
+bias         1x1  struct  m/s^2  .basis .t0 .knots .coef (3xP) .cov (1x3 cell)
+quadratic    3x1  double  s^2/m  K2 per axis; NaN = not estimated
+uncertainty  1x1  struct  -      as the estimator reports it (sigma, inflation, EIV bound, ...)
+gates        1x1  struct  -      observability and preflight verdicts
+convention   1x1  string  -      "observation" (y = b + S a) or "correction" (a = b + S y)
+provenance   1x1  struct  -      NonGravForces.provenance of the fit, plus the estimator's
+\end{lstlisting}
+
+\subsubsection*{METHODS}
+\begin{lstlisting}
+b = biasAt(obj, t)          t Kx1 int64 GPS ns; b 3xK in m/s^2
+out = apply(obj, arc)       arc: timeSeriesPreparation.Arc with 3 columns in m/s2; out: the
+                            calibrated arc (derive: same epochs, provenance appended)
+inv = invert(obj)           the other convention, first-order covariance
+T = summaryTable(obj)       one row per scale entry and bias coefficient
+save(obj, file)             versioned MAT file (schemaVersion "1")
+cal = Calibration.load(file)
+B = Calibration.basis(bias, t)   KxP basis matrix at int64 epochs
+\end{lstlisting}
+
+\subsubsection*{OUTPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{10.10cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+cal & 1x1 & NonGravForces.app.Calibration \\
+\end{longtable}
+
+\subsubsection*{ERRORS}
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
+\item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}inputFit}] the fit struct lacks a field, or one has the wrong size
+\item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}inputBasis}] unknown basis, knots not increasing or too few
+\item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}inputArc}] apply: not a 3-column arc in m/s2
+\item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}unsupportedQuadratic}] apply with a non-zero K2
+\item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}dataSchema}] load: not a calibration file, or no schemaVersion
+\item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}numericSingular}] invert/apply: S is singular to working precision
+\end{description}
+
+\subsubsection*{WARNINGS}
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
+\item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}newerSchema}] load: written by a newer schema; read field by field
 \end{description}

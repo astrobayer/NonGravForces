@@ -43,7 +43,9 @@ def public_methods(src):
         for j in range(i + 1, len(lines)):
             if re.match(r'^' + indent + r'end\s*$', lines[j]):
                 break
-            g = re.match(r'^\s*function\s+(?:\[[^\]]*\]|\w+)?\s*=?\s*(\w+)\s*\(', lines[j])
+            # The output clause is optional AS A WHOLE: with `(?:...|\w+)?\s*=?` the name of a method
+            # without outputs was split, `function save(obj)` reading as a method `e` (2026-10-14).
+            g = re.match(r'^\s*function\s+(?:(?:\[[^\]]*\]|\w+)\s*=\s*)?(\w+)\s*\(', lines[j])
             if g and not g.group(1).startswith('local'):
                 names.append(g.group(1))
     return names
