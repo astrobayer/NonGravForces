@@ -3469,6 +3469,7 @@ m          = magnitudeResponse(obj, f_Hz)   |S(f)| of the cascade, evaluated on 
 res = NonGravForces.app.calibrate(acc, M, 'Orbit', orb, 'Attitude', att)   % a priori from the Model
 res = NonGravForces.app.calibrate(acc, refArc)                              % an external reference
 res = NonGravForces.app.calibrate(acc, M, 'Orbit', orb, 'Fit', {'BiasBasis', "pspline", 'Scale', "full"})
+res = NonGravForces.app.calibrate(accDays, M, 'Orbit', orbDays)            % N days, one scale (N-09)
 \end{lstlisting}
 
 \subsubsection*{INPUT ARGUMENTS}
@@ -3485,7 +3486,7 @@ res = NonGravForces.app.calibrate(acc, M, 'Orbit', orb, 'Fit', {'BiasBasis', "ps
 \endfoot
 \bottomrule
 \endlastfoot
-acc & 1x1 & timeSeriesPreparation.\allowbreak{}Arc & m/\allowbreak{}s\textasciicircum{}2 & Observation, three axes in m/s2 (e.g. ACT1B, lin\_accl\_x/y/z); its product selects the preset \\
+acc & 1xN & timeSeriesPreparation.\allowbreak{}Arc & m/\allowbreak{}s\textasciicircum{}2 & Observation, three axes in m/s2 (e.g. ACT1B, lin\_accl\_x/y/z); its product selects the preset \\
 reference & 1x1 & NonGravForces.\allowbreak{}Model or Arc & m/\allowbreak{}s\textasciicircum{}2 & The a priori: a Model (needs 'Orbit'), or an Arc with acc's three columns on the raw grid \\
 \end{longtable}
 
@@ -3503,7 +3504,7 @@ reference & 1x1 & NonGravForces.\allowbreak{}Model or Arc & m/\allowbreak{}s\tex
 \endfoot
 \bottomrule
 \endlastfoot
-Orbit & 1x1 & struct & - & .epoch (referenceSystem epoch, GPS), .r and .v (3xK, GCRS, m and m/s), e.g. from io.readGNV1B; required with a Model, covering the arc plus half a CRN window \\
+Orbit & 1xN & struct & - & .epoch (referenceSystem epoch, GPS), .r and .v (3xK, GCRS, m and m/s), e.g. from io.readGNV1B; required with a Model, covering the arc plus half a CRN window \\
 Attitude & 1x1 & struct & - & geom.AttitudeProvider for the orbit epochs; [] (default) uses the Model's own provider \\
 Config & 1x1 & struct & - & timeSeriesPreparation.Config; default Config(acc), with run.filterReference set true \\
 QualFlags & 1x1 & struct & - & Passed to run's mask stage; default none \\
@@ -3536,6 +3537,8 @@ res & 1x1 & struct & - & timeSeriesPreparation.run's fields (arc, reference, dia
 \item[\texttt{NonGravForces:\allowbreak{}calibrate:\allowbreak{}inputReference}] reference is neither a Model nor such an Arc
 \item[\texttt{NonGravForces:\allowbreak{}calibrate:\allowbreak{}inputOrbit}] a Model without 'Orbit', a malformed Orbit, or an orbit that does not cover the arc
 \item[\texttt{NonGravForces:\allowbreak{}calibrate:\allowbreak{}inputConfig}] the Config names no CRN preset
+\item[\texttt{NonGravForces:\allowbreak{}calibrate:\allowbreak{}dataEmpty}] a campaign in which run refused every day
+\item[\texttt{NonGravForces:\allowbreak{}calibrate:\allowbreak{}unsupportedMultiArc}] 'Jumps' true in a campaign
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}*}] the estimate
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}*}] the Model evaluation
 \item[\texttt{timeSeriesPreparation:\allowbreak{}*, lsqvce:\allowbreak{}*, referenceSystem:\allowbreak{}*}] propagated unwrapped
@@ -3954,6 +3957,7 @@ cal & 1x1 & NonGravForces.app.Calibration \\
 cal = NonGravForces.app.fitCalibration(obs, ref)
 [cal, info] = NonGravForces.app.fitCalibration(obs, ref, 'Scale', "full", 'BiasBasis', "pspline", 'NBoot', 0)
 cal = NonGravForces.app.fitCalibration(obs, ref, 'ScaleBasis', "linear")   % S(t), N-03a
+cal = NonGravForces.app.fitCalibration(obsDays, refDays)                  % 1xN: one scale, N biases (N-09)
 \end{lstlisting}
 
 \subsubsection*{INPUT ARGUMENTS}
@@ -3970,8 +3974,8 @@ cal = NonGravForces.app.fitCalibration(obs, ref, 'ScaleBasis', "linear")   % S(t
 \endfoot
 \bottomrule
 \endlastfoot
-obs & 1x1 & timeSeriesPreparation.\allowbreak{}Arc & m/\allowbreak{}s\textasciicircum{}2 & Observation, three axes, units m/s2, already through the L1B chain (e.g. ACT1B); its epochs lie on ref's grid \\
-ref & 1x1 & timeSeriesPreparation.\allowbreak{}Arc & m/\allowbreak{}s\textasciicircum{}2 & Model accelerations, three axes, units m/s2, on the kernel's raw grid around obs (10 Hz for "ACC"); with 'Kernel' [] on obs's epochs \\
+obs & 1xN & timeSeriesPreparation.\allowbreak{}Arc & m/\allowbreak{}s\textasciicircum{}2 & Observation, three axes, units m/s2, already through the L1B chain (e.g. ACT1B); its epochs lie on ref's grid \\
+ref & 1xN & timeSeriesPreparation.\allowbreak{}Arc & m/\allowbreak{}s\textasciicircum{}2 & Model accelerations, three axes, units m/s2, on the kernel's raw grid around obs (10 Hz for "ACC"); with 'Kernel' [] on obs's epochs \\
 \end{longtable}
 
 \subsubsection*{NAME-VALUE ARGUMENTS}
@@ -3994,6 +3998,7 @@ BiasKnotSpacing\_\allowbreak{}s & 1x1 & double & s & Knot spacing of "hat" and "
 Scale & 3x3 & string & - & "diag" (default) \textbar{} "full" \textbar{} a 3x3 logical mask \\
 ScaleBasis & 1x1 & string & - & "constant" (default) \textbar{} "linear" \textbar{} "hat" \textbar{} "pspline": the time dependence of every estimated entry \\
 ScaleKnotSpacing\_\allowbreak{}s & 1x1 & double & s & Knot spacing of a "hat" or "pspline" scale; default 43200, at least the bias's when both are knotted \\
+ScaleMode & 1x1 & string & - & With several arcs: "common" (default) or "perArc" \\
 Span & 1x2 & int64 & ns & [first last] epoch the bias and scale bases must cover; default [] = the first and last usable observation epoch. Cross-validation passes the WHOLE arc's span, so that a B-spline is defined over a held-out block (N-03b) \\
 FixCrossTrack & 1x1 & logical & - & Hold S\_yy at its a-priori value; default true \\
 ScaleApriori & 3x3 & double & - & Values of the entries not estimated; default eye(3) \\
@@ -4021,8 +4026,8 @@ Robust & 1x1 & string & - & lsqvce M-estimation: "none" (default) \textbar{} "hu
 \endfoot
 \bottomrule
 \endlastfoot
-cal & 1x1 & NonGravForces.\allowbreak{}app.\allowbreak{}Calibration & - & Convention "observation"; scaleCurve when 'ScaleBasis' is not "constant"; covScale and bias cov from the bootstrap when NBoot \textgreater{} 0, else formal; .uncertainty (.sigmaScaleFormal, .sigmaScaleBootstrap, .inflation 3x3, .residualRms 1x3 m/s\textasciicircum{}2, .eiv, .noise, .nBoot, .stopReason); .gates (.vif, .cond, .maxAbsCorr, .weightFraction, .vifMax, .verdict) \\
-info & 1x1 & struct & - & .residual (Arc at obs epochs, NaN where not fitted) .names (1x3 cell of column names) .rows (Nx3 logical) .Qxx (1x3 cell, the unit-weight cofactor of each axis, in the unscaled parameters) .results (1x3 cell of lsqvce.Results) .observability (1x3 cell) .prediction (Arc at obs epochs: the fitted observation, fixed scale entries included, at EVERY row whose design is finite, fitted or not; NaN elsewhere) \\
+cal & 1xN & NonGravForces.\allowbreak{}app.\allowbreak{}Calibration & - & One per arc. Convention "observation"; scaleCurve when 'ScaleBasis' is not "constant"; covScale and bias cov from the bootstrap when NBoot \textgreater{} 0, else formal; .uncertainty (.sigmaScaleFormal, .sigmaScaleBootstrap, .inflation 3x3, .residualRms 1x3 m/s\textasciicircum{}2, .eiv, .noise, .nBoot, .stopReason); .gates (.vif, .cond, .maxAbsCorr, .weightFraction, .vifMax, .verdict) \\
+info & 1x1 & struct & - & .residual (Arc at obs epochs, NaN where not fitted) .names (1x3 cell of column names) .rows (Nx3 logical) .Qxx (1x3 cell, the unit-weight cofactor of each axis, in the unscaled parameters) .results (1x3 cell of lsqvce.Results) .observability (1x3 cell) .prediction (Arc at obs epochs: the fitted observation, fixed scale entries included, at EVERY row whose design is finite, fitted or not; NaN elsewhere). With several arcs in common mode: .mode "common", .residual (1xN cell of Arc), .rows (1xN cell), .names, .Qxx and .results per axis; in perArc mode: .mode, .arcs (1xN cell of single-arc infos) \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
@@ -4035,6 +4040,7 @@ info & 1x1 & struct & - & .residual (Arc at obs epochs, NaN where not fitted) .n
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputJumps}] 'Jumps' not int64
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputScaleBasis}] a knotted scale basis finer than the knotted bias basis
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputSpan}] 'Span' not an increasing int64 pair
+\item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}unsupportedMultiArc}] common mode with a knotted bias, 'Jumps' or a time-varying scale
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}numericCollinear}] the VIF gate refused a row with several model columns
 \item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}inputBasis}] knots the basis refuses
 \item[\texttt{timeSeriesPreparation:\allowbreak{}*}] crnApply, observability, bootstrap
@@ -4044,6 +4050,7 @@ info & 1x1 & struct & - & .residual (Arc at obs epochs, NaN where not fitted) .n
 \subsubsection*{WARNINGS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}knotsBelowFilterSpan}] knot spacing below the kernel span Tf: the filtered basis columns are nearly dependent
+\item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}fewArcs}] a bootstrap over fewer than 10 days
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}jumpOutsideFit}] a jump whose step is constant over the fitted rows; it is dropped from the bias
 \end{description}
 

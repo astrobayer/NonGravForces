@@ -36,6 +36,17 @@ classdef tNgfFitCalibration < NgfTestCase
             tc.verifyBoundAndRecord(label + " axis " + i + " (worst " + names(k) + ")", worst, 1, "-", ...
                 "error / (2 sqrt(Q n) eRow + 100 eps cond sqrt(Q n) rms y)");
         end
+        function [obs, ref, b0] = multiPair(tc, N, noise, varargin)
+            %MULTIPAIR N consecutive days of syntheticPair: one scale, a different constant bias per day.
+            obs = timeSeriesPreparation.Arc.empty; ref = obs; b0 = zeros(3, N);
+            asd = [1e-10; 1e-9; 1e-10]; if ~noise, asd = tc.Quiet; end
+            for k = 1:N
+                st = int64(7305 * 86400 - 43200 + 18 + (k - 1) * 86400) * int64(1e9);
+                b0(:, k) = [2e-7; -1e-7; 5e-8] + 1e-8 * k * [1; -2; 3];
+                [obs(k), ref(k)] = NonGravForces.app.syntheticPair('Days', 0.1, 'Start', st, 'Seed', k, 'Bias', b0(:, k), ...
+                    'BiasDrift', zeros(3, 1), 'NoiseAsd', asd, varargin{:});
+            end
+        end
         function [x, names] = estimateOf(~, cal, info, i)
             %ESTIMATEOF The fitted parameters of axis i in the order of info.names{i}.
             names = info.names{i};
@@ -318,6 +329,121 @@ classdef tNgfFitCalibration < NgfTestCase
             end
             tc.verifyBoundAndRecord("fitCalibration, 2x arc / 1x arc", median(t2) / median(t1), 4, "-", ...
                 "linear would be 2 and a fixed overhead pulls it lower; quadratic 4");
+        end
+    end
+
+    % ===================================================================== N-09: many arcs, one scale
+    methods (Test, TestTags = {'contract'})
+        function fitCalibrationMultiArcContract(tc)
+            [obs, ref] = tc.multiPair(3, true, 'Spikes', 0);
+            [cal, info] = NonGravForces.app.fitCalibration(obs, ref, 'BiasBasis', "constant", 'NBoot', 0);
+            tc.verifyClass(cal, 'NonGravForces.app.Calibration'); tc.verifySize(cal, [1 3]);
+            tc.verifyEqual(info.mode, "common");
+            tc.verifyEqual(cal(2).scale, cal(1).scale, 'the scale is common: every element carries the same one');
+            tc.verifyNotEqual(cal(2).bias.coef, cal(1).bias.coef, 'the biases are per day');
+            tc.verifyEqual(cal(3).bias.t0, obs(3).t(1));
+            tc.verifyEqual(cal(1).uncertainty.mode, "common"); tc.verifyEqual(cal(1).uncertainty.nArcs, 3);
+            tc.verifySize(info.residual, [1 3]); tc.verifyEqual(info.residual{2}.t, obs(2).t);
+            tc.verifyWarning(@() NonGravForces.app.fitCalibration(obs, ref, 'BiasBasis', "constant", 'NBoot', 5), ...
+                "NonGravForces:fitCalibration:fewArcs");
+            id = "NonGravForces:fitCalibration:unsupportedMultiArc";
+            tc.verifyErrorId(@() NonGravForces.app.fitCalibration(obs, ref, 'BiasBasis', "pspline", 'NBoot', 0), id);
+            tc.verifyErrorId(@() NonGravForces.app.fitCalibration(obs, ref, 'ScaleBasis', "linear", 'NBoot', 0), id);
+            tc.verifyErrorId(@() NonGravForces.app.fitCalibration(obs, ref, 'Jumps', obs(2).t(100), 'NBoot', 0), id);
+            tc.verifyErrorId(@() NonGravForces.app.fitCalibration(obs, ref(1:2), 'NBoot', 0), "NonGravForces:fitCalibration:inputArc");
+            tc.verifyErrorId(@() NonGravForces.app.fitCalibration(obs([2 1 3]), ref([2 1 3]), 'NBoot', 0), "NonGravForces:fitCalibration:inputArc");
+        end
+    end
+    methods (Test, TestTags = {'reference'})
+        function fitCalibrationMultiArcReference(tc)
+            % Noise-free, three days, ONE planted scale and three different biases: the joint fit returns
+            % them all. The scale bound is the single-arc one over all rows (the common cofactor info.Qxx
+            % times the row rounding); a bias is a constant per day, recovered to the same rounding
+            % relative to the signal it sits beside.
+            [obs, ref, b0] = tc.multiPair(3, false, 'Spikes', 0, 'Gap_s', 0, 'Scale', tc.TruthS .* eye(3));
+            [cal, info] = NonGravForces.app.fitCalibration(obs, ref, 'BiasBasis', "constant", 'FixCrossTrack', false, 'NBoot', 0);
+            [~, ~, truth] = NonGravForces.app.syntheticPair('Days', 0.1, 'Scale', tc.TruthS .* eye(3), 'NoiseAsd', tc.Quiet, 'Spikes', 0, 'Gap_s', 0);
+            n = sum(cellfun(@(r) nnz(r(:, 1)), info.rows));
+            for i = 1:3
+                q = sqrt(info.Qxx{i}(1, 1));
+                bound = 2 * q * sqrt(n) * tc.rowBound(truth, ref(1)) + 100 * eps * cal(1).gates.cond(i) * q * sqrt(n) * 2e-7;
+                tc.verifyBoundAndRecord("fitCalibration multi-arc common scale, axis " + i, abs(cal(1).scale(i, i) - tc.TruthS(i, i)) / bound, 1, "-", ...
+                    "error / (2 sqrt(Q n) eRow + 100 eps cond sqrt(Q n) |signal|), n over all days");
+            end
+            errB = max(abs(cell2mat(arrayfun(@(c) c.bias.coef(:, 1), cal, 'UniformOutput', false)) - b0), [], 'all');
+            tc.verifyBoundAndRecord("fitCalibration multi-arc per-day biases, relative to the signal", errB / 2e-7, 1e-9, "-", ...
+                "rounding of the CRN-filtered solve; measured ~1e-15 when written");
+        end
+    end
+    methods (Test, TestTags = {'precision'})
+        function fitCalibrationMultiArcPrecision(tc)
+            % The algebra of pre-elimination: lsqvce's joint solve with each day's bias as a local block
+            % equals the DENSE joint least squares -- a block-diagonal bias design beside the common scale
+            % column, solved here by QR -- at the rounding of that solve, cond * eps.
+            [obs, ref] = tc.multiPair(3, true, 'Spikes', 0, 'Gap_s', 0);
+            [cal, info] = NonGravForces.app.fitCalibration(obs, ref, 'BiasBasis', "linear", 'NBoot', 0);
+            K = timeSeriesPreparation.crnKernel("ACC");
+            X = []; l = []; nB = 2;
+            for k = 1:3
+                Ha = timeSeriesPreparation.crnApply(ref(k), K, OutputEpochs = obs(k).t).obs;
+                bk = struct('basis', "linear", 't0', obs(k).t(1), 'knots', int64([]), 'coef', zeros(3, 2));
+                Br = NonGravForces.app.Calibration.basis(bk, ref(k).t);
+                names = {'b1', 'b2'}; u = struct('b1', '-', 'b2', '-');
+                bArc = timeSeriesPreparation.Arc(ref(k).t, Br, struct("obsNames", {names}, "variableNames", {names}, ...
+                    "variableFieldNames", {names}, "variableUnits", u, "fileName", "DESIGN", "product", "DESIGN"));
+                HB = timeSeriesPreparation.crnApply(bArc, K, OutputEpochs = obs(k).t).obs;
+                r = info.rows{k}(:, 1);
+                blk = zeros(nnz(r), 3 * nB); blk(:, (k - 1) * nB + (1:nB)) = HB(r, :);
+                X = [X; blk, Ha(r, 1)]; l = [l; obs(k).obs(r, 1)]; %#ok<AGROW>
+            end
+            [Q, Rq] = qr(X, 0); xd = Rq \ (Q' * l);
+            bound = 100 * eps * cond(X);
+            tc.verifyBoundAndRecord("fitCalibration multi-arc scale vs dense joint LS (relative)", abs(cal(1).scale(1, 1) - xd(end)) / abs(xd(end)) / bound, 1, "-", ...
+                "two solvers of one problem; bound 100 eps cond(X)");
+            yb = cell2mat(arrayfun(@(c) c.bias.coef(1, :)', cal, 'UniformOutput', false));
+            tc.verifyBoundAndRecord("fitCalibration multi-arc biases vs dense joint LS (relative to max bias)", ...
+                max(abs(yb(:) - xd(1:end - 1))) / max(abs(xd(1:end - 1))) / bound, 1, "-", "same solve, the local block");
+        end
+    end
+    methods (Test, TestTags = {'vectorization'})
+        function fitCalibrationVectorization(tc)
+            % 'ScaleMode' "perArc" is N single-arc fits, bitwise, arc k with seed Seed + k - 1.
+            [obs, ref] = tc.multiPair(3, true);
+            [cal, info] = NonGravForces.app.fitCalibration(obs, ref, 'ScaleMode', "perArc", 'NBoot', 3, 'Seed', 4);
+            tc.verifyEqual(info.mode, "perArc");
+            for k = 1:3
+                c1 = NonGravForces.app.fitCalibration(obs(k), ref(k), 'NBoot', 3, 'Seed', 4 + k - 1);
+                tc.verifyEqual(cal(k).scale, c1.scale, "arc " + k);
+                tc.verifyEqual(cal(k).bias.coef, c1.bias.coef, "arc " + k);
+                tc.verifyEqual(cal(k).covScale, c1.covScale, "arc " + k);
+            end
+        end
+    end
+    methods (Test, TestTags = {'robustness'})
+        function fitCalibrationMultiArcRobustness(tc)
+            % Spikes and a gap inside every day (several sub-arcs per day), the held S_yy axis that has no
+            % common column (it decouples into per-day fits), and the bootstrap over days: all finite.
+            [obs, ref] = tc.multiPair(3, true);
+            [cal, info] = tc.verifyWarning(@() NonGravForces.app.fitCalibration(obs, ref, 'NBoot', 4, 'Seed', 1), ...
+                "NonGravForces:fitCalibration:fewArcs");
+            tc.verifyTrue(all(isfinite(cal(1).scale), 'all'));
+            tc.verifyTrue(all(cellfun(@(r) any(diff(find(r(:, 1))) > 1), info.rows)), 'each day really has a gap');
+            tc.verifyTrue(all(isfinite(cell2mat(arrayfun(@(c) c.bias.coef(:), cal, 'UniformOutput', false))), 'all'));
+            tc.verifyTrue(all(isfinite(diag(cal(1).covScale([1 9], [1 9])))), 'the bootstrap over days gives a covariance');
+            tc.verifyEqual(cal(1).uncertainty.bootstrap, "days");
+        end
+    end
+    methods (Test, TestTags = {'metamorphic'})
+        function fitCalibrationMultiArcMetamorphic(tc)
+            % Doubling every day's observation doubles the common scale and every bias of the free axes,
+            % bitwise (the equilibration takes a power of two out exactly); and the day's own reference is
+            % what matters -- passing one reference arc per day equals passing them as an array.
+            [obs, ref] = tc.multiPair(3, true, 'Spikes', 0);
+            c1 = NonGravForces.app.fitCalibration(obs, ref, 'BiasBasis', "constant", 'NBoot', 0);
+            o2 = obs; for k = 1:3, o2(k) = obs(k).derive(obs(k).t, 2 * obs(k).obs, "test.double"); end
+            c2 = NonGravForces.app.fitCalibration(o2, ref, 'BiasBasis', "constant", 'NBoot', 0);
+            tc.verifyEqual(c2(1).scale([1 9]), 2 * c1(1).scale([1 9]));
+            for k = 1:3, tc.verifyEqual(c2(k).bias.coef([1 3], :), 2 * c1(k).bias.coef([1 3], :)); end
         end
     end
 end

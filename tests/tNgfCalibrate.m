@@ -59,6 +59,23 @@ classdef tNgfCalibrate < NgfTestCase
             tc.verifyErrorId(@() C(tc.acc, tc.Mfast), "NonGravForces:calibrate:inputOrbit");
             tc.verifyErrorId(@() C(obs, tc.Mfast, 'Orbit', tc.orb), "NonGravForces:calibrate:inputOrbit");   % 2020-01-01 orbit, a 2020-01-02 arc
         end
+        function calibrateCampaignContract(tc)
+            % N-09: an Arc array is a campaign -- run per day, one joint fit, results per day.
+            obs = timeSeriesPreparation.Arc.empty; ref = obs;
+            for k = 1:2
+                st = int64(7305 * 86400 - 43200 + 18 + (k - 1) * 86400) * int64(1e9);
+                [obs(k), ref(k)] = NonGravForces.app.syntheticPair('Days', 0.1, 'Start', st, 'Seed', k, 'Spikes', 0);
+            end
+            res = NonGravForces.app.calibrate(obs, ref, 'Fit', {'NBoot', 0});
+            tc.verifyTrue(all(isfield(res, {'results', 'summary', 'calibration', 'used', 'fit', 'attribution'})));
+            tc.verifyEqual(res.used, [true true]);
+            tc.verifySize(res.calibration, [1 2]);
+            tc.verifyEqual(res.calibration{2}.scale, res.calibration{1}.scale, 'one common scale');
+            tc.verifyEqual(res.fit.mode, "common");
+            tc.verifyErrorId(@() NonGravForces.app.calibrate(obs, ref, 'Jumps', true), "NonGravForces:calibrate:unsupportedMultiArc");
+            tc.verifyErrorId(@() NonGravForces.app.calibrate(obs, [ref, ref]), "NonGravForces:calibrate:inputReference");
+            tc.verifyErrorId(@() NonGravForces.app.calibrate(obs, tc.Mfast), "NonGravForces:calibrate:inputOrbit");
+        end
     end
 
     % ===================================================================== reference
@@ -101,6 +118,41 @@ classdef tNgfCalibrate < NgfTestCase
                     "least squares with a constant in the basis cannot do worse than the mean");
             end
         end
+        function calibrateCampaignRealDays(tc)
+            % N-09 on real data: GRACE-C 2020-01-01..03 (30 min of each, GFZ ISDC RL04, fetched
+            % 2026-10-15), ACT1B against the fast Model along each day's GNV1B with SCA1B attitude.
+            % Completion and consistency, not truth: one common scale, finite per-day biases that
+            % agree to a few per cent between consecutive days.
+            f = @(varargin) fullfile(tc.root, varargin{:});
+            names = {'lin_accl_x', 'lin_accl_y', 'lin_accl_z'};
+            units = struct('lin_accl_x', 'm/s2', 'lin_accl_y', 'm/s2', 'lin_accl_z', 'm/s2');
+            accs = timeSeriesPreparation.Arc.empty; orbs = struct('epoch', {}, 'r', {}, 'v', {}); epA = []; qA = [];
+            for d = 1:3
+                day = sprintf('2020-01-%02d', d);
+                [ep, r, v] = NonGravForces.io.readGNV1B(f('data', 'samples', 'multiday', "GNV1B_" + day + "_C_04.txt"), 'Eop', tc.eop);
+                orbs(d) = struct('epoch', ep, 'r', r, 'v', v);
+                [e, q] = NonGravForces.io.readSCA1B(f('data', 'samples', 'multiday', "SCA1B_" + day + "_C_04.txt"));
+                if isempty(epA), epA = e; qA = q;
+                else, epA = referenceSystem.daySecondToEpoch([[epA.day; e.day], [epA.sec; e.sec]], epA.scale); qA = [qA, q]; %#ok<AGROW>
+                end
+                [epC, a] = NonGravForces.io.readACC1B(f('data', 'samples', 'multiday', "ACT1B_" + day + "_C_04.txt"));
+                aux = struct("obsNames", {names}, "variableNames", {names}, "variableFieldNames", {names}, ...
+                    "variableUnits", units, "fileName", "ACT1B_" + day + "_C_04.txt", "product", "ACT1B");
+                accs(d) = timeSeriesPreparation.Arc(referenceSystem.epochTo(epC, "gpsNanoseconds"), a.', aux);
+            end
+            attP = NonGravForces.geom.AttitudeProvider(epA, qA);
+            M = NonGravForces.Model(NonGravForces.geom.graceFO("C"), NonGravForces.Options("fast"), 'Attitude', attP, ...
+                'Eop', tc.eop, 'SpaceWeather', tc.sw, 'Exponential', struct('rho0_kg_m3', 3e-12, 'h0_m', 450e3, 'H_m', 60e3));
+            res = NonGravForces.app.calibrate(accs, M, 'Orbit', orbs, 'Attitude', attP, 'Fit', {'NBoot', 0});
+            tc.verifyEqual(res.used, true(1, 3));
+            tc.verifyEqual(res.summary.status, repmat("ok", 3, 1));
+            S = res.calibration{1}.scale;
+            tc.verifyTrue(all(isfinite(S), 'all'));
+            tc.verifyEqual(res.calibration{3}.scale, S);
+            bx = cellfun(@(c) c.bias.coef(1, 1), res.calibration);
+            tc.verifyBoundAndRecord("calibrate campaign, real x bias day-to-day spread / mean", (max(bx) - min(bx)) / abs(mean(bx)), 0.2, "-", ...
+                "three consecutive days of one instrument; measured 0.08 when written (-3.38, -3.32, -3.12e-7)");
+        end
     end
 
     % ===================================================================== precision
@@ -124,10 +176,10 @@ classdef tNgfCalibrate < NgfTestCase
             v = @(t) R * n * (-sin(phi0 + n * t) .* e1 + cos(phi0 + n * t) .* e2);
             ep1 = referenceSystem.daySecondToEpoch([repmat(day, numel(t1), 1), sec0 + t1(:)], "GPS");
             ep10 = referenceSystem.daySecondToEpoch([repmat(day, numel(t10), 1), sec0 + t10(:)], "GPS");
-            att = NonGravForces.geom.AttitudeProvider(ep10, NonGravForces.geom.AttitudeProvider.nominal(r(t10), v(t10), true));
+            attP = NonGravForces.geom.AttitudeProvider(ep10, NonGravForces.geom.AttitudeProvider.nominal(r(t10), v(t10), true));
             M = NonGravForces.Model(NonGravForces.geom.graceFO("C"), NonGravForces.Options("standard"), ...
-                'Attitude', att, 'Eop', tc.eop, 'SpaceWeather', tc.sw);
-            [a10, i10] = M.accel(ep10, r(t10), v(t10), att.at(ep10));
+                'Attitude', attP, 'Eop', tc.eop, 'SpaceWeather', tc.sw);
+            [a10, i10] = M.accel(ep10, r(t10), v(t10), attP.at(ep10));
             rad = vecnorm(i10.radiation);
             tc.verifyLessThan(min(rad) / max(rad), 0.5, 'the arc must reach the umbra, or it measures a sunlit arc');
             % the observation: the 10 Hz Model, CRN-filtered at the whole seconds, as ACT1B is formed
@@ -139,15 +191,15 @@ classdef tNgfCalibrate < NgfTestCase
                 "variableFieldNames", {names}, "variableUnits", units, "fileName", prod + "_2020-01-01_C_04.txt", "product", prod));
             Fd = timeSeriesPreparation.crnApply(mk(tns, a10.', "MODEL"), K, OutputEpochs = tns(1:10:end));
             keep = all(isfinite(Fd.obs), 2);
-            acc = mk(Fd.t(keep), Fd.obs(keep, :), "ACT1B");
-            res = NonGravForces.app.calibrate(acc, M, 'Orbit', struct('epoch', ep1, 'r', r(t1), 'v', v(t1)), ...
-                'Attitude', att, 'Fit', {'NBoot', 0});
+            accA = mk(Fd.t(keep), Fd.obs(keep, :), "ACT1B");
+            res = NonGravForces.app.calibrate(accA, M, 'Orbit', struct('epoch', ep1, 'r', r(t1), 'v', v(t1)), ...
+                'Attitude', attP, 'Fit', {'NBoot', 0});
             raw = res.diagnostics.rawReference;
             [onGrid, at] = ismember(raw.t, tns);
             tc.verifyTrue(all(onGrid), 'the raw reference lies on the 10 Hz grid');
-            Fr = timeSeriesPreparation.crnApply(raw, K, OutputEpochs = acc.t).obs;
-            d = Fr - acc.obs; ok = all(isfinite(d), 2);
-            signal = max(abs(acc.obs), [], 'all');
+            Fr = timeSeriesPreparation.crnApply(raw, K, OutputEpochs = accA.t).obs;
+            d = Fr - accA.obs; ok = all(isfinite(d), 2);
+            signal = max(abs(accA.obs), [], 'all');
             rawErr = max(abs(raw.obs - a10(:, at).'), [], 'all');
             tc.verifyBoundAndRecord("calibrate reference, pchip vs 10 Hz Model, raw grid, / signal", rawErr / signal, 0.05, "-", ...
                 "recorded: unfiltered, the 1 s interpolation is visible at the shadow boundary (measured 3.9e-3)");
