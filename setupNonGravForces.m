@@ -385,8 +385,14 @@ if present && mode ~= "force"
     % fresh machine and nothing after it, which is every run on every developer's host. Verified
     % 2026-09-16 by fault injection: with the digest checked only on download, a deliberately wrong
     % pin changed nothing and the gate stayed green. Hashing 33 MB costs about 0.2 s.
-    got = localSha256(dst);
-    if got ~= sha256
+    try
+        got = localSha256(dst);
+    catch err
+        got = "";
+        rec.action = "failed: " + string(err.message);
+        rec.file = "";
+    end
+    if strlength(got) > 0 && got ~= sha256
         rec.action = "failed: the file on disk has SHA-256 " + got + ", not the pinned " + sha256 + ...
             " -> it was NOT used; delete it and refetch, or verify it by hand before repinning";
         rec.file = "";
@@ -410,8 +416,23 @@ end
 if ~isfolder(folder), mkdir(folder); end
 fprintf('setupNonGravForces: fetching %s through referenceSystem.downloadKernels (about 33 MB)\n', file);
 try
-    referenceSystem.downloadKernels('Set', "minimal", 'Span', "short", 'Mode', "download", ...
+    % READ THE MANIFEST BEFORE THE FILE. downloadKernels does not throw on a failed fetch: it warns
+    % and returns a "FAILED | reason" row, and writes nothing. On CI run 38733381139 NAIF closed the
+    % connection, the file was never produced, and hashing it reported "Invalid file identifier" in
+    % place of the network error -- the gate went red for the right reason under the wrong name.
+    manifest = referenceSystem.downloadKernels('Set', "minimal", 'Span', "short", 'Mode', "download", ...
         'CacheDir', string(folder), 'Overwrite', mode == "force");
+    row = manifest(manifest.File == string(file), :);
+    if ~isempty(row) && startsWith(row.Status(1), "FAILED")
+        error('setupNonGravForces:download', '%s', ...
+            "download: " + strtrim(extractAfter(row.Status(1), "FAILED |")) + ...
+            " -> nothing was written; rerun setupNonGravForces('FetchKernels', ""force"") when NAIF answers");
+    end
+    if ~isfile(dst)
+        error('setupNonGravForces:download', '%s', "download: referenceSystem.downloadKernels reported " + ...
+            "status """ + strjoin(string(row.Status), ", ") + """ but wrote no " + string(file) + " in " + string(folder) + ...
+            " -> fetch it by hand into that folder, or rerun when NAIF answers");
+    end
     got = localSha256(dst);
     if got == sha256
         rec.action = "fetched";
@@ -607,7 +628,13 @@ end
 
 function h = localSha256(file)
 md = java.security.MessageDigest.getInstance('SHA-256');
-fid = fopen(file, 'r');
+[fid, why] = fopen(file, 'r');
+if fid < 0
+    % Refuse here, BEFORE registering fclose: an onCleanup on fid -1 raises "Invalid file
+    % identifier", which is what reached the gate in place of the real cause (CI run 38733381139).
+    error('setupNonGravForces:sha256', 'cannot open %s to hash it (%s) -> the file is missing or unreadable', ...
+        file, why);
+end
 closer = onCleanup(@() fclose(fid));
 md.update(fread(fid, Inf, '*uint8'));
 h = string(lower(reshape(dec2hex(typecast(md.digest(), 'uint8'), 2)', 1, [])));
