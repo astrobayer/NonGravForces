@@ -171,8 +171,13 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-16, N-10a)
+## 5. Current status (2026-10-16, occlusion speed-up)
 
+- **2026-10-16, occlusion speed-up:** `selfShadow`'s look-up, `radiationPanelForce` and `flowShadow`'s species
+  loop restructured with every value bitwise unchanged (accel, info and torque compared with `main`):
+  `Model.accel` 1.004 -> 0.85 ms per epoch, interleaved A/B. The benchmark table was not re-committed (the
+  host was loaded; untouched paths moved too). Further gains change numbers: HANDOVER lists three options.
+  ☑ on Tier A: 427/427, predicted 427.
 - **2026-10-16, N-10a (#67):** `tools/regressionBaseline.m` calibrates 2020-01 C and D from the DATAPOOL
   (`standard`, joint over days, 100-replicate day bootstrap) and freezes `tools/baseline_reference.json`
   (C: S_xx 0.7620 +- 0.0084; D: 0.7694 +- 0.0097, 19..21 Jan without records). ~4 h, run at every RELEASE
@@ -619,6 +624,9 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   constancy check passes it. Look at the values before choosing a regressor (N-11a).
 - **lsqvce's `B` spans every local column of the system**, not just the arc's own day: m_a x nl over all days,
   the day's block in place (sparse). And a system needs at least one COMMON column (N-09).
+- **Vectorising is not by itself faster.** `radiationPanelForce` broadcast to one 3xNxK expression per source
+  was 18 % SLOWER than the plate loop it replaced; one NxK accumulator per component was 28 % faster. And the
+  profiler showed the faster version as slower: compare variants interleaved with tic/toc, never by profile.
 - **A title's text object hides its handle from `findobj`**; a test reading back a Tagged title needs `findall`.
 - **`tsFitAR`'s default exact method is too slow for anything drawn**: over a minute for 4000 samples with a
   gap. Fit Yule-Walker (`Method = "yw"`) on a gap-free run and filter (N-05).
