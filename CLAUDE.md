@@ -171,8 +171,13 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-15, N-11a)
+## 5. Current status (2026-10-16, N-10a)
 
+- **2026-10-16, N-10a (#67):** `tools/regressionBaseline.m` calibrates 2020-01 C and D from the DATAPOOL
+  (`standard`, joint over days, 100-replicate day bootstrap) and freezes `tools/baseline_reference.json`
+  (C: S_xx 0.7620 +- 0.0084; D: 0.7694 +- 0.0097, 19..21 Jan without records). ~4 h, run at every RELEASE
+  on Tier A: audit check 14 refuses a version the baseline was not verified at. The month is in
+  `E:\DATAPOOL\GRACEFO\L1B\RL04\2020`; CI sees the pool through `READING_DATA_POOL` (#92).
 - **2026-10-15, N-11a (#68, first of two PRs):** 'Regressors' in `fitCalibration` (measured series, linear onto
   the raw grid, demeaned, filtered like the bias; common over days) carried by `Calibration` (schema "3";
   `apply` refuses without the series). Measured: GRACE-FO TSU temperatures span 0.022 C per day (thermal
@@ -647,6 +652,9 @@ Every one of these was an actual defect found in a predecessor or a dependency.
 - **Dropping a dependency leaves dead code behind it.** Removing the lsqvce row left its only
   helper unreferenced and `codeIssues` (DEFNU) caught it before any test ran. Grep for the
   helpers a removed row used, not only for the row.
+- **An empty L1B day is a refusal, not an empty array**: gracefoReading raises
+  `gracefoReading:readL1b:noData` for `num_records: 0` (GRACE-D 2020-01-19..21). A long run must catch that
+  identifier and write each finished part as it goes -- the first month run lost three hours to it.
 - **MATLAB's `websave` times out after 5 s by default.** A research server's first byte can take longer;
   `setupNonGravForces` passes `weboptions('Timeout', 60)` and retries once (O-50). Any new fetch goes through
   its `localDownload`, never a bare `websave`.
