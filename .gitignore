@@ -65,3 +65,4 @@ data/kernels/
 # GROOPS data (albedo grids, CERES SYN1deg climatologies) is FETCHED into DATAPOOL by
 # setupNonGravForces, never committed: the SYN1deg files are 1.25 GB each (O-41).
 data/albedo/
+tools/baseline_last.txt

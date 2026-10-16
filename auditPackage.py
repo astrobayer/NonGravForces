@@ -485,6 +485,31 @@ else:
                              "and quote it, or mark the line as superseded history"
                              % (rel, i, val, ", ".join("%g" % mv for mv in sorted(set(measured)))))
 
+# 14. THE REGRESSION BASELINE WAS VERIFIED AT THIS VERSION (N-10a, ORC-10).
+#     tools/regressionBaseline.m calibrates the reference month 2020-01 (GRACE-C and -D) and either
+#     freezes it into tools/baseline_reference.json or compares a new run with it, writing the
+#     toolbox version into meta.toolbox only when every number stayed within k sigma. The month
+#     takes ~1.5 h, so it runs at a release on Tier A and not in CI -- and an instrument nobody is
+#     made to run is the O-29 disease. This makes it unavoidable: a tree whose version is not the
+#     one the baseline was last verified at is refused, exactly as a stale benchmark is (check 13).
+#     WHAT IT DOES NOT CHECK: the numbers themselves (that is the tool's comparison), nor that the
+#     file came from a real run rather than an edit.
+import json
+BASE = os.path.join(ROOT, "tools", "baseline_reference.json")
+if not os.path.isfile(BASE):
+    note("tools/baseline_reference.json is missing -> run tools/regressionBaseline('Mode', \"freeze\") "
+         "on the DATAPOOL and commit it (N-10a)")
+else:
+    try:
+        bmeta = json.load(open(BASE, encoding="utf-8")).get("meta", {})
+    except (ValueError, OSError) as e:
+        bmeta = {}
+        note("tools/baseline_reference.json is not readable JSON (%s) -> regenerate it" % e)
+    if version and bmeta.get("toolbox") != version:
+        note("tools/baseline_reference.json was last verified at toolbox %s but this tree is %s "
+             "-> run tools/regressionBaseline on the DATAPOOL (Mode \"compare\") before the release"
+             % (bmeta.get("toolbox"), version))
+
 if findings:
     print(f"auditPackage: {len(findings)} finding(s)")
     for f in findings:
