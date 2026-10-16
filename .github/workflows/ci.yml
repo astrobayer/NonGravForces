@@ -141,7 +141,22 @@ jobs:
     timeout-minutes: 45
     env:
       NONGRAVFORCES_CI: 1
+      # The DATAPOOL root on this runner (organisation variable, owner decision 2026-09-19 in
+      # timeSeriesPreparation's GUIDE): the GRACE-FO Level-1B days live below it under
+      # GRACEFO\L1B\RL04\<yyyy>\<yyyy-mm-dd>\. Read by the N-10 regression month; empty when the
+      # organisation has not granted the variable to this repository -- the next step says which.
+      READING_DATA_POOL: ${{ vars.READING_DATA_POOL }}
     steps:
+      # Says whether the pool reached this job and what of 2020-01 it holds. Reporting only: a
+      # missing variable and a pool without the month produce the same skipped data downstream,
+      # and without this line the two could not be told apart (gracefoReading's CI does the same).
+      - name: Report the DATAPOOL this job sees
+        shell: powershell                # the runner carries Windows PowerShell 5.1 only (pwsh fails; sibling repos measured it)
+        run: |
+          if (-not $env:READING_DATA_POOL) { Write-Output "READING_DATA_POOL is not set for this repository"; exit 0 }
+          $m = Join-Path $env:READING_DATA_POOL "GRACEFO\L1B\RL04\2020"
+          Write-Output "READING_DATA_POOL = $($env:READING_DATA_POOL)"
+          if (Test-Path $m) { Write-Output ("2020 days present: " + (@(Get-ChildItem $m -Directory -Filter "2020-01-*").Count)) } else { Write-Output "no $m" }
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with: { path: NonGravForces }
       # ciGate checks for ALL FIVE siblings - referenceSystem/setupReferenceSystem.m,
