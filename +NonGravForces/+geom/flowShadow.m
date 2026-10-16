@@ -243,36 +243,38 @@ if withSpecies
                 SP0 = SP0 + wc(:, :, ia) .* cn(:, :, ia); SPO = SPO + wco(:, :, ia) .* cn(:, :, ia);
                 ST0 = ST0 + wc(:, :, ia) .* tang(:, :, ia); STO = STO + wco(:, :, ia) .* tang(:, :, ia);
             end
-            for j = 1:8
-                sj = sb(j, :)';
-                x = sj .* cc;
-                es = exp(-sj.^2);
-                % E G0 = (sqrt(pi)/2) exp(x^2 - s^2) erfc(-x), written so that neither factor over- or underflows:
-                % exp(x^2 - s^2) <= 1 since |x| <= s, and for x < 0 the product goes through erfcx.
-                s2 = sj.^2 .* ones(size(x));
-                esx = es .* ones(size(x));
-                EG0 = zeros(size(x));
-                pos = x >= 0;
-                EG0(pos) = (sqrt(pi) / 2) * exp(x(pos).^2 - s2(pos)) .* erfc(-x(pos));
-                EG0(~pos) = (sqrt(pi) / 2) * esx(~pos) .* erfcx(-x(~pos));
-                EJ3 = es .* (x.^2 + 1) / 2 + (x.^3 + 1.5 * x) .* EG0;
-                EJ4 = es .* (0.5 * x.^3 + 1.25 * x) + (x.^4 + 3 * x.^2 + 0.75) .* EG0;
-                g3 = wchi .* EJ3; g4 = wchi .* EJ4;
-                [IN0, INO, IP0, IPO, IT0, ITO] = deal(zeros(Kb, 1));
-                for ir = 1:size(g3, 2)                    % ring by ring, for the same reason as above
-                    IN0 = IN0 + g3(:, ir) .* SN0(:, ir); INO = INO + g3(:, ir) .* SNO(:, ir);
-                    IP0 = IP0 + g4(:, ir) .* SP0(:, ir); IPO = IPO + g4(:, ir) .* SPO(:, ir);
-                    IT0 = IT0 + g4(:, ir) .* ST0(:, ir); ITO = ITO + g4(:, ir) .* STO(:, ir);
-                end
-                rN = INO ./ IN0; rN(~(IN0 > 0)) = 1;
-                rP = IPO ./ IP0; rP(~(IP0 > 0)) = 1;
-                rT = ITO ./ IT0; bad = ~(l > 0) | ~(abs(IT0) > 0); rT(bad) = rN(bad);
-                fN(k, idx, j) = rN; fP(k, idx, j) = rP; fT(k, idx, j) = rT;
-                if options.Integrals
-                    integrals.CN(k, idx, j) = IN0 ./ (sj * pi^1.5);
-                    integrals.CpInc(k, idx, j) = 2 * IP0 ./ (sj.^2 * pi^1.5);
-                    integrals.CtauInc(k, idx, j) = 2 * IT0 ./ (sj.^2 * pi^1.5);
-                end
+            % The eight species side by side in the third dimension (Kb x R x 8): every element is formed
+            % by the same operations in the same order as one species at a time, so the result is bitwise
+            % the same, and the ring loop below runs R times instead of 8 R (it was the per-block cost
+            % that made a large block pay, measured 2026-10-16).
+            sj = reshape(sb.', Kb, 1, 8);
+            x = sj .* cc;
+            es = exp(-sj.^2);
+            % E G0 = (sqrt(pi)/2) exp(x^2 - s^2) erfc(-x), written so that neither factor over- or underflows:
+            % exp(x^2 - s^2) <= 1 since |x| <= s, and for x < 0 the product goes through erfcx.
+            s2 = sj.^2 .* ones(size(x));
+            esx = es .* ones(size(x));
+            EG0 = zeros(size(x));
+            pos = x >= 0;
+            EG0(pos) = (sqrt(pi) / 2) * exp(x(pos).^2 - s2(pos)) .* erfc(-x(pos));
+            EG0(~pos) = (sqrt(pi) / 2) * esx(~pos) .* erfcx(-x(~pos));
+            EJ3 = es .* (x.^2 + 1) / 2 + (x.^3 + 1.5 * x) .* EG0;
+            EJ4 = es .* (0.5 * x.^3 + 1.25 * x) + (x.^4 + 3 * x.^2 + 0.75) .* EG0;
+            g3 = wchi .* EJ3; g4 = wchi .* EJ4;
+            [IN0, INO, IP0, IPO, IT0, ITO] = deal(zeros(Kb, 1, 8));
+            for ir = 1:size(g3, 2)                        % ring by ring, for the same reason as above
+                IN0 = IN0 + g3(:, ir, :) .* SN0(:, ir); INO = INO + g3(:, ir, :) .* SNO(:, ir);
+                IP0 = IP0 + g4(:, ir, :) .* SP0(:, ir); IPO = IPO + g4(:, ir, :) .* SPO(:, ir);
+                IT0 = IT0 + g4(:, ir, :) .* ST0(:, ir); ITO = ITO + g4(:, ir, :) .* STO(:, ir);
+            end
+            rN = INO ./ IN0; rN(~(IN0 > 0)) = 1;
+            rP = IPO ./ IP0; rP(~(IP0 > 0)) = 1;
+            rT = ITO ./ IT0; bad = ~(l > 0) | ~(abs(IT0) > 0); rT(bad) = rN(bad);
+            fN(k, idx, :) = reshape(rN, 1, Kb, 8); fP(k, idx, :) = reshape(rP, 1, Kb, 8); fT(k, idx, :) = reshape(rT, 1, Kb, 8);
+            if options.Integrals
+                integrals.CN(k, idx, :) = reshape(IN0 ./ (sj * pi^1.5), 1, Kb, 8);
+                integrals.CpInc(k, idx, :) = reshape(2 * IP0 ./ (sj.^2 * pi^1.5), 1, Kb, 8);
+                integrals.CtauInc(k, idx, :) = reshape(2 * IT0 ./ (sj.^2 * pi^1.5), 1, Kb, 8);
             end
         end
     end

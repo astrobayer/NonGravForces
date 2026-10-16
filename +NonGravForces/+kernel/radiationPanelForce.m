@@ -116,7 +116,7 @@ else
     end
 end
 Nrm = macro.N; A = macro.A(:);
-F = zeros(3, N, K);
+Fx = zeros(N, K); Fy = Fx; Fz = Fx;
 absorbed = zeros(N, K); lit = zeros(N, K);
 cLight = referenceSystem.iersConstants().speedOfLight;
 for m = 1:M
@@ -127,12 +127,16 @@ for m = 1:M
     w = P(m, :) .* A .* fShadow(:, :, m) .* gp;     % NxK, P A f gamma
     lit = lit + (gamma > 0);
     absorbed = absorbed + opt(1, :)' .* w * cLight ./ A;   % a E gamma f  [W/m^2]
-    for k = 1:N
-        ad = opt(1, k) + opt(3, k);
-        cn = 2 * opt(2, k) * gp(k, :) + (2 / 3) * opt(3, k);          % 1xK
-        F(:, k, :) = F(:, k, :) - reshape(w(k, :) .* (ad .* dm + cn .* Nrm(:, k)), 3, 1, K);
-    end
+    % Every plate at once, one NxK accumulator per component: element by element the same products
+    % and sums as one plate at a time, so F is bitwise what it was. The loop over plates writing
+    % strided slices of a 3xNxK F took 40 % longer on 577 sources (HANDOVER, 2026-10-16).
+    ad = opt(1, :) + opt(3, :);                                      % 1xN
+    cn = (2 * opt(2, :)') .* gp + (2 / 3) * opt(3, :)';              % NxK
+    Fx = Fx - w .* (ad' .* dm(1, :) + cn .* Nrm(1, :)');
+    Fy = Fy - w .* (ad' .* dm(2, :) + cn .* Nrm(2, :)');
+    Fz = Fz - w .* (ad' .* dm(3, :) + cn .* Nrm(3, :)');
 end
+F = permute(cat(3, Fx, Fy, Fz), [3 1 2]);                          % 3xNxK
 info.absorbed_W_m2 = absorbed;
 info.litCount = lit;
 info.M = M; info.K = K; info.bands = band;
