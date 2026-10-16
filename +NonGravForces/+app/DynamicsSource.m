@@ -16,7 +16,8 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
 %   TWO EVALUATION PATHS, ONE MODEL. With 'Native' true (the default) prepare()
 %   builds every time-only quantity into tables -- the ITRS->GCRS rotation and its
 %   rate, Sun and Moon, the attitude nodes, the space-weather drivers, the UTC
-%   calendar, the mass, the CERES months, the self-shadow table -- hands them to
+%   calendar, the mass, the CERES months, the self-shadow table and, under
+%   geom.flowShadow "table", geom.flowShadow's table of the gas-stream ratios -- hands them to
 %   the compiled evaluator (mex/ngfRhs.c, NonGravForces.buildMex target "rhs") and
 %   publishes a gj_native_entry, so a run bound "native" steps in C and evaluates
 %   in C. accel() then calls THAT entry, so the MATLAB side of such a run
@@ -554,6 +555,17 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
                 [s.xChi, s.wChi] = localGauss(12);
                 [s.xArc, s.wArc] = localGauss(16);
                 s.nChi = 12; s.nArc = 16;
+            end
+            % geom.flowShadow "table": the same table Model.accel reads (geom.flowShadow keeps it for the
+            % session), handed to C, which interpolates it in the same order and falls back exactly outside it.
+            [s.flowTable, s.ftN, s.ftNs, s.ftNShaded] = deal(0);
+            [s.ftHalfWidthTan, s.ftT0, s.ftH, s.ftS0, s.ftHs] = deal(0);
+            [s.ftShaded, s.ftPlus, s.ftMinus] = deal([]);
+            if s.shadow && o.geom.flowShadow == "table" && o.drag.gsi ~= "constantCd"
+                tb = NonGravForces.geom.flowShadow(M.macro, [], [], 'Method', "table", 'Lut', M.lut.table);
+                s.flowTable = 1; s.ftN = tb.n; s.ftNs = tb.ns; s.ftNShaded = numel(tb.shaded);
+                s.ftHalfWidthTan = tb.halfWidthTan; s.ftT0 = tb.t0; s.ftH = tb.h; s.ftS0 = tb.s0; s.ftHs = tb.hs;
+                s.ftShaded = double(tb.shaded); s.ftPlus = tb.plus; s.ftMinus = tb.minus;
             end
             s.t0 = t.t0; s.dt = t.dt; s.nT = t.nT;
             s.R = t.R; s.Rdot = t.Rdot; s.sun = t.sun; s.moon = t.moon; s.eclipticNormal = t.eclipticNormal; s.mass = t.mass;

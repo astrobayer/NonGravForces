@@ -156,6 +156,13 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         S.lut = array(st, "lut", (S.shadow == NGF_SHADOW_LUT) ? (long)n * cells : -1);
         S.nChi = (int)scalar(st, "nChi"); S.nArc = (int)scalar(st, "nArc");
         S.xChi = array(st, "xChi", -1); S.wChi = array(st, "wChi", -1); S.xArc = array(st, "xArc", -1); S.wArc = array(st, "wArc", -1);
+        S.flowTable = (int)scalar(st, "flowTable");
+        S.ftN = (int)scalar(st, "ftN"); S.ftNs = (int)scalar(st, "ftNs"); S.ftNShaded = (int)scalar(st, "ftNShaded");
+        S.ftHalfWidthTan = scalar(st, "ftHalfWidthTan"); S.ftT0 = scalar(st, "ftT0"); S.ftH = scalar(st, "ftH");
+        S.ftS0 = scalar(st, "ftS0"); S.ftHs = scalar(st, "ftHs");
+        S.ftShaded = array(st, "ftShaded", S.flowTable ? (long)S.ftNShaded : -1);
+        S.ftPlus = array(st, "ftPlus", S.flowTable ? 24L * S.ftNShaded * S.ftN * S.ftN * S.ftNs : -1);
+        S.ftMinus = array(st, "ftMinus", S.flowTable ? 24L * S.ftNShaded * S.ftN * S.ftN * S.ftNs : -1);
         S.t0 = scalar(st, "t0"); S.dt = scalar(st, "dt"); nT = (int)scalar(st, "nT"); S.nT = nT;
         S.R = array(st, "R", 9L * nT); S.Rdot = array(st, "Rdot", 9L * nT); S.sun = array(st, "sun", 3L * nT);
         S.moon = array(st, "moon", -1); S.eclipticNormal = array(st, "eclipticNormal", -1); S.mass = array(st, "mass", nT);

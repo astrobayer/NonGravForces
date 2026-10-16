@@ -11,7 +11,7 @@ run('../referenceSystem/setupReferenceSystem.m'); run('../gracefoReading/setupGr
 run('../odeSuite/gjToolboxSetup.m')      % optional for the toolbox, required by ciGate
 setupNonGravForces; runNgfTests
 ```
-Status: 59 catalogued units, all delivered, no stubs left (`auditPackage.py` compares this number with `doc/functionlist.csv`); all are verified in MATLAB. **Version 0.15.0** completes the accelerometer calibration diagnostics of N-03: a time-varying scale with its drift test, model comparison by blocked cross-validation, the per-revolution fit and its attribution on drivers. **427/427 green** on Tier A after N-11a added measured regressors (temperatures, magnetorquer currents) (R2026a Update 4, 2026-10-15; `tests/last_run.txt`).
+Status: 59 catalogued units, all delivered, no stubs left (`auditPackage.py` compares this number with `doc/functionlist.csv`); all are verified in MATLAB. **Version 0.15.0** completes the accelerometer calibration diagnostics of N-03: a time-varying scale with its drift test, model comparison by blocked cross-validation, the per-revolution fit and its attribution on drivers. **435/435 green** on Tier A after the standard preset began reading the gas-stream shadow from a table (R2026a Update 4, 2026-10-17; `tests/last_run.txt`).
 
 Licensed MIT (see `LICENSE`). The NRLMSISE-00 C source is **not** in this repository — it carries no redistribution grant, so it is fetched from its maintainer instead:
 

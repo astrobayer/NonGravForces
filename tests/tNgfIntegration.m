@@ -141,7 +141,7 @@ classdef tNgfIntegration < NgfTestCase
             % a context epoch that disagrees, and a native path the options cannot serve
             s2 = D(M, 'Epoch', tc.tai);
             tc.verifyErrorId(@() s2.prepare(struct('Span', [0 60], 'StencilSpan', [0 60], 'Epoch', tc.tai + seconds(1))), 'NonGravForces:DynamicsSource:inputEpoch');
-            s3 = D(tc.modelFor(NonGravForces.Options("standard").set("geom.selfShadow", "raycast")), 'Epoch', tc.tai, 'Margin_s', 30);
+            s3 = D(tc.modelFor(NonGravForces.Options("standard").set("geom.selfShadow", "raycast").set("geom.flowShadow", "exact")), 'Epoch', tc.tai, 'Margin_s', 30);
             tc.verifyErrorId(@() s3.prepare(struct('Span', [120 420], 'StencilSpan', [120 420])), 'NonGravForces:DynamicsSource:inputModel');
         end
     end
@@ -258,6 +258,20 @@ classdef tNgfIntegration < NgfTestCase
 
     % ===================================================================== metamorphic
     methods (Test, TestTags = {'metamorphic'})
+        function DynamicsSourceMetamorphicFlowTable(tc)
+            % The reference test's parity covers the flow-shadow table only if BOTH paths read it: the standard
+            % preset's native acceleration agrees with Model.accel at a node, and the exact flow shadow moves the
+            % result by far more than the two paths differ.
+            [src, Mt] = tc.sourceFor("standard");
+            Me = tc.modelFor(NonGravForces.Options("standard").set("geom.flowShadow", "exact"));
+            k = 181; t = double(tc.ep.sec(k) - tc.ep.sec(1));
+            aN = src.accel(t, tc.r(:, k), tc.v(:, k));
+            src.release();
+            aT = tc.modelAccel(Mt, k); aE = tc.modelAccel(Me, k);
+            tc.verifyBoundAndRecord("native vs Model.accel, both on the flow-shadow table, at a node", norm(aN - aT) / norm(aT), 1e-13, "-", ...
+                "the C trilinear is MATLAB's in the same order");
+            tc.verifyGreaterThan(norm(aT - aE), 100 * norm(aN - aT));
+        end
         function DynamicsSourceMetamorphic(tc)
             % 1. cdScale multiplies the gas part and nothing else, through the native evaluator.
             [s1, M] = tc.sourceFor("standard");

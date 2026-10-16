@@ -71,6 +71,8 @@ classdef tNgfCore < NgfTestCase
             % model that does not read it is exactly the contradiction Options is supposed to refuse.
             tc.verifyEqual([p2.drag.accommodation, p2.drag.density, p2.geom.selfShadow], ["fixed", "msis21", "lut"]);
             tc.verifyEqual(p2.drag.alpha, 0.85); tc.verifyEmpty(p2.drag.surfaceMass_amu); tc.verifyEqual(p2.geom.lutResolution, 32);
+            tc.verifyEqual([NonGravForces.Options("fast").geom.flowShadow, NonGravForces.Options("standard").geom.flowShadow, p2.geom.flowShadow], ["exact", "table", "exact"]);
+            tc.verifyErrorId(@() NonGravForces.Options("standard", "geom.flowShadow", "lut"), 'NonGravForces:Options:inputValue');
             % and the computed models stay reachable by name, with the mass the sources disagree over
             pw = NonGravForces.Options("precise", "drag.alpha", [], "drag.accommodation", "walker2014", "drag.surfaceMass_amu", 263.3223);
             tc.verifyEqual([pw.drag.accommodation, pw.drag.density], ["walker2014", "msis21"]);

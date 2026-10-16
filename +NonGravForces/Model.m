@@ -67,6 +67,7 @@ classdef Model
 %     3. density and composition          env.density with the space-weather drivers
 %     4. the radiation source list        env.radiationSources (Sun, Earth tiles, eclipse)
 %     5. occlusion                        geom.selfShadow per radiation source; geom.flowShadow for the gas
+%                                         (Method "table" when geom.flowShadow is "table", the standard preset)
 %     6. panel temperatures               geom.thermalState with the per-source occlusion
 %     7. accommodation                    kernel.accommodation (fixed, pilinski2010/2011, walker2014)
 %     8. per-panel forces                 kernel.dragPanelForce, radiationPanelForce, thermalRecoil
@@ -127,7 +128,8 @@ classdef Model
 %   NonGravForces:Model:inputMacro      macro is not a MacroModel
 %   NonGravForces:Model:inputOptions    options is not an Options object, or its choices contradict each other
 %                                       (alpha beside a non-fixed accommodation, maxwell without a specular
-%                                       fraction, walker2014 without a surface mass, internal power without shares)
+%                                       fraction, walker2014 without a surface mass, internal power without shares,
+%                                       geom.flowShadow table beside selfShadow raycast)
 %   NonGravForces:Model:inputMass       no 'Mass' and no mass on the macro model, or 'Mass' not a positive mass / massModel
 %   NonGravForces:Model:inputState      epoch, r, v or q disagree in size, or are not finite
 %   NonGravForces:Model:inputAttitude   no q was given and the Model has no attitude provider
@@ -593,7 +595,11 @@ classdef Model
             if method == "lut", args = [args, {'Lut', obj.lut.table}]; end   % built once at construction
             T = [];
             if kinetic, T = Tgas; end                                        % constantCd reads the parallel beam only
-            flow = NonGravForces.geom.flowShadow(obj.macro, vrelBody, T, args{:});
+            flowArgs = args;
+            if obj.options.geom.flowShadow == "table" && kinetic
+                flowArgs{2} = "table";                                       % the lut ratios, tabulated (geom.flowShadow)
+            end
+            flow = NonGravForces.geom.flowShadow(obj.macro, vrelBody, T, flowArgs{:});
             dirAll = reshape(src.dir, 3, M * K);                            % every source direction of every epoch
             fRad = permute(reshape(NonGravForces.geom.selfShadow(obj.macro, dirAll, args{:}), N, M, K), [1 3 2]);
         end
@@ -739,6 +745,9 @@ if d.gsi ~= "constantCd"
     if d.gsi == "maxwell" && isempty(d.specularFraction)
         NonGravForces.fail("Model", "inputOptions", "drag.gsi maxwell needs drag.specularFraction -> set('drag.specularFraction', 0.1), say");
     end
+end
+if o.geom.flowShadow == "table" && o.geom.selfShadow == "raycast"
+    NonGravForces.fail("Model", "inputOptions", "geom.flowShadow table tabulates the lut occlusion, and geom.selfShadow asks for the ray cast -> set('geom.flowShadow', ""exact"") to ray-cast the stream too, or use selfShadow lut");
 end
 if o.thermal.internalPower_W > 0 && any(isnan(macro.internalShare))
     NonGravForces.fail("Model", "inputOptions", "thermal.internalPower_W > 0 needs every panel's internalShare on the macro model '%s' -> give the panels internalShare, or set the power to 0", macro.name);

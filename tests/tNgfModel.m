@@ -219,6 +219,8 @@ classdef tNgfModel < NgfTestCase
             ap = mk(tc.M.options.set("drag.accommodation", "pilinski2010").set("drag.alpha", [])).accel(e, rr, vv);
             tc.verifyTrue(all(isfinite([aw; ap])));
             tc.verifyErrorId(@() mk(tc.M.options.set("drag.alpha", [])), 'NonGravForces:Model:inputOptions');
+            tc.verifyErrorId(@() mk(tc.M.options.set("geom.selfShadow", "raycast")), 'NonGravForces:Model:inputOptions');   % a table of the lut beside a ray cast
+            tc.verifyClass(mk(tc.M.options.set("geom.selfShadow", "raycast").set("geom.flowShadow", "exact")), 'NonGravForces.Model');
             tc.verifyErrorId(@() mk(tc.M.options.set("thermal.internalPower_W", 100)), 'NonGravForces:Model:inputOptions');
             % the mass is the macro model's, or the caller's, never GRACE-C's by default (LP-C F10)
             o6 = struct('bus', struct('vis', [0.34 0.40 0.26], 'ir', [0.62 0.23 0.15]));
