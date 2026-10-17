@@ -84,6 +84,10 @@ typedef struct {
     int thermal; double internalPower;
     int shadow, lutResolution; const double *lut;     /* n x 6(res+1)^2 */
     int nChi, nArc; const double *xChi, *wChi, *xArc, *wArc;   /* Gauss-Legendre on [-1, 1] */
+    /* geom.flowShadow Method "table" (Options geom.flowShadow): trilinear over (v_y/|v_x|, v_z/|v_x|, s_O),
+       one table per cone (+x, -x), P = 24 * ftNShaded rows (plate, species, ratio) by ftN^2 ftNs nodes */
+    int flowTable, ftN, ftNs, ftNShaded; double ftHalfWidthTan, ftT0, ftH, ftS0, ftHs;
+    const double *ftShaded, *ftPlus, *ftMinus;       /* 1-based plate numbers; P x nodes, column-major */
     /* tables over [t0, t0 + (nT-1) dt], seconds from the run epoch (TAI) */
     double t0, dt; int nT;
     const double *R, *Rdot;                           /* 9 x nT, ITRS -> GCRS, column-major 3x3 */

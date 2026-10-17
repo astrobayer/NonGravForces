@@ -35,6 +35,7 @@ classdef Options
 %     erp.grid                -             12x24           24x48
 %     thermal.model           none          steadyState     steadyState (+transient opt-in)
 %     geom.selfShadow         none          lut 16          lut 32
+%     geom.flowShadow         exact         table           exact
 %     sun.source              rs.analytic   rs.analytic     rs.de440
 %
 % PROPERTIES (read-only after construction; change through set())
@@ -61,6 +62,10 @@ classdef Options
 %   thermal     struct    .model "none"|"steadyState"|"transient" .internalPower_W
 %   torques     struct    .gravityGradient .magnetic (logical)
 %   geom        struct    .selfShadow "none"|"lut"|"raycast" .lutResolution (cube-map cells per face edge)
+%                         .flowShadow "exact"|"table": the gas stream's shadow ratios computed per epoch,
+%                         or read from geom.flowShadow's table (Method "table"; drag changes by <= 7e-13
+%                         m/s^2 on GRACE-FO, measured 2026-10-17). "table" needs selfShadow "lut"; with
+%                         selfShadow "none" or drag.gsi constantCd there is no stream shadow to tabulate
 %   sun         struct    .source "rs.analytic"|"rs.de440"
 %   series      struct    .useParallel (logical) .chunk (double, epochs)
 %   partials    struct    .method "analytic" | "finiteDiff"
@@ -153,10 +158,10 @@ classdef Options
             switch preset
                 case "fast"
                     dens = "exponential"; gsi = "constantCd"; acc = "fixed"; alpha = 0.85; ms = [];
-                    ecl = "conical"; erpB = "none"; grid = [0 0]; th = "none"; ss = "none"; lutN = 16; sunS = "rs.analytic";
+                    ecl = "conical"; erpB = "none"; grid = [0 0]; th = "none"; ss = "none"; lutN = 16; sunS = "rs.analytic"; fs = "exact";
                 case "standard"
                     dens = "msis00"; gsi = "sentman"; acc = "fixed"; alpha = 0.85; ms = [];
-                    ecl = "conical"; erpB = "knocke"; grid = [12 24]; th = "steadyState"; ss = "lut"; lutN = 16; sunS = "rs.analytic";
+                    ecl = "conical"; erpB = "knocke"; grid = [12 24]; th = "steadyState"; ss = "lut"; lutN = 16; sunS = "rs.analytic"; fs = "table";
                 case "precise"
                     % The FITTED constant of March et al. (2021), not a computed accommodation, by owner
                     % ruling of 2026-09-17 (HANDOVER O-42). That paper is the state of the art for this
@@ -166,7 +171,7 @@ classdef Options
                     % name -- and disagree with this by 17.5 % of the drag at 520 km in solar minimum,
                     % which is measured, not feared (HANDOVER Part G, LP-E).
                     dens = "msis21"; gsi = "sentman"; acc = "fixed"; alpha = 0.85; ms = [];
-                    ecl = "solaarsCF"; erpB = "ceres"; grid = [24 48]; th = "steadyState"; ss = "lut"; lutN = 32; sunS = "rs.de440";
+                    ecl = "solaarsCF"; erpB = "ceres"; grid = [24 48]; th = "steadyState"; ss = "lut"; lutN = 32; sunS = "rs.de440"; fs = "exact";
             end
             obj.drag     = struct('density', dens, 'wind', "corotation", 'gsi', gsi, ...
                                   'accommodation', acc, 'alpha', alpha, 'surfaceMass_amu', ms, ...
@@ -175,7 +180,7 @@ classdef Options
             obj.erp      = struct('backend', erpB, 'grid', grid);
             obj.thermal  = struct('model', th, 'internalPower_W', 0);
             obj.torques  = struct('gravityGradient', false, 'magnetic', false);
-            obj.geom     = struct('selfShadow', ss, 'lutResolution', lutN);
+            obj.geom     = struct('selfShadow', ss, 'lutResolution', lutN, 'flowShadow', fs);
             obj.sun      = struct('source', sunS);
             obj.series   = struct('useParallel', false, 'chunk', 8640);
             obj.partials = struct('method', "analytic");
@@ -192,6 +197,7 @@ classdef Options
                 'erp_backend',        ["none","pointSource","knocke","ceres","ceresClimatology"], ...
                 'thermal_model',      ["none","steadyState","transient"], ...
                 'geom_selfShadow',    ["none","lut","raycast"], ...
+                'geom_flowShadow',    ["exact","table"], ...
                 'sun_source',         ["rs.analytic","rs.de440"], ...
                 'partials_method',    ["analytic","finiteDiff"]);
             key = replace(field, ".", "_");

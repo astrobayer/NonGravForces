@@ -4,6 +4,8 @@ function [S, info] = flowShadow(macro, vrel_body, T_K, options)
 %   S = NonGravForces.geom.flowShadow(macro, vrel_body, T_K, 'Method', "lut", 'Lut', lut)
 %   S = NonGravForces.geom.flowShadow(macro, vrel_body, T_K)                 % exact ray cast (slow)
 %   S = NonGravForces.geom.flowShadow(macro, vrel_body, [], 'Lut', lut, 'Method', "lut")   % hyperthermal only
+%   S = NonGravForces.geom.flowShadow(macro, vrel_body, T_K, 'Method', "table", 'Lut', lut)  % tabulated "lut"
+%   tb = NonGravForces.geom.flowShadow(macro, [], [], 'Method', "table", 'Lut', lut)       % the table itself
 %   [S, info] = NonGravForces.geom.flowShadow(___, 'Integrals', true)
 %
 %   WHY THIS IS NOT geom.selfShadow ALONG v_rel. Gas molecules do not arrive as a
@@ -52,6 +54,20 @@ function [S, info] = flowShadow(macro, vrel_body, T_K, options)
 %   |pi/2 - theta_n| and pi - |pi/2 - theta_n| and at 3/s of the lightest, the
 %   middle and the heaviest species, so each species' peak is resolved.
 %
+%   THE TABLE (Method "table"). The ratios depend on the plate geometry, the
+%   self-shadow table, the stream direction in the body and ONE speed ratio (every
+%   species' s is s_O sqrt(m_j / m_O)). A spacecraft that flies along its x axis
+%   keeps the direction in a narrow cone (GRACE-FO: 3.8 deg on ten days of 2020-01),
+%   so Method "lut" is evaluated once at the nodes of a grid over the gnomonic
+%   coordinates (v_y/|v_x|, v_z/|v_x|) in [-tan 6 deg, tan 6 deg] (25 nodes, 0.5 deg)
+%   and s_O in [5, 12] (15 nodes, step 0.5), about +x and about -x, and read back by
+%   trilinear interpolation in difference form; number and normal are clamped to
+%   [0, 1], which the interpolation of values in [0, 1] keeps to an ulp. An epoch
+%   outside the grid is computed by Method "lut" exactly and flagged in
+%   S.tableFallback. A cone is built at its first use (9375 nodes, ~4 s) and kept for
+%   the MATLAB session, keyed by the geometry, the self-shadow table and the
+%   quadrature; mex/ngfRhs.c reads the same table (app.DynamicsSource).
+%
 % INPUT ARGUMENTS
 %   Name        Size  Type                           Units  Description
 %   ----        ----  ----                           -----  -----------
@@ -63,9 +79,10 @@ function [S, info] = flowShadow(macro, vrel_body, T_K, options)
 % NAME-VALUE ARGUMENTS
 %   Name        Size  Type     Units  Description
 %   ----        ----  ----     -----  -----------
-%   Method      1x1   string   -      "raycast" (default, exact to the sampling) | "lut"
+%   Method      1x1   string   -      "raycast" (default, exact to the sampling) | "lut" | "table" (the
+%                                     "lut" ratios read from a table; see THE TABLE)
 %   Samples     1x1   double   -      ray-cast samples per plate edge (default 40)
-%   Lut         1x1   struct   -      a geom.selfShadow table for this macro model (required for "lut")
+%   Lut         1x1   struct   -      a geom.selfShadow table for this macro model (required for "lut" and "table")
 %   Quadrature  1x2   double   -      [nodes per chi segment, nodes per arc], default [12 16]
 %   Integrals   1x1   logical  -      also return the unobstructed coefficient integrals in info (default false)
 %
@@ -74,7 +91,11 @@ function [S, info] = flowShadow(macro, vrel_body, T_K, options)
 %   ----     ----  ----    -----  -----------
 %   S        1x1   struct  -      .beam NxK (occlusion along v_rel), .number .normal .tangential NxKx8
 %                                 (species in const.speciesName order; [] without T_K), .speedRatio
-%                                 8xK, .kind "flow"
+%                                 8xK, .kind "flow", .tableFallback (1xK logical: the epochs Method
+%                                 "table" computed exactly because they lie outside the table; [] for
+%                                 the other methods). With vrel_body = [] and T_K = [] under Method
+%                                 "table": the table itself (.n .t0 .h .ns .s0 .hs .halfWidthTan
+%                                 .shaded .plus .minus, rows plate x species x {number normal tangential})
 %   info     1x1   struct  -      .method, .quadrature, .directionsPerEpoch, .integrals (struct CN
 %                                 CpInc CtauInc NxKx8, with 'Integrals'), .provenance
 %
@@ -89,7 +110,11 @@ function [S, info] = flowShadow(macro, vrel_body, T_K, options)
 %   that reaches a force. A ratio inherits the occlusion's own error (geom.selfShadow: the
 %   ray cast's ~2/Samples, the table's 90/n deg smearing) and none from the
 %   quadrature where the occlusion is uniform, because the same sums appear
-%   above and below. What is NOT modelled: molecules re-emitted from one plate
+%   above and below. THE TABLE adds its interpolation error: against Method "lut"
+%   on 81952 epochs of ten real days of GRACE-C and -D (2020-01, every 10 s) the
+%   ratios differ by at most 1.2e-3 and the drag acceleration by at most 6.7e-13
+%   m/s^2 (rms 1.8e-13) of a 2.1e-8 m/s^2 drag, measured 2026-10-17; it costs 2-8
+%   us per epoch against ~450 us. What is NOT modelled: molecules re-emitted from one plate
 %   that strike another (multiple reflections). Against the independent
 %   test-particle Monte Carlo tools/pyxcheck/tpmc_check.py the incident fluxes on
 %   a plate screened by a wall agree within its standard errors (recorded per run).
@@ -98,7 +123,8 @@ function [S, info] = flowShadow(macro, vrel_body, T_K, options)
 %   NonGravForces:flowShadow:inputMacro   not a MacroModel, or without vertices on every plate
 %   NonGravForces:flowShadow:inputShape   vrel_body not 3xK or not finite, T_K not 1xK or [], Quadrature not positive integers
 %   NonGravForces:flowShadow:inputRange   |vrel| = 0 or T_K <= 0
-%   NonGravForces:flowShadow:inputLut     Method "lut" without a 'Lut'
+%   NonGravForces:flowShadow:inputLut     Method "lut" or "table" without a 'Lut'
+%   NonGravForces:flowShadow:unsupportedIntegrals  'Integrals' under Method "table" (they are not tabulated)
 %   NonGravForces:selfShadow:*            propagated from the occlusion look-up
 %
 % REFERENCES
@@ -116,12 +142,12 @@ function [S, info] = flowShadow(macro, vrel_body, T_K, options)
 % See also NonGravForces.geom.selfShadow, NonGravForces.kernel.dragPanelForce, NonGravForces.kernel.gsiCoefficients.
 %
 % KEYWORDS self-shadowing free molecular flow Maxwellian occlusion drag
-% Created 2026-09-15 by Claude Opus 5 (Anthropic).
+% Created 2026-09-15 by Claude Opus 5 (Anthropic); Method "table" 2026-10-17 by Claude Opus 5.5 (Anthropic).
 arguments
     macro
     vrel_body double
     T_K double
-    options.Method (1,1) string {mustBeMember(options.Method, ["raycast","lut"])} = "raycast"
+    options.Method (1,1) string {mustBeMember(options.Method, ["raycast","lut","table"])} = "raycast"
     options.Samples (1,1) double {mustBeInteger, mustBeGreaterThanOrEqual(options.Samples, 2)} = 40
     options.Lut struct = struct([])
     options.Quadrature double = [12 16]
@@ -130,6 +156,10 @@ end
 unit = "flowShadow";
 if ~isa(macro, 'NonGravForces.geom.MacroModel') || ~macro.hasVertices
     NonGravForces.fail(unit, "inputMacro", "macro must be a NonGravForces.geom.MacroModel with vertices_m on every plate -> geom.graceFO and geom.boxWing (bus) provide them");
+end
+if options.Method == "table"
+    [S, info] = localTableMethod(macro, vrel_body, T_K, options, unit, nargout > 1);
+    return
 end
 if ~(ismatrix(vrel_body) && size(vrel_body, 1) == 3) || any(~isfinite(vrel_body(:)))
     NonGravForces.fail(unit, "inputShape", "vrel_body must be a finite 3xK array -> one relative velocity per column");
@@ -161,7 +191,7 @@ if K == 0
 else
     beam = NonGravForces.geom.selfShadow(macro, v, occ{:});
 end
-S = struct('kind', "flow", 'beam', beam, 'number', [], 'normal', [], 'tangential', [], 'speedRatio', []);
+S = struct('kind', "flow", 'beam', beam, 'number', [], 'normal', [], 'tangential', [], 'speedRatio', [], 'tableFallback', []);
 integrals = struct('CN', [], 'CpInc', [], 'CtauInc', []);
 if withSpecies
     c = NonGravForces.const();
@@ -287,6 +317,135 @@ if nargout > 1
     info.integrals = integrals;
     info.provenance = NonGravForces.provenance("geom.flowShadow", 'Options', struct('method', options.Method, 'quadrature', q));
 end
+end
+
+% ------------------------------------------------------------------------- the tabulated ratios
+function [S, info] = localTableMethod(macro, vrel_body, T_K, options, unit, wantInfo)
+% Method "table": the ratios of Method "lut", read from a table over the stream direction about +-x and
+% the atomic-oxygen speed ratio; an epoch outside the table is computed exactly and flagged.
+if isempty(options.Lut)
+    NonGravForces.fail(unit, "inputLut", "Method table tabulates Method lut and needs its table -> pass 'Lut', geom.selfShadow(macro, [], 'Method', ""lut"")");
+end
+if options.Integrals
+    NonGravForces.fail(unit, "unsupportedIntegrals", "the unobstructed integrals are not tabulated -> use Method lut for 'Integrals'");
+end
+lutArgs = {'Method', "lut", 'Lut', options.Lut, 'Quadrature', options.Quadrature};
+info = struct();
+if isequal(size(vrel_body), [0 0]) && isequal(size(T_K), [0 0])
+    S = localFlowTable(macro, options.Lut, options.Quadrature, [1 -1]);    % the table itself, both cones
+    return
+end
+S = NonGravForces.geom.flowShadow(macro, vrel_body, [], lutArgs{:});    % validates vrel_body; the beam is exact
+K = size(vrel_body, 2);
+S.tableFallback = false(1, K);
+if isequal(size(T_K), [0 0])
+    return                                                                 % hyperthermal only: nothing to tabulate
+end
+if ~(isequal(size(T_K), [1 K]) && all(isfinite(T_K)))
+    NonGravForces.fail(unit, "inputShape", "T_K must be a finite 1x%d array, or [] for the hyperthermal limit -> got %s", K, mat2str(size(T_K)));
+end
+if any(T_K <= 0)
+    NonGravForces.fail(unit, "inputRange", "|vrel_body| must be > 0 and T_K > 0 -> check the inputs");
+end
+c = NonGravForces.const();
+mass = c.speciesMass(:) / c.NA;
+U = vecnorm(vrel_body);
+s = U ./ sqrt(2 * c.kB * T_K ./ mass);                                     % the exact path's expression
+v = vrel_body ./ U;
+ax = abs(v(1, :));
+ty = v(2, :) ./ ax; tz = v(3, :) ./ ax; sO = s(2, :);
+sg = sign(v(1, :));
+tb = localFlowTable(macro, options.Lut, options.Quadrature, unique(sg(sg ~= 0)));
+sTop = tb.s0 + (tb.ns - 1) * tb.hs;
+inside = ax > 0 & abs(ty) <= tb.halfWidthTan & abs(tz) <= tb.halfWidthTan & sO >= tb.s0 & sO <= sTop;
+N = macro.n; nSh = numel(tb.shaded);
+fN = ones(N, K, 8); fP = fN; fT = fN;
+for cone = [1 -1]
+    sel = inside & sg == cone;
+    if ~any(sel), continue, end
+    V = tb.plus; if cone < 0, V = tb.minus; end
+    f = localTrilinear(tb, V, ty(sel), tz(sel), sO(sel));                 % (nSh*8*3) x Ks
+    f = permute(reshape(f, nSh, 8, 3, []), [1 4 2 3]);                     % nSh x Ks x 8 x 3
+    fN(tb.shaded, sel, :) = min(1, max(0, f(:, :, :, 1)));                 % [0, 1] by construction; the clamp
+    fP(tb.shaded, sel, :) = min(1, max(0, f(:, :, :, 2)));                 % restores what an ulp can lose
+    fT(tb.shaded, sel, :) = f(:, :, :, 3);
+end
+out = ~inside;
+if any(out)
+    E = NonGravForces.geom.flowShadow(macro, vrel_body(:, out), T_K(out), lutArgs{:});
+    fN(:, out, :) = E.number; fP(:, out, :) = E.normal; fT(:, out, :) = E.tangential;
+end
+S.number = fN; S.normal = fP; S.tangential = fT; S.speedRatio = s; S.tableFallback = out;
+if wantInfo
+    info.method = "table";
+    info.quadrature = options.Quadrature;
+    info.directionsPerEpoch = 0;
+    info.integrals = struct('CN', [], 'CpInc', [], 'CtauInc', []);
+    info.table = rmfield(tb, {'plus', 'minus'});
+    info.fallbackEpochs = nnz(out);
+    info.provenance = NonGravForces.provenance("geom.flowShadow", 'Options', struct('method', "table", 'quadrature', options.Quadrature));
+end
+end
+
+function tb = localFlowTable(macro, lut, q, signs)
+% The table over [-W, W]^2 (gnomonic: v_y/|v_x|, v_z/|v_x|) about +x or -x and s_O in [s0, s1], built
+% from Method lut at the nodes and kept for the session: it depends only on the macro model's geometry,
+% the self-shadow table and the quadrature, and building one cone costs ~4 s.
+persistent cache
+W = tand(6); n = 25; ns = 15; s0 = 5; s1 = 12;
+h = 2 * W / (n - 1); hs = (s1 - s0) / (ns - 1);
+shaded = find(~all(lut.f == 1, 2))';
+tb = struct('halfWidthTan', W, 'n', n, 't0', -W, 'h', h, 'ns', ns, 's0', s0, 'hs', hs, ...
+    'shaded', shaded, 'quadrature', q, 'plus', [], 'minus', []);
+for sg = signs(:)'
+    hit = 0;
+    for i = 1:numel(cache)
+        e = cache(i);
+        if e.sign == sg && e.resolution == lut.resolution && e.samples == lut.samples && ...
+                isequal(e.q, q) && isequal(e.geometry, lut.geometry)
+            hit = i; break
+        end
+    end
+    if hit
+        V = cache(hit).values;
+    else
+        t = -W + (0:n-1) * h; sv = s0 + (0:ns-1) * hs;
+        [TY, TZ, SS] = ndgrid(t, t, sv);
+        un = [sg * ones(1, numel(TY)); TY(:)'; TZ(:)'];
+        un = un ./ vecnorm(un);
+        c = NonGravForces.const(); mO = c.speciesMass(2) / c.NA; U0 = 7600;
+        Tn = U0^2 * mO ./ (2 * c.kB * SS(:)'.^2);
+        Sn = NonGravForces.geom.flowShadow(macro, U0 * un, Tn, 'Method', "lut", 'Lut', lut, 'Quadrature', q);
+        Nn = numel(TY); nSh = numel(shaded);
+        V = [reshape(permute(Sn.number(shaded, :, :), [1 3 2]), nSh * 8, Nn); ...
+             reshape(permute(Sn.normal(shaded, :, :), [1 3 2]), nSh * 8, Nn); ...
+             reshape(permute(Sn.tangential(shaded, :, :), [1 3 2]), nSh * 8, Nn)];
+        entry = struct('sign', sg, 'resolution', lut.resolution, 'samples', lut.samples, 'q', q, ...
+            'geometry', lut.geometry, 'values', V);
+        if isempty(cache), cache = entry; else, cache(end + 1) = entry; end %#ok<AGROW> one entry per geometry and cone
+    end
+    if sg > 0, tb.plus = V; else, tb.minus = V; end
+end
+end
+
+function f = localTrilinear(tb, V, ty, tz, sO)
+% Trilinear in difference form, node index ix + n iy + n^2 is; mex/ngfRhs.c ngfFlowTable is the same
+% arithmetic in the same order.
+fx = (ty - tb.t0) ./ tb.h; ix = min(max(floor(fx), 0), tb.n - 2); wx = min(max(fx - ix, 0), 1);
+fy = (tz - tb.t0) ./ tb.h; iy = min(max(floor(fy), 0), tb.n - 2); wy = min(max(fy - iy, 0), 1);
+fs = (sO - tb.s0) ./ tb.hs; is = min(max(floor(fs), 0), tb.ns - 2); ws = min(max(fs - is, 0), 1);
+nn = tb.n * tb.n;
+c000 = ix + tb.n * iy + nn * is + 1;
+c100 = c000 + 1; c010 = c000 + tb.n; c110 = c010 + 1;
+c001 = c000 + nn; c101 = c100 + nn; c011 = c010 + nn; c111 = c110 + nn;
+V000 = V(:, c000); V001 = V(:, c001); V010 = V(:, c010); V011 = V(:, c011);
+a00 = V000 + wx .* (V(:, c100) - V000);
+a10 = V010 + wx .* (V(:, c110) - V010);
+a01 = V001 + wx .* (V(:, c101) - V001);
+a11 = V011 + wx .* (V(:, c111) - V011);
+b0 = a00 + wy .* (a10 - a00);
+b1 = a01 + wy .* (a11 - a01);
+f = b0 + ws .* (b1 - b0);
 end
 
 function X = localSet(X, mask, value)

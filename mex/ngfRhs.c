@@ -451,6 +451,62 @@ static double ngfLut(const ngfRhsContext *c, int k, const double *d)
 }
 
 /* ========================================================================= flow shadow */
+/* geom.flowShadow (Method "table") for one epoch, the same arithmetic in the same order as its
+   localTrilinear: returns 1 and fills fN, fP, fT when the epoch lies inside the table, 0 otherwise
+   (the caller then computes it exactly, as geom.flowShadow does) */
+static int ngfFlowTable(ngfRhsContext *c, const double *vB, double U, double T)
+{
+    const ngfRhsSetup *S = &c->s;
+    int N = S->n, n = S->ftN, nSh = S->ftNShaded, P = 24 * S->ftNShaded, nn, j, p;
+    long c000, c100, c010, c110, c001, c101, c011, c111;
+    double v[3], ax, ty, tz, sO, sTop, fx, fy, fs, ixd, iyd, isd, wx, wy, ws;
+    const double *V;
+    for (j = 0; j < 3; j++) {
+        v[j] = vB[j] / U;
+    }
+    ax = fabs(v[0]);
+    if (!(ax > 0.0)) {
+        return 0;
+    }
+    ty = v[1] / ax; tz = v[2] / ax;
+    sO = U / sqrt(2.0 * S->kB * T / S->speciesMass[1]);
+    sTop = S->ftS0 + (S->ftNs - 1) * S->ftHs;
+    if (!(fabs(ty) <= S->ftHalfWidthTan && fabs(tz) <= S->ftHalfWidthTan && sO >= S->ftS0 && sO <= sTop)) {
+        return 0;
+    }
+    V = (v[0] > 0.0) ? S->ftPlus : S->ftMinus;
+    fx = (ty - S->ftT0) / S->ftH; ixd = fmin(fmax(floor(fx), 0.0), n - 2.0); wx = fmin(fmax(fx - ixd, 0.0), 1.0);
+    fy = (tz - S->ftT0) / S->ftH; iyd = fmin(fmax(floor(fy), 0.0), n - 2.0); wy = fmin(fmax(fy - iyd, 0.0), 1.0);
+    fs = (sO - S->ftS0) / S->ftHs; isd = fmin(fmax(floor(fs), 0.0), S->ftNs - 2.0); ws = fmin(fmax(fs - isd, 0.0), 1.0);
+    nn = n * n;
+    c000 = (long)ixd + (long)n * (long)iyd + (long)nn * (long)isd;
+    c100 = c000 + 1; c010 = c000 + n; c110 = c010 + 1;
+    c001 = c000 + nn; c101 = c100 + nn; c011 = c010 + nn; c111 = c110 + nn;
+    for (j = 0; j < N * NGF_SPECIES; j++) {
+        c->fN[j] = 1.0; c->fP[j] = 1.0; c->fT[j] = 1.0;
+    }
+    for (p = 0; p < P; p++) {
+        double V000 = V[P * c000 + p], V001 = V[P * c001 + p], V010 = V[P * c010 + p], V011 = V[P * c011 + p];
+        double a00 = V000 + wx * (V[P * c100 + p] - V000);
+        double a10 = V010 + wx * (V[P * c110 + p] - V010);
+        double a01 = V001 + wx * (V[P * c101 + p] - V001);
+        double a11 = V011 + wx * (V[P * c111 + p] - V011);
+        double b0 = a00 + wy * (a10 - a00);
+        double b1 = a01 + wy * (a11 - a01);
+        double f = b0 + ws * (b1 - b0);
+        int sh = p % nSh, sp = (p / nSh) % NGF_SPECIES, r = p / (nSh * NGF_SPECIES);
+        int k = (int)S->ftShaded[sh] - 1;
+        if (r == 0) {
+            c->fN[N * sp + k] = fmin(1.0, fmax(0.0, f));
+        } else if (r == 1) {
+            c->fP[N * sp + k] = fmin(1.0, fmax(0.0, f));
+        } else {
+            c->fT[N * sp + k] = f;
+        }
+    }
+    return 1;
+}
+
 /* geom.flowShadow (Method "lut") for one epoch: fN, fP, fT laid out [N * j + k] for plate k, species j */
 static void ngfFlowShadow(ngfRhsContext *c, const double *vB, double U, double T)
 {
@@ -979,7 +1035,7 @@ static int ngfEvalOne(ngfRhsContext *c, double t, const double *r, const double 
         if (S->shadow == NGF_SHADOW_LUT) {
             for (i = 0; i < 3; i++) { vu[i] = vB[i] / U; }
             for (k = 0; k < N; k++) { c->beam[k] = ngfLut(c, k, vu); }
-            if (kinetic) {
+            if (kinetic && !(S->flowTable && ngfFlowTable(c, vB, U, Tg))) {
                 ngfFlowShadow(c, vB, U, Tg);
             }
             for (m = 0; m < M; m++) {
@@ -1096,6 +1152,13 @@ int ngfRhsCreate(const ngfRhsSetup *setup, ngfRhsContext **out)
     st |= ngfOwnCopy(c, &S->wChi, (size_t)S->nChi, S->shadow == NGF_SHADOW_LUT);
     st |= ngfOwnCopy(c, &S->xArc, (size_t)S->nArc, S->shadow == NGF_SHADOW_LUT);
     st |= ngfOwnCopy(c, &S->wArc, (size_t)S->nArc, S->shadow == NGF_SHADOW_LUT);
+    {
+        size_t ftRows = 24 * (size_t)S->ftNShaded, ftNodes = (size_t)S->ftN * (size_t)S->ftN * (size_t)S->ftNs;
+        int ft = (S->flowTable != 0);
+        st |= ngfOwnCopy(c, &S->ftShaded, ft ? (size_t)S->ftNShaded : 0, ft);
+        st |= ngfOwnCopy(c, &S->ftPlus, ft ? ftRows * ftNodes : 0, ft);
+        st |= ngfOwnCopy(c, &S->ftMinus, ft ? ftRows * ftNodes : 0, ft);
+    }
     st |= ngfOwnCopy(c, &S->R, 9 * nT, 1);
     st |= ngfOwnCopy(c, &S->Rdot, 9 * nT, 1);
     st |= ngfOwnCopy(c, &S->sun, 3 * nT, 1);

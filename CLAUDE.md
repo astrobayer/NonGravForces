@@ -171,8 +171,12 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-16, occlusion speed-up)
+## 5. Current status (2026-10-17, flow-shadow table)
 
+- **2026-10-17, flow-shadow table:** `geom.flowShadow` Method "table" (trilinear over the stream direction about
+  +-x and s_O, exact fallback outside, flagged) is the standard preset's default (`geom.flowShadow`), read by
+  `Model` and by `mex/ngfRhs.c` alike; drag moves <= 6.7e-13 m/s^2 on ten real days, ~100x cheaper per epoch.
+  Tier A: 435 passed, 0 failed, 0 incomplete, GATE TRUE, predicted 435.
 - **2026-10-16, occlusion speed-up:** `selfShadow`'s look-up, `radiationPanelForce` and `flowShadow`'s species
   loop restructured with every value bitwise unchanged (accel, info and torque compared with `main`):
   `Model.accel` 1.004 -> 0.85 ms per epoch, interleaved A/B. The benchmark table was not re-committed (the
@@ -627,6 +631,9 @@ Every one of these was an actual defect found in a predecessor or a dependency.
 - **Vectorising is not by itself faster.** `radiationPanelForce` broadcast to one 3xNxK expression per source
   was 18 % SLOWER than the plate loop it replaced; one NxK accumulator per component was 28 % faster. And the
   profiler showed the faster version as slower: compare variants interleaved with tic/toc, never by profile.
+- **A table that does not converge with its grid is mis-indexed, not coarse.** The flow-shadow prototype's
+  error stayed at 0.1 from 21 to 41 nodes because nodes and queries used mirrored coordinates. Refine once
+  before believing any interpolation error.
 - **A title's text object hides its handle from `findobj`**; a test reading back a Tagged title needs `findall`.
 - **`tsFitAR`'s default exact method is too slow for anything drawn**: over a minute for 4000 samples with a
   gap. Fit Yule-Walker (`Method = "yw"`) on a gap-free run and filter (N-05).

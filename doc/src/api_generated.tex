@@ -46,6 +46,7 @@ FIDELITY LADDER
   erp.grid                -             12x24           24x48
   thermal.model           none          steadyState     steadyState (+transient opt-in)
   geom.selfShadow         none          lut 16          lut 32
+  geom.flowShadow         exact         table           exact
   sun.source              rs.analytic   rs.analytic     rs.de440
 \end{lstlisting}
 
@@ -74,6 +75,10 @@ erp         struct    .backend "none"|"pointSource"|"knocke"|"ceres"|"ceresClima
 thermal     struct    .model "none"|"steadyState"|"transient" .internalPower_W
 torques     struct    .gravityGradient .magnetic (logical)
 geom        struct    .selfShadow "none"|"lut"|"raycast" .lutResolution (cube-map cells per face edge)
+                      .flowShadow "exact"|"table": the gas stream's shadow ratios computed per epoch,
+                      or read from geom.flowShadow's table (Method "table"; drag changes by <= 7e-13
+                      m/s^2 on GRACE-FO, measured 2026-10-17). "table" needs selfShadow "lut"; with
+                      selfShadow "none" or drag.gsi constantCd there is no stream shadow to tabulate
 sun         struct    .source "rs.analytic"|"rs.de440"
 series      struct    .useParallel (logical) .chunk (double, epochs)
 partials    struct    .method "analytic" | "finiteDiff"
@@ -2085,6 +2090,8 @@ info & 1x1 & struct & - & .method, .samples, .lut (struct .f N x 6(n+1)\textasci
 S = NonGravForces.geom.flowShadow(macro, vrel_body, T_K, 'Method', "lut", 'Lut', lut)
 S = NonGravForces.geom.flowShadow(macro, vrel_body, T_K)                 % exact ray cast (slow)
 S = NonGravForces.geom.flowShadow(macro, vrel_body, [], 'Lut', lut, 'Method', "lut")   % hyperthermal only
+S = NonGravForces.geom.flowShadow(macro, vrel_body, T_K, 'Method', "table", 'Lut', lut)  % tabulated "lut"
+tb = NonGravForces.geom.flowShadow(macro, [], [], 'Method', "table", 'Lut', lut)       % the table itself
 [S, info] = NonGravForces.geom.flowShadow(___, 'Integrals', true)
 \end{lstlisting}
 
@@ -2121,9 +2128,9 @@ T\_\allowbreak{}K & 1xK & double & K & Gas kinetic temperature at the satellite,
 \endfoot
 \bottomrule
 \endlastfoot
-Method & 1x1 & string & - & "raycast" (default, exact to the sampling) \textbar{} "lut" \\
+Method & 1x1 & string & - & "raycast" (default, exact to the sampling) \textbar{} "lut" \textbar{} "table" (the "lut" ratios read from a table; see THE TABLE) \\
 Samples & 1x1 & double & - & ray-cast samples per plate edge (default 40) \\
-Lut & 1x1 & struct & - & a geom.selfShadow table for this macro model (required for "lut") \\
+Lut & 1x1 & struct & - & a geom.selfShadow table for this macro model (required for "lut" and "table") \\
 Quadrature & 1x2 & double & - & [nodes per chi segment, nodes per arc], default [12 16] \\
 Integrals & 1x1 & logical & - & also return the unobstructed coefficient integrals in info (default false) \\
 \end{longtable}
@@ -2142,7 +2149,7 @@ Integrals & 1x1 & logical & - & also return the unobstructed coefficient integra
 \endfoot
 \bottomrule
 \endlastfoot
-S & 1x1 & struct & - & .beam NxK (occlusion along v\_rel), .number .normal .tangential NxKx8 (species in const.speciesName order; [] without T\_K), .speedRatio 8xK, .kind "flow" \\
+S & 1x1 & struct & - & .beam NxK (occlusion along v\_rel), .number .normal .tangential NxKx8 (species in const.speciesName order; [] without T\_K), .speedRatio 8xK, .kind "flow", .tableFallback (1xK logical: the epochs Method "table" computed exactly because they lie outside the table; [] for the other methods). With vrel\_body = [] and T\_K = [] under Method "table": the table itself (.n .t0 .h .ns .s0 .hs .halfWidthTan .shaded .plus .minus, rows plate x species x \{number normal tangential\}) \\
 info & 1x1 & struct & - & .method, .quadrature, .directionsPerEpoch, .integrals (struct CN CpInc CtauInc NxKx8, with 'Integrals'), .provenance \\
 \end{longtable}
 
@@ -2151,7 +2158,8 @@ info & 1x1 & struct & - & .method, .quadrature, .directionsPerEpoch, .integrals 
 \item[\texttt{NonGravForces:\allowbreak{}flowShadow:\allowbreak{}inputMacro}] not a MacroModel, or without vertices on every plate
 \item[\texttt{NonGravForces:\allowbreak{}flowShadow:\allowbreak{}inputShape}] vrel\_body not 3xK or not finite, T\_K not 1xK or [], Quadrature not positive integers
 \item[\texttt{NonGravForces:\allowbreak{}flowShadow:\allowbreak{}inputRange}] \textbar{}vrel\textbar{} = 0 or T\_K \textless{}= 0
-\item[\texttt{NonGravForces:\allowbreak{}flowShadow:\allowbreak{}inputLut}] Method "lut" without a 'Lut'
+\item[\texttt{NonGravForces:\allowbreak{}flowShadow:\allowbreak{}inputLut}] Method "lut" or "table" without a 'Lut'
+\item[\texttt{NonGravForces:\allowbreak{}flowShadow:\allowbreak{}unsupportedIntegrals}] 'Integrals' under Method "table" (they are not tabulated)
 \item[\texttt{NonGravForces:\allowbreak{}selfShadow:\allowbreak{}*}] propagated from the occlusion look-up
 \end{description}
 
@@ -3120,6 +3128,7 @@ WHAT IT COMPOSES, in order, per epoch:
   3. density and composition          env.density with the space-weather drivers
   4. the radiation source list        env.radiationSources (Sun, Earth tiles, eclipse)
   5. occlusion                        geom.selfShadow per radiation source; geom.flowShadow for the gas
+                                      (Method "table" when geom.flowShadow is "table", the standard preset)
   6. panel temperatures               geom.thermalState with the per-source occlusion
   7. accommodation                    kernel.accommodation (fixed, pilinski2010/2011, walker2014)
   8. per-panel forces                 kernel.dragPanelForce, radiationPanelForce, thermalRecoil
@@ -3195,7 +3204,7 @@ info & 1x1 & struct & .frame, .drag .radiation .thermal (3xK each, the same fram
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}inputMacro}] macro is not a MacroModel
-\item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}inputOptions}] options is not an Options object, or its choices contradict each other (alpha beside a non-fixed accommodation, maxwell without a specular fraction, walker2014 without a surface mass, internal power without shares)
+\item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}inputOptions}] options is not an Options object, or its choices contradict each other (alpha beside a non-fixed accommodation, maxwell without a specular fraction, walker2014 without a surface mass, internal power without shares, geom.flowShadow table beside selfShadow raycast)
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}inputMass}] no 'Mass' and no mass on the macro model, or 'Mass' not a positive mass / massModel
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}inputState}] epoch, r, v or q disagree in size, or are not finite
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}inputAttitude}] no q was given and the Model has no attitude provider

@@ -80,6 +80,28 @@ classdef tNgfGeometry < NgfTestCase
 
     % ===================================================================== contract
     methods (Test, TestTags = {'contract'})
+        function flowShadowTableContract(tc)
+            % Method "table": the table itself (both cones), the struct it returns, and what it refuses.
+            lut = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut");
+            tb = NonGravForces.geom.flowShadow(tc.mm, [], [], 'Method', "table", 'Lut', lut);
+            tc.verifyEqual(tb.shaded, find(~all(lut.f == 1, 2))');
+            tc.verifySize(tb.plus, [24 * numel(tb.shaded), tb.n^2 * tb.ns]); tc.verifySize(tb.minus, size(tb.plus));
+            vb = [-1 -0.99; 0.02 0.1; 0.01 -0.05]; vb = 7600 * vb ./ vecnorm(vb); T = [950 1000];
+            [S, info] = NonGravForces.geom.flowShadow(tc.mm, vb, T, 'Method', "table", 'Lut', lut);
+            tc.verifySize(S.number, [8 2 8]); tc.verifySize(S.normal, [8 2 8]); tc.verifySize(S.tangential, [8 2 8]);
+            tc.verifyClass(S.tableFallback, 'logical'); tc.verifyEqual(S.tableFallback, false(1, 2));
+            tc.verifyEqual(info.method, "table"); tc.verifyEqual(info.fallbackEpochs, 0);
+            Sb = NonGravForces.geom.flowShadow(tc.mm, vb, [], 'Method', "table", 'Lut', lut);
+            tc.verifyEmpty(Sb.number); tc.verifyEqual(Sb.beam, S.beam); tc.verifyEqual(Sb.tableFallback, false(1, 2));
+            Sl = NonGravForces.geom.flowShadow(tc.mm, vb, T, 'Method', "lut", 'Lut', lut);
+            tc.verifyEmpty(Sl.tableFallback); tc.verifyEqual(Sl.beam, S.beam);
+            g = @(varargin) NonGravForces.geom.flowShadow(varargin{:});
+            tc.verifyErrorId(@() g(tc.mm, vb, T, 'Method', "table"), 'NonGravForces:flowShadow:inputLut');
+            tc.verifyErrorId(@() g(tc.mm, vb, T, 'Method', "table", 'Lut', lut, 'Integrals', true), 'NonGravForces:flowShadow:unsupportedIntegrals');
+            tc.verifyErrorId(@() g(tc.mm, vb(1:2, :), T, 'Method', "table", 'Lut', lut), 'NonGravForces:flowShadow:inputShape');
+            tc.verifyErrorId(@() g(tc.mm, vb, [950 1000 1050], 'Method', "table", 'Lut', lut), 'NonGravForces:flowShadow:inputShape');
+            tc.verifyErrorId(@() g(tc.mm, vb, [950 -1], 'Method', "table", 'Lut', lut), 'NonGravForces:flowShadow:inputRange');
+        end
         function flowShadowContract(tc)
             lut = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut", 'LutResolution', 4, 'Samples', 10);
             vb = 7600 * [-1 -0.99; 0.02 0.1; 0.01 -0.05]; vb = 7600 * vb ./ vecnorm(vb); T = [950 1000];
@@ -192,6 +214,23 @@ classdef tNgfGeometry < NgfTestCase
 
     % ===================================================================== reference
     methods (Test, TestTags = {'reference'})
+        function flowShadowTableReference(tc)
+            % The table against the computation it tabulates (Method lut), over GRACE-FO's stream: yaw +-4 deg, pitch
+            % +-1 deg about both +x and -x, s_O 7..10. Measured 2026-10-17 on 81952 epochs of ten real days (C and D):
+            % 1.2e-3 at most, which moved the drag by 6.7e-13 m/s^2 of 2.1e-8. Bound 4x.
+            lut = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut");
+            rng(11); K = 400;
+            sg = [-ones(1, K / 2), ones(1, K / 2)];
+            u = [sg; tand(4 * (2 * rand(1, K) - 1)); tand(2 * rand(1, K) - 1)]; vb = 7600 * u ./ vecnorm(u);
+            T = arrayfun(@(s) tc.temperatureFor(s, 7600), 7 + 3 * rand(1, K));
+            St = NonGravForces.geom.flowShadow(tc.mm, vb, T, 'Method', "table", 'Lut', lut);
+            Se = NonGravForces.geom.flowShadow(tc.mm, vb, T, 'Method', "lut", 'Lut', lut);
+            tc.verifyFalse(any(St.tableFallback));
+            err = max(abs([St.number(:) - Se.number(:); St.normal(:) - Se.normal(:); St.tangential(:) - Se.tangential(:)]));
+            tc.verifyBoundAndRecord("flowShadow table vs Method lut, every ratio, GRACE-FO cone (400 epochs)", err, 5e-3, "-", ...
+                "trilinear at 0.5 deg and 0.5 in s_O; measured 1.2e-3 on 81952 real epochs (2026-10-17)");
+            tc.verifyEqual(St.beam, Se.beam);
+        end
         function flowShadowReference(tc)
             % Oracle: tools/pyxcheck/tpmc_check.py, a standard-library test-particle Monte Carlo of the incident number,
             % normal-momentum and tangential-momentum fluxes on a tiny plate screened by a wall, written from a physics
@@ -305,6 +344,23 @@ classdef tNgfGeometry < NgfTestCase
             tc.verifyBoundAndRecord("nadir absorbed flux: per-source minus Sun-only occlusion (F2 regression)", ...
                 -min(it.absorbed_W_m2(7, :) - itOld.absorbed_W_m2(7, :)), 0, "W/m^2", "per-source occlusion never absorbs less than the Sun column forced onto the Earth tiles");
         end
+        function flowShadowTablePrecision(tc)
+            % At its own nodes the table returns what it stored, and what it stored is Method lut at that node: a node
+            % read back differs from the exact evaluation there only by the rounding of the node's coordinates.
+            lut = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut");
+            tb = NonGravForces.geom.flowShadow(tc.mm, [], [], 'Method', "table", 'Lut', lut);
+            % interior nodes: a node ON the table's edge comes back from v/|v| an ulp outside it and is, correctly,
+            % computed exactly instead (flowShadowTableRobustness)
+            ix = [1 12 23 3]; iy = [1 12 23 20]; is = [1 7 13 2]; sg = [1 -1 1 -1];
+            u = [sg; tb.t0 + ix * tb.h; tb.t0 + iy * tb.h]; u = u ./ vecnorm(u);
+            T = arrayfun(@(s) tc.temperatureFor(s, 7600), tb.s0 + is * tb.hs);
+            St = NonGravForces.geom.flowShadow(tc.mm, 7600 * u, T, 'Method', "table", 'Lut', lut);
+            Se = NonGravForces.geom.flowShadow(tc.mm, 7600 * u, T, 'Method', "lut", 'Lut', lut);
+            tc.verifyFalse(any(St.tableFallback));
+            err = max(abs([St.number(:) - Se.number(:); St.normal(:) - Se.normal(:); St.tangential(:) - Se.tangential(:)]));
+            tc.verifyBoundAndRecord("flowShadow table at its nodes vs Method lut there", err, 1e-10, "-", ...
+                "node coordinates rebuilt from v/|v| carry a few ulp, times a slope below 1e2 per unit of tan");
+        end
         function flowShadowPrecision(tc)
             % Without occlusion the directional integrals ARE Sentman's incident coefficients (number flux, normal and
             % tangential momentum): an identity of kinetic theory, so the comparison measures the quadrature alone.
@@ -389,6 +445,18 @@ classdef tNgfGeometry < NgfTestCase
 
     % ===================================================================== vectorization
     methods (Test, TestTags = {'vectorization'})
+        function flowShadowTableVectorization(tc)
+            % Element by element, inside and outside the table alike: a batch equals its epochs one at a time, bitwise.
+            lut = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut");
+            u = [-1 -1 1 -1 0.2 -1; 0.03 -0.08 0.05 0.4 1 0; -0.01 0.02 0 0.1 0 0.004]; vb = 7600 * u ./ vecnorm(u);
+            T = [900 1000 800 950 1100 4000];
+            S = NonGravForces.geom.flowShadow(tc.mm, vb, T, 'Method', "table", 'Lut', lut);
+            for k = 1:size(vb, 2)
+                Sk = NonGravForces.geom.flowShadow(tc.mm, vb(:, k), T(k), 'Method', "table", 'Lut', lut);
+                tc.verifyEqual(Sk.number, S.number(:, k, :)); tc.verifyEqual(Sk.normal, S.normal(:, k, :));
+                tc.verifyEqual(Sk.tangential, S.tangential(:, k, :)); tc.verifyEqual(Sk.tableFallback, S.tableFallback(k));
+            end
+        end
         function flowShadowVectorization(tc)
             % five epochs at once equal five single epochs, bitwise: every sum runs along a dimension whose length does
             % not depend on the number of epochs
@@ -448,6 +516,22 @@ classdef tNgfGeometry < NgfTestCase
 
     % ===================================================================== robustness
     methods (Test, TestTags = {'robustness'})
+        function flowShadowTableRobustness(tc)
+            % Outside the table -- a stream 20 deg off the axis, side-on, or a speed ratio beyond [5, 12] -- the epoch is
+            % computed exactly, bitwise as Method lut computes it, and flagged; the epochs inside are not disturbed.
+            lut = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut");
+            u = [-1 -1 0.2 -1 1; 0.02 tand(20) 1 0 -0.01; 0 0 0 0 0.01]; vb = 7600 * u ./ vecnorm(u);
+            T = [950 950 950 tc.temperatureFor(4, 7600) tc.temperatureFor(13, 7600)];
+            S = NonGravForces.geom.flowShadow(tc.mm, vb, T, 'Method', "table", 'Lut', lut);
+            tc.verifyEqual(S.tableFallback, [false true true true true]);
+            out = S.tableFallback;
+            E = NonGravForces.geom.flowShadow(tc.mm, vb(:, out), T(out), 'Method', "lut", 'Lut', lut);
+            tc.verifyEqual(S.number(:, out, :), E.number); tc.verifyEqual(S.normal(:, out, :), E.normal);
+            tc.verifyEqual(S.tangential(:, out, :), E.tangential);
+            S1 = NonGravForces.geom.flowShadow(tc.mm, vb(:, 1), T(1), 'Method', "table", 'Lut', lut);
+            tc.verifyEqual(S1.number, S.number(:, 1, :));
+            tc.verifyTrue(all(S.number(:) >= 0 & S.number(:) <= 1 & S.normal(:) >= 0 & S.normal(:) <= 1));
+        end
         function flowShadowRobustness(tc)
             % the stream exactly along a plate normal (no tangential direction), exactly edge-on, exactly leeward, a very cold
             % and a very hot gas, and no epochs at all: finite ratios in [0, 1], and exactly 1 on GRACE-FO plates nothing screens
@@ -542,6 +626,24 @@ classdef tNgfGeometry < NgfTestCase
 
     % ===================================================================== metamorphic
     methods (Test, TestTags = {'metamorphic'})
+        function flowShadowTableMetamorphic(tc)
+            % Switching geom.flowShadow from exact to table may move the DRAG and nothing else: radiation and thermal
+            % recoil are bitwise unchanged, and the drag moves, but by no more than the table's error carries.
+            [ep, r, v, q] = tc.sampleState();
+            eop = referenceSystem.readEop(fullfile(tc.root, 'data', 'eop', 'finals2000A_2019-09_2020-03.all'));
+            sw = NonGravForces.io.spaceWeather(fullfile(tc.root, 'data', 'spaceweather', 'SW-All_2019-09_2020-03.csv'));
+            k = 1:20:numel(ep.sec);
+            e = referenceSystem.daySecondToEpoch([ep.day(k) ep.sec(k)], ep.scale);
+            Mt = NonGravForces.Model(tc.mm, NonGravForces.Options("standard"), 'Eop', eop, 'SpaceWeather', sw);
+            Me = NonGravForces.Model(tc.mm, NonGravForces.Options("standard").set("geom.flowShadow", "exact"), 'Eop', eop, 'SpaceWeather', sw);
+            [~, it] = Mt.accel(e, r(:, k), v(:, k), q(:, k)); [~, ie] = Me.accel(e, r(:, k), v(:, k), q(:, k));
+            tc.verifyEqual(it.radiation, ie.radiation); tc.verifyEqual(it.thermal, ie.thermal);
+            tc.verifyFalse(any(it.flowShadow.tableFallback)); tc.verifyEmpty(ie.flowShadow.tableFallback);
+            d = max(abs(it.drag - ie.drag), [], 'all');
+            tc.verifyGreaterThan(d, 0);
+            tc.verifyBoundAndRecord("Model drag, flowShadow table vs exact (sample arc)", d / max(vecnorm(ie.drag)), 1e-4, "rel", ...
+                "measured 6.7e-13 m/s^2 of 4.5e-8 on real days (1.5e-5); bound ~7x");
+        end
         function flowShadowMetamorphic(tc)
             % (1) the beam field IS selfShadow along v_rel, bitwise; (2) mirroring the stream in y swaps starboard and port;
             % (3) as the gas cools (s -> inf) every ratio converges on the beam value: the error falls as s rises.
@@ -651,6 +753,20 @@ classdef tNgfGeometry < NgfTestCase
 
     % ===================================================================== speed
     methods (Test, TestTags = {'speed'})
+        function flowShadowTableSpeed(tc)
+            % The table read against the computation it replaces, 200 epochs, after the session's table is built.
+            % Measured 2026-10-17: 2-4 us against 450 us per epoch. Budget 5x the measured 0.01.
+            lut = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut");
+            % GRACE-FO's stream (yaw +-4 deg, pitch +-1 deg): every epoch inside the table, so this times the read, not
+            % the exact fallback an epoch outside it gets
+            rng(6); u = [-ones(1, 200); tand(4 * (2 * rand(1, 200) - 1)); tand(2 * rand(1, 200) - 1)];
+            vb = 7600 * u ./ vecnorm(u); T = 900 + 100 * rand(1, 200);
+            S = NonGravForces.geom.flowShadow(tc.mm, vb, T, 'Method', "table", 'Lut', lut);
+            tc.assertFalse(any(S.tableFallback));
+            q = tc.speedRatio(@() NonGravForces.geom.flowShadow(tc.mm, vb, T, 'Method', "table", 'Lut', lut), ...
+                              @() NonGravForces.geom.flowShadow(tc.mm, vb, T, 'Method', "lut", 'Lut', lut));
+            tc.verifyBoundAndRecord("flowShadow table / Method lut time ratio (200 epochs)", q, 0.05, "-", "measured ~0.01 on 2026-10-17; budget 5x");
+        end
         function flowShadowSpeed(tc)
             % flowShadow for 32 epochs against the radiation look-up the same Model epoch needs (577 source directions x 32):
             % the gas quadrature must stay within an order of magnitude of the radiation occlusion it sits beside.
