@@ -176,6 +176,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 - **2026-10-17, flow-shadow table:** `geom.flowShadow` Method "table" (trilinear over the stream direction about
   +-x and s_O, exact fallback outside, flagged) is the standard preset's default (`geom.flowShadow`), read by
   `Model` and by `mex/ngfRhs.c` alike; drag moves <= 6.7e-13 m/s^2 on ten real days, ~100x cheaper per epoch.
+  A 10-day `calibrate` (C): 650 -> 350 s at NBoot 0, 1541 -> 1204 s at NBoot 100 (the bootstrap is lsqvce#183).
   Tier A: 435 passed, 0 failed, 0 incomplete, GATE TRUE, predicted 435.
 - **2026-10-16, occlusion speed-up:** `selfShadow`'s look-up, `radiationPanelForce` and `flowShadow`'s species
   loop restructured with every value bitwise unchanged (accel, info and torque compared with `main`):
