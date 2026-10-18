@@ -1,4 +1,4 @@
-# NonGravForces 0.15.0
+# NonGravForces 0.16.0
 
 Non-gravitational forces, torques and partials for LEO satellites (GRACE-FO reference case; classic GRACE-A/B macro model since N-07). Third concept, designed from scratch after the audits of `SatelliteNonGravToolbox` v1 and `NonGravToolbox` v0.1.1.
 
@@ -11,7 +11,7 @@ run('../referenceSystem/setupReferenceSystem.m'); run('../gracefoReading/setupGr
 run('../odeSuite/gjToolboxSetup.m')      % optional for the toolbox, required by ciGate
 setupNonGravForces; runNgfTests
 ```
-Status: 59 catalogued units, all delivered, no stubs left (`auditPackage.py` compares this number with `doc/functionlist.csv`); all are verified in MATLAB. **Version 0.15.0** completes the accelerometer calibration diagnostics of N-03: a time-varying scale with its drift test, model comparison by blocked cross-validation, the per-revolution fit and its attribution on drivers. **435/435 green** on Tier A after the standard preset began reading the gas-stream shadow from a table (R2026a Update 4, 2026-10-17; `tests/last_run.txt`).
+Status: 59 catalogued units, all delivered, no stubs left (`auditPackage.py` compares this number with `doc/functionlist.csv`); all are verified in MATLAB. **Version 0.16.0** adds multi-day calibration with one common scale (N-09), measured temperature and magnetorquer regressors (N-11a), the calibration figures (N-05), a frozen regression baseline over January 2020 for GRACE-C and -D that every release must reproduce (N-10a), and a cheaper standard preset: the gas-stream shadow is read from a table (drag changes by at most 7e-13 m/s^2), which with a bitwise-neutral restructuring halves the model's share of a calibration. **435/435 green** on Tier A after the standard preset began reading the gas-stream shadow from a table (R2026a Update 4, 2026-10-17; `tests/last_run.txt`).
 
 Licensed MIT (see `LICENSE`). The NRLMSISE-00 C source is **not** in this repository — it carries no redistribution grant, so it is fetched from its maintainer instead:
 
