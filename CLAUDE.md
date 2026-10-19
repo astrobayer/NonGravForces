@@ -64,7 +64,7 @@ records — A.2 rule, B.4 — follow with N-02c.)
 | `referenceSystem` ≥ 2.3 (2.3.0; raised from 2.1 by N-02c for `epochTo(..., "gpsNanoseconds")`) | time scales, EOP, ITRS↔GCRS with derivatives, geodesy, quaternions, attitude interpolation, Sun/Moon states |
 | `gracefoReading` ≥ 1.0.1 (1.0.1) | L1B ASCII reading, quality flags, GROOPS instrument export/import. The PATCH minimum is deliberate and is the one exception to VERSIONING.md's MAJOR.MINOR rule (HANDOVER O-12, O-25) |
 | `timeSeriesPreparation` ≥ 1.4 (1.4.0) | The L1B CRN kernel (`crnKernel`), and after N-01 the `qc` stage. **Optional for the toolbox, required by `ciGate`**: `sensor.Electrostatic` filters with `crnKernel("ACC")` by DEFAULT (N-04, owner ruling 2026-10-14) and raises `Electrostatic:depMissing` without it. Its version is the `% Version` line of its `Contents.m` |
-| `lsqvce` ≥ 6.22 (6.22.0) | The one least-squares estimator (CONCEPT Q2). **Optional for the toolbox, required by `ciGate`**: `app.fitCalibration` declares kind A (one system, one day, one arc per contiguous run) per axis and its bootstrap refits kind B. Version from `lsqvce.util.toolboxVersion` |
+| `lsqvce` ≥ 6.35 (6.35.0; raised from 6.22 on 2026-10-19 for `R.contributions` / `solveContributions`) | The one least-squares estimator (CONCEPT Q2). **Optional for the toolbox, required by `ciGate`**: `app.fitCalibration` declares kind A (one system, one day, one arc per contiguous run) per axis its day bootstrap solves the fit's per-day contributions and its single-arc bootstrap refits kind B. Version from `lsqvce.util.toolboxVersion` |
 | `gjToolbox` (odeSuite) ≥ 0.1 (0.1.0) | Gauss-Jackson integration. **Optional for the toolbox, required by `ciGate`**: `app.DynamicsSource` subclasses `gjToolbox.DynamicsSource` (so it cannot even load without it) and the `buildMex` target `rhs` compiles against `csrc/gj_native.h` (ABI 1). `Model.rhs` is gone — O-4 closed by removal, 2026-09-16 |
 
 ### Key design decisions
@@ -171,8 +171,12 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-18, release 0.16.0)
+## 5. Current status (2026-10-19, day bootstrap on lsqvce contributions)
 
+- **2026-10-19, lsqvce#183 used:** `fitCalibration`'s day bootstrap is `lsqvce.solveContributions` on the drawn
+  multiplicities (lsqvce >= 6.35). 10 days of GRACE-C, 100 replicates: `calibrate` 1410 -> ~340 s, sigmas identical
+  to ten digits; under 'Noise' estimate / 'Robust' the weights are now fixed per replicate (Part I, open).
+  ☑ on Tier A: 437/437, predicted 437.
 - **2026-10-18, release 0.16.0:** N-05, N-09, N-11a, N-10a, #96 and the flow-shadow table released. Gate 435/435 on
   Tier A, predicted 435; benchmark re-measured (standard 0.440 ms at K=100, was 0.836); the month baseline
   passed at 0.16.0, worst 0.013 sigma, in 3.1 h (was 4.0). Issues #59/#60/#62/#66 closed; O-35 closed.

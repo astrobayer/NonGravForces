@@ -4029,7 +4029,7 @@ Seed & 1x1 & double & - & Bootstrap seed; default 0 \\
 VifMax & 1x1 & double & - & VIF gate for a row with several model columns; default 10 \\
 MinWeightFraction & 1x1 & double & - & Minimum-data gate of observability; default 0.5 \\
 Jumps & 1xJ & int64 & ns & Epochs (GPS ns) of steps in the bias, one Heaviside column each, filtered like the basis; default none \\
-Robust & 1x1 & string & - & lsqvce M-estimation: "none" (default) \textbar{} "huber" \textbar{} "igg3" \textbar{} "bisquare"; the bootstrap refits with it \\
+Robust & 1x1 & string & - & lsqvce M-estimation: "none" (default) \textbar{} "huber" \textbar{} "igg3" \textbar{} "bisquare"; a single arc's bootstrap refits with it, the day bootstrap keeps its final weights \\
 \end{longtable}
 
 \subsubsection*{OUTPUT ARGUMENTS}
