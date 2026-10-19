@@ -84,9 +84,14 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %   only, and refuses 'Jumps' (unsupportedMultiArc): a day's local block must
 %   have one size, and a common curve over days is not defined here. Its
 %   uncertainty is a bootstrap over DAYS: timeSeriesPreparation.bootstrap on
-%   the day index with block length 1, each replicate refitted jointly with
-%   its days relabelled -- days are independent where the samples of one day
-%   are not. Below 10 days it warns (fewArcs). The per-day biases carry
+%   the day index with block length 1 -- days are independent where the
+%   samples of one day are not. A replicate is the weighted sum of the drawn
+%   days' reduced normal equations (lsqvce >= 6.35: R.contributions and
+%   lsqvce.solveContributions, a day drawn twice counted twice), so the data
+%   pass is paid once and a replicate costs O(N p^2). Under "white" noise and
+%   no 'Robust' that IS the joint refit of the drawn days; an estimated noise
+%   model or robust weights are held at the full fit's values in every
+%   replicate (a bootstrap under fixed weights). Below 10 days it warns (fewArcs). The per-day biases carry
 %   lsqvce's FORMAL local covariance (s0^2 Nll^-1 plus the propagated common
 %   part), not a bootstrap one. The gates are computed on the model columns
 %   with each day's bias basis projected out -- the columns the pre-eliminated
@@ -157,7 +162,8 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %   Jumps              1xJ   int64   ns     Epochs (GPS ns) of steps in the bias, one Heaviside
 %                                           column each, filtered like the basis; default none
 %   Robust             1x1   string  -      lsqvce M-estimation: "none" (default) | "huber" |
-%                                           "igg3" | "bisquare"; the bootstrap refits with it
+%                                           "igg3" | "bisquare"; a single arc's bootstrap refits
+%                                           with it, the day bootstrap keeps its final weights
 %
 % OUTPUT ARGUMENTS
 %   Name  Size  Type                            Units  Description
@@ -698,8 +704,8 @@ for i = 1:3
     gates.verdict(i) = "pass";
     if any(~(modelVif <= options.VifMax)), gates.verdict(i) = "warn"; end
 
-    % the joint solve, and the bootstrap over days refitting the same solve
-    [x, y, Cxx, Cyy, Rr, Qc] = localJoint(A, B, L, ok, tS, 1:N, options.Noise, options.Robust);
+    % the joint solve, and the bootstrap over days on its per-day reduced contributions
+    [x, y, Cxx, Cyy, Rr, Qc, sc] = localJoint(A, B, L, ok, tS, 1:N, options.Noise, options.Robust);
     results{i} = Rr; Qxx{i} = Qc; stopReason(i) = string(Rr.stopReason);
     for k = 1:N
         v = nan(numel(L{k}), 1);
@@ -711,8 +717,13 @@ for i = 1:3
     allv = cell2mat(cellfun(@(r) r(:, i), res, 'UniformOutput', false)');
     resRms(i) = sqrt(mean(allv(isfinite(allv)).^2));
     if options.NBoot > 0 && (~isempty(est) || options.Quadratic || Kr > 0)
+        % A replicate is the weighted sum of the days' reduced normal equations (lsqvce >= 6.35,
+        % R.contributions / solveContributions): one data pass, then O(N p^2) per replicate. Under the
+        % default white noise and no robust weights it IS the refit of the drawn days; an estimated
+        % noise model or robust weights stay at the full fit's values (lsqvce: fixed weights).
+        Cn = Rr.contributions();
         [~, bi] = timeSeriesPreparation.bootstrap((1:N)', ...
-            @(ii) localJoint(A, B, L, ok, tS, ii(:)', options.Noise, options.Robust).', ...
+            @(ii) localReplicate(Cn, ii, N, sc).', ...
             NBoot = options.NBoot, BlockLength = 1, Seed = options.Seed, Stage = "fitCalibration.days." + axisNames(i));
         rows = all(isfinite(bi.replicates), 2);
         Cuse = cov(bi.replicates(rows, :));
@@ -761,10 +772,17 @@ info = struct('mode', "common", 'residual', {infoRes}, 'rows', {rowsUsed}, 'name
     'Qxx', {Qxx}, 'results', {results});
 end
 
-function [x, y, Cxx, Cyy, R, Qc] = localJoint(A, B, L, ok, tS, days, noise, robust)
+function x = localReplicate(Cn, ii, N, sc)
+%LOCALREPLICATE One bootstrap replicate: the drawn days' multiplicities on the full fit's contributions.
+c = accumarray(ii(:), 1, [N 1]).';
+out = lsqvce.solveContributions(Cn, c);
+x = out.x(:) * sc.sl ./ sc.sA(:);
+end
+
+function [x, y, Cxx, Cyy, R, Qc, sc] = localJoint(A, B, L, ok, tS, days, noise, robust)
 %LOCALJOINT The common columns with each day's bias as lsqvce 'day' locals: one kind-A system.
-%   days lists the arcs to use, in order and possibly repeated (a bootstrap draw); they are
-%   relabelled 1..numel(days), so a repeated day is a second, identical day of data.
+%   days lists the arcs to use, in order; they are relabelled 1..numel(days). The day bootstrap
+%   no longer refits through here (localReplicate), so every caller passes 1:N.
 nd = numel(days);
 if size(A{1}, 2) == 0
     % No common column (a held scale and no K2): the days decouple into independent bias fits,
@@ -777,7 +795,7 @@ if size(A{1}, 2) == 0
         [xk, ~, Ck, Rs{j}] = localSolve(B{k}, L{k}, ok{k}, int64(round(tS{k} * 1e9)), noise, robust);
         y(:, j) = xk; Cyy{j} = Ck;
     end
-    Cxx = zeros(0); Qc = zeros(0); R = Rs{end};
+    Cxx = zeros(0); Qc = zeros(0); R = Rs{end}; sc = struct('sA', zeros(1, 0), 'sl', 1);
     return
 end
 Ac = cell2mat(cellfun(@(Ak, okk) Ak(okk, :), A(days), ok(days), 'UniformOutput', false)');
@@ -817,6 +835,7 @@ else
     R = lsqvce.fit(data, o);
 end
 x = R.x(:) * sl ./ sA(:);
+sc = struct('sA', sA, 'sl', sl);
 if nargout < 2, return, end
 Cxx = R.sol.Cxx .* (sl^2 ./ (sA(:) * sA(:).'));
 Qc = R.acc.commonCofactor() ./ (sA(:) * sA(:).');
