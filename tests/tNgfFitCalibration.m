@@ -321,6 +321,22 @@ classdef tNgfFitCalibration < NgfTestCase
 
     % ===================================================================== speed
     methods (Test, TestTags = {'speed'})
+        function fitCalibrationDayBootstrapSpeed(tc)
+            % With the per-day contributions the data pass is paid once and a replicate is a small solve, so
+            % 50 replicates must add little to a 10-day joint fit. The replicate-by-refit it replaced cost about
+            % one full fit per replicate (measured 2026-10-17: 870 s of bootstrap beside 350 s of fit on
+            % 10 real days at 100 replicates). Budget: 50 replicates within twice the fit without them.
+            [obs, ref] = tc.multiPair(10, true, 'Spikes', 0);
+            f0 = @() NonGravForces.app.fitCalibration(obs, ref, 'BiasBasis', "constant", 'NBoot', 0);
+            f1 = @() NonGravForces.app.fitCalibration(obs, ref, 'BiasBasis', "constant", 'NBoot', 50, 'Seed', 1);
+            f0(); f1();
+            r = zeros(1, 3);
+            for k = 1:3
+                t0 = tic; f0(); a = toc(t0); t1 = tic; f1(); b = toc(t1); r(k) = b / a;
+            end
+            tc.verifyBoundAndRecord("fitCalibration, 10 days: 50 day-bootstrap replicates / no bootstrap", median(r), 2, "-", ...
+                "a replicate is lsqvce.solveContributions, O(N p^2); a refit per replicate would read ~50");
+        end
         function fitCalibrationSpeed(tc)
             % Filter, gate and three solves all grow with the arc: twice the arc, about twice the cost.
             [o1, r1] = NonGravForces.app.syntheticPair('Days', 0.05);
@@ -382,6 +398,35 @@ classdef tNgfFitCalibration < NgfTestCase
         end
     end
     methods (Test, TestTags = {'precision'})
+        function fitCalibrationMultiArcDayBootstrapPrecision(tc)
+            % A day-bootstrap replicate is lsqvce.solveContributions on the drawn multiplicities. Its oracle is
+            % the public joint fit over the EXPANDED day list -- a day drawn twice entered twice, as a copy of
+            % its data generated at another day's time (syntheticPair is shift-invariant) -- for the very
+            % draws timeSeriesPreparation.bootstrap makes (same seed, same stage name). Under white noise
+            % the two are one estimator, so the bootstrap sigma must agree to the solves' rounding.
+            N = 10; nb = 8; seed = 3;
+            [obs, ref, b0] = tc.multiPair(N, true, 'Spikes', 0);
+            cal = NonGravForces.app.fitCalibration(obs, ref, 'BiasBasis', "constant", 'NBoot', nb, 'Seed', seed);
+            [~, bi] = timeSeriesPreparation.bootstrap((1:N)', @(ii) ii(:).', NBoot = nb, BlockLength = 1, Seed = seed, ...
+                Stage = "fitCalibration.days.x");
+            Sxx = zeros(nb, 1);
+            for b = 1:nb
+                draw = sort(bi.replicates(b, :));
+                o = timeSeriesPreparation.Arc.empty; r = o;
+                for j = 1:N
+                    d = draw(j);
+                    st = int64(7305 * 86400 - 43200 + 18 + (j - 1) * 86400) * int64(1e9);
+                    [o(j), r(j)] = NonGravForces.app.syntheticPair('Days', 0.1, 'Start', st, 'Seed', d, 'Bias', b0(:, d), ...
+                        'BiasDrift', zeros(3, 1), 'NoiseAsd', [1e-10; 1e-9; 1e-10], 'Spikes', 0);
+                end
+                cb = NonGravForces.app.fitCalibration(o, r, 'BiasBasis', "constant", 'NBoot', 0);
+                Sxx(b) = cb(1).scale(1, 1);
+            end
+            sOracle = std(Sxx);
+            sGot = cal(1).uncertainty.sigmaScaleBootstrap(1, 1);
+            tc.verifyBoundAndRecord("day bootstrap sigma S_xx: solveContributions vs full refits of the expanded day lists", ...
+                abs(sGot / sOracle - 1), 1e-6, "rel", "lsqvce: solveContributions equals a fit over the expanded days to 1e-9 in x; the spread of 8 replicates of ~1e-4 keeps ~5 digits of that");
+        end
         function fitCalibrationMultiArcPrecision(tc)
             % The algebra of pre-elimination: lsqvce's joint solve with each day's bias as a local block
             % equals the DENSE joint least squares -- a block-diagonal bias design beside the common scale
