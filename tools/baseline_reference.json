@@ -1,13 +1,14 @@
 {
   "meta": {
-    "toolbox": "0.15.0",
+    "toolbox": "0.16.0",
     "generated": "2026-10-16 08:02 UTC",
     "matlab": "26.1.0.3312084 (R2026a) Update 4",
     "month": "2020-01",
     "preset": "standard",
     "nBoot": 100,
     "k": 3,
-    "note": "ORC-10: every number may move by at most k of its sigma (scale: bootstrap over days; bias: formal)"
+    "note": "ORC-10: every number may move by at most k of its sigma (scale: bootstrap over days; bias: formal)",
+    "verified": "2026-10-18 19:00 UTC"
   },
   "result": {
     "C": {

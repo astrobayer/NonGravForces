@@ -788,21 +788,22 @@ the \SI{4.22}{} that Hładczuk et al.\ leave when they omit the term and the \SI
 \section{Cost}
 \textbf{The cost per epoch depends on how many epochs you ask for in one call, far more than on which
 preset you choose}, and that is the most useful thing to know about this toolbox's performance.
-Measured by \texttt{tools/benchmark.m} on 2026-10-15 (v0.15.0, R2026a, median of five after five
-warm-up calls; v0.14.0's run on a host shared with other MATLAB processes read 5--30\,\% higher); the table it writes is committed at \texttt{tools/benchmark\_reference.csv}, and the
+Measured by \texttt{tools/benchmark.m} on 2026-10-18 (v0.16.0, R2026a, median of five after five
+warm-up calls; v0.16.0 reads the \texttt{standard} preset's gas-stream shadow from a table, which roughly
+halved its per-epoch work against v0.15.0's \SI{0.836}{\milli\second} at $K=100$); the table it writes is committed at \texttt{tools/benchmark\_reference.csv}, and the
 audit checks every figure below against it.
 
 \begin{table}[h]\centering\footnotesize
 \begin{tabular}{@{}lrrr@{}}\toprule
  & \multicolumn{3}{c}{ms per epoch, for a call of $K$ epochs}\\\cmidrule(l){2-4}
 path & $K=1$ & $K=10$ & $K=100$\\\midrule
-\texttt{Model.accel}, \texttt{standard} & 17.0 & 3.11 & 0.836\\
-\texttt{Model.accel}, \texttt{fast} & 5.15 & 0.865 & 0.096\\
-\texttt{Model.budget}, \texttt{fast} & 5.45 & 0.898 & 0.098\\
-\texttt{app.forceBudget}, \texttt{fast} & 6.55 & 0.893 & 0.111\\\midrule
+\texttt{Model.accel}, \texttt{standard} & 11.9 & 2.47 & 0.440\\
+\texttt{Model.accel}, \texttt{fast} & 5.64 & 1.07 & 0.119\\
+\texttt{Model.budget}, \texttt{fast} & 6.46 & 1.19 & 0.121\\
+\texttt{app.forceBudget}, \texttt{fast} & 6.37 & 0.937 & 0.144\\\midrule
 \multicolumn{4}{@{}l}{\emph{pointwise by construction --- these take one state and do not batch:}}\\
-\texttt{kernel.singleEpoch} (compiled) & \multicolumn{3}{r}{0.521}\\
-\texttt{app.DynamicsSource.accel} (native) & \multicolumn{3}{r}{0.505}\\
+\texttt{kernel.singleEpoch} (compiled) & \multicolumn{3}{r}{0.487}\\
+\texttt{app.DynamicsSource.accel} (native) & \multicolumn{3}{r}{0.596}\\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -812,21 +813,21 @@ epoch on 2026-09-18 (v0.12.0), so \textbf{a day at \SI{1}{\hertz} cost about 1 m
 That figure is not one \texttt{tools/benchmark.m} writes, so this release did not regenerate it.
 
 Every path in that table gets dramatically cheaper per epoch between $K=1$ and $K=100$ ---
-$20\times$ for \texttt{standard}, and $53$ to $59\times$ for the \texttt{fast} rows, whose
+$27\times$ for \texttt{standard}, and $44$ to $53\times$ for the \texttt{fast} rows, whose
 per-epoch work is smaller and so amortises further --- and the reason is a large fixed cost per
 \emph{call}. Fitting $\text{cost}(K)=a+bK$ to the
-\texttt{standard} rows at $K=1$ and $K=100$ gives $a\approx\SI{16.3}{\milli\second}$ of setup and
-$b\approx\SI{0.67}{\milli\second}$ of actual per-epoch work; for \texttt{fast},
-$a\approx\SI{5.1}{\milli\second}$ and $b\approx\SI{0.045}{\milli\second}$. \textbf{Asking for one
-epoch buys you almost entirely setup.} The presets separate by about $3.3\times$ at $K=1$ and
-$8.7\times$ at $K=100$, and on the marginal cost --- the number that describes the physics rather
-than the call --- by $15\times$, which is where self-shadowing, Earth radiation and the thermal
+\texttt{standard} rows at $K=1$ and $K=100$ gives $a\approx\SI{11.6}{\milli\second}$ of setup and
+$b\approx\SI{0.32}{\milli\second}$ of actual per-epoch work; for \texttt{fast},
+$a\approx\SI{5.6}{\milli\second}$ and $b\approx\SI{0.063}{\milli\second}$. \textbf{Asking for one
+epoch buys you almost entirely setup.} The presets separate by about $2.1\times$ at $K=1$ and
+$3.7\times$ at $K=100$, and on the marginal cost --- the number that describes the physics rather
+than the call --- by $5\times$, which is where self-shadowing, Earth radiation and the thermal
 model actually show up.
 
 \textbf{So: pass many epochs at once, or use \texttt{Model.series}.} For the one caller that cannot
 batch by nature --- an integrator's right-hand side, which asks for one state at a time --- the
-native evaluator of Chapter~\ref{ch:integrator} answers in \SI{0.505}{\milli\second}, which is
-\num{34} times cheaper than \texttt{Model.accel} at $K=1$ and is the whole reason that path exists.
+native evaluator of Chapter~\ref{ch:integrator} answers in \SI{0.596}{\milli\second}, which is
+\num{20} times cheaper than \texttt{Model.accel} at $K=1$ and is the whole reason that path exists.
 
 \begin{quote}\footnotesize
 This section read \SI{88}{\milli\second} per epoch and \SI{2.1}{\hour} for a day until 2026-09-18. It

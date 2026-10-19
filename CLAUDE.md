@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-10-15 (O-49, release 0.15.0) by Claude Opus 5.5. Toolbox version 0.15.0.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-10-18 (release 0.16.0) by Claude Opus 5.5. Toolbox version 0.16.0.
 
 ---
 
@@ -171,8 +171,11 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-17, flow-shadow table)
+## 5. Current status (2026-10-18, release 0.16.0)
 
+- **2026-10-18, release 0.16.0:** N-05, N-09, N-11a, N-10a, #96 and the flow-shadow table released. Gate 435/435 on
+  Tier A, predicted 435; benchmark re-measured (standard 0.440 ms at K=100, was 0.836); the month baseline
+  passed at 0.16.0, worst 0.013 sigma, in 3.1 h (was 4.0). Issues #59/#60/#62/#66 closed; O-35 closed.
 - **2026-10-17, flow-shadow table:** `geom.flowShadow` Method "table" (trilinear over the stream direction about
   +-x and s_O, exact fallback outside, flagged) is the standard preset's default (`geom.flowShadow`), read by
   `Model` and by `mex/ngfRhs.c` alike; drag moves <= 6.7e-13 m/s^2 on ten real days, ~100x cheaper per epoch.
@@ -756,9 +759,9 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   differ by 4.0x — which is the real cost of a bad measurement: not the wrong digit, the conclusion
   drawn from it and written somewhere else.
 - **A per-epoch cost is mostly a property of the BATCH, not of the toolbox**, so never quote one
-  without K. `Model.accel` in the standard preset costs 17.0 ms at K=1 and 0.836 ms at K=100
-  (0.15.0, 2026-10-15), because one call pays ~16 ms of setup before any per-epoch work (fast: 5.1
-  ms and 0.045). A day at 1 Hz through `Model.series` was 1 min 16 s on 2026-09-18 -- a figure
+  without K. `Model.accel` in the standard preset costs 11.9 ms at K=1 and 0.440 ms at K=100
+  (0.16.0, 2026-10-18, with the flow-shadow table), because one call pays ~11.6 ms of setup before any
+  per-epoch work (fast: 5.6 ms and 0.063). A day at 1 Hz through `Model.series` was 1 min 16 s on 2026-09-18 -- a figure
   `tools/benchmark.m` does NOT produce, so nothing regenerates it. The authority is `tools/benchmark_reference.csv`,
   which `tools/benchmark.m` writes and `auditPackage.py` check 13 compares every quoted figure
   against; `tools/benchmark_last.txt` is the gitignored host log and is NOT the authority, because a
