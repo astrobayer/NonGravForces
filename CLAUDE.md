@@ -175,7 +175,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 - **2026-10-19, lsqvce#183 used:** `fitCalibration`'s day bootstrap is `lsqvce.solveContributions` on the drawn
   multiplicities (lsqvce >= 6.35). 10 days of GRACE-C, 100 replicates: `calibrate` 1410 -> ~340 s, sigmas identical
-  to ten digits; under 'Noise' estimate / 'Robust' the weights are now fixed per replicate (Part I, open).
+  to ten digits; under 'Noise' estimate / 'Robust' the weights are now fixed per replicate (Part I, ratified 2026-10-20).
   ☑ on Tier A: 437/437, predicted 437.
 - **2026-10-18, release 0.16.0:** N-05, N-09, N-11a, N-10a, #96 and the flow-shadow table released. Gate 435/435 on
   Tier A, predicted 435; benchmark re-measured (standard 0.440 ms at K=100, was 0.836); the month baseline
