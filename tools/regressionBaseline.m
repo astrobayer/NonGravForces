@@ -52,6 +52,14 @@ function R = regressionBaseline(options)
 %   K           1x1   double  -      Tolerance in sigmas; default 3
 %   Mode        1x1   string  -      "compare" (default), "freeze" (write the reference) or "trial"
 %                                    (compute and report only)
+%   Product     1x1   string  -      The observation: "ACT1B" (default) or "ACH1B", GRACE-FO's hybrid
+%                                    transplant (ACU + ACS + ACM + AC0, from the .ACX archives), which
+%                                    exists for GRACE-D only (N-10b, ORC-12). Only "ACT1B" is frozen and
+%                                    compared; "ACH1B" runs in "trial" mode. Its arcs are LABELLED
+%                                    "ACT1B" (the file name keeps ACH1B): timeSeriesPreparation's
+%                                    Config knows no ACH1B preset, and the hybrid product is CRN-
+%                                    filtered and flagged like ACT1B, so the label makes both
+%                                    products prepared alike, which a comparison needs
 %   Reference   1x1   string  -      The reference file; default tools/baseline_reference.json. Another
 %                                    file serves a short trial of the comparison itself
 %
@@ -80,8 +88,13 @@ arguments
     options.K (1,1) double {mustBePositive} = 3
     options.Mode (1,1) string = "compare"
     options.Reference (1,1) string = ""
+    options.Product (1,1) string = "ACT1B"
 end
 unit = "regressionBaseline";
+if ~ismember(options.Product, ["ACT1B" "ACH1B"]) || (options.Product == "ACH1B" && (any(options.Satellites ~= "D") || options.Mode ~= "trial"))
+    NonGravForces.fail(unit, "inputRange", "'Product' is ""ACT1B"", or ""ACH1B"" for GRACE-D in ""trial"" mode (the hybrid transplant exists for D only, and only ACT1B is frozen) -> got %s for %s in %s", ...
+        options.Product, strjoin(options.Satellites, ","), options.Mode);
+end
 if ~ismember(options.Mode, ["compare" "freeze" "trial"])
     NonGravForces.fail(unit, "inputRange", "'Mode' must be ""compare"", ""freeze"" or ""trial"" -> got ""%s""", options.Mode);
 end
@@ -108,14 +121,17 @@ meta = struct('toolbox', string(NonGravForces.toolboxVersion("string")), 'genera
     'note', "ORC-10: every number may move by at most k of its sigma (scale: bootstrap over days; bias: formal)");
 for sat = options.Satellites
     ts = tic;
-    [acc, orb, att, used, noData] = localReadMonth(monthDir, days, sat, eop);
+    [acc, orb, att, used, noData] = localReadMonth(monthDir, days, sat, eop, options.Product);
     fprintf('regressionBaseline %s: read %d days (%d without records) in %.0f s\n', sat, numel(used), numel(noData), toc(ts));
     M = NonGravForces.Model(NonGravForces.geom.graceFO(sat), NonGravForces.Options(options.Preset), 'Attitude', att, 'Eop', eop, 'SpaceWeather', sw);
     tc = tic;
     res = NonGravForces.app.calibrate(acc, M, 'Orbit', orb, 'Attitude', att, 'Fit', {'NBoot', options.NBoot, 'BiasBasis', "linear"});
     fprintf('regressionBaseline %s: calibrate (run, model, joint fit, %d replicates) in %.0f s\n', sat, options.NBoot, toc(tc));
-    ok = res.used;
-    cals = [res.calibration{ok}];
+    if isfield(res, 'used')
+        ok = res.used; cals = [res.calibration{ok}];
+    else
+        ok = true; cals = res.calibration;          % one day: calibrate's single-arc result (found by N-10b)
+    end
     c = cals(1);
     r = struct();
     r.usedDays = used(ok);
@@ -156,7 +172,7 @@ fclose(fid);
 end
 
 % =========================================================================================
-function [acc, orb, att, used, noData] = localReadMonth(monthDir, days, sat, eop)
+function [acc, orb, att, used, noData] = localReadMonth(monthDir, days, sat, eop, product)
 %LOCALREADMONTH The ACT1B arcs, GNV1B orbits and one SCA1B attitude provider of the days present.
 names = {'lin_accl_x', 'lin_accl_y', 'lin_accl_z'};
 units = struct('lin_accl_x', 'm/s2', 'lin_accl_y', 'm/s2', 'lin_accl_z', 'm/s2');
@@ -164,9 +180,9 @@ acc = timeSeriesPreparation.Arc.empty; orb = struct('epoch', {}, 'r', {}, 'v', {
 dayS = []; secS = []; qS = [];
 for d = days
     f = @(p) fullfile(monthDir, d, p + "_" + d + "_" + sat + "_04.txt");
-    if ~all(arrayfun(@(p) isfile(f(p)), ["ACT1B" "GNV1B" "SCA1B"])), continue, end
+    if ~all(arrayfun(@(p) isfile(f(p)), [product "GNV1B" "SCA1B"])), continue, end
     try
-        [epC, a] = NonGravForces.io.readACC1B(f("ACT1B"));
+        [epC, a] = NonGravForces.io.readACC1B(f(product));
         [ep, r, v] = NonGravForces.io.readGNV1B(f("GNV1B"), 'Eop', eop);
         [e, q] = NonGravForces.io.readSCA1B(f("SCA1B"));
     catch err
@@ -176,7 +192,7 @@ for d = days
     end
     if isempty(a), noData(end + 1) = d; continue, end %#ok<AGROW>
     acc(end + 1) = timeSeriesPreparation.Arc(referenceSystem.epochTo(epC, "gpsNanoseconds"), a.', struct("obsNames", {names}, ...
-        "variableNames", {names}, "variableFieldNames", {names}, "variableUnits", units, "fileName", "ACT1B_" + d + "_" + sat + "_04.txt", "product", "ACT1B")); %#ok<AGROW>
+        "variableNames", {names}, "variableFieldNames", {names}, "variableUnits", units, "fileName", product + "_" + d + "_" + sat + "_04.txt", "product", "ACT1B")); %#ok<AGROW>
     orb(end + 1) = struct('epoch', ep, 'r', r, 'v', v); %#ok<AGROW>
     dayS = [dayS; e.day(:)]; secS = [secS; e.sec(:)]; qS = [qS, q]; %#ok<AGROW>
     used(end + 1) = d; %#ok<AGROW>

@@ -305,6 +305,28 @@ classdef tNgfIo < NgfTestCase
             tc.verifyGreaterThan(max(fld.magnitude_T) * 1e6, 10, ...
                 'a field magnitude below 10 microtesla over five minutes would mean the columns are not the field');
         end
+        function readACC1BHybridReference(tc)
+            % ACH1B, GRACE-D's hybrid transplant (N-10b): read as product ACH1B, and its linear accelerations
+            % are the sum of the four .ACX components ACU + ACS + ACM + AC0 (CONCEPT V-16), read here with
+            % gracefoReading's generic reader -- an independent path. 120 real records of 2020-01-01 in which
+            % the thruster model is non-zero; the files print 16 significant digits, so the sum agrees to a
+            % few units of that rounding.
+            d = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'samples', 'acx');
+            [ep, a, aux] = NonGravForces.io.readACC1B(fullfile(d, 'ACH1B_2020-01-01_D_04.txt'));
+            tc.verifyEqual(aux.product, "ACH1B"); tc.verifyEqual(aux.satellite, "D"); tc.verifySize(a, [3 120]);
+            S = zeros(120, 3); nz = false;
+            for p = ["ACU1B" "ACS1B" "ACM1B" "AC01B"]
+                [~, X, cx] = gracefoReading.readL1b(fullfile(d, p + "_2020-01-01_D_04.txt"));
+                cols = ismember(string(cx.obsNames), ["lin_accl_x" "lin_accl_y" "lin_accl_z"]);
+                S = S + X(:, cols);
+                if p == "AC01B", nz = any(X(:, cols) ~= 0, 'all'); end
+            end
+            tc.verifyTrue(nz, 'the window must exercise the thruster model');
+            err = max(abs(a.' - S), [], 'all') / max(abs(a), [], 'all');
+            tc.verifyBoundAndRecord("ACH1B = ACU + ACS + ACM + AC0 (120 real records), relative to the largest value", err, 4 * 5e-16 + 4 * eps, "-", ...
+                "four 16-digit printed terms and their sum: 4 x 5e-16 printing plus 4 eps of summation");
+            tc.verifyEqual(referenceSystem.epochTo(ep, "gpsNanoseconds"), int64(631108800 + (0:119)') * int64(1e9));
+        end
         function readACC1BReference(tc)
             % Oracle: the file text itself, parsed independently (regexp tokens of the first data record).
             [~, a, aux] = NonGravForces.io.readACC1B(tc.f.act);

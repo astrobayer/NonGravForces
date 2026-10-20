@@ -9,7 +9,9 @@ function [epoch, a_srf, aux] = readACC1B(files, options)
 %   Science Reference Frame (SRF, which is the toolbox body frame: +X to the
 %   K-band horn, +Z to nadir) as a 3xK array, with the epochs as a
 %   referenceSystem GPS epoch struct. ACT1B (transplant-calibrated, the
-%   GRACE-FO standard), ACH1B (high rate) and classic ACC1B share one layout;
+%   GRACE-FO standard), ACH1B (GRACE-D's 1 Hz hybrid transplant from the .ACX
+%   archives, ACU + ACS + ACM + AC0, linear accelerations only -- "high rate"
+%   until 2026-10-20, which it is not) and classic ACC1B share one layout;
 %   the product actually read is reported in aux.product and comes from the
 %   file header, never from the file name (rule R3).
 %
