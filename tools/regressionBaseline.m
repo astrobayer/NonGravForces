@@ -55,11 +55,10 @@ function R = regressionBaseline(options)
 %   Product     1x1   string  -      The observation: "ACT1B" (default) or "ACH1B", GRACE-FO's hybrid
 %                                    transplant (ACU + ACS + ACM + AC0, from the .ACX archives), which
 %                                    exists for GRACE-D only (N-10b, ORC-12). Only "ACT1B" is frozen and
-%                                    compared; "ACH1B" runs in "trial" mode. Its arcs are LABELLED
-%                                    "ACT1B" (the file name keeps ACH1B): timeSeriesPreparation's
-%                                    Config knows no ACH1B preset, and the hybrid product is CRN-
-%                                    filtered and flagged like ACT1B, so the label makes both
-%                                    products prepared alike, which a comparison needs
+%                                    compared; "ACH1B" runs in "trial" mode. timeSeriesPreparation
+%                                    >= 1.5 prepares ACH1B exactly as ACT1B (its X-19); until then
+%                                    the arcs were labelled "ACT1B", which gave bitwise the same
+%                                    result on 2020-01-05/06 (measured 2026-10-20)
 %   Reference   1x1   string  -      The reference file; default tools/baseline_reference.json. Another
 %                                    file serves a short trial of the comparison itself
 %
@@ -192,7 +191,7 @@ for d = days
     end
     if isempty(a), noData(end + 1) = d; continue, end %#ok<AGROW>
     acc(end + 1) = timeSeriesPreparation.Arc(referenceSystem.epochTo(epC, "gpsNanoseconds"), a.', struct("obsNames", {names}, ...
-        "variableNames", {names}, "variableFieldNames", {names}, "variableUnits", units, "fileName", product + "_" + d + "_" + sat + "_04.txt", "product", "ACT1B")); %#ok<AGROW>
+        "variableNames", {names}, "variableFieldNames", {names}, "variableUnits", units, "fileName", product + "_" + d + "_" + sat + "_04.txt", "product", product)); %#ok<AGROW>
     orb(end + 1) = struct('epoch', ep, 'r', r, 'v', v); %#ok<AGROW>
     dayS = [dayS; e.day(:)]; secS = [secS; e.sec(:)]; qS = [qS, q]; %#ok<AGROW>
     used(end + 1) = d; %#ok<AGROW>
