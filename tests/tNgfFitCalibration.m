@@ -48,6 +48,16 @@ classdef tNgfFitCalibration < NgfTestCase
                     'BiasDrift', zeros(3, 1), 'NoiseAsd', asd, varargin{:});
             end
         end
+        function z = tempFcn(~, ts, offset, amp)
+            %TEMPFCN A temperature (C) with an orbital swing of amplitude amp about 22 + offset, and a current.
+            z = [22 + offset + amp * sin(2 * pi * ts / 5640 + 0.3), 0.04 * cos(2 * pi * ts / 2820)];
+        end
+        function [obs, ref, truth, S1] = tempPair(tc, varargin)
+            %TEMPPAIR A noise-free pair with a planted temperature-dependent scale on x and z.
+            S1 = [2e-3 0 0; 0 0 0; 0 0 -1e-3];
+            [obs, ref, truth] = NonGravForces.app.syntheticPair('Days', 0.1, 'NoiseAsd', tc.Quiet, 'Spikes', 0, 'Gap_s', 0, ...
+                'RegressorFcn', @(ts) tc.tempFcn(ts, 0, 0.5), 'RegressorCoupling', zeros(3, 2), 'ScaleTemperature', S1, varargin{:});
+        end
         function z = regFcn(~, ts)
             %REGFCN A temperature-like and a current-like series (n x 2).
             z = [22 + 0.3 * sin(2 * pi * ts / 5640 + 0.7), 0.04 * cos(2 * pi * ts / 2820)];
@@ -500,6 +510,48 @@ classdef tNgfFitCalibration < NgfTestCase
 
     % ===================================================================== N-11a: measured regressors
     methods (Test, TestTags = {'reference'})
+        function fitCalibrationScaleTemperatureReference(tc)
+            % N-11b. Noise-free with a planted dS/dT on x and z: the coefficients return to the solve's rounding,
+            % at the planted reference (the mean over the raw grid on both sides). Over three days whose
+            % temperatures differ only by a daily OFFSET (5 mK of in-day swing), the common S1 returns too --
+            % which a per-day reference could not give -- and the scale is S at the common T0. And apply
+            % undoes the coupling to the bound of exchanging the filter with S(T(t)) over its window.
+            [obs, ref, truth, S1] = tc.tempPair();
+            cal = NonGravForces.app.fitCalibration(obs, ref, 'Regressors', truth.regressors, 'ScaleTemperature', "reg1", 'NBoot', 0);
+            tc.verifyEqual(cal.scaleTemperature.reference, truth.scaleTemperatureReference);
+            tc.verifyEqual(cal.scaleTemperature.coef([2 4 5 6 7 8]), zeros(1, 6));   % not estimated: exactly 0
+            tc.verifyBoundAndRecord("fitCalibration dS/dT, one noise-free arc, relative", ...
+                max(abs(cal.scaleTemperature.coef - S1), [], 'all') / max(abs(S1), [], 'all'), 1e-9, "-", ...
+                "rounding of the solve; measured 2.8e-13 on 2026-10-20");
+            tc.verifyEqual(cal.scale([1 9]), truth.scale([1 9]), 'RelTol', 1e-9);
+            % apply: the filter and S(T(t)) do not commute; their difference is bounded by |S1| times the
+            % largest temperature change inside one CRN window
+            a = cal.apply(obs, 'Regressors', truth.regressors);
+            Hm = timeSeriesPreparation.crnApply(ref, truth.kernel, OutputEpochs = obs.t).obs;
+            ok = all(isfinite(a.obs), 2) & all(isfinite(Hm), 2);
+            Tw = truth.regressors.obs(:, 1); w = truth.kernel.Nf;
+            dT = max(movmax(Tw, w) - movmin(Tw, w));
+            bound = 2 * max(abs(S1), [], 'all') * dT;
+            tc.verifyBoundAndRecord("Calibration apply of a fitted temperature-dependent scale vs H(model), relative", ...
+                max(abs(a.obs(ok, :) - Hm(ok, :)), [], 'all') / max(abs(Hm(ok, :)), [], 'all'), bound, "-", ...
+                "the filter and S(T(t)) exchanged over one window: 2 |S1| max dT(window); measured 2.2e-4 at 0.5 C per orbit");
+            obs2 = timeSeriesPreparation.Arc.empty; ref2 = obs2; regs = obs2;
+            for k = 1:3
+                st = int64(7305 * 86400 - 43200 + 18 + (k - 1) * 86400) * int64(1e9);
+                [obs2(k), ref2(k), tr] = NonGravForces.app.syntheticPair('Days', 0.1, 'Start', st, 'Seed', k, 'NoiseAsd', tc.Quiet, 'Spikes', 0, 'Gap_s', 0, ...
+                    'BiasDrift', zeros(3, 1), 'RegressorFcn', @(ts) tc.tempFcn(ts, 0.2 * k, 0.005), 'RegressorCoupling', zeros(3, 2), ...
+                    'ScaleTemperature', S1, 'ScaleTemperatureReference', 22.4);
+                regs(k) = tr.regressors;
+            end
+            c2 = NonGravForces.app.fitCalibration(obs2, ref2, 'Regressors', regs, 'ScaleTemperature', "reg1", 'BiasBasis', "constant", 'NBoot', 0);
+            tc.verifyEqual(c2(3).scaleTemperature, c2(1).scaleTemperature, 'one common S1 and one reference');
+            tc.verifyBoundAndRecord("fitCalibration dS/dT, three days, common, relative", ...
+                max(abs(c2(1).scaleTemperature.coef - S1), [], 'all') / max(abs(S1), [], 'all'), 1e-8, "-", ...
+                "noise-free; the daily offsets alone carry S1; measured 2.4e-11 on 2026-10-20");
+            T0 = c2(1).scaleTemperature.reference;
+            Sx = tr.scale + S1 * (T0 - 22.4);
+            tc.verifyEqual(c2(1).scale([1 9]), Sx([1 9]), 'RelTol', 1e-9);
+        end
         function fitCalibrationRegressorReference(tc)
             % Noise-free with a planted coupling to two measured series: every parameter, the
             % coefficients included, returns to the computed rounding bound; over two days in common mode
@@ -526,7 +578,39 @@ classdef tNgfFitCalibration < NgfTestCase
                 "noise-free; rounding of the joint solve, measured ~1e-13 when written");
         end
     end
+    methods (Test, TestTags = {'contract'})
+        function fitCalibrationScaleTemperatureContract(tc)
+            % The column names, the refusals, and the gate seeing the new columns.
+            [obs, ref, truth] = tc.tempPair();
+            [cal, info] = NonGravForces.app.fitCalibration(obs, ref, 'Regressors', truth.regressors, 'ScaleTemperature', "reg1", 'NBoot', 0);
+            tc.verifyTrue(any(info.names{1} == "dS_xx_dT")); tc.verifyTrue(any(info.names{3} == "dS_zz_dT"));
+            tc.verifyFalse(any(startsWith(info.names{2}, "dS_")));                     % S_yy held, so no dS_yy
+            tc.verifyNumElements(cal.gates.vif{1}, numel(info.names{1}));
+            tc.verifyEqual(cal.scaleTemperature.name, "reg1");
+            f = @(varargin) NonGravForces.app.fitCalibration(obs, ref, 'NBoot', 0, varargin{:});
+            tc.verifyErrorId(@() f('Regressors', truth.regressors, 'ScaleTemperature', "nope"), "NonGravForces:fitCalibration:inputScaleTemperature");
+            tc.verifyErrorId(@() f('ScaleTemperature', "reg1"), "NonGravForces:fitCalibration:inputScaleTemperature");
+            tc.verifyErrorId(@() f('Regressors', truth.regressors, 'ScaleTemperature', "reg1", 'ScaleBasis', "linear"), ...
+                "NonGravForces:fitCalibration:unsupportedScaleTemperature");
+            plain = f('Regressors', truth.regressors);
+            tc.verifyFalse(plain.isTemperatureDependent());
+        end
+    end
     methods (Test, TestTags = {'robustness'})
+        function fitCalibrationScaleTemperatureRobustness(tc)
+            % A housekeeping gap: the temperature series is missing over 20 minutes mid-arc. The rows it leaves
+            % undefined are not fitted, and the coefficients still return (noise-free).
+            [obs, ref, truth, S1] = tc.tempPair();
+            R = truth.regressors;
+            ts = double(R.t - R.t(1)) / 1e9;
+            z = R.obs; z(ts > 2400 & ts < 3600, 1) = NaN;
+            Rg = R.derive(R.t, z, "test.gap", struct());
+            [cal, info] = NonGravForces.app.fitCalibration(obs, ref, 'Regressors', Rg, 'ScaleTemperature', "reg1", 'NBoot', 0);
+            [~, info0] = NonGravForces.app.fitCalibration(obs, ref, 'Regressors', R, 'ScaleTemperature', "reg1", 'NBoot', 0);
+            tc.verifyLessThan(nnz(info.rows(:, 1)), nnz(info0.rows(:, 1)));
+            tc.verifyBoundAndRecord("fitCalibration dS/dT across a temperature gap, relative", ...
+                max(abs(cal.scaleTemperature.coef - S1), [], 'all') / max(abs(S1), [], 'all'), 1e-8, "-", "noise-free; fewer rows, same algebra");
+        end
         function fitCalibrationRegressorRobustness(tc)
             % A constant channel is refused before any fit, paired with the live series accepted; a series
             % covering only part of the arc fits the rows it covers.
@@ -546,6 +630,18 @@ classdef tNgfFitCalibration < NgfTestCase
         end
     end
     methods (Test, TestTags = {'metamorphic'})
+        function fitCalibrationScaleTemperatureMetamorphic(tc)
+            % The temperature in another unit, T' = 10 T + 5: dS/dT' = dS/dT / 10, T0' = 10 T0 + 5, and the
+            % scale at the reference is the same -- one physical coupling, two descriptions.
+            [obs, ref, truth] = tc.tempPair();
+            R = truth.regressors;
+            R2 = R.derive(R.t, [10 * R.obs(:, 1) + 5, R.obs(:, 2)], "test.unit", struct());
+            c1 = NonGravForces.app.fitCalibration(obs, ref, 'Regressors', R, 'ScaleTemperature', "reg1", 'NBoot', 0);
+            c2 = NonGravForces.app.fitCalibration(obs, ref, 'Regressors', R2, 'ScaleTemperature', "reg1", 'NBoot', 0);
+            tc.verifyEqual(c2.scaleTemperature.coef * 10, c1.scaleTemperature.coef, 'AbsTol', 1e-12);
+            tc.verifyEqual(c2.scaleTemperature.reference, 10 * c1.scaleTemperature.reference + 5, 'RelTol', 1e-14);
+            tc.verifyEqual(c2.scale, c1.scale, 'AbsTol', 1e-12);
+        end
         function fitCalibrationRegressorMetamorphic(tc)
             % A series in other units (x 10) has its coefficients divided by 10, and an offset (+ 5) changes
             % nothing but the stored mean: the column is demeaned.

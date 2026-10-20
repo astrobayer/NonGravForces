@@ -52,6 +52,14 @@ classdef tNgfCalibration < NgfTestCase
                 'coef', [S0(:), slope(:)], 'cov', {{[4e-8 1e-9; 1e-9 9e-8], [], [], [], [], [], [], [], [1e-8 0; 0 2e-8]}});
             cal = NonGravForces.app.Calibration(struct('scale', S0, 'scaleCurve', sc, 'bias', base.bias));
         end
+        function [cal, R, S1] = tempCal(tc)
+            %TEMPCAL regCal with a temperature-dependent scale on its 'temp' series (N-11b), reference 22 C.
+            [base, R] = tc.regCal();
+            S1 = [1e-3 2e-4 0; 0 0 0; -1e-4 0 -2e-3];
+            cv = nan(9); est = find(S1(:) ~= 0); cv(est, est) = 1e-12 * eye(numel(est));
+            st = struct('name', "temp", 'units', "C", 'reference', 22, 'coef', S1, 'cov', cv);
+            cal = NonGravForces.app.Calibration(struct('scale', base.scale, 'bias', base.bias, 'regressors', base.regressors, 'scaleTemperature', st));
+        end
         function [cal, R, C, m] = regCal(tc)
             %REGCAL splineCal(8) with two regressor terms and the hourly series that drives them.
             base = tc.splineCal(8);
@@ -89,7 +97,9 @@ classdef tNgfCalibration < NgfTestCase
             tc.verifyEqual(obs.names, ["lin_accl_x" "lin_accl_y" "lin_accl_z"]);
             tc.verifyEqual(obs.units, repmat("m/s2", 1, 3));
             tc.verifyEqual(sort(string(fieldnames(truth)))', sort(["scale" "scaleDrift_per_day" "regressors" "regressorCoupling" "bias0" "biasDrift_per_day" ...
-                "quadratic" "bias" "noise" "spikes" "gap" "kernel" "orbitPeriod_s" "seed" "provenance"]));
+                "quadratic" "bias" "noise" "spikes" "gap" "kernel" "orbitPeriod_s" "seed" "provenance" "scaleTemperature" "scaleTemperatureReference"]));
+            tc.verifyEqual(truth.scaleTemperature, zeros(3)); tc.verifyTrue(isnan(truth.scaleTemperatureReference));   % nothing planted by default
+            tc.verifyErrorId(@() NonGravForces.app.syntheticPair('Days', tc.Days, 'ScaleTemperature', eye(3) * 1e-3), "NonGravForces:syntheticPair:inputShape");
             tc.verifySize(truth.bias, [3 n]);
             tc.verifyEqual(height(truth.spikes), 3);
             tc.verifyClass(truth.spikes.t, 'int64'); tc.verifyClass(truth.gap, 'int64');
@@ -106,7 +116,7 @@ classdef tNgfCalibration < NgfTestCase
         function calibrationContract(tc)
             cal = tc.splineCal(8);
             tc.verifyEqual(cal.convention, "observation");
-            tc.verifyEqual(cal.SchemaVersion, "3");
+            tc.verifyEqual(cal.SchemaVersion, "4");
             tc.verifyFalse(cal.isTimeVarying());
             tc.verifyTrue(all(isnan(cal.quadratic)));
             tc.verifyTrue(all(isnan(cal.covScale), 'all'));
@@ -178,6 +188,34 @@ classdef tNgfCalibration < NgfTestCase
             tc.verifyErrorId(@() singCal.apply(tc.arc3(cal.bias.t0 + int64(43200e9), zeros(1, 3))), "NonGravForces:Calibration:numericSingular");
         end
 
+        function calibrationScaleTemperatureContract(tc)
+            % N-11b: the temperature-dependent scale travels with the calibration; apply needs the temperature,
+            % invert refuses, and a scale that depends on time AND temperature is refused.
+            [cal, R, S1] = tc.tempCal();
+            tc.verifyTrue(cal.isTemperatureDependent()); tc.verifyFalse(cal.isTimeVarying());
+            S3 = cal.scaleAtTemperature([22 23]);
+            tc.verifySize(S3, [3 3 2]);
+            tc.verifyEqual(S3(:, :, 1), cal.scale); tc.verifyEqual(S3(:, :, 2), cal.scale + S1, 'AbsTol', 1e-15);
+            t = R.t(10:20); arc = tc.arc3(t, zeros(numel(t), 3));
+            tc.verifyErrorId(@() cal.apply(arc), "NonGravForces:Calibration:inputRegressors");
+            other = timeSeriesPreparation.Arc(R.t, R.obs(:, 2), struct("obsNames", {{'curr'}}, "variableNames", {{'curr'}}, ...
+                "variableFieldNames", {{'curr'}}, "variableUnits", struct('curr', 'A'), "fileName", "REG", "product", "REG"));
+            tc.verifyErrorId(@() cal.apply(arc, 'Regressors', other), "NonGravForces:Calibration:inputRegressors");
+            tc.verifyClass(cal.apply(arc, 'Regressors', R), 'timeSeriesPreparation.Arc');
+            tc.verifyErrorId(@() cal.invert(), "NonGravForces:Calibration:unsupportedTemperatureScale");
+            T = cal.summaryTable();
+            tc.verifyEqual(sort(T.parameter(startsWith(T.parameter, "dS_")))', sort(["dS_11_dT" "dS_31_dT" "dS_12_dT" "dS_33_dT"]));
+            f = [tempname '.mat']; cal.save(f); c2 = NonGravForces.app.Calibration.load(f); delete(f);
+            tc.verifyEqual(c2.scaleTemperature, cal.scaleTemperature);
+            tc.verifyEqual(NonGravForces.app.Calibration.SchemaVersion, "4");
+            sc = struct('basis', "linear", 't0', cal.bias.t0, 'knots', int64([]), 'tRef', cal.bias.t0, 'coef', [cal.scale(:), zeros(9, 1)]);
+            tc.verifyErrorId(@() NonGravForces.app.Calibration(struct('scale', cal.scale, 'bias', cal.bias, 'scaleCurve', sc, ...
+                'scaleTemperature', cal.scaleTemperature)), "NonGravForces:Calibration:unsupportedTemperatureScale");
+            tc.verifyErrorId(@() NonGravForces.app.Calibration(struct('scale', cal.scale, 'bias', cal.bias, ...
+                'scaleTemperature', struct('name', "temp", 'reference', 22, 'coef', zeros(2)))), "NonGravForces:Calibration:inputFit");
+            plain = NonGravForces.app.Calibration(struct('scale', cal.scale, 'bias', cal.bias));
+            tc.verifyFalse(plain.isTemperatureDependent());
+        end
         function calibrationRegressorContract(tc)
             % N-11a: measured regressor terms travel with the calibration and apply refuses without them.
             [cal, R, C] = tc.regCal();
@@ -323,6 +361,25 @@ classdef tNgfCalibration < NgfTestCase
             tc.verifyEqual(d.pValue(1, 1), erfc(sqrt(W(1) / 2)), 'RelTol', 1e-12, 'chi-square with 1 dof: P(X > W) = erfc(sqrt(W/2))');
         end
 
+        function calibrationScaleTemperaturePrecision(tc)
+            % apply against a per-epoch loop of y = S(T(t)) a + b(t) + C (z(t) - m), every series interpolated linearly.
+            [cal, R, S1] = tc.tempCal();
+            g = cal.regressors;
+            t = R.t(1) + int64(0:239)' * int64(7.3e9);
+            a = 1e-7 * [cos((1:240)' / 9), sin((1:240)' / 7), cos((1:240)' / 5)];
+            b = cal.biasAt(t);
+            tq = double(t - R.t(1)) / 1e9; tr = double(R.t - R.t(1)) / 1e9;
+            z = [interp1(tr, R.obs(:, 1), tq), interp1(tr, R.obs(:, 2), tq)];
+            y = zeros(240, 3);
+            for k = 1:240
+                Sk = cal.scale + S1 * (z(k, 1) - 22);
+                y(k, :) = (Sk * a(k, :).' + b(:, k) + g.coef * (z(k, :) - g.mean).').';
+            end
+            got = cal.apply(tc.arc3(t, y), 'Regressors', R).obs;
+            err = max(abs(got - a), [], 'all') / max(abs(a), [], 'all');
+            tc.verifyBoundAndRecord("Calibration apply with a temperature-dependent scale vs the observation equation", err, 1e-9, "-", ...
+                "one 3x3 solve per epoch on S(T(t)); ~1e-15 expected, bound as for the regressor terms");
+        end
         function calibrationRegressorPrecision(tc)
             % apply against a per-epoch loop of y = S a + b(t) + C (z(t) - m), z interpolated linearly.
             [cal, R, C, m] = tc.regCal();

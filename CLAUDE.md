@@ -171,8 +171,12 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-19, day bootstrap on lsqvce contributions)
+## 5. Current status (2026-10-20, N-11b)
 
+- **2026-10-20, N-11b (#68 complete):** `fitCalibration` 'ScaleTemperature' (S(T) = S + S1 (T - T0), one T0 and a
+  common S1 over days), carried by `Calibration` (schema "4"); regressor interpolation no longer bridges gaps.
+  Real 10 days of GRACE-C: dS_xx/dT 0.26 +- 0.83 /C, dS_zz/dT -0.13 +- 0.13 /C -- not observable on a thermally
+  controlled instrument (TSU 0.065 C in 10 days). ☑ on Tier A: 443/443, predicted 443.
 - **2026-10-19, lsqvce#183 used:** `fitCalibration`'s day bootstrap is `lsqvce.solveContributions` on the drawn
   multiplicities (lsqvce >= 6.35). 10 days of GRACE-C, 100 replicates: `calibrate` 1410 -> ~340 s, sigmas identical
   to ten digits; under 'Noise' estimate / 'Robust' the weights are now fixed per replicate (Part I, ratified 2026-10-20).
@@ -642,6 +646,10 @@ Every one of these was an actual defect found in a predecessor or a dependency.
 - **A table that does not converge with its grid is mis-indexed, not coarse.** The flow-shadow prototype's
   error stayed at 0.1 from 21 to 41 nodes because nodes and queries used mirrored coordinates. Refine once
   before believing any interpolation error.
+- **Housekeeping comes in bursts, so never size a gap by the MEDIAN sample spacing.** MAG1B samples in pairs
+  0.5 ms apart once a second, AHK1B's TSU in 0.1 s bursts 4.7 s apart: the median is the burst's, and a
+  median-based gap rule declared every epoch between bursts a gap. `interpolateSeries` uses 10x the 90th
+  percentile (computed by sorting: `prctile` is the Statistics Toolbox, absent on the runner).
 - **A title's text object hides its handle from `findobj`**; a test reading back a Tagged title needs `findall`.
 - **`tsFitAR`'s default exact method is too slow for anything drawn**: over a minute for 4000 samples with a
   gap. Fit Yule-Walker (`Method = "yw"`) on a gap-free run and filter (N-05).
