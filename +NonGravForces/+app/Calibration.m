@@ -6,7 +6,9 @@ classdef Calibration
 %   S   = cal.scaleAt(t)                % 3x3xK scale at int64 GPS-ns epochs (N-03a)
 %   d   = cal.drift()                   % Wald test of a time-varying scale against a constant
 %   a   = cal.apply(obsArc)             % calibrated accelerations, a timeSeriesPreparation.Arc
-%   a   = cal.apply(obsArc, 'Regressors', R)   % with measured regressor terms (N-11a)
+%   a   = cal.apply(obsArc, 'Regressors', R)   % with measured regressor terms (N-11a), and the
+%                                              % temperature of a temperature-dependent scale (N-11b)
+%   S   = cal.scaleAtTemperature(T)     % 3x3xK scale at temperatures T (N-11b)
 %   inv = cal.invert()                  % the same calibration in the correction direction
 %   T   = cal.summaryTable()
 %   cal.save(file);  cal = NonGravForces.app.Calibration.load(file)
@@ -64,10 +66,21 @@ classdef Calibration
 %   those column names) and REFUSES without them: dropping a term the fit
 %   estimated would apply a different calibration than the one fitted. The
 %   series are interpolated linearly onto the arc's epochs, as the estimator
-%   interpolated them onto the raw grid.
+%   interpolated them onto the raw grid, and never across a gap in the series
+%   (interpolateSeries: NaN where the samples around an epoch are more than 10x
+%   the 90th-percentile spacing apart).
+%
+%   A TEMPERATURE-DEPENDENT SCALE (N-11b; CONCEPT 6.2 "an optional
+%   temperature-dependent, fully-populated scale matrix"): S(T) = S + S1 (T - T0),
+%   with S1 = scaleTemperature.coef (per unit of the series, the estimated entries
+%   of S only), T the measured series named scaleTemperature.name and T0 =
+%   scaleTemperature.reference, the temperature at which `scale` holds. apply then
+%   needs that series in 'Regressors' and refuses without it, for the reason the
+%   regressors do. It cannot be combined with a time-varying scale.
 %
 %   APPLY inverts the observation equation per epoch: a = S \ (y - b(t)), with
-%   S = S(t) when the scale is a curve. The
+%   S = S(t) when the scale is a curve and S = S(T(t)) when it depends on a
+%   temperature. The
 %   bias is evaluated, not filtered: the estimator fits H*b, and for a bias
 %   that varies slower than the 140.7 s CRN window H*b = dcGain * b to within
 %   the curvature of b over that window (exactly so for "constant" and
@@ -82,7 +95,8 @@ classdef Calibration
 %   inverse, and with noise in the model (errors in variables) the two differ
 %   by the attenuation the EIV bound reports. A time-varying scale is NOT
 %   inverted: S(t)^-1 is no curve on the same basis, so `invert` refuses
-%   rather than return an approximation it does not name. The bias covariance of the
+%   rather than return an approximation it does not name; nor is a temperature-
+%   dependent one (S(T)^-1 is not linear in T). The bias covariance of the
 %   inverted calibration ignores the scale's uncertainty and the bias-scale
 %   cross-covariance, which this class does not hold; the help says so
 %   instead of returning a number that looks complete.
@@ -99,7 +113,8 @@ classdef Calibration
 %                              .t0, .knots, .tRef int64, .coef 9xQ, .cov 1x9 cell of QxQ,
 %                              [] where not estimated) for a time-varying scale; optional
 %                              .regressors struct (.names 1xK, .units 1xK, .mean 1xK, .coef
-%                              3xK, .cov 1x3 cell of KxK)
+%                              3xK, .cov 1x3 cell of KxK); optional .scaleTemperature struct
+%                              (.name, .units, .reference, .coef 3x3, .cov 9x9)
 %
 % NAME-VALUE ARGUMENTS
 %   None.
@@ -113,6 +128,9 @@ classdef Calibration
 %   quadratic    3x1  double  s^2/m  K2 per axis; NaN = not estimated
 %   regressors   1x1  struct  -      .names .units .mean (1xK) .coef (3xK, m/s^2 per unit) .cov
 %                                    (1x3 cell, KxK); K = 0 without measured regressors
+%   scaleTemperature 1x1 struct -    .name ("" without) .units .reference T0 .coef (3x3, dS/dT, 1 per
+%                                    unit, 0 where not estimated) .cov (9x9, cov of coef(:), NaN
+%                                    where not estimated)
 %   uncertainty  1x1  struct  -      as the estimator reports it (sigma, inflation, EIV bound, ...)
 %   gates        1x1  struct  -      observability and preflight verdicts
 %   convention   1x1  string  -      "observation" (y = b + S a) or "correction" (a = b + S y)
@@ -123,7 +141,10 @@ classdef Calibration
 %   S = scaleAt(obj, t)         3x3xK; the constant S repeated when not time-varying
 %   s = scaleSigmaAt(obj, t)    3x3xK pointwise sigma of S(t); NaN where not estimated
 %   tf = isTimeVarying(obj)     scaleCurve.basis is not "constant"
+%   tf = isTemperatureDependent(obj)   scaleTemperature.name is not ""
+%   S = scaleAtTemperature(obj, T)   3x3xK: scale + coef (T - reference), T 1xK in the series' unit
 %   r = regressorTermAt(obj, t, R)   3xK: sum_k c_k (z_k(t) - m_k) from the measured series R
+%   T = temperatureAt(obj, t, R)     1xK: the series the scale depends on, at int64 epochs t
 %   Z = Calibration.interpolateSeries(R, col, t)   columns col of Arc R, linearly at int64 t (NaN
 %                               outside); the one rule of the estimator and of apply
 %   d = drift(obj, alpha)       .statistic .dof .pValue (3x3, NaN where not tested)
@@ -134,8 +155,9 @@ classdef Calibration
 %                               calibrated arc (derive: same epochs, provenance appended)
 %   inv = invert(obj)           the other convention, first-order covariance
 %   T = summaryTable(obj)       one row per scale entry and bias coefficient, plus one per
-%                               scale-curve coefficient when time-varying
-%   save(obj, file)             versioned MAT file (schemaVersion "3"; "1" and "2" files load)
+%                               scale-curve coefficient when time-varying and one per estimated
+%                               temperature coefficient (dS_ij_dT)
+%   save(obj, file)             versioned MAT file (schemaVersion "4"; "1" to "3" files load)
 %   cal = Calibration.load(file)
 %   B = Calibration.basis(bias, t)   KxP basis matrix at int64 epochs
 %
@@ -146,7 +168,12 @@ classdef Calibration
 %   apply/invert are exact algebra to rounding (cond(S) * eps of the reading);
 %   biasAt is the basis evaluation, exact to rounding (partition of unity of the
 %   B-splines holds to ~1e-15). The approximation of `apply` is the one named
-%   above: the bias is evaluated where the fit used it filtered. The p-value of
+%   above: the bias is evaluated where the fit used it filtered. A scale that
+%   varies within the 140.7 s CRN window -- S(t), or S(T(t)) -- is applied to the
+%   filtered reading where the fit filtered S a: the difference is at most about
+%   |S1| times the temperature change inside one window, relative to the signal
+%   (2.2e-4 measured for |S1| = 2e-3 per C and a 0.5 C orbital swing; GRACE-FO's
+%   sensor-unit temperatures move ~0.02 C in a DAY, which makes it negligible). The p-value of
 %   `drift` is gammainc(W/2, dof/2, 'upper'), exact for the chi-square law;
 %   the law itself is the large-sample one of the estimate, and holds for the
 %   bootstrap covariance only as well as that covariance is estimated.
@@ -161,7 +188,10 @@ classdef Calibration
 %                                            (at some epoch, for a time-varying scale)
 %   NonGravForces:Calibration:unsupportedTimeVarying  invert of a time-varying scale
 %   NonGravForces:Calibration:inputRegressors  apply without the regressor series the calibration
-%                                            carries, or an Arc that lacks one of their columns
+%                                            carries (or the temperature its scale depends on), or
+%                                            an Arc that lacks one of their columns
+%   NonGravForces:Calibration:unsupportedTemperatureScale  invert of a temperature-dependent scale,
+%                                            or one combined with a time-varying scale
 %
 % WARNINGS
 %   NonGravForces:Calibration:newerSchema    load: written by a newer schema; read field by field
@@ -187,9 +217,9 @@ classdef Calibration
 % See also NonGravForces.app.calibrate, NonGravForces.app.syntheticPair, NonGravForces.sensor.Electrostatic.
 %
 % KEYWORDS calibration accelerometer bias scale apply invert spline provenance
-% Created 2026-10-14 by Claude (Anthropic) for Matthias Weigelt.
+% Created 2026-10-14 by Claude (Anthropic) for Matthias Weigelt; temperature-dependent scale 2026-10-20.
     properties (Constant)
-        SchemaVersion = "3"
+        SchemaVersion = "4"
     end
     properties (SetAccess = private)
         scale (3,3) double = eye(3)
@@ -198,6 +228,7 @@ classdef Calibration
         bias (1,1) struct = struct('basis', "constant", 't0', int64(0), 'knots', int64([]), 'jumps', zeros(1, 0, 'int64'), 'coef', zeros(3, 1), 'cov', {{[], [], []}})
         quadratic (3,1) double = nan(3, 1)
         regressors (1,1) struct = struct('names', strings(1, 0), 'units', strings(1, 0), 'mean', zeros(1, 0), 'coef', zeros(3, 0), 'cov', {cell(1, 3)})
+        scaleTemperature (1,1) struct = struct('name', "", 'units', "", 'reference', NaN, 'coef', zeros(3), 'cov', nan(9))
         uncertainty (1,1) struct = struct()
         gates (1,1) struct = struct()
         convention (1,1) string = "observation"
@@ -246,6 +277,12 @@ classdef Calibration
             if isfield(fit, 'regressors') && ~isempty(fit.regressors)
                 obj.regressors = NonGravForces.app.Calibration.checkRegressors(fit.regressors);
             end
+            if isfield(fit, 'scaleTemperature') && ~isempty(fit.scaleTemperature)
+                obj.scaleTemperature = NonGravForces.app.Calibration.checkScaleTemperature(fit.scaleTemperature);
+                if obj.isTemperatureDependent() && obj.isTimeVarying()
+                    NonGravForces.fail(unit, "unsupportedTemperatureScale", "a scale that depends on both time and temperature is not delivered -> fit one or the other");
+                end
+            end
             if isfield(fit, 'uncertainty'), obj.uncertainty = fit.uncertainty; end
             if isfield(fit, 'gates'), obj.gates = fit.gates; end
             if isfield(fit, 'convention')
@@ -289,9 +326,14 @@ classdef Calibration
             if ~isempty(obj.regressors.names)
                 b = b + obj.regressorTermAt(arc.t, nv.Regressors);
             end
-            if obj.isTimeVarying()
-                % One 3x3 solve per epoch, as pages: the curve gives every epoch its own S.
-                S3 = obj.scaleAt(arc.t);
+            if obj.isTimeVarying() || obj.isTemperatureDependent()
+                % One 3x3 solve per epoch, as pages: the curve, or the temperature, gives every epoch
+                % its own S.
+                if obj.isTemperatureDependent()
+                    S3 = obj.scaleAtTemperature(obj.temperatureAt(arc.t, nv.Regressors));
+                else
+                    S3 = obj.scaleAt(arc.t);
+                end
                 K = size(y, 2);
                 if obj.convention == "observation"
                     obj.requireRegularPages(S3);
@@ -313,6 +355,9 @@ classdef Calibration
             %INVERT The same calibration in the other convention; covariance to first order.
             if obj.isTimeVarying()
                 NonGravForces.fail("Calibration", "unsupportedTimeVarying", "S(t)^-1 is not a curve on the scale basis, so a time-varying scale has no exact inverse here -> apply it to the arc instead, or refit with 'ScaleBasis' ""constant""");
+            end
+            if obj.isTemperatureDependent()
+                NonGravForces.fail("Calibration", "unsupportedTemperatureScale", "S(T)^-1 is not linear in T, so a temperature-dependent scale has no exact inverse here -> apply it to the arc instead");
             end
             obj.requireRegular();
             Si = inv3(obj.scale);
@@ -385,6 +430,15 @@ classdef Calibration
                     sig = [sig; sqrt(diag(obj.scaleCurve.cov{k}))]; %#ok<AGROW>
                 end
             end
+            if obj.isTemperatureDependent()
+                st = obj.scaleTemperature;
+                cs = sqrt(diag(st.cov));
+                for k = find(isfinite(cs))'
+                    names = [names; compose("dS_%d%d_dT", ii(k), jj(k))]; %#ok<AGROW>
+                    vals = [vals; st.coef(k)]; %#ok<AGROW>
+                    sig = [sig; cs(k)]; %#ok<AGROW>
+                end
+            end
             T = table(names, vals, sig, 'VariableNames', {'parameter', 'value', 'sigma'});
         end
 
@@ -400,6 +454,30 @@ classdef Calibration
             end
             Z = NonGravForces.app.Calibration.interpolateSeries(R, col, t) - g.mean;
             r = g.coef * Z.';
+        end
+
+        function tf = isTemperatureDependent(obj)
+            %ISTEMPERATUREDEPENDENT Whether the scale depends on a measured temperature (N-11b).
+            tf = obj.scaleTemperature.name ~= "";
+        end
+
+        function S = scaleAtTemperature(obj, T)
+            %SCALEATTEMPERATURE The scale at temperatures T (1xK, the series' unit), 3x3xK.
+            T = reshape(T, 1, 1, []);
+            S = obj.scale + obj.scaleTemperature.coef .* (T - obj.scaleTemperature.reference);
+        end
+
+        function T = temperatureAt(obj, t, R)
+            %TEMPERATUREAT The series the scale depends on, interpolated at int64 epochs t (1xK).
+            name = obj.scaleTemperature.name;
+            if isempty(R) || ~isa(R, 'timeSeriesPreparation.Arc')
+                NonGravForces.fail("Calibration", "inputRegressors", "this calibration's scale depends on %s -> pass 'Regressors', an Arc with that column", name);
+            end
+            [found, col] = ismember(name, R.names);
+            if ~found
+                NonGravForces.fail("Calibration", "inputRegressors", "'Regressors' lacks %s, the temperature this scale depends on -> pass the series the calibration was fitted with", name);
+            end
+            T = reshape(NonGravForces.app.Calibration.interpolateSeries(R, col, t), 1, []);
         end
 
         function tf = isTimeVarying(obj)
@@ -510,12 +588,24 @@ classdef Calibration
         function Z = interpolateSeries(R, col, t)
             %INTERPOLATESERIES Columns col of the Arc R, linearly at int64 epochs t (NaN outside).
             %   One rule for the estimator and for apply: linear, so a housekeeping series sampled every
-            %   few seconds is never overshot between its samples.
+            %   few seconds is never overshot between its samples -- and never bridged across a GAP: where
+            %   the two samples around an epoch lie more than 10 times the 90th percentile of the sample
+            %   spacing apart, the value is NaN, so the rows there are not fitted (a 20 min housekeeping
+            %   gap, interpolated, moved a temperature-dependent scale by 3.7 %; found by N-11b,
+            %   2026-10-20). A percentile, not the median: real series come in BURSTS -- MAG1B in pairs
+            %   0.5 ms apart once a second, AHK1B's TSU in 0.1 s bursts 4.7 s apart -- whose median
+            %   spacing is the burst's, which made every epoch between bursts a "gap".
             tr = double(R.t - R.t(1)) / 1e9; tq = double(t(:) - R.t(1)) / 1e9;
             Z = zeros(numel(tq), numel(col));
             for k = 1:numel(col)
                 z = R.obs(:, col(k)); ok = isfinite(z);
                 Z(:, k) = interp1(tr(ok), z(ok), tq, 'linear', NaN);
+                if nnz(ok) > 1
+                    tk = tr(ok);
+                    span = interp1(tk, tk, tq, 'next', NaN) - interp1(tk, tk, tq, 'previous', NaN);
+                    d = sort(diff(tk));
+                    Z(span > 10 * d(ceil(0.9 * numel(d))), k) = NaN;
+                end
             end
         end
 
@@ -573,7 +663,7 @@ classdef Calibration
         end
 
         function s = toStruct(obj)
-            s = struct('schemaVersion', NonGravForces.app.Calibration.SchemaVersion, 'scale', obj.scale, 'scaleCurve', obj.scaleCurve, 'regressors', obj.regressors, ...
+            s = struct('schemaVersion', NonGravForces.app.Calibration.SchemaVersion, 'scale', obj.scale, 'scaleCurve', obj.scaleCurve, 'regressors', obj.regressors, 'scaleTemperature', obj.scaleTemperature, ...
                 'covScale', obj.covScale, 'bias', obj.bias, 'quadratic', obj.quadratic, ...
                 'uncertainty', obj.uncertainty, 'gates', obj.gates, 'convention', obj.convention, ...
                 'provenance', obj.provenance);
@@ -595,6 +685,27 @@ classdef Calibration
             if ~isfield(g, 'cov') || isempty(g.cov), g.cov = cell(1, 3); end
             g = struct('names', reshape(string(g.names), 1, []), 'units', reshape(string(g.units), 1, []), ...
                 'mean', reshape(g.mean, 1, []), 'coef', g.coef, 'cov', {reshape(g.cov, 1, 3)});
+        end
+
+        function st = checkScaleTemperature(st)
+            %CHECKSCALETEMPERATURE Validate a temperature-dependent scale: name, reference, coef, cov.
+            unit = "Calibration";
+            if ~isstruct(st) || ~isscalar(st) || ~all(isfield(st, {'name', 'reference', 'coef'}))
+                NonGravForces.fail(unit, "inputFit", ".scaleTemperature must be a struct with name, reference and coef -> see the help");
+            end
+            if string(st.name) == ""
+                st = struct('name', "", 'units', "", 'reference', NaN, 'coef', zeros(3), 'cov', nan(9));
+                return
+            end
+            if ~isequal(size(st.coef), [3 3]) || ~all(isfinite(st.coef(:))) || ~isscalar(st.reference) || ~isfinite(st.reference)
+                NonGravForces.fail(unit, "inputFit", ".scaleTemperature needs a finite 3x3 coef and a finite scalar reference -> got %s and %s", mat2str(size(st.coef)), mat2str(size(st.reference)));
+            end
+            if ~isfield(st, 'units') || isempty(st.units), st.units = "-"; end
+            if ~isfield(st, 'cov') || isempty(st.cov), st.cov = nan(9); end
+            if ~isequal(size(st.cov), [9 9])
+                NonGravForces.fail(unit, "inputFit", ".scaleTemperature.cov must be 9x9 (the covariance of coef(:)) -> got %s", mat2str(size(st.cov)));
+            end
+            st = struct('name', string(st.name), 'units', string(st.units), 'reference', double(st.reference), 'coef', st.coef, 'cov', st.cov);
         end
 
         function sc = checkScaleCurve(sc, scale)

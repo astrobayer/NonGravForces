@@ -111,6 +111,19 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %   0.035 Hz, so a whitening law estimated from it is ill-conditioned above
 %   the band, while the block bootstrap needs no law at all.
 %
+%   TEMPERATURE-DEPENDENT SCALE (N-11b; CONCEPT 6.2). With 'ScaleTemperature'
+%   naming a column T of 'Regressors', every ESTIMATED scale entry S_ij gains a
+%   coefficient S1_ij = dS_ij/dT: the column H((T - T0) a_j), the measured series
+%   (linear onto the raw grid, as for the regressors) times the model axis before
+%   the filter. T0 is the mean of T over the raw grid of the arc -- over ALL arcs
+%   in common mode, where S1 is common: a per-day reference would remove exactly
+%   the day-to-day temperature differences that make S1 observable on a
+%   thermally controlled instrument (GRACE-FO's TSU span 0.022 C in a day). The
+%   calibration's `scale` is S(T0). The columns enter the gate; a VIF above
+%   'VifMax' gives the verdict "warn", not a refusal, since S1 then carries the
+%   large sigma it deserves. It is refused beside a time-varying scale
+%   (unsupportedScaleTemperature), with which it is not separable on one arc.
+%
 %   EIV BOUND (v3 D4). The model carries the dominant error, so a regression
 %   scale is attenuated toward zero by lambda = var(H a_j) / (var(H a_j) +
 %   sigma_e^2) (Fuller 1987, sect. 1.1). With the residual variance of axis j,
@@ -144,7 +157,11 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %                                           43200, at least the bias's when both are knotted
 %   ScaleMode          1x1   string  -      With several arcs: "common" (default) or "perArc"
 %   Regressors         1xN   Arc     -      Measured series, one Arc of K columns (one per obs arc,
-%                                           or one covering all); default none
+%                                           or one covering all), interpolated linearly but never
+%                                           across a gap in a series (Calibration.interpolateSeries);
+%                                           default none
+%   ScaleTemperature   1x1   string  -      Name of one 'Regressors' column the scale depends on
+%                                           (N-11b): S(T) = S + S1 (T - T0); default "" (none)
 %   Span               1x2   int64   ns     [first last] epoch the bias and scale bases must cover;
 %                                           default [] = the first and last usable observation epoch.
 %                                           Cross-validation passes the WHOLE arc's span, so that a
@@ -219,6 +236,10 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %                                                  the arc
 %   NonGravForces:fitCalibration:unsupportedMultiArc  common mode with a knotted bias, 'Jumps' or a
 %                                                  time-varying scale
+%   NonGravForces:fitCalibration:inputScaleTemperature  'ScaleTemperature' names no column of
+%                                                  'Regressors'
+%   NonGravForces:fitCalibration:unsupportedScaleTemperature  'ScaleTemperature' beside a
+%                                                  time-varying scale
 %   NonGravForces:fitCalibration:numericCollinear  the VIF gate refused a row with several model
 %                                                  columns
 %   NonGravForces:Calibration:inputBasis           knots the basis refuses
@@ -262,6 +283,7 @@ arguments
     options.Span = int64([])
     options.ScaleMode (1,1) string {mustBeMember(options.ScaleMode, ["common" "perArc"])} = "common"
     options.Regressors = []
+    options.ScaleTemperature (1,1) string = ""
     options.FixCrossTrack (1,1) logical = true
     options.ScaleApriori (3,3) double = eye(3)
     options.Quadratic (1,1) logical = false
@@ -420,9 +442,26 @@ if isempty(K), gridT = obs.t; else, gridT = ref.t; end
 [HR, reg] = localRegressors(options.Regressors, gridT, obs.t, K, unit);
 Kr = size(HR, 2); rNames = "r_" + reg.names;
 axisNames = ["x" "y" "z"];
+% The temperature-dependent scale (N-11b): one column H((T - T0) a_j) per model axis an entry needs.
+[tCol, T0] = localTemperatureColumn(options, reg, unit);
+HT = cell(1, 3);
+if tCol > 0
+    if varying
+        NonGravForces.fail(unit, "unsupportedScaleTemperature", "a scale that depends on time and on temperature is not separable on one arc -> use 'ScaleBasis' ""constant"" with 'ScaleTemperature'");
+    end
+    Zt = NonGravForces.app.Calibration.interpolateSeries(options.Regressors, tCol, gridT) - T0;
+    for j = find(any(mask, 1))
+        if isempty(K)
+            HT{j} = Zt .* ref.obs(at, j);
+        else
+            HT{j} = timeSeriesPreparation.crnApply(localArc(ref.t, Zt .* ref.obs(:, j), "t"), K, OutputEpochs = obs.t).obs;
+        end
+    end
+end
+coefT = zeros(3); covT = nan(9);
 
 % --- three problems ----------------------------------------------------------------------
-N = numel(obs.t);
+N = numel(obs.t); N0 = N;
 usable = obs.weights > 0 & ~obs.filled;
 scale = S0; covScale = zeros(9); coefB = zeros(3, P); covB = cell(1, 3);
 constRow = ones(1, Q); if options.ScaleBasis == "linear", constRow = [1 0]; end
@@ -445,12 +484,16 @@ for i = 1:3
         Xs = Ha(:, est);
         sNames = "S_" + axisNames(i) + axisNames(est);
     end
+    Xt = zeros(N0, 0); tNames = strings(1, 0);
+    if tCol > 0
+        Xt = [HT{est}]; tNames = "dS_" + axisNames(i) + axisNames(est) + "_dT";
+    end
     if options.Quadratic
-        X = [HB, HR, Xs, Hq(:, i)];
-        names = [bNames, rNames, sNames, "K2_" + axisNames(i)];
+        X = [HB, HR, Xs, Xt, Hq(:, i)];
+        names = [bNames, rNames, sNames, tNames, "K2_" + axisNames(i)];
     else
-        X = [HB, HR, Xs];
-        names = [bNames, rNames, sNames];
+        X = [HB, HR, Xs, Xt];
+        names = [bNames, rNames, sNames, tNames];
     end
     l = obs.obs(:, i) - Ha(:, fix) * S0(i, fix).';
     ok = usable & isfinite(l) & all(isfinite(X), 2);
@@ -473,6 +516,8 @@ for i = 1:3
     end
     gates.verdict(i) = "pass";
     if any(~(modelVif <= options.VifMax)), gates.verdict(i) = "warn"; end
+    tVif = rep.vif(P + Kr + numel(est) * Q + (1:numel(tNames)), 1);
+    if any(~(tVif <= options.VifMax)), gates.verdict(i) = "warn"; end
 
     % the solve: lsqvce.fit, kind A, one arc per contiguous run
     [x, Qxx, Cxx, R] = localSolve(X, l, ok, obs.t, options.Noise, options.Robust);
@@ -520,6 +565,11 @@ for i = 1:3
             covS{lin(e)} = Cuse(q, q);
         end
     end
+    if tCol > 0
+        tIdx = P + Kr + numel(est) * Q + (1:numel(est));
+        coefT(i, est) = reshape(x(tIdx), 1, []);
+        covT(lin, lin) = Cuse(tIdx, tIdx);
+    end
     if options.Quadratic, quad(i) = x(end); end
 end
 
@@ -541,11 +591,35 @@ prov = NonGravForces.provenance("app.fitCalibration", 'Options', localHashable(o
 sc.coef = coefS; sc.cov = covS;
 if ~varying, sc = struct('basis', "constant", 't0', int64(0), 'knots', int64([]), 'tRef', int64(0), 'coef', zeros(9, 0), 'cov', {cell(1, 9)}); end
 if Kr == 0, reg = []; end
+st = localScaleTemperature(options, tCol, T0, coefT, covT);
 cal = NonGravForces.app.Calibration(struct('scale', scale, 'scaleCurve', sc, 'covScale', covScale, 'bias', bias, 'regressors', reg, ...
-    'quadratic', quad, 'uncertainty', uncertainty, 'gates', gates, 'convention', "observation", 'provenance', prov));
+    'scaleTemperature', st, 'quadratic', quad, 'uncertainty', uncertainty, 'gates', gates, 'convention', "observation", 'provenance', prov));
 info.residual = obs.derive(obs.t, res, "NonGravForces.app.fitCalibration", struct('basis', options.BiasBasis));
 info.rows = rowsUsed;
 info.prediction = obs.derive(obs.t, pred, "NonGravForces.app.fitCalibration.prediction", struct('basis', options.BiasBasis));
+end
+
+% =========================================================================================
+function [tCol, T0] = localTemperatureColumn(options, reg, unit)
+%LOCALTEMPERATURECOLUMN The 'Regressors' column 'ScaleTemperature' names (0: none) and its raw-grid mean.
+tCol = 0; T0 = NaN;
+if options.ScaleTemperature == "", return, end
+[found, tCol] = ismember(options.ScaleTemperature, reg.names);
+if ~found
+    NonGravForces.fail(unit, "inputScaleTemperature", "'ScaleTemperature' names %s, which is not a column of 'Regressors' (%s) -> pass the temperature series in 'Regressors' too", ...
+        options.ScaleTemperature, strjoin(reg.names, ", "));
+end
+T0 = reg.mean(tCol);
+end
+
+function st = localScaleTemperature(options, tCol, T0, coefT, covT)
+%LOCALSCALETEMPERATURE The Calibration's scaleTemperature struct ("" name when not estimated).
+st = struct('name', "", 'units', "", 'reference', NaN, 'coef', zeros(3), 'cov', nan(9));
+if tCol == 0, return, end
+units = "-";
+R = options.Regressors(1);
+if numel(R.units) >= tCol, units = string(R.units(tCol)); end
+st = struct('name', options.ScaleTemperature, 'units', units, 'reference', T0, 'coef', coefT, 'cov', covT);
 end
 
 % =========================================================================================
@@ -643,6 +717,32 @@ for k = 1:N
     [HR, regk] = localRegressors(Rk, gridT, o.t, K, unit);
     arcs(k) = struct('t', o.t, 'y', o.obs, 'usable', o.weights > 0 & ~o.filled, 'Ha', Ha, 'HB', HB, 'Hq', Hq, 'bias', b, 'HR', HR, 'reg', regk);
 end
+% The temperature-dependent scale (N-11b): ONE reference T0 over every arc's raw grid, so that S1 sees
+% the day-to-day temperature differences, and S1 common like the scale.
+[tCol, ~] = localTemperatureColumn(options, arcs(1).reg, unit);
+HT = cell(1, N); T0 = NaN;
+if tCol > 0
+    Zt = cell(1, N); grids = cell(1, N);
+    for k = 1:N
+        if numel(options.Regressors) > 1, Rk = options.Regressors(k); else, Rk = options.Regressors; end
+        if isempty(K), grids{k} = obs(k).t; else, grids{k} = refs(k).t; end
+        Zt{k} = NonGravForces.app.Calibration.interpolateSeries(Rk, tCol, grids{k});
+    end
+    zAll = cell2mat(Zt(:));
+    T0 = mean(zAll(isfinite(zAll)));
+    for k = 1:N
+        HT{k} = nan(numel(obs(k).t), 3);
+        for j = find(any(mask, 1))
+            if isempty(K)
+                [~, at] = ismember(obs(k).t, refs(k).t);
+                HT{k}(:, j) = (Zt{k} - T0) .* refs(k).obs(at, j);
+            else
+                HT{k}(:, j) = timeSeriesPreparation.crnApply(localArc(refs(k).t, (Zt{k} - T0) .* refs(k).obs(:, j), "t"), K, OutputEpochs = obs(k).t).obs;
+            end
+        end
+    end
+end
+coefT = zeros(3); covT = nan(9);
 Kr = size(arcs(1).HR, 2); rNames = "r_" + arcs(1).reg.names;
 regCoef = zeros(3, Kr); regCov = cell(1, 3);
 P = size(arcs(1).HB, 2);
@@ -664,6 +764,7 @@ for i = 1:3
     sNames = "S_" + axisNames(i) + axisNames(est);
     if options.Quadratic, sNames = [sNames, "K2_" + axisNames(i)]; end %#ok<AGROW>
     sNames = [sNames, rNames]; %#ok<AGROW>
+    if tCol > 0, sNames = [sNames, "dS_" + axisNames(i) + axisNames(est) + "_dT"]; end %#ok<AGROW>
     names{i} = [bNames, sNames];
     % the per-arc rows of this axis: common columns A, local columns B, observation l
     A = cell(1, N); B = cell(1, N); L = cell(1, N); ok = cell(1, N); tS = cell(1, N);
@@ -672,6 +773,7 @@ for i = 1:3
         A{k} = a.Ha(:, est);
         if options.Quadratic, A{k} = [A{k}, a.Hq(:, i)]; end
         A{k} = [A{k}, a.HR];
+        if tCol > 0, A{k} = [A{k}, HT{k}(:, est)]; end
         B{k} = a.HB;
         L{k} = a.y(:, i) - a.Ha(:, fix) * S0(i, fix).';
         ok{k} = a.usable & isfinite(L{k}) & all(isfinite(A{k}), 2) & all(isfinite(B{k}), 2);
@@ -703,6 +805,7 @@ for i = 1:3
     end
     gates.verdict(i) = "pass";
     if any(~(modelVif <= options.VifMax)), gates.verdict(i) = "warn"; end
+    if tCol > 0 && any(~(rep.vif(end - numel(est) + 1:end, 1) <= options.VifMax)), gates.verdict(i) = "warn"; end
 
     % the joint solve, and the bootstrap over days on its per-day reduced contributions
     [x, y, Cxx, Cyy, Rr, Qc, sc] = localJoint(A, B, L, ok, tS, 1:N, options.Noise, options.Robust);
@@ -739,6 +842,11 @@ for i = 1:3
     if options.Quadratic, quad(i) = x(numel(est) + 1); end
     rIdx = numel(est) + options.Quadratic + (1:Kr);
     regCoef(i, :) = reshape(x(rIdx), 1, []); regCov{i} = Cuse(rIdx, rIdx);
+    if tCol > 0
+        tIdx = numel(est) + options.Quadratic + Kr + (1:numel(est));
+        coefT(i, est) = reshape(x(tIdx), 1, []);
+        covT(lin, lin) = Cuse(tIdx, tIdx);
+    end
 end
 
 % --- the EIV bound per model axis, over every fitted row ----------------------------------------
@@ -764,7 +872,7 @@ for k = 1:N
     prov = NonGravForces.provenance("app.fitCalibration", 'Options', localHashable(options), ...
         'Note', sprintf("arc %d of %d, common scale; obs %s, ref %s, kernel %s", k, N, obs(k).product, refs(k).product, localKernelName(K)));
     c{k} = NonGravForces.app.Calibration(struct('scale', scale, 'covScale', covScale, 'bias', b, 'regressors', regk, ...
-        'quadratic', quad, 'uncertainty', uncertainty, 'gates', gates, 'convention', "observation", 'provenance', prov));
+        'scaleTemperature', localScaleTemperature(options, tCol, T0, coefT, covT), 'quadratic', quad, 'uncertainty', uncertainty, 'gates', gates, 'convention', "observation", 'provenance', prov));
     infoRes{k} = obs(k).derive(obs(k).t, res{k}, "NonGravForces.app.fitCalibration", struct('basis', options.BiasBasis, 'arc', k));
 end
 cal = [c{:}];

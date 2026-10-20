@@ -47,6 +47,11 @@ function [obs, ref, truth] = syntheticPair(options)
 %                                              planted coupling raw += z * RegressorCoupling'; default
 %                                              none (N-11a)
 %   RegressorCoupling 3xK double  m/s^2/unit   The true coefficients; default empty
+%   ScaleTemperature 3x3  double  1/unit       True temperature dependence of the scale (N-11b), driven by
+%                                              the FIRST column z1 of RegressorFcn: S(t) = Scale +
+%                                              ScaleTemperature * (z1(t) - Tref); default zeros
+%   ScaleTemperatureReference 1x1 double unit  Tref; default [] = the mean of z1 over the raw grid,
+%                                              which is the reference fitCalibration uses on one arc
 %   ScaleDrift      3x3   double  1/day        True linear drift of S, so S(t) = Scale +
 %                                              ScaleDrift * (t - Start) / 1 day; default zeros
 %   Bias            3x1   double  m/s^2        True bias at Start; default [2e-7; -1e-7; 5e-8]
@@ -70,6 +75,7 @@ function [obs, ref, truth] = syntheticPair(options)
 %   truth    1x1   struct                      -      .scale (at Start) .scaleDrift_per_day
 %                                                     .regressors (Arc of the series on the 10 Hz
 %                                                     grid, columns reg1..regK, or []) .regressorCoupling
+%                                                     .scaleTemperature (3x3) .scaleTemperatureReference
 %                                                     .bias0 .biasDrift_per_day
 %                                                     .quadratic .bias (3xK1 at obs.t) .noise
 %                                                     (.asd .corner .seeds) .spikes (table: t
@@ -115,6 +121,8 @@ arguments
     options.ScaleDrift double = zeros(3)
     options.RegressorFcn = []
     options.RegressorCoupling double = zeros(3, 0)
+    options.ScaleTemperature double = zeros(3)
+    options.ScaleTemperatureReference double = []
     options.Bias double = [2e-7; -1e-7; 5e-8]
     options.BiasDrift double = [1e-9; 0; -5e-10]
     options.Quadratic double = zeros(3, 1)
@@ -173,12 +181,25 @@ if any(D(:) ~= 0)
     raw = raw + (ts / 86400) .* (model * D.');
 end
 regArc = [];
+S1 = options.ScaleTemperature; Tref = NaN;
+if ~isequal(size(S1), [3 3]) || ~all(isfinite(S1(:)))
+    NonGravForces.fail(unit, "inputShape", "ScaleTemperature must be a finite 3x3 -> got %s", mat2str(size(S1)));
+end
+if any(S1(:) ~= 0) && isempty(options.RegressorFcn)
+    NonGravForces.fail(unit, "inputShape", "ScaleTemperature is driven by the first column of RegressorFcn -> pass 'RegressorFcn'");
+end
 if ~isempty(options.RegressorFcn)
     Zr = options.RegressorFcn(ts);
     if size(Zr, 1) ~= n || ~isequal(size(options.RegressorCoupling), [3 size(Zr, 2)])
         NonGravForces.fail(unit, "inputShape", "RegressorFcn must return %d rows and RegressorCoupling be 3x(its columns) -> got %s and %s", n, mat2str(size(Zr)), mat2str(size(options.RegressorCoupling)));
     end
     raw = raw + Zr * options.RegressorCoupling.';
+    if any(S1(:) ~= 0)
+        % Added only when planted, so a pair without it stays bitwise what it was before N-11b.
+        Tref = options.ScaleTemperatureReference;
+        if isempty(Tref), Tref = mean(Zr(:, 1)); end
+        raw = raw + (Zr(:, 1) - Tref) .* (model * S1.');
+    end
     rn = cellstr("reg" + string(1:size(Zr, 2)));
     ru = struct(); for k = 1:numel(rn), ru.(rn{k}) = '-'; end
     regArc = timeSeriesPreparation.Arc(t, Zr, struct("obsNames", {rn}, "variableNames", {rn}, "variableFieldNames", {rn}, ...
@@ -224,7 +245,8 @@ obs = obs.addLayer("crnWindow", filtered.layers.crnWindow);
 ref = timeSeriesPreparation.Arc(t, model, localAux(names, "MODEL_" + day + "_C_04.txt", "MODEL"));
 
 t1 = double(obs.t - options.Start) / 1e9;
-truth = struct('scale', S, 'scaleDrift_per_day', D, 'regressors', regArc, 'regressorCoupling', options.RegressorCoupling, 'bias0', b0, 'biasDrift_per_day', drift, 'quadratic', k2, ...
+truth = struct('scale', S, 'scaleDrift_per_day', D, 'regressors', regArc, 'regressorCoupling', options.RegressorCoupling, ...
+    'scaleTemperature', S1, 'scaleTemperatureReference', Tref, 'bias0', b0, 'biasDrift_per_day', drift, 'quadratic', k2, ...
     'bias', b0 + drift .* (t1' / 86400), ...
     'noise', struct('asd', asd, 'corner', options.NoiseCorner, 'seeds', seeds), ...
     'spikes', table(spikeT, spikeAxis, repmat(options.SpikeAmplitude, options.Spikes, 1), ...
