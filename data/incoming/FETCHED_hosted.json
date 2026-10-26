@@ -1,16 +1,6 @@
 {
- "generated": "2026-10-26 16:43 UTC",
+ "generated": "2026-10-26 17:08 UTC",
  "items": [
-  {
-   "url": "https://isdc-data.gfz.de/grace/Level-1B/",
-   "status": "failed",
-   "note": "URLError: <urlopen error [Errno 110] Connection timed out>"
-  },
-  {
-   "url": "ftp://isdcftp.gfz-potsdam.de/grace/Level-1B/",
-   "status": "failed",
-   "note": "URLError: <urlopen error [Errno -2] Name or service not known>"
-  },
   {
    "url": "https://spdf.gsfc.nasa.gov/pub/data/omni/low_res_omni/omni2.text",
    "status": 200,
@@ -97,6 +87,18 @@
    "status": "",
    "bytes": 5260147,
    "sha256": "6423391a3bd0b9fb073170c0a896ff9b6c22f1db0e5ed6c554e7a3a358f5e422"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/README.txt",
+   "status": 200,
+   "bytes": 8448,
+   "sha256": "09a1a4f320edd8125557d67a6ec0c43a657a8fbfb4aa6ba44f6c85f862c02d05"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/README_referenceFrames.txt",
+   "status": 200,
+   "bytes": 2000,
+   "sha256": "290f86f7248d6d8122fc3d4e7bb801a203104ba5a27800ef7dadc69200a0ccb9"
   },
   {
    "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACE-1/attitude/2008/GRACE-1_attitude_2008-01-01.txt.gz",

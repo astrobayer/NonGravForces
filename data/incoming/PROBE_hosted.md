@@ -1,12 +1,6 @@
-# fetchData probe report, 2026-10-26 16:43 UTC
+# fetchData probe report, 2026-10-26 17:08 UTC
 
 Written by `tools/fetchData.py` on a GitHub-hosted runner. Staging only: see the script's docstring. Each line is a request and what came back.
-
-## Classic GRACE Level-1B, 2008-01-01 (N-08)
-
-- `https://isdc-data.gfz.de/grace/Level-1B/` -> failed -- URLError: <urlopen error [Errno 110] Connection timed out>
-- `ftp://isdcftp.gfz-potsdam.de/grace/Level-1B/` -> failed -- URLError: <urlopen error [Errno -2] Name or service not known>
-`ftp://isdcftp.gfz-potsdam.de/grace/Level-1B/`: 
 
 ## Dst (O-9)
 
@@ -56,6 +50,10 @@ listing of `ftp://ftpsedr.cls.fr/pub/previsol/solarflux/observation/`: `radio_fl
 
 ## ITSG operational products: attitude, non-conservative forces, orbits (N-12, O-19)
 
+- `https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/README.txt` -> 200, 8448 bytes, sha256 `09a1a4f320edd8125557d67a6ec0c43a657a8fbfb4aa6ba44f6c85f862c02d05`
+  - committed `itsg/README.txt` (8448 bytes)
+- `https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/README_referenceFrames.txt` -> 200, 2000 bytes, sha256 `290f86f7248d6d8122fc3d4e7bb801a203104ba5a27800ef7dadc69200a0ccb9`
+  - committed `itsg/README_referenceFrames.txt` (2000 bytes)
 `https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACE-1/attitude/2008/`: 366 entries; for 2008-01-01: `GRACE-1_attitude_2008-01-01.txt.gz`
 - `https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACE-1/attitude/2008/GRACE-1_attitude_2008-01-01.txt.gz` -> 200, 438416 bytes, sha256 `b6689a4f2c0fc1f28a5db9eba82dd28a2f4a8f6bf1a77d53b2b38f264446b386`
   - `GRACE-1_attitude_2008-01-01.txt`: 1123673 bytes, sha256 `e51dfdc9a0fe89acaa3e95efac18bf34ad39e8a33d092f65cebf4cee9c612bdc`
