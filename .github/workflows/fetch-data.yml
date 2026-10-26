@@ -1,5 +1,6 @@
-# Fetch the public data three open gaps need (O-9 Dst/F30, N-12 attitude, N-08 classic
-# GRACE Level-1B) and commit a STAGING record of it to the pull request's own branch.
+# Fetch the public data three open gaps need (O-9 Dst/F30, N-12 attitude with ITSG's
+# non-conservative forces for O-19, N-08 classic GRACE Level-1B) and commit a STAGING
+# record of it to the pull request's own branch.
 #
 # Why a workflow: the development container cannot reach ftp.tugraz.at, isdc-data.gfz.de,
 # spdf.gsfc.nasa.gov, wdc.kugi.kyoto-u.ac.jp or the others (its network policy refuses
@@ -40,7 +41,10 @@ jobs:
         with:
           ref: ${{ github.head_ref || github.ref_name }}
       - name: Fetch, record and excerpt
-        run: python3 -I tools/fetchData.py --out data/incoming --raw "$RUNNER_TEMP/fetch_raw"
+        # Each run is a whole snapshot: what an earlier run staged and this one did not is removed.
+        run: |
+          rm -rf data/incoming
+          python3 -I tools/fetchData.py --out data/incoming --raw "$RUNNER_TEMP/fetch_raw"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         if: always()
         with:
@@ -52,7 +56,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/incoming
+          git add -A data/incoming
           if git diff --cached --quiet; then
             echo "nothing changed in data/incoming"
             exit 0

@@ -11,7 +11,8 @@ Targets (HANDOVER Part H and the open issues):
   dst       O-9   hourly Dst: NASA OMNI2 yearly files (which carry Kyoto's Dst) and the
                   Kyoto WDC pages themselves, probed
   f30       O-9   daily 30 cm (1 GHz) solar radio flux: Nobeyama NoRP and CLS, probed
-  attitude  N-12  ITSG attitude products at TU Graz: the tree is LISTED, candidates fetched
+  itsg      N-12  TU Graz operational products per satellite and day: attitude, and for
+            O-19  comparison the non-conservative forces and the reduced-dynamic orbit
   classic   N-08  classic GRACE Level-1B for 2008-01-01 (A and B) from GFZ ISDC
 
 This is a STAGING step, not a fixture step: the server formats have not been read by
@@ -123,14 +124,23 @@ class _Links(html.parser.HTMLParser):
                     self.hrefs.append(v)
 
 
-def listing(url, rec):
-    """Entries (name, is_dir, absolute url) of an autoindex page below url."""
+def listing(url, rec, timeout=90):
+    """Entries (name, is_dir, absolute url) of an autoindex page, or of an FTP LIST, below url."""
     if not url.endswith("/"):
         url += "/"
-    status, body, _, err = get(url, max_bytes=20_000_000)
+    status, body, _, err = get(url, max_bytes=20_000_000, timeout=timeout)
     if body is None:
         rec.item(url=url, status=status or "failed", note=err or "no listing")
         return None
+    if url.startswith("ftp://"):
+        out = []
+        for ln in body.decode("latin-1").splitlines():
+            parts = ln.split(None, 8)
+            if len(parts) == 9 and parts[8] not in (".", ".."):
+                d = parts[0].startswith("d")
+                out.append((parts[8] + ("/" if d else ""), d, url + parts[8] + ("/" if d else "")))
+        time.sleep(0.2)
+        return out
     p = _Links()
     p.feed(body.decode("utf-8", "replace"))
     out, seen = [], set()
@@ -187,7 +197,7 @@ def head_sample(b, n=HEAD_LINES):
 
 
 _DATE_RES = [
-    (re.compile(r"^\s*(\d{4})-(\d{2})-(\d{2})"), "ymd"),
+    (re.compile(r"^\s*\"?(\d{4})-(\d{2})-(\d{2})"), "ymd"),
     (re.compile(r"^\s*(\d{4})[ /.](\d{1,2})[ /.](\d{1,2})\b"), "ymd"),
     (re.compile(r"^\s*(\d{4})(\d{2})(\d{2})\b"), "ymd"),
     (re.compile(r"^\s*(\d{4})\s+(\d{1,3})\s+(\d{1,2})\s"), "ydh"),   # OMNI2: year doy hour
@@ -253,16 +263,18 @@ def target_dst(out, raw, rec):
             rec.say(f"  - window {lo}..{hi} from {year}: {n} hourly lines")
             if n:
                 save_out(out, f"omni2/omni2_{year}_{lo}_{hi}.dat", text, rec)
-    # Kyoto is the primary source of Dst; OMNI copies it. Probe its pages and WDC-format files.
-    kyoto = "https://wdc.kugi.kyoto-u.ac.jp/"
-    for kind in ("dst_final", "dst_provisional", "dst_realtime"):
-        for ym in ("200801", "202001"):
-            for leaf in ("index.html", f"dst{ym[2:]}.for.request"):
-                url = f"{kyoto}{kind}/{ym}/{leaf}"
-                status, b, _, err = get(url, max_bytes=2_000_000, tries=2)
-                rec.item(url=url, status=status or err, bytes=len(b or b""), sha256=sha(b) if b else "")
-                if b and status == 200:
-                    save_out(out, f"kyoto/{kind}_{ym}_{leaf}", b, rec)
+    # Kyoto is the primary source of Dst; OMNI copies it. Run 40358650063 found FINAL values in
+    # WDC format for both fixture months (provisional/realtime answer 403 for them); the month
+    # before each is taken too, for histories across the new year.
+    kyoto = "https://wdc.kugi.kyoto-u.ac.jp/dst_final/"
+    for ym in ("200712", "200801", "201912", "202001"):
+        url = f"{kyoto}{ym}/dst{ym[2:]}.for.request"
+        status, b, _, err = get(url, max_bytes=2_000_000, tries=2)
+        ok = bool(b) and b.startswith(b"DST" + ym[2:].encode())
+        rec.item(url=url, status=status or err, bytes=len(b or b""), sha256=sha(b) if b else "",
+                 note="" if ok else "not a WDC Dst record -> not used")
+        if ok:
+            save_out(out, f"kyoto/dst{ym[2:]}.for.request", b, rec)
 
 
 # ---------------------------------------------------------------------------- f30 (O-9)
@@ -286,82 +298,95 @@ def target_f30(out, raw, rec):
         rec.say(f"  - daily windows: {n} dated lines")
         if n:
             save_out(out, f"norp/{os.path.splitext(name)[0]}_2007-09_2008-03_2019-09_2020-03.txt", text, rec)
-    # CLS publishes F30 as used by DTM2020; its page is probed and every data link it names
-    # is fetched, so the next step can read the format rather than guess it.
-    cls = "https://spaceweather.cls.fr/services/radioflux/"
-    status, b, final, err = get(cls, max_bytes=5_000_000)
-    rec.item(url=cls, status=status or err, bytes=len(b or b""), sha256=sha(b) if b else "")
-    if b:
-        save_out(out, "cls/radioflux_index.html", b, rec)
-        p = _Links()
-        p.feed(b.decode("utf-8", "replace"))
-        links = sorted({urllib.parse.urljoin(final, h) for h in p.hrefs
-                        if re.search(r"\.(txt|csv|dat|json)(\?|$)|download|export|data", h, re.I)})
-        rec.say("links on the CLS page: " + ", ".join(f"`{u}`" for u in links[:60]))
-        for url in links[:12]:
-            s2, b2, _, e2 = get(url, max_bytes=50_000_000, tries=2)
-            rec.item(url=url, status=s2 or e2, bytes=len(b2 or b""), sha256=sha(b2) if b2 else "")
-            if b2 and is_text(b2):
-                leaf = re.sub(r"[^A-Za-z0-9._-]", "_", urllib.parse.urlparse(url).path.strip("/"))[-80:] or "page"
-                save_raw(raw, "cls/" + leaf, b2)
-                save_out(out, f"cls/{leaf}.head.txt", head_sample(b2), rec)
-                text, n = excerpt_by_date(b2, DAILY_WINDOWS)
+    # CLS publishes F30 as used by DTM2020. Its page links no HTTP data, only an FTP archive
+    # (run 40358650063): ftp://ftpsedr.cls.fr/pub/previsol/solarflux/observation/.
+    cls = "ftp://ftpsedr.cls.fr/pub/previsol/solarflux/observation/"
+    entries = listing(cls, rec, timeout=120)
+    if entries is not None:
+        rec.say(f"listing of `{cls}`: " + ", ".join(f"`{e[0]}`" for e in entries[:80]))
+    for name, isdir, url in (entries or [])[:12]:
+        if isdir:
+            continue
+        s2, b2, _, e2 = get(url, max_bytes=100_000_000, tries=2, timeout=120)
+        rec.item(url=url, status=s2 or e2, bytes=len(b2 or b""), sha256=sha(b2) if b2 else "")
+        if not b2:
+            continue
+        save_raw(raw, "cls/" + name, b2)
+        for m, body in unpack_any(b2, name):
+            save_out(out, f"cls/{m}.head.txt", head_sample(body), rec)
+            if is_text(body):
+                text, n = excerpt_by_date(body, DAILY_WINDOWS)
+                rec.say(f"  - `{m}` daily windows: {n} dated lines")
                 if n:
-                    rec.say(f"  - daily windows: {n} dated lines")
-                    save_out(out, f"cls/{leaf}_2007-09_2008-03_2019-09_2020-03.txt", text, rec)
+                    save_out(out, f"cls/{os.path.splitext(m)[0]}_2007-09_2008-03_2019-09_2020-03.txt", text, rec)
 
 
-# ---------------------------------------------------------------------------- attitude (N-12)
-ATT_KEY = re.compile(r"attitude|star|sca|orient|quaternion|imu|level1|l1b|instrument", re.I)
+# ---------------------------------------------------------------------------- ITSG (N-12, O-19)
+# TU Graz's operational satellite products, found by run 40358650063's crawl (itsg/TREE.txt):
+# per satellite and day, attitude, nonConservativeForces and orbits in GROOPS instrument format.
+# GRACE-1/-2 are GRACE-A/-B, GRACEFO-1/-2 are GRACE-C/-D.
+ITSG = "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/"
+ITSG_DAYS = [("GRACE-1", "2008-01-01"), ("GRACE-2", "2008-01-01"),
+             ("GRACEFO-1", "2020-01-01"), ("GRACEFO-1", "2020-01-02"), ("GRACEFO-1", "2020-01-03"),
+             ("GRACEFO-2", "2020-01-01")]
+ITSG_PRODUCTS = ("attitude", "nonConservativeForces", "reducedDynamicOrbit")
+GROOPS_EXCERPT = 600
 
 
-def target_attitude(out, raw, rec, max_listings=350):
-    rec.h("ITSG attitude products at TU Graz (N-12)")
-    root = "https://ftp.tugraz.at/pub/ITSG/"
-    queue = [(0, 0, root)]     # (priority, depth, url)
-    tree, candidates, n = [], [], 0
-    while queue and n < max_listings:
-        queue.sort()
-        _, depth, url = queue.pop(0)
-        entries = listing(url, rec)
-        n += 1
-        if entries is None:
-            continue
-        rel = url[len(root):]
-        files = [e for e in entries if not e[1]]
-        dirs = [e for e in entries if e[1]]
-        tree.append(f"{rel or '/'}  [{len(dirs)} dirs, {len(files)} files]  "
-                    + " ".join(e[0] for e in dirs[:40]) + (" ..." if len(dirs) > 40 else ""))
-        for name, _, absu in files:
-            low = (rel + name).lower()
-            if ATT_KEY.search(low) and re.search(r"2020-?01|2008-?01|20200101|20080101", low):
-                candidates.append(absu)
-        if depth >= 5:
-            continue
-        for name, _, absu in dirs:
-            low = (rel + name).lower()
-            ym = re.fullmatch(r"(\d{4})/", name)
-            if ym and ym.group(1) not in ("2008", "2020"):
-                continue          # year folders: only the fixture years
-            if re.fullmatch(r"\d{4}-\d{2}/", name) and name[:7] not in ("2008-01", "2020-01"):
-                continue          # month folders: only the fixture months
-            pri = 0 if ATT_KEY.search(name) else (1 if "grace" in low else 2)
-            if depth >= 2 and pri == 2:
-                continue          # deep and unrelated: not worth a listing
-            queue.append((pri, depth + 1, absu))
-    rec.say(f"{n} listings read (cap {max_listings}); {len(queue)} folders left unread.")
-    save_out(out, "itsg/TREE.txt", "\n".join(tree) + "\n", rec)
-    rec.say("candidate files (attitude-like name, fixture month): "
-            + (", ".join(f"`{c}`" for c in candidates[:80]) or "none"))
-    for url in candidates[:6]:
-        status, b, _, err = get(url, max_bytes=300_000_000)
-        rec.item(url=url, status=status or err, bytes=len(b or b""), sha256=sha(b) if b else "")
-        if not b:
-            continue
-        leaf = url[len(root):].replace("/", "__")
-        save_raw(raw, "itsg/" + leaf, b)
-        for name, body in unpack_any(b, leaf):
-            save_out(out, f"itsg/{name}.head.txt", head_sample(body), rec)
+def cut_groops(body, keep):
+    """A GROOPS instrument file: header (through the '# ===' rule and, where present, the
+    epoch-count line) unchanged except the count, then the first `keep` epochs unchanged.
+    Returns (text, kept, total, how the count was rewritten) or None."""
+    if not is_text(body):
+        return None
+    lines = body.decode("latin-1").splitlines(keepends=True)
+    rule = next((i for i, ln in enumerate(lines) if ln.startswith("# ====")), None)
+    if rule is None:
+        return None
+    head, data = lines[:rule + 1], lines[rule + 1:]
+    how = "none"
+    if data and re.fullmatch(r"\s*\d+\s*", data[0]):
+        count, data = data[0], data[1:]
+        kept = data[:keep]
+        head.append(re.sub(r"\d+", str(len(kept)), count, count=1))
+        how = "count line after the rule"
+    else:
+        kept = data[:keep]
+        for i, ln in enumerate(head):
+            m = re.fullmatch(r"(\s*-?\d+\s+\d+\s+)(\d+)(\s*)", ln)
+            if m and int(m.group(2)) == len(data):
+                head[i] = m.group(1) + str(len(kept)).rjust(len(m.group(2))) + m.group(3)
+                how = f"third integer of header line {i + 1}"
+    return "".join(head + kept), len(kept), len(data), how
+
+
+def target_itsg(out, raw, rec):
+    rec.h("ITSG operational products: attitude, non-conservative forces, orbits (N-12, O-19)")
+    for product in ITSG_PRODUCTS:
+        for sat, day in ITSG_DAYS:
+            folder = f"{ITSG}{sat}/{product}/{day[:4]}/"
+            entries = listing(folder, rec)
+            if entries is None:
+                continue
+            hits = [e for e in entries if day in e[0] and not e[1]]
+            rec.say(f"`{folder}`: {len(entries)} entries; for {day}: "
+                    + (", ".join(f"`{e[0]}`" for e in hits) or "none"))
+            for name, _, url in hits[:2]:
+                status, b, _, err = get(url, max_bytes=500_000_000)
+                rec.item(url=url, status=status or err, bytes=len(b or b""), sha256=sha(b) if b else "")
+                if not b:
+                    continue
+                save_raw(raw, f"itsg/{sat}/{product}/{name}", b)
+                for m, body in unpack_any(b, name):
+                    rec.say(f"  - `{m}`: {len(body)} bytes, sha256 `{sha(body)}`")
+                    save_out(out, f"itsg/{sat}/{product}/{m}.head.txt", head_sample(body), rec)
+                    cut = cut_groops(body, GROOPS_EXCERPT)
+                    if cut is None:
+                        rec.say(f"  - `{m}`: not a GROOPS instrument file -> no excerpt")
+                        continue
+                    text, k, total, how = cut
+                    rec.say(f"  - `{m}`: {k} of {total} epochs kept; count rewritten: {how}")
+                    save_out(out, f"itsg/{sat}/{product}/{m}", text, rec)
 
 
 def unpack_any(b, name):
@@ -408,27 +433,32 @@ def cut_l1b(body, keep):
 
 def target_classic(out, raw, rec):
     rec.h(f"Classic GRACE Level-1B, {CLASSIC_DAY} (N-08)")
-    base = "https://isdc-data.gfz.de/grace/Level-1B/"
-    tops = listing(base, rec) or []
+    # Run 40358650063: the HTTPS listing timed out at 90 s. Wait longer, then try ISDC's FTP.
+    tops = []
+    for base in ("https://isdc-data.gfz.de/grace/Level-1B/",
+                 "ftp://isdcftp.gfz-potsdam.de/grace/Level-1B/"):
+        tops = listing(base, rec, timeout=300) or []
+        if tops:
+            break
     rec.say(f"`{base}`: " + ", ".join(f"`{e[0]}`" for e in tops))
     releases = []
     for centre, cisdir, curl in tops:
         if not cisdir:
             continue
-        inst = listing(curl + "INSTRUMENT/", rec)
+        inst = listing(curl + "INSTRUMENT/", rec, timeout=300)
         if inst is None:
             continue
         rec.say(f"`{curl}INSTRUMENT/`: " + ", ".join(f"`{e[0]}`" for e in inst))
         releases += [(centre.strip("/"), e[0].strip("/"), e[2]) for e in inst if e[1]]
     for centre, rl, rurl in releases:
-        year = listing(rurl + CLASSIC_DAY[:4] + "/", rec)
+        year = listing(rurl + CLASSIC_DAY[:4] + "/", rec, timeout=300)
         if year is None:
             continue
         hits = [e for e in year if CLASSIC_DAY in e[0] and not e[1]]
         rec.say(f"`{rurl}{CLASSIC_DAY[:4]}/`: {len(year)} entries; for {CLASSIC_DAY}: "
                 + (", ".join(f"`{e[0]}`" for e in hits) or "none"))
         for name, _, url in hits[:2]:
-            status, b, _, err = get(url, max_bytes=1_500_000_000)
+            status, b, _, err = get(url, max_bytes=1_500_000_000, timeout=600)
             rec.item(url=url, status=status or err, bytes=len(b or b""), sha256=sha(b) if b else "")
             if not b:
                 continue
@@ -475,7 +505,7 @@ def unpack_all(b, name):
 
 
 # ---------------------------------------------------------------------------- main
-TARGETS = {"dst": target_dst, "f30": target_f30, "attitude": target_attitude, "classic": target_classic}
+TARGETS = {"dst": target_dst, "f30": target_f30, "itsg": target_itsg, "classic": target_classic}
 
 
 def main():
