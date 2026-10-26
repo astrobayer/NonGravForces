@@ -63,8 +63,8 @@ every data line is as published. Times are GPS, as MJD. Frames, from TU Graz's `
 | `nonConservativeForces` | acceleration due to non-conservative forces, m/s^2 | satellite reference frame |
 | `reducedDynamicOrbit` | position, velocity (and three zero acceleration columns), m, m/s | celestial reference frame |
 
-TU Graz's README does not say whether `nonConservativeForces` is the calibrated accelerometer or a model; nothing in
-this repository may assume either until that is settled with them. The GRACE-FO orbits are in their own CoM-realised
+`nonConservativeForces` is MODELLED (owner, 2026-10-26; TU Graz's README does not say): GROOPS's force model for
+the real day, not the calibrated accelerometer -- an independent implementation to compare this toolbox with (O-19). The GRACE-FO orbits are in their own CoM-realised
 quasi-inertial frame (`README_referenceFrames.txt`), not referenceSystem's GCRS: compare after a frame check.
 
 | Downloaded file (gz) | Bytes | SHA-256 |

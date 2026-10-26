@@ -1212,6 +1212,162 @@ classdef tNgfIo < NgfTestCase
         end
     end
 
+
+    % ============================================== io.spaceWeather Dst and F30 (O-9, 2026-10-26)
+    % Oracle: the raw Kyoto WDC and CLS text, split here on whitespace (the reader uses fixed WDC columns
+    % and the CLS column line; the committed months hold no adjacent four-digit values, so a split is exact
+    % here), and the 81-day F30 means computed in exact rational arithmetic by an independent standard-
+    % library Python script on the committed excerpt (2026-10-26): 18764/405 for 2008-01-01, 2077/45 for
+    % 2020-01-01.
+    methods
+        function [dstFiles, clsAdj, clsAbs] = dstF30Fixtures(~)
+            W = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'spaceweather');
+            dstFiles = string(fullfile(W, ["dst0712" "dst0801" "dst1912" "dst2001"] + ".for.request"));
+            clsAdj = string(fullfile(W, 'radio_flux_adjusted_observation_2007-09_2008-03_2019-09_2020-03.txt'));
+            clsAbs = string(fullfile(W, 'radio_flux_absolute_observation_2007-09_2008-03_2019-09_2020-03.txt'));
+        end
+        function p = editedCopy(tc, src, name, editFcn)
+            %EDITEDCOPY Copy a text fixture with editFcn(lines) applied; return the path.
+            lines = splitlines(string(fileread(src)));
+            lines = editFcn(lines);
+            p = fullfile(tc.tmp, name);
+            fid = fopen(p, 'w'); fprintf(fid, '%s\n', lines); fclose(fid);
+        end
+    end
+    methods (Test, TestTags = {'contract'})
+        function spaceWeatherDstF30Contract(tc)
+            [dstFiles, clsAdj, clsAbs] = tc.dstF30Fixtures();
+            sd = NonGravForces.io.spaceWeather(dstFiles);
+            tc.verifyEqual(sd.format, "dst"); tc.verifyEqual(numel(sd.mjd), 124, 'four months of 31 days');
+            tc.verifySize(sd.index.dst, [124 24]); tc.verifyClass(sd.index.version, 'string');
+            tc.verifyEqual(sd.span, [54435 58879], '2007-12-01 .. 2020-01-31');
+            d = sd.query(referenceSystem.mjdToEpoch([58849.5; 58850.2], "UTC"));
+            tc.verifyEqual(sort(string(fieldnames(d))), sort(["dst"; "version"])); tc.verifySize(d.dst, [1 2]);
+            sf = NonGravForces.io.spaceWeather(clsAdj);
+            tc.verifyEqual(sf.format, "f30"); tc.verifyTrue(sf.adjusted); tc.verifyEqual(numel(sf.mjd), 426);
+            tc.verifyFalse(NonGravForces.io.spaceWeather(clsAbs).adjusted, '"not adjusted to 1 AU" in the header');
+            q = sf.query(referenceSystem.mjdToEpoch([54466.5; 58849.5], "UTC"));
+            tc.verifyEqual(sort(string(fieldnames(q))), sort(["f30"; "f30Previous"; "f30Mean81"; "f30Flag"])); tc.verifySize(q.f30Mean81, [1 2]);
+            tc.verifyTrue(all(isfield(sf.index, ["f30" "f30Corrected" "f30Precision" "f30Flag" "f107" "f32Flag"])));
+            tc.verifyEqual(NonGravForces.io.spaceWeather(dstFiles, 'Format', "dst").mjd, sd.mjd);
+            tc.verifyErrorId(@() NonGravForces.io.spaceWeather(clsAdj, 'Format', "dst"), 'NonGravForces:spaceWeather:inputFormat');
+            tc.verifyErrorId(@() NonGravForces.io.spaceWeather([dstFiles(1) clsAdj]), 'NonGravForces:spaceWeather:inputFiles');
+            tc.verifyErrorId(@() NonGravForces.io.spaceWeather([clsAdj clsAbs]), 'NonGravForces:spaceWeather:inputFiles');
+            tc.verifyErrorId(@() sd.query(struct('x', 1)), 'NonGravForces:spaceWeather:inputEpoch');
+        end
+    end
+    methods (Test, TestTags = {'reference'})
+        function spaceWeatherDstF30Reference(tc)
+            [dstFiles, clsAdj] = tc.dstF30Fixtures();
+            e = @(mjd) referenceSystem.mjdToEpoch(mjd, "UTC");
+            sd = NonGravForces.io.spaceWeather(dstFiles);
+            L = splitlines(string(fileread(dstFiles(4)))); t4 = split(strtrim(L(startsWith(L, "DST2001*04"))));
+            % tokens: "DST2001*04" "X220" base h1..h24 mean; Kyoto's hour k covers [k-1, k) UT
+            tc.verifyEqual(sd.query(e(58852 + 17.5/24)).dst, str2double(t4(3)) * 100 + str2double(t4(3 + 18)), '2020-01-04 17:30 UT is hour 18');
+            tc.verifyEqual(sd.query(e(58852)).dst, str2double(t4(4)), '00:00:00 is hour 1');
+            tc.verifyEqual(sd.query(e(58852 + 86399/86400)).dst, str2double(t4(27)), '23:59:59 is hour 24');
+            tc.verifyEqual(sd.index.dailyMean(sd.mjd == 58852), str2double(t4(28)));
+            tc.verifyEqual(sd.query(e(58852.1)).version, "X2");
+            L = splitlines(string(fileread(dstFiles(1)))); t1 = split(strtrim(L(startsWith(L, "DST0712*01"))));
+            tc.verifyEqual(sd.index.dst(sd.mjd == 54435, :), str2double(t1(4:27))', '2007-12-01, all 24 hours');
+            sf = NonGravForces.io.spaceWeather(clsAdj);
+            C = splitlines(string(fileread(clsAdj)));
+            row = @(y, m, d) str2double(split(strtrim(C(~cellfun(@isempty, regexp(C, sprintf('^\\s+%d\\s+%d\\s+%d\\s', y, m, d), 'once'))))))';
+            for c = {{2008, 1, 1, 54466, 18764/405}, {2020, 1, 1, 58849, 2077/45}}
+                [y, m, dd, mjd, mean81] = c{1}{:};
+                r0 = row(y, m, dd); rp = row(y - 1, 12, 31);             % both days are 1 January
+                q = sf.query(e(mjd + 0.5));
+                tc.verifyEqual(q.f30, r0(5)); tc.verifyEqual(q.f30Flag, r0(8)); tc.verifyEqual(q.f30Previous, rp(5));
+                tc.verifyEqual(r0(4) + 33282, mjd, 'cont_day + 33282 is the MJD (CLS: day 0 = 1950-01-01)');
+                tc.verifyRelClose(q.f30Mean81, mean81, 1e-13, "F30 81-day centred mean vs exact rational");
+            end
+        end
+    end
+    methods (Test, TestTags = {'precision'})
+        function spaceWeatherF30Precision(tc)
+            % The 81-day mean is the only arithmetic of the f30 family: one sum of 81 values of ~46 sfu and
+            % one division. Its rounding is bounded by 81 eps relative; measured against exact rationals.
+            [~, clsAdj] = tc.dstF30Fixtures();
+            sf = NonGravForces.io.spaceWeather(clsAdj);
+            q = sf.query(referenceSystem.mjdToEpoch([54466.5 58849.5], "UTC"));
+            err = max(abs(q.f30Mean81 ./ [18764/405 2077/45] - 1));
+            tc.verifyBoundAndRecord("F30 81-day mean, relative error vs exact rational", err, 81 * eps, "-", ...
+                "a sum of 81 doubles and one division; the rationals are from an independent Python Fraction sum");
+        end
+    end
+    methods (Test, TestTags = {'vectorization'})
+        function spaceWeatherDstF30Vectorization(tc)
+            [dstFiles, clsAdj] = tc.dstF30Fixtures();
+            mjd = [54440.01; 54466.5; 54495.99; 58849.2; 58879.9];
+            sd = NonGravForces.io.spaceWeather(dstFiles); sf = NonGravForces.io.spaceWeather(clsAdj);
+            for s = {sd, sf}
+                m = mjd;
+                if s{1}.format == "f30", m = mjd([2 4]) + [0; 0.3]; end   % the 81-day window needs 40 days each side
+                dAll = s{1}.query(referenceSystem.mjdToEpoch(m, "UTC"));
+                for k = 1:numel(m)
+                    d1 = s{1}.query(referenceSystem.mjdToEpoch(m(k), "UTC"));
+                    for fn = string(fieldnames(dAll))'
+                        tc.verifyEqual(dAll.(fn)(:, k), d1.(fn), sprintf('%s field %s epoch %d', s{1}.format, fn, k));
+                    end
+                end
+            end
+        end
+    end
+    methods (Test, TestTags = {'robustness'})
+        function spaceWeatherDstF30Robustness(tc)
+            [dstFiles, clsAdj] = tc.dstF30Fixtures();
+            e = @(mjd) referenceSystem.mjdToEpoch(mjd, "UTC");
+            % a WDC missing value (9999) is refused at its hour only
+            miss = tc.editedCopy(dstFiles(4), 'dst2001.for.request', @(L) setWdcHour(L, "DST2001*01", 5, "9999"));
+            sm = NonGravForces.io.spaceWeather(miss);
+            tc.verifyErrorId(@() sm.query(e(58849 + 4.5/24)), 'NonGravForces:spaceWeather:dataMissing');
+            tc.verifyTrue(isfinite(sm.query(e(58849 + 3.5/24)).dst), 'hour 4 of the same day is intact');
+            tc.verifyErrorId(@() sm.query(e(58880)), 'NonGravForces:spaceWeather:dataRange');            % 2020-02-01, not loaded
+            short = tc.editedCopy(dstFiles(4), 'dst2001s.for.request', @(L) [extractBefore(L(1), 100); L(2:end)]);
+            tc.verifyErrorId(@() NonGravForces.io.spaceWeather(short), 'NonGravForces:spaceWeather:dataMalformed');
+            tc.verifyErrorId(@() NonGravForces.io.spaceWeather([dstFiles(4) dstFiles(4)]), 'NonGravForces:spaceWeather:dataMalformed');
+            % CLS: -1 is missing; a cont_day that disagrees with the date is refused; the 81-day window must fit
+            sf = NonGravForces.io.spaceWeather(clsAdj);
+            tc.verifyErrorId(@() sf.query(e(54363.5)), 'NonGravForces:spaceWeather:dataRange');          % 2007-09-20: day-40 not in the table
+            tc.verifyTrue(isfinite(sf.query(e(54384.5)).f30Mean81), '2007-10-11 is the first day with a full window');
+            k = @(L) find(~cellfun(@isempty, regexp(L, '^\s+2008\s+1\s+1\s', 'once')));
+            neg = tc.editedCopy(clsAdj, 'cls_neg.txt', @(L) setLine(L, k(L), 5, "-1"));
+            sn = NonGravForces.io.spaceWeather(neg);
+            tc.verifyErrorId(@() sn.query(e(54466.5)), 'NonGravForces:spaceWeather:dataMissing');
+            tc.verifyErrorId(@() sn.query(e(54470.5)), 'NonGravForces:spaceWeather:dataMissing');   % 2008-01-05: the window holds the gap
+            badDay = tc.editedCopy(clsAdj, 'cls_day.txt', @(L) setLine(L, k(L), 4, "21185"));
+            tc.verifyErrorId(@() NonGravForces.io.spaceWeather(badDay), 'NonGravForces:spaceWeather:dataMalformed');
+            noAu = tc.editedCopy(clsAdj, 'cls_au.txt', @(L) L(~contains(L, "adjusted to 1 AU")));
+            tc.verifyErrorId(@() NonGravForces.io.spaceWeather(noAu), 'NonGravForces:spaceWeather:dataColumn');
+        end
+    end
+    methods (Test, TestTags = {'metamorphic'})
+        function spaceWeatherDstF30Metamorphic(tc)
+            [dstFiles, clsAdj, clsAbs] = tc.dstF30Fixtures();
+            e = @(mjd) referenceSystem.mjdToEpoch(mjd, "UTC");
+            % the order and grouping of month files changes nothing
+            all4 = NonGravForces.io.spaceWeather(dstFiles);
+            rev = NonGravForces.io.spaceWeather(fliplr(dstFiles));
+            one = NonGravForces.io.spaceWeather(dstFiles(2));
+            tc.verifyEqual(rev.index, all4.index); tc.verifyEqual(rev.mjd, all4.mjd);
+            ep = e(54466 + (0:23)' / 24 + 1/48);
+            tc.verifyEqual(one.query(ep).dst, all4.query(ep).dst);
+            % Kyoto's printed daily mean is the mean of the 24 hourly values, rounded to an integer
+            tc.verifyLessThanOrEqual(max(abs(mean(all4.index.dst, 2) - all4.index.dailyMean)), 0.5);
+            % F30 is a daily value: every second of a UTC day gives the same answer
+            sf = NonGravForces.io.spaceWeather(clsAdj);
+            a = sf.query(e(58849)); b = sf.query(e(58849 + 86399/86400));
+            tc.verifyEqual([a.f30 a.f30Previous a.f30Mean81 a.f30Flag], [b.f30 b.f30Previous b.f30Mean81 b.f30Flag]);
+            % adjusted = absolute * (r / 1 AU)^2: about 0.967 in early January (perihelion), the same factor for
+            % every band of a day up to CLS's 0.1 sfu rounding
+            sa = NonGravForces.io.spaceWeather(clsAbs);
+            r = sf.index.f30(sf.mjd == 58851) / sa.index.f30(sa.mjd == 58851);
+            r15 = sf.index.f15(sf.mjd == 58851) / sa.index.f15(sa.mjd == 58851);
+            tc.verifyGreaterThan(r, 0.960); tc.verifyLessThan(r, 0.972);
+            tc.verifyLessThan(abs(r - r15), 0.004, 'one distance factor per day for all bands');
+        end
+    end
+
 end
 
 % ------------------------------------------------------------------------- local helpers
@@ -1226,4 +1382,10 @@ tok = split(strtrim(L(k))); tok(jj) = "0"; L(k) = strjoin(tok, " ");
 end
 function x = localBaseline(mjd, ep)
 [~, r] = ismember(ep.day, mjd); s = floor(ep.sec / 10800) + 1; x = r + s;
+end
+function L = setLine(L, k, j, value)
+tok = split(strtrim(L(k))); tok(j) = string(value); L(k) = "   " + strjoin(tok, "   ");
+end
+function L = setWdcHour(L, record, hour, value)
+k = startsWith(L, record); L(k) = replaceBetween(L(k), 21 + 4 * (hour - 1), 24 + 4 * (hour - 1), value);
 end

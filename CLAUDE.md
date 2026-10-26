@@ -185,7 +185,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   `data/samples/itsg`, 30 files); `.github/workflows/fetch-data.yml` runs both on the SELF-HOSTED runner into
   its `READING_DATA_POOL`, the commit alone on GitHub's machine. First run 40381190966: 30/30 fetched, every
   committed excerpt reproduced byte for byte; CI green on 108fdc4. **No reader for Dst/F30 yet** (WP-25), TU
-  Graz's forces are not an oracle until TU Graz says whether they are measured or modelled, and classic
+  Graz's forces are MODELLED (owner, 2026-10-26): GROOPS output, the O-19 comparison still to write; classic
   GRACE Level-1B is PARKED (O-51: GFZ's ISDC is down, unreachable from every runner). Gate unchanged at 444.
 
 - **2026-10-20, N-10b (#67 complete):** GRACE-D's hybrid ACH1B (.ACX, 2020-01, in the pool) against ACT1B on the

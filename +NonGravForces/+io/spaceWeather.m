@@ -1,15 +1,19 @@
 function sw = spaceWeather(files, options)
-%SPACEWEATHER Space-weather provider: CelesTrak SW-All (MSIS drivers) or SET SOLFSMY+DTCFILE (JB2008 drivers), with query(epoch).
+%SPACEWEATHER Space-weather provider: CelesTrak SW-All, SET SOLFSMY+DTCFILE, Kyoto Dst or CLS F30, with query(epoch).
 %
 %   sw = NonGravForces.io.spaceWeather(swAllCsv)                       % family celestrak
 %   sw = NonGravForces.io.spaceWeather([solfsmyTxt dtcfileTxt])        % family jb2008
+%   sw = NonGravForces.io.spaceWeather([dst0712 dst0801 ...])          % family dst (Kyoto WDC months)
+%   sw = NonGravForces.io.spaceWeather(clsRadioFluxTxt)                % family f30 (CLS)
 %   d  = sw.query(epoch)                                               % drivers at K epochs
 %
 %   Loads the solar and geomagnetic indices a thermosphere model needs and
 %   returns them with a query function. The two families are never mixed:
 %   NRLMSISE-00 / MSIS 2.1 want F10.7 and ap, JB2008 wants F10, S10, M10, Y10
-%   and DTC, and the JB2008 indices are not F10.7 substitutes. The family is
-%   identified from the FILE CONTENT (header line), never from the file name.
+%   and DTC, and the JB2008 indices are not F10.7 substitutes. Dst (Kyoto) and
+%   F30 (CLS, the DTM2020 driver) are families of their own, loaded beside the
+%   others, not merged into them. The family is identified from the FILE
+%   CONTENT (header or record layout), never from the file name.
 %
 %   QUERY. d = sw.query(epoch) takes a referenceSystem epoch struct in any
 %   time scale (converted to UTC for the day lookup) and returns 1xK fields:
@@ -31,6 +35,17 @@ function sw = spaceWeather(files, options)
 %                dtc              at the UTC hour of the epoch         K
 %                          (lags as printed in the SOLFSMY header; the
 %                          "b" values are the 81-day centred means)
+%     dst        dst       hourly Dst of the UTC hour containing the
+%                          epoch (Kyoto's hour k covers [k-1, k) UT)  nT
+%                version   columns 13-14 of the day's WDC record, as
+%                          printed ("X2" in the committed final months) -
+%     f30        f30       daily 30 cm flux of the UTC day             sfu
+%                f30Previous  the same, one day earlier                sfu
+%                f30Mean81 arithmetic mean of the 81 daily values
+%                          centred on the day (day-40..day+40)         sfu
+%                f30Flag   CLS processing flag of the day (sum of 1
+%                          provisional, 2 interpolated, 4 flare-corrected) -
+%                          No lag is applied: a consumer applies its model's own.
 %
 %   A query that needs a day outside the table (including the lag and the
 %   57 h ap history) raises dataRange; a needed value that is missing (empty
@@ -41,14 +56,18 @@ function sw = spaceWeather(files, options)
 % INPUT ARGUMENTS
 %   Name     Size  Type    Units  Description
 %   ----     ----  ----    -----  -----------
-%   files    1xF   string  -      One CelesTrak SW-All CSV, or the SET
-%                                 SOLFSMY and DTCFILE text files (either order).
+%   files    1xF   string  -      One CelesTrak SW-All CSV; or the SET
+%                                 SOLFSMY and DTCFILE text files (either order);
+%                                 or one or more Kyoto WDC Dst month files
+%                                 (dst<yymm>.for.request, any order, no day twice);
+%                                 or one CLS radio_flux_*_observation.txt.
 %
 % NAME-VALUE ARGUMENTS
 %   Name     Size  Type    Units  Description
 %   ----     ----  ----    -----  -----------
 %   Format   1x1   string  -      "auto" (default; identified from content),
-%                                 "celestrak" or "jb2008" (must then match).
+%                                 "celestrak", "jb2008", "dst" or "f30" (must
+%                                 then match).
 %
 % OUTPUT ARGUMENTS
 %   Name     Size  Type    Units  Description
@@ -63,12 +82,23 @@ function sw = spaceWeather(files, options)
 %                                 (Nx8, /10) kpSum sunspotNumber dataType (string)
 %            jb2008 .index:     f10 f10b s10 s10b m10 m10b y10 y10b ssrc
 %                                 (string) dtc (Nx24, NaN where DTCFILE has no day)
+%            dst .index:        dst (Nx24 nT, base value applied, NaN for the
+%                                 WDC missing value 9999), dailyMean (Nx1 nT, as
+%                                 printed), version (Nx1 string)
+%            f30 .index:        for each band b of f30 f15 f107 f8 f32 (CLS f30,
+%                                 f15, f10.7, f8, f3.2): b, bCorrected (CLS _c,
+%                                 flare-corrected), bPrecision (_p), bFlag (_f);
+%                                 Nx1 sfu, NaN where CLS writes -1
+%            f30 also sets .adjusted (true: "adjusted to 1 AU", false: "not
+%                                 adjusted"), read from the file header.
 %
 % ACCURACY
 %   Table values are returned unchanged; nothing is interpolated (daily and
 %   3-hourly indices are step functions by definition, DTC is hourly). The
 %   81-day means are the published columns, so an excerpt of the file gives
-%   the same answers as the whole file.
+%   the same answers as the whole file. f30Mean81 is computed here: a plain
+%   mean of 81 table values, exact to rounding (no window weights, no gap
+%   filling: CLS has already interpolated its gaps and flags them).
 %
 % ERRORS
 %   NonGravForces:spaceWeather:inputFiles     wrong number of files for the family
@@ -77,7 +107,9 @@ function sw = spaceWeather(files, options)
 %   NonGravForces:spaceWeather:dataColumn     a required column is missing
 %   NonGravForces:spaceWeather:dataMalformed  a record does not parse (bad date,
 %                                             DTC row without 24 values, JD and
-%                                             YYYY/DDD disagree)
+%                                             YYYY/DDD disagree, a WDC Dst record
+%                                             not 120 columns, a CLS cont_day that
+%                                             disagrees with its date, a day twice)
 %   NonGravForces:spaceWeather:inputEpoch     (query) not an epoch struct
 %   NonGravForces:spaceWeather:dataRange      (query) a needed day is not in the table
 %   NonGravForces:spaceWeather:dataMissing    (query) a needed value is empty
@@ -88,7 +120,10 @@ function sw = spaceWeather(files, options)
 %   CelesTrak SW-All format, https://celestrak.org/SpaceData/ ; Picone et al.
 %   (2002) NRLMSISE-00 (AP array, F107 previous day, F107A 81-day centred);
 %   Bowman et al. (2008) AIAA 2008-6438, JB2008 driver header (index lags);
-%   SET SOLFSMY.TXT header (lags restated).
+%   SET SOLFSMY.TXT header (lags restated). WDC for Geomagnetism, Kyoto, Dst
+%   index WDC exchange format (columns 1-20 header, 21-116 24 hourly values
+%   I4, 117-120 daily mean, 9999 missing). CLS radio flux files, header of
+%   radio_flux_*_observation.txt (columns, flags; cont_day 0 = 1950-01-01).
 %
 % EXAMPLE
 %   root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
@@ -97,11 +132,11 @@ function sw = spaceWeather(files, options)
 %
 % See also NonGravForces.env.density, referenceSystem.mjdToEpoch.
 %
-% KEYWORDS space weather F10.7 Ap Kp S10 M10 Y10 DTC JB2008 MSIS
-% Created 2026-09-06 by Claude Fable 5.1 (Anthropic).
+% KEYWORDS space weather F10.7 Ap Kp S10 M10 Y10 DTC JB2008 MSIS Dst F30 DTM2020
+% Created 2026-09-06 by Claude Fable 5.1 (Anthropic); Dst and F30 2026-10-26 by Claude Opus 5.5 (Anthropic).
 arguments
     files (1,:) string {mustBeNonempty, mustBeFile}
-    options.Format (1,1) string {mustBeMember(options.Format, ["auto","celestrak","jb2008"])} = "auto"
+    options.Format (1,1) string {mustBeMember(options.Format, ["auto","celestrak","jb2008","dst","f30"])} = "auto"
 end
 unit = "spaceWeather";
 kinds = arrayfun(@(f) localKind(f, unit), files);
@@ -110,14 +145,23 @@ if options.Format == "auto"
         fam = "celestrak";
     elseif numel(files) == 2 && all(ismember(["solfsmy","dtc"], kinds))
         fam = "jb2008";
+    elseif all(kinds == "dst")
+        fam = "dst";
+    elseif isscalar(files) && kinds == "cls"
+        fam = "f30";
     else
-        NonGravForces.fail(unit, "inputFiles", "got %d file(s) of kind %s -> pass one SW-All.csv (celestrak) or SOLFSMY.TXT + DTCFILE.TXT (jb2008)", ...
+        NonGravForces.fail(unit, "inputFiles", "got %d file(s) of kind %s -> pass one SW-All.csv (celestrak), SOLFSMY.TXT + DTCFILE.TXT (jb2008), Kyoto dst<yymm>.for.request months (dst) or one CLS radio_flux file (f30)", ...
             numel(files), strjoin(kinds, ","));
     end
 else
     fam = options.Format;
-    want = struct('celestrak', "celestrak", 'jb2008', ["solfsmy","dtc"]);
-    if ~(numel(files) == numel(want.(fam)) && all(ismember(want.(fam), kinds)))
+    want = struct('celestrak', "celestrak", 'jb2008', ["solfsmy","dtc"], 'dst', "dst", 'f30', "cls");
+    if fam == "dst"
+        fits = all(kinds == "dst");
+    else
+        fits = numel(files) == numel(want.(fam)) && all(ismember(want.(fam), kinds));
+    end
+    if ~fits
         NonGravForces.fail(unit, "inputFormat", "Format %s needs file kind(s) %s, got %s -> pass the matching files or use Format auto", ...
             fam, strjoin(want.(fam), "+"), strjoin(kinds, ","));
     end
@@ -133,6 +177,14 @@ switch fam
         [sw.mjd, sw.index] = localReadJb2008(files(kinds == "solfsmy"), files(kinds == "dtc"), unit);
         data = struct('mjd', sw.mjd, 'index', sw.index);
         sw.query = @(epoch) localQueryJb2008(epoch, data, unit);
+    case "dst"
+        [sw.mjd, sw.index] = localReadDst(files, unit);
+        data = struct('mjd', sw.mjd, 'index', sw.index);
+        sw.query = @(epoch) localQueryDst(epoch, data, unit);
+    case "f30"
+        [sw.mjd, sw.index, sw.adjusted] = localReadCls(files, unit);
+        data = struct('mjd', sw.mjd, 'index', sw.index);
+        sw.query = @(epoch) localQueryF30(epoch, data, unit);
 end
 sw.span = [sw.mjd(1) sw.mjd(end)];
 sw.provenance = NonGravForces.provenance("io.spaceWeather", 'Files', files, 'Options', options);
@@ -154,12 +206,16 @@ end
 fclose(fid);
 if ~isempty(head) && startsWith(head(1), "DATE,BSRN,ND,")
     kind = "celestrak";
+elseif ~isempty(head) && ~isempty(regexp(head(1), '^DST\d{4}\*\d{2}', 'once'))
+    kind = "dst";
+elseif ~isempty(head) && startsWith(head(1), "# File created by CLS")
+    kind = "cls";
 elseif any(startsWith(head, "DTC "))
     kind = "dtc";
 elseif any(contains(head, "YYYY DDD") & startsWith(head, "#"))
     kind = "solfsmy";
 else
-    NonGravForces.fail(unit, "inputFormat", "%s is neither CelesTrak SW-All (header DATE,BSRN,ND,...), SET SOLFSMY (# YYYY DDD ...) nor SET DTCFILE (DTC yyyy ddd ...) -> pass one of those", file);
+    NonGravForces.fail(unit, "inputFormat", "%s is neither CelesTrak SW-All (header DATE,BSRN,ND,...), SET SOLFSMY (# YYYY DDD ...), SET DTCFILE (DTC yyyy ddd ...), Kyoto WDC Dst (DSTyymm*dd ...) nor CLS radio flux (# File created by CLS ...) -> pass one of those", file);
 end
 end
 
@@ -336,4 +392,135 @@ localNoNaN([d.f10; d.f10b; d.s10; d.s10b], "F10/S10 (1 d lag)", dayQ - 1, unit);
 localNoNaN([d.m10; d.m10b], "M10 (2 d lag)", dayQ - 2, unit);
 localNoNaN([d.y10; d.y10b], "Y10 (5 d lag)", dayQ - 5, unit);
 localNoNaN(d.dtc, "DTC (hourly)", dayQ, unit);
+end
+
+% ------------------------------------------------------------------------ Dst and F30 (O-9)
+function [mjd, index] = localReadDst(files, unit)
+% Kyoto WDC exchange format, fixed columns: 1-3 'DST', 4-5 yy, 6-7 month, 8 '*', 9-10 day,
+% 13-14 version, 15-16 century, 17-20 base (100 nT), 21-116 24 x I4 hourly (nT), 117-120 daily mean.
+recs = strings(0, 1);
+for f = files
+    l = splitlines(string(fileread(f)));
+    l = l(strlength(strtrim(l)) > 0);
+    recs = [recs; l]; %#ok<AGROW>
+end
+bad = find(strlength(recs) ~= 120 | ~startsWith(recs, "DST"), 1);
+if ~isempty(bad)
+    NonGravForces.fail(unit, "dataMalformed", "Dst record %d is not a 120-column WDC record starting DST -> check the file: %s", bad, recs(bad));
+end
+c = char(recs);
+cen = str2double(string(c(:, 15:16)));
+cen(isnan(cen)) = 19;                               % WDC: a blank century means 19xx
+yr = 100 * cen + str2double(string(c(:, 4:5)));
+mo = str2double(string(c(:, 6:7)));
+dy = str2double(string(c(:, 9:10)));
+base = str2double(string(c(:, 17:20)));
+base(isnan(base)) = 0;                              % a blank base is 0
+hourly = zeros(numel(recs), 24);
+for k = 1:24
+    hourly(:, k) = str2double(string(c(:, 20 + 4 * (k - 1) + (1:4))));
+end
+daily = str2double(string(c(:, 117:120)));
+if any(isnan([yr; mo; dy])) || any(isnan(hourly(:)))
+    k = find(any(isnan([yr mo dy hourly]), 2), 1);
+    NonGravForces.fail(unit, "dataMalformed", "Dst record %d does not parse as WDC integers -> check the file: %s", k, recs(k));
+end
+missing = hourly == 9999;
+hourly = 100 * base + hourly;
+hourly(missing) = NaN;
+daily(daily == 9999) = NaN;
+ep = referenceSystem.datetimeToEpoch(datetime(yr, mo, dy), "UTC");
+mjd = double(ep.day(:));
+[mjd, order] = sort(mjd);                           % months may come in any order
+if any(diff(mjd) == 0)
+    NonGravForces.fail(unit, "dataMalformed", "Dst day MJD %d appears twice -> pass each month file once", mjd(find(diff(mjd) == 0, 1)));
+end
+index.dst = hourly(order, :);
+index.dailyMean = daily(order);
+index.version = string(c(order, 13:14));
+end
+
+function [mjd, index, adjusted] = localReadCls(file, unit)
+% CLS radio_flux_*_observation.txt: '#' header naming the columns, then whitespace-separated
+% year month day cont_day and four values per band; -1 is missing; cont_day 0 = 1950-01-01.
+lines = splitlines(string(fileread(file)));
+head = lines(startsWith(lines, "#"));
+if any(contains(head, "not adjusted to 1 AU"))
+    adjusted = false;
+elseif any(contains(head, "adjusted to 1 AU"))
+    adjusted = true;
+else
+    NonGravForces.fail(unit, "dataColumn", "%s does not say whether it is adjusted to 1 AU -> pass CLS's radio_flux_adjusted_observation.txt or radio_flux_absolute_observation.txt", file);
+end
+colLine = head(~cellfun(@isempty, regexp(head, '^#\s+year\s+month\s+day\s+cont_day', 'once')));
+if isempty(colLine)
+    NonGravForces.fail(unit, "dataColumn", "%s has no '# year month day cont_day ...' column line -> use CLS's observation file layout", file);
+end
+names = split(strtrim(extractAfter(colLine(1), "#")))';
+bands = ["f30" "f15" "f10.7" "f8" "f3.2"];
+fields = ["f30" "f15" "f107" "f8" "f32"];
+need = [bands, bands + "_c", bands + "_p", bands + "_f"];
+miss = need(~ismember(need, names));
+if ~isempty(miss)
+    NonGravForces.fail(unit, "dataColumn", "CLS columns %s missing (have %s) -> use CLS's observation file layout", strjoin(miss, ","), strjoin(names, ","));
+end
+data = lines(~startsWith(lines, "#") & strlength(strtrim(lines)) > 0);
+try
+    tok = split(strtrim(data));
+catch
+    NonGravForces.fail(unit, "dataMalformed", "CLS data lines do not all have the same number of fields -> check the file");
+end
+if isscalar(data), tok = tok'; end
+if size(tok, 2) ~= numel(names)
+    NonGravForces.fail(unit, "dataMalformed", "CLS data lines have %d fields, the column line names %d -> check the file", size(tok, 2), numel(names));
+end
+v = str2double(tok);
+col = @(n) v(:, names == n);
+if any(isnan(v(:)))
+    k = find(any(isnan(v), 2), 1);
+    NonGravForces.fail(unit, "dataMalformed", "CLS data line %d does not parse as numbers -> check the file: %s", k, data(k));
+end
+ep = referenceSystem.datetimeToEpoch(datetime(col("year"), col("month"), col("day")), "UTC");
+mjd = double(ep.day(:));
+contDay = col("cont_day");
+k = find(mjd ~= contDay + 33282, 1);                % MJD of 1950-01-01 is 33282
+if ~isempty(k)
+    NonGravForces.fail(unit, "dataMalformed", "CLS line %d: cont_day %d disagrees with its date (MJD %d) -> the file is corrupt", k, contDay(k), mjd(k));
+end
+if any(diff(mjd) <= 0)
+    NonGravForces.fail(unit, "dataMalformed", "CLS days are not strictly increasing at line %d -> the file is corrupt", find(diff(mjd) <= 0, 1) + 1);
+end
+for b = 1:numel(bands)
+    for sfx = ["", "_c", "_p", "_f"]
+        x = col(bands(b) + sfx);
+        x(x == -1) = NaN;
+        index.(fields(b) + replace(sfx, ["_c" "_p" "_f"], ["Corrected" "Precision" "Flag"])) = x;
+    end
+end
+end
+
+function d = localQueryDst(epoch, data, unit)
+[dayQ, secQ] = localQueryDay(epoch, unit);
+r0 = localRows(data.mjd, dayQ, unit, "Dst query");
+hour = floor(secQ / 3600) + 1;                      % 1..24, Kyoto's hour k covers [k-1, k) UT
+d.dst = data.index.dst(sub2ind(size(data.index.dst), r0, hour));
+d.version = data.index.version(r0)';
+localNoNaN(d.dst, "hourly Dst", dayQ, unit);
+end
+
+function d = localQueryF30(epoch, data, unit)
+[dayQ, ~] = localQueryDay(epoch, unit);
+idx = data.index;
+r0 = localRows(data.mjd, dayQ, unit, "F30 query");
+r1 = localRows(data.mjd, dayQ - 1, unit, "previous-day F30");
+rw = localRows(data.mjd, dayQ + (-40:40)', unit, "81-day centred F30 mean");
+d.f30 = idx.f30(r0)';
+d.f30Previous = idx.f30(r1)';
+w = reshape(idx.f30(rw), 81, []);
+d.f30Mean81 = sum(w, 1) / 81;
+d.f30Flag = idx.f30Flag(r0)';
+localNoNaN(d.f30, "F30", dayQ, unit);
+localNoNaN(d.f30Previous, "F30 (previous day)", dayQ - 1, unit);
+days81 = dayQ + (-40:40)';
+localNoNaN(w(:)', "F30 (81-day window)", days81(:)', unit);
 end
