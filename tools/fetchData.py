@@ -206,7 +206,7 @@ def head_sample(b, n=HEAD_LINES):
 
 _DATE_RES = [
     (re.compile(r"^\s*\"?(\d{4})-(\d{2})-(\d{2})"), "ymd"),
-    (re.compile(r"^\s*(\d{4})[ /.](\d{1,2})[ /.](\d{1,2})\b"), "ymd"),
+    (re.compile(r"^\s*(\d{4})[ /.]+(\d{1,2})[ /.]+(\d{1,2})\b"), "ymd"),   # CLS: "  2008    1    1"
     (re.compile(r"^\s*(\d{4})(\d{2})(\d{2})\b"), "ymd"),
     (re.compile(r"^\s*(\d{4})\s+(\d{1,3})\s+(\d{1,2})\s"), "ydh"),   # OMNI2: year doy hour
 ]
@@ -214,8 +214,8 @@ _DATE_RES = [
 
 def line_date(line, kind=None):
     for rx, k in _DATE_RES:
-        if kind and k != kind:
-            continue
+        if k != (kind or "ymd"):
+            continue          # year-doy-hour only when asked for: "2008 1 1" is a date otherwise
         m = rx.match(line)
         if not m:
             continue
@@ -540,7 +540,7 @@ def main():
     when = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     rec.say(f"# fetchData probe report, {when}")
     rec.say("")
-    rec.say("Written by `tools/fetchData.py` on a GitHub-hosted runner. Staging only: see the "
+    rec.say("Written by `tools/fetchData.py` on a CI runner (hosted: GitHub; classic: self-hosted). Staging only: see the "
             "script's docstring. Each line is a request and what came back.")
     for name in a.only:
         try:
