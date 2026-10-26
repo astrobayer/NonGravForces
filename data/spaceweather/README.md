@@ -17,8 +17,9 @@ these sources (HANDOVER O-9); they came separately, below.
 
 ## Dst and F30 (O-9), fetched 2026-10-26
 
-Fetched by `.github/workflows/fetch-data.yml` (`tools/fetchData.py`, run 40361879447) on a GitHub-hosted runner,
-because the development container cannot reach these hosts. **No reader exists for either yet**:
+First fetched by `.github/workflows/fetch-data.yml` on 2026-10-26 (run 40361879447). The full products are now
+fetched by `setupNonGravForces('FetchPool', ...)` into `<DATAPOOL>/SpaceWeather` (on the CI runner, its
+`READING_DATA_POOL`), and these excerpts are cut from them by `tools/cutFixtures.py`; the workflow does both. **No reader exists for either yet**:
 `io.spaceWeather` identifies the three families above only, and these files are the oracle a reader must be
 written against.
 

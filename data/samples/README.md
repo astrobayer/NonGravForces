@@ -48,7 +48,9 @@ On that day the sensor-unit temperatures TSU span only 0.022 C and TICUR reads -
 ## itsg/ — TU Graz operational orbit products (N-12 attitude; an external force series for O-19)
 
 Excerpts of the Institute of Geodesy's operational products, `https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/<satellite>/<product>/<year>/`,
-fetched 2026-10-26 by `.github/workflows/fetch-data.yml` (run 40361879447; `tools/fetchData.py`). Free of charge for
+first fetched 2026-10-26 by `.github/workflows/fetch-data.yml` (run 40361879447). The full products are fetched by
+`setupNonGravForces('FetchPool', ...)` into `<DATAPOOL>/ITSG/operational/<satellite>/<product>/<year>/` and cut by
+`tools/cutFixtures.py`; the workflow does both on the CI runner. Free of charge for
 any use; publications acknowledge TU Graz (their `README.txt`). GRACE-1/-2 are GRACE-A/-B, GRACEFO-1/-2 are GRACE-C/-D.
 
 Each file is the **first 600 epochs (10 s sampling, 00:00:00 to 01:39:50 GPS)** of the day, GROOPS instrument format

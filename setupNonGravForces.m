@@ -35,6 +35,19 @@ function info = setupNonGravForces(options)
 %       CERES EBAF 4.2.1    rsut, rlut and rsdt monthly means 2000-03..2025-09 (obs4MIPs,
 %                           65 MB) from ESGF, each kept only if its SHA-256 is the one ESGF
 %                           publishes, into data/ceres beside the committed two-month excerpt
+%     observations for the reference days ('FetchPool', into DATAPOOL; PR #107)
+%       Dst                 Kyoto WDC FINAL hourly Dst, the month of each 'PoolDays' day and the
+%                           month before it, into <DataPool>/SpaceWeather/Dst
+%       F30                 CLS daily 30 cm radio flux (adjusted to 1 AU and absolute; gaps
+%                           interpolated and flagged), by anonymous FTP, into
+%                           <DataPool>/SpaceWeather/F30
+%       TU Graz products    attitude, nonConservativeForces and reducedDynamicOrbit of GRACE-A/B
+%                           (days before 2018) or GRACE-C/D (from 2018) per 'PoolDays' day, as
+%                           published (.txt.gz), into <DataPool>/ITSG/operational/<sat>/<product>/<yyyy>
+%                           The committed excerpts in data/spaceweather and data/samples/itsg are
+%                           cut from these by tools/cutFixtures.py. Classic GRACE Level-1B is not
+%                           here yet: GFZ's ISDC, its only anonymous source, is down (2026-10-26)
+%                           and no archive name has been read from it.
 %
 %   PRESENCE IS DECIDED BY THE EXACT FILE, AND A DOWNLOAD BY ITS CONTENT. Until
 %   2026-09-15 a glob decided presence, so the committed seven-month excerpts
@@ -72,7 +85,14 @@ function info = setupNonGravForces(options)
 %   DataPool   1x1   string   -      Root of the GROOPS-style data pool. Default: the DATAPOOL
 %                                    environment variable. It is NOT guessed: a 2.5 GB download
 %                                    into a directory nobody named is not a service (R5). The
-%                                    files go into <DataPool>/EarthRadiationPressure.
+%                                    GROOPS files go into <DataPool>/EarthRadiationPressure,
+%                                    FetchPool's into <DataPool>/SpaceWeather and <DataPool>/ITSG.
+%   FetchPool  1x1   string   -      The same three settings for the observations of the reference
+%                                    days (Dst, F30, TU Graz products), into DataPool (default
+%                                    "ifMissing"; nothing happens without a DataPool). ciGate passes
+%                                    "never": the gate reads committed excerpts, not the network.
+%   PoolDays   1xN   string   -      Reference days for FetchPool, "yyyy-mm-dd" (default the fixture
+%                                    days "2008-01-01" "2020-01-01" "2020-01-02" "2020-01-03").
 %   FetchKernels 1x1 string   -      The same three settings for the DE440 ephemeris. It is SEPARATE
 %                                    from FetchData on purpose: ciGate passes FetchData "never" so
 %                                    that the gate does not test the network for OBSERVATIONS, which
@@ -101,7 +121,7 @@ function info = setupNonGravForces(options)
 % See also NonGravForces.dependencyReport, NonGravForces.buildMex, runNgfTests.
 %
 % KEYWORDS setup path dependencies fetch
-% Created 2026-08-27 by Claude Fable 5 (Anthropic) for Matthias Weigelt; content-checked fetches and NRLMSIS 2.1 2026-09-15 by Claude Opus 5 (Anthropic).
+% Created 2026-08-27 by Claude Fable 5 (Anthropic) for Matthias Weigelt; content-checked fetches and NRLMSIS 2.1 2026-09-15 by Claude Opus 5 (Anthropic); FetchPool 2026-10-26 by Claude Opus 5.5 (Anthropic).
 arguments
     options.Verbose (1,1) logical = true
     options.FetchMsis (1,1) string {mustBeMember(options.FetchMsis, ["ifMissing","never","force"])} = "ifMissing"
@@ -109,6 +129,8 @@ arguments
     options.FetchKernels (1,1) string {mustBeMember(options.FetchKernels, ["ifMissing","never","force"])} = "ifMissing"
     options.FetchGroops (1,1) string {mustBeMember(options.FetchGroops, ["ifMissing","never","force"])} = "never"
     options.DataPool (1,1) string = string(getenv('DATAPOOL'))
+    options.FetchPool (1,1) string {mustBeMember(options.FetchPool, ["ifMissing","never","force"])} = "ifMissing"
+    options.PoolDays (1,:) string {mustBeNonempty} = ["2008-01-01" "2020-01-01" "2020-01-02" "2020-01-03"]
 end
 % THE PINS AND URLS LIVE HERE AND NOWHERE ELSE (rule R1). Moving a pin is an act with a run behind it.
 % NRLMSISE-00: bc9a2fe is "gtd7: fix output at 32.5 km" (Argon densities and a memory corruption fixed
@@ -163,6 +185,14 @@ GROOPS_FILES = struct( ...
     'name', {"CERES_SYN1deg_albedo_climatology.dat", "CERES_SYN1deg_longwaveFlux_climatology.dat", ...
              "earth_ceres_reflectivity_grid2.5.dat", "earth_ceres_emissivity_grid2.5.dat"}, ...
     'folder', {"earthRadiationPressure", "earthRadiationPressure", "albedo", "albedo"});
+% Observations for the reference days (FetchPool). The three sources were found by the fetch-data
+% workflow's probes of 2026-10-26 (PR #107, runs 40358650063 to 40375328241). NO SHA-256 PINS: the
+% days are a parameter, and CLS rewrites its files daily; each reply is checked by its first line.
+DST_BASE = "https://wdc.kugi.kyoto-u.ac.jp/dst_final";      % /<yyyymm>/dst<yymm>.for.request
+F30_BASE = "ftp://ftpsedr.cls.fr/pub/previsol/solarflux/observation";
+F30_FILES = ["radio_flux_adjusted_observation.txt" "radio_flux_absolute_observation.txt"];
+ITSG_BASE = "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational";
+ITSG_PRODUCTS = ["attitude" "nonConservativeForces" "reducedDynamicOrbit"];
 DE440_FILE = "de440s.bsp";
 DE440_SHA256 = "c1c7feeab882263fc493a9d5a5b2ddd71b54826cdf65d8d17a76126b260a49f2";
 root = fileparts(mfilename('fullpath'));
@@ -187,6 +217,8 @@ info.data.items = [info.data.items, localFetchCeres(root, CERES_BASE, CERES_FILE
 info.data.items = [info.data.items, localFetchKernel(root, DE440_FILE, DE440_SHA256, options.FetchKernels)];
 info.dataPool = options.DataPool;
 info.data.items = [info.data.items, localFetchGroops(options.DataPool, GROOPS_BASE, GROOPS_FILES, options.FetchGroops)];
+info.data.items = [info.data.items, localFetchPool(options.DataPool, options.PoolDays, DST_BASE, F30_BASE, F30_FILES, ...
+    ITSG_BASE, ITSG_PRODUCTS, options.FetchPool)];
 info.mex = NonGravForces.buildMex('Check', true);      % 1xT: one element per target
 if options.Verbose
     for m = 1:numel(info.mex)
@@ -346,6 +378,128 @@ for k = 1:numel(files)
     items(end+1) = rec; %#ok<AGROW>
     clear cleanup
 end
+end
+
+function items = localFetchPool(pool, days, dstBase, f30Base, f30Files, itsgBase, itsgProducts, mode)
+%LOCALFETCHPOOL Observations of the reference days into DATAPOOL: Dst, F30 and TU Graz's products.
+%   The pool is named, never guessed (localFetchGroops says why). Every reply is checked by its first
+%   lines before it replaces anything -- for a .gz, those of what it decompresses to -- and a failure
+%   is REPORTED per file, never raised. Kyoto keeps FINAL Dst only for months a few years old; a
+%   recent day reports "failed" for its month rather than silently taking provisional values.
+items = struct('name', {}, 'action', {}, 'file', {}, 'source', {});
+if strlength(pool) == 0
+    items(end+1) = struct('name', "pool", 'action', ...
+        "skipped: DATAPOOL is not set -> set the DATAPOOL environment variable or pass 'DataPool'", ...
+        'file', "", 'source', "");
+    return
+end
+d = datetime(days, 'InputFormat', 'yyyy-MM-dd');
+targets = struct('name', {}, 'url', {}, 'dst', {}, 'check', {});
+% Dst: each day's month and the month before it, so a three-day history never stops at a month boundary
+first = dateshift(d, 'start', 'month');
+months = unique([first, first - calmonths(1)]);
+for m = months
+    ym = string(m, 'yyyyMM');
+    yymm = extractAfter(ym, 2);
+    targets(end+1) = struct('name', "dst " + ym, 'url', dstBase + "/" + ym + "/dst" + yymm + ".for.request", ...
+        'dst', string(fullfile(pool, "SpaceWeather", "Dst", "dst" + yymm + ".for.request")), 'check', "^DST" + yymm); %#ok<AGROW>
+end
+for f = f30Files
+    targets(end+1) = struct('name', "f30 " + extractBefore(f, "_observation"), 'url', f30Base + "/" + f, ...
+        'dst', string(fullfile(pool, "SpaceWeather", "F30", f)), 'check', "^# File created by CLS"); %#ok<AGROW>
+end
+% TU Graz names GRACE-A/B "GRACE-1/-2" and GRACE-C/D "GRACEFO-1/-2"
+for k = 1:numel(d)
+    yyyy = string(year(d(k)));
+    ymd = string(d(k), 'yyyy-MM-dd');
+    if year(d(k)) < 2018, sats = ["GRACE-1" "GRACE-2"]; else, sats = ["GRACEFO-1" "GRACEFO-2"]; end
+    for s = sats
+        for p = itsgProducts
+            file = s + "_" + p + "_" + ymd + ".txt.gz";
+            targets(end+1) = struct('name', "itsg " + s + " " + p + " " + ymd, ...
+                'url', itsgBase + "/" + s + "/" + p + "/" + yyyy + "/" + file, ...
+                'dst', string(fullfile(pool, "ITSG", "operational", s, p, yyyy, file)), 'check', "^groops instrument"); %#ok<AGROW>
+        end
+    end
+end
+for t = targets
+    rec = struct('name', t.name, 'action', "present", 'file', t.dst, 'source', t.url);
+    if isfile(t.dst) && mode ~= "force"
+        items(end+1) = rec; %#ok<AGROW>
+        continue
+    end
+    if mode == "never"
+        rec.action = "missing (FetchPool never)";
+        rec.file = "";
+        items(end+1) = rec; %#ok<AGROW>
+        continue
+    end
+    folder = fileparts(t.dst);
+    if ~isfolder(folder), mkdir(folder); end
+    gz = endsWith(t.dst, ".gz");
+    if gz, tmp = [tempname '.txt.gz']; else, tmp = [tempname '.txt']; end   % gunzip wants the extension
+    cleanup = onCleanup(@() localQuietDelete(tmp));
+    fprintf('setupNonGravForces: fetching %s from %s\n', t.name, t.url);
+    try
+        if startsWith(t.url, "ftp://")
+            localFtpGet(tmp, t.url);
+        else
+            localDownload(tmp, t.url);
+        end
+        if localPoolContent(tmp, t.check, gz)
+            movefile(tmp, t.dst, 'f');
+            rec.action = "fetched";
+        else
+            rec.action = "failed: the reply is not the expected product (its first lines do not match) -> discarded";
+            rec.file = "";
+        end
+    catch err
+        rec.action = "failed: " + string(err.message);
+        rec.file = "";
+    end
+    if rec.action ~= "fetched"
+        fprintf('setupNonGravForces: %s -> fetch it by hand from %s\n', rec.action, t.url);
+    end
+    items(end+1) = rec; %#ok<AGROW>
+    clear cleanup
+end
+end
+
+function localFtpGet(tmp, url)
+%LOCALFTPGET One file by anonymous FTP: websave speaks HTTP only, and CLS publishes F30 by FTP only.
+tok = regexp(char(url), '^ftp://([^/]+)(/.*)/([^/]+)$', 'tokens', 'once');
+if isempty(tok)
+    error('setupNonGravForces:ftpUrl', 'not an ftp://host/path/file URL: %s', url);
+end
+here = tempname;
+mkdir(here);
+gone = onCleanup(@() rmdir(here, 's'));
+f = ftp(tok{1});
+closer = onCleanup(@() close(f));
+cd(f, tok{2});
+mget(f, tok{3}, here);
+clear closer
+movefile(fullfile(here, tok{3}), tmp, 'f');
+clear gone
+end
+
+function tf = localPoolContent(file, pattern, gz)
+%LOCALPOOLCONTENT The first lines of a fetched observation -- decompressed first when it is a .gz -- match.
+if ~gz
+    tf = localHeadMatches(file, pattern);
+    return
+end
+tf = false;
+here = tempname;
+mkdir(here);
+gone = onCleanup(@() rmdir(here, 's'));
+try
+    out = gunzip(file, here);
+catch
+    return          % not gzip: an HTML error page, typically
+end
+tf = ~isempty(out) && localHeadMatches(out{1}, pattern);
+clear gone
 end
 
 function tf = localGroopsMagic(file)
