@@ -1,0 +1,211 @@
+{
+ "generated": "2026-10-26 18:10 UTC",
+ "items": [
+  {
+   "url": "https://spdf.gsfc.nasa.gov/pub/data/omni/low_res_omni/omni2.text",
+   "status": 200,
+   "bytes": 18021,
+   "sha256": "be4aca7bdf030a3eb6ed584fb6960913e3be909d5627b2a69fe93a4765962d7f",
+   "note": "OMNI2 format description"
+  },
+  {
+   "url": "https://spdf.gsfc.nasa.gov/pub/data/omni/low_res_omni/omni2_2007.dat",
+   "status": 200,
+   "bytes": 2873280,
+   "sha256": "2bdae448301e6de3863e78643178628e3bcd39dee2aea111fe523d1e393217e7",
+   "note": ""
+  },
+  {
+   "url": "https://spdf.gsfc.nasa.gov/pub/data/omni/low_res_omni/omni2_2008.dat",
+   "status": 200,
+   "bytes": 2881152,
+   "sha256": "3115c8f3c1d28eaca6a4ada84ca2f36865d36d2b2db1c4f8a4c4ba667ac1e274",
+   "note": ""
+  },
+  {
+   "url": "https://spdf.gsfc.nasa.gov/pub/data/omni/low_res_omni/omni2_2019.dat",
+   "status": 200,
+   "bytes": 2873280,
+   "sha256": "8f4e57f313687b4fb86865dbb2df06adf414c7e496b99893b86013d91744b48e",
+   "note": ""
+  },
+  {
+   "url": "https://spdf.gsfc.nasa.gov/pub/data/omni/low_res_omni/omni2_2020.dat",
+   "status": 200,
+   "bytes": 2881152,
+   "sha256": "11c2de98f1fd1ebe0156ca36c439fd4063d28c95e3706ec8752e7f59eea41700",
+   "note": ""
+  },
+  {
+   "url": "https://wdc.kugi.kyoto-u.ac.jp/dst_final/200712/dst0712.for.request",
+   "status": 200,
+   "bytes": 3752,
+   "sha256": "7b3ff06cf0cc4560497e8ca9030d9b67f6f118e396ff40657daef86b0b7fc432",
+   "note": ""
+  },
+  {
+   "url": "https://wdc.kugi.kyoto-u.ac.jp/dst_final/200801/dst0801.for.request",
+   "status": 200,
+   "bytes": 3752,
+   "sha256": "a09c56d390e89bad6d7dd89a3db7858503e52649f6087fd57aee594b8707b23b",
+   "note": ""
+  },
+  {
+   "url": "https://wdc.kugi.kyoto-u.ac.jp/dst_final/201912/dst1912.for.request",
+   "status": 200,
+   "bytes": 3752,
+   "sha256": "8813b818ffaa2a04521be4ed0f225a8164e490c520b4d4c408dc1c0211f8e99a",
+   "note": ""
+  },
+  {
+   "url": "https://wdc.kugi.kyoto-u.ac.jp/dst_final/202001/dst2001.for.request",
+   "status": 200,
+   "bytes": 3752,
+   "sha256": "f7545be24ea25aecb985bb5b73f760cd620d2897bbe041bcd6145761c45da483",
+   "note": ""
+  },
+  {
+   "url": "https://solar.nro.nao.ac.jp/norp/data/daily/",
+   "status": "failed",
+   "note": "URLError: <urlopen error timed out>"
+  },
+  {
+   "url": "https://solar.nro.nao.ac.jp/norp/data/daily/TYKW-NoRP_dailyflux.txt",
+   "status": "URLError: <urlopen error timed out>",
+   "bytes": 0,
+   "sha256": ""
+  },
+  {
+   "url": "ftp://ftpsedr.cls.fr/pub/previsol/solarflux/observation/radio_flux_absolute_observation.txt",
+   "status": "",
+   "bytes": 5260151,
+   "sha256": "50c8df9ab77ebe0be6387a0d596e21956e71f5016458d4252790d8d6514cf46f"
+  },
+  {
+   "url": "ftp://ftpsedr.cls.fr/pub/previsol/solarflux/observation/radio_flux_adjusted_observation.txt",
+   "status": "",
+   "bytes": 5260147,
+   "sha256": "6423391a3bd0b9fb073170c0a896ff9b6c22f1db0e5ed6c554e7a3a358f5e422"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/README.txt",
+   "status": 200,
+   "bytes": 8448,
+   "sha256": "09a1a4f320edd8125557d67a6ec0c43a657a8fbfb4aa6ba44f6c85f862c02d05"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/README_referenceFrames.txt",
+   "status": 200,
+   "bytes": 2000,
+   "sha256": "290f86f7248d6d8122fc3d4e7bb801a203104ba5a27800ef7dadc69200a0ccb9"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACE-1/attitude/2008/GRACE-1_attitude_2008-01-01.txt.gz",
+   "status": 200,
+   "bytes": 438416,
+   "sha256": "b6689a4f2c0fc1f28a5db9eba82dd28a2f4a8f6bf1a77d53b2b38f264446b386"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACE-2/attitude/2008/GRACE-2_attitude_2008-01-01.txt.gz",
+   "status": 200,
+   "bytes": 437714,
+   "sha256": "11f8319ce529933c3945fe75ad2027f24a5e77e6b4677c27b65904af01dcb1fe"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACEFO-1/attitude/2020/GRACEFO-1_attitude_2020-01-01.txt.gz",
+   "status": 200,
+   "bytes": 439031,
+   "sha256": "6c845b358f91175aad28f87f70ef4605e0b0abe253b015fc88fc24c5dcd5ba72"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACEFO-1/attitude/2020/GRACEFO-1_attitude_2020-01-02.txt.gz",
+   "status": 200,
+   "bytes": 438820,
+   "sha256": "c7614304a1b30ef15c7ce2660f9c3c6a7690c0bbf3ac91cfc914b06b803d2f89"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACEFO-1/attitude/2020/GRACEFO-1_attitude_2020-01-03.txt.gz",
+   "status": 200,
+   "bytes": 438903,
+   "sha256": "8776843d45c936a32cd8fc461a63e7e8371cc8e6c785ef400add4cc7a7582d4e"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACEFO-2/attitude/2020/GRACEFO-2_attitude_2020-01-01.txt.gz",
+   "status": 200,
+   "bytes": 437144,
+   "sha256": "523f83d00bff30dc8193ed06e876cb24032e14da4b8d32c00913a3480ce2e1dd"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACE-1/nonConservativeForces/2008/GRACE-1_nonConservativeForces_2008-01-01.txt.gz",
+   "status": 200,
+   "bytes": 341164,
+   "sha256": "4e720c8b730435c94f17a334e8ec291e414673f557f2fd6b2acdcb89e295b985"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACE-2/nonConservativeForces/2008/GRACE-2_nonConservativeForces_2008-01-01.txt.gz",
+   "status": 200,
+   "bytes": 340654,
+   "sha256": "8326d5563d5031f725f5bb858084df9b8b4266dc6f7372a5c9db79994c83849b"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACEFO-1/nonConservativeForces/2020/GRACEFO-1_nonConservativeForces_2020-01-01.txt.gz",
+   "status": 200,
+   "bytes": 340331,
+   "sha256": "57023e3f6383e843a325b597b81c5e24624397fc4e9b135b481f90721338034b"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACEFO-1/nonConservativeForces/2020/GRACEFO-1_nonConservativeForces_2020-01-02.txt.gz",
+   "status": 200,
+   "bytes": 340232,
+   "sha256": "5528e19a783b924add176a849d2904217437d60c7e7f517efff4ddda0b2b4914"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACEFO-1/nonConservativeForces/2020/GRACEFO-1_nonConservativeForces_2020-01-03.txt.gz",
+   "status": 200,
+   "bytes": 340753,
+   "sha256": "3a8316726b8fc71de60492affe4af63e4789a15e4f451e279e59b4595a4430c9"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACEFO-2/nonConservativeForces/2020/GRACEFO-2_nonConservativeForces_2020-01-01.txt.gz",
+   "status": 200,
+   "bytes": 339753,
+   "sha256": "3d3490e1ed629867a6481cd8c80ae574c3a0dd6f36f5625ecd4a76dba9b95723"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACE-1/reducedDynamicOrbit/2008/GRACE-1_reducedDynamicOrbit_2008-01-01.txt.gz",
+   "status": 200,
+   "bytes": 661333,
+   "sha256": "40813ac1aeb1ad2177e1b19e48ced675d272b240ba88247a34289d8e4ca4801b"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACE-2/reducedDynamicOrbit/2008/GRACE-2_reducedDynamicOrbit_2008-01-01.txt.gz",
+   "status": 200,
+   "bytes": 661454,
+   "sha256": "e3d9d7463f5e7ecfa34acae3bc09f64619151d00971242883d2b64d448a51aa6"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACEFO-1/reducedDynamicOrbit/2020/GRACEFO-1_reducedDynamicOrbit_2020-01-01.txt.gz",
+   "status": 200,
+   "bytes": 659073,
+   "sha256": "32608c82721ac7ca8e97291687475a25f880738e7009c3319fe916e425868f7b"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACEFO-1/reducedDynamicOrbit/2020/GRACEFO-1_reducedDynamicOrbit_2020-01-02.txt.gz",
+   "status": 200,
+   "bytes": 658882,
+   "sha256": "24d9065d9895388a41a4dc68978504d6b2e64e7bb8a826578822181594a1daf1"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACEFO-1/reducedDynamicOrbit/2020/GRACEFO-1_reducedDynamicOrbit_2020-01-03.txt.gz",
+   "status": 200,
+   "bytes": 658883,
+   "sha256": "dc46ecf50d9841629a12a9ea5c47e00dbf6a68e86bb2448e5ec193260072524c"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACEFO-2/reducedDynamicOrbit/2020/GRACEFO-2_reducedDynamicOrbit_2020-01-01.txt.gz",
+   "status": 200,
+   "bytes": 659035,
+   "sha256": "e90356d8869d8662dbaf8832b3ef57bd7139a4a69aeaf04e7c20999f449426d4"
+  }
+ ]
+}
