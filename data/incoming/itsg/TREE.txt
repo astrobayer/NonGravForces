@@ -1,0 +1,172 @@
+/  [14 dirs, 0 files]  CAKAO/ COST-G/ COTAGA/ GOCO/ GRACE/ SLR/ SODA/ groops/ oceanAndAtmosphericTides/ satelliteOrbitProducts/ swarmGravity/ teaching/ tmp/ tvgogo/
+GRACE/  [5 dirs, 0 files]  ITSG-Grace2014/ ITSG-Grace2016/ ITSG-Grace2018/ ITSG-Grace_operational/ L1B/
+GRACE/L1B/  [1 dirs, 0 files]  ACT1B/
+GRACE/ITSG-Grace2014/  [3 dirs, 1 files]  daily/ monthly/ static/
+GRACE/ITSG-Grace2016/  [2 dirs, 0 files]  daily_kalman/ monthly/
+GRACE/ITSG-Grace2018/  [3 dirs, 0 files]  daily_kalman/ monthly/ static/
+GRACE/ITSG-Grace_operational/  [2 dirs, 2 files]  daily_kalman/ monthly/
+GRACE/ITSG-Grace2014/daily/  [2 dirs, 2 files]  background/ degree40/
+GRACE/ITSG-Grace2014/monthly/  [7 dirs, 1 files]  background/ degree60/ degree60_covarianceMatrix/ degree90/ degree90_covarianceMatrix/ degree120/ degree120_covarianceMatrix/
+GRACE/ITSG-Grace2014/static/  [2 dirs, 5 files]  covariance_ITSG-Grace2014k/ covariance_ITSG-Grace2014s/
+GRACE/ITSG-Grace2016/daily_kalman/  [2 dirs, 1 files]  daily_background/ daily_n40/
+GRACE/ITSG-Grace2016/monthly/  [6 dirs, 2 files]  groops/ monthly_background/ monthly_n60/ monthly_n90/ monthly_n90_normals/ monthly_n120/
+GRACE/ITSG-Grace2018/daily_kalman/  [3 dirs, 3 files]  daily_background/ daily_n40/ netcdf/
+GRACE/ITSG-Grace2018/monthly/  [5 dirs, 3 files]  monthly_background/ monthly_n60/ monthly_n96/ monthly_n120/ normals_SINEX/
+GRACE/ITSG-Grace2018/static/  [2 dirs, 2 files]  earthquakes/ normals/
+GRACE/ITSG-Grace_operational/daily_kalman/  [4 dirs, 1 files]  daily_background/ daily_n40/ daily_signalSeparation/ netcdf/
+GRACE/ITSG-Grace_operational/monthly/  [6 dirs, 0 files]  monthly_background/ monthly_n60/ monthly_n96/ monthly_n120/ monthly_signalSeparation/ normals_SINEX/
+GRACE/L1B/ACT1B/  [0 dirs, 97 files]  
+GRACE/ITSG-Grace2014/daily/background/  [0 dirs, 48 files]  
+GRACE/ITSG-Grace2014/daily/degree40/  [0 dirs, 12 files]  
+GRACE/ITSG-Grace2014/monthly/background/  [0 dirs, 548 files]  
+GRACE/ITSG-Grace2014/monthly/degree120/  [0 dirs, 129 files]  
+GRACE/ITSG-Grace2014/monthly/degree120_covarianceMatrix/  [0 dirs, 129 files]  
+GRACE/ITSG-Grace2014/monthly/degree60/  [0 dirs, 129 files]  
+GRACE/ITSG-Grace2014/monthly/degree60_covarianceMatrix/  [0 dirs, 129 files]  
+GRACE/ITSG-Grace2014/monthly/degree90/  [0 dirs, 129 files]  
+GRACE/ITSG-Grace2014/monthly/degree90_covarianceMatrix/  [0 dirs, 129 files]  
+GRACE/ITSG-Grace2014/static/covariance_ITSG-Grace2014k/  [0 dirs, 212 files]  
+GRACE/ITSG-Grace2014/static/covariance_ITSG-Grace2014s/  [0 dirs, 212 files]  
+GRACE/ITSG-Grace2016/daily_kalman/daily_background/  [16 dirs, 0 files]  2002/ 2003/ 2004/ 2005/ 2006/ 2007/ 2008/ 2009/ 2010/ 2011/ 2012/ 2013/ 2014/ 2015/ 2016/ 2017/
+GRACE/ITSG-Grace2016/daily_kalman/daily_n40/  [16 dirs, 0 files]  2002/ 2003/ 2004/ 2005/ 2006/ 2007/ 2008/ 2009/ 2010/ 2011/ 2012/ 2013/ 2014/ 2015/ 2016/ 2017/
+GRACE/ITSG-Grace2016/monthly/groops/  [1 dirs, 0 files]  monthly/
+GRACE/ITSG-Grace2016/monthly/monthly_background/  [0 dirs, 1464 files]  
+GRACE/ITSG-Grace2016/monthly/monthly_n120/  [0 dirs, 161 files]  
+GRACE/ITSG-Grace2016/monthly/monthly_n60/  [0 dirs, 161 files]  
+GRACE/ITSG-Grace2016/monthly/monthly_n90/  [0 dirs, 161 files]  
+GRACE/ITSG-Grace2016/monthly/monthly_n90_normals/  [0 dirs, 161 files]  
+GRACE/ITSG-Grace2018/daily_kalman/daily_background/  [16 dirs, 0 files]  2002/ 2003/ 2004/ 2005/ 2006/ 2007/ 2008/ 2009/ 2010/ 2011/ 2012/ 2013/ 2014/ 2015/ 2016/ 2017/
+GRACE/ITSG-Grace2018/daily_kalman/daily_n40/  [16 dirs, 0 files]  2002/ 2003/ 2004/ 2005/ 2006/ 2007/ 2008/ 2009/ 2010/ 2011/ 2012/ 2013/ 2014/ 2015/ 2016/ 2017/
+GRACE/ITSG-Grace2018/daily_kalman/netcdf/  [0 dirs, 16 files]  
+GRACE/ITSG-Grace2018/monthly/monthly_background/  [0 dirs, 1944 files]  
+GRACE/ITSG-Grace2018/monthly/monthly_n120/  [0 dirs, 162 files]  
+GRACE/ITSG-Grace2018/monthly/monthly_n60/  [0 dirs, 162 files]  
+GRACE/ITSG-Grace2018/monthly/monthly_n96/  [0 dirs, 162 files]  
+GRACE/ITSG-Grace2018/monthly/normals_SINEX/  [2 dirs, 0 files]  monthly_n96/ monthly_n120/
+GRACE/ITSG-Grace2018/static/earthquakes/  [0 dirs, 4 files]  
+GRACE/ITSG-Grace2018/static/normals/  [0 dirs, 9 files]  
+GRACE/ITSG-Grace_operational/daily_kalman/daily_background/  [7 dirs, 0 files]  2018/ 2019/ 2020/ 2021/ 2022/ 2023/ 2024/
+GRACE/ITSG-Grace_operational/daily_kalman/daily_n40/  [7 dirs, 0 files]  2018/ 2019/ 2020/ 2021/ 2022/ 2023/ 2024/
+GRACE/ITSG-Grace_operational/daily_kalman/daily_signalSeparation/  [7 dirs, 0 files]  2018/ 2019/ 2020/ 2021/ 2022/ 2023/ 2024/
+GRACE/ITSG-Grace_operational/daily_kalman/netcdf/  [0 dirs, 7 files]  
+GRACE/ITSG-Grace_operational/monthly/monthly_background/  [0 dirs, 485 files]  
+GRACE/ITSG-Grace_operational/monthly/monthly_n120/  [0 dirs, 97 files]  
+GRACE/ITSG-Grace_operational/monthly/monthly_n60/  [0 dirs, 97 files]  
+GRACE/ITSG-Grace_operational/monthly/monthly_n96/  [0 dirs, 97 files]  
+GRACE/ITSG-Grace_operational/monthly/monthly_signalSeparation/  [0 dirs, 485 files]  
+GRACE/ITSG-Grace_operational/monthly/normals_SINEX/  [2 dirs, 0 files]  monthly_n96/ monthly_n120/
+GRACE/ITSG-Grace2016/daily_kalman/daily_background/2008/  [0 dirs, 2928 files]  
+GRACE/ITSG-Grace2016/daily_kalman/daily_n40/2008/  [0 dirs, 366 files]  
+GRACE/ITSG-Grace2016/monthly/groops/monthly/  [163 dirs, 0 files]  2002-04/ 2002-05/ 2002-08/ 2002-09/ 2002-10/ 2002-12/ 2003-01/ 2003-02/ 2003-03/ 2003-04/ 2003-05/ 2003-07/ 2003-08/ 2003-09/ 2003-10/ 2003-11/ 2003-12/ 2004-01/ 2004-02/ 2004-03/ 2004-04/ 2004-05/ 2004-06/ 2004-07/ 2004-08/ 2004-09/ 2004-10/ 2004-11/ 2004-12/ 2005-01/ 2005-02/ 2005-03/ 2005-04/ 2005-05/ 2005-06/ 2005-07/ 2005-08/ 2005-09/ 2005-10/ 2005-11/ ...
+GRACE/ITSG-Grace2018/daily_kalman/daily_background/2008/  [0 dirs, 4026 files]  
+GRACE/ITSG-Grace2018/daily_kalman/daily_n40/2008/  [0 dirs, 366 files]  
+GRACE/ITSG-Grace2018/monthly/normals_SINEX/monthly_n120/  [0 dirs, 162 files]  
+GRACE/ITSG-Grace2018/monthly/normals_SINEX/monthly_n96/  [0 dirs, 162 files]  
+GRACE/ITSG-Grace_operational/daily_kalman/daily_background/2020/  [0 dirs, 1830 files]  
+GRACE/ITSG-Grace_operational/daily_kalman/daily_n40/2020/  [0 dirs, 366 files]  
+GRACE/ITSG-Grace_operational/daily_kalman/daily_signalSeparation/2020/  [0 dirs, 1830 files]  
+GRACE/ITSG-Grace_operational/monthly/normals_SINEX/monthly_n120/  [0 dirs, 97 files]  
+GRACE/ITSG-Grace_operational/monthly/normals_SINEX/monthly_n96/  [0 dirs, 97 files]  
+CAKAO/  [4 dirs, 0 files]  combinedGravityFields/ gpsClocks/ gpsOrbits/ stationPositions/
+COST-G/  [1 dirs, 0 files]  softwareComparison/
+COTAGA/  [4 dirs, 3 files]  EOT11a_AsciiGrid/ EOT13ag/ grid_eot11ag/ tideModel/
+GOCO/  [2 dirs, 0 files]  GOCO06s/ GOCO2025s/
+SLR/  [3 dirs, 0 files]  Conny/ solution_2024-01-26/ solution_2024-01-27/
+SODA/  [0 dirs, 1 files]  
+groops/  [3 dirs, 1 files]  data/ scenario/ videos/
+oceanAndAtmosphericTides/  [3 dirs, 1 files]  conversion/ models/ software/
+satelliteOrbitProducts/  [1 dirs, 0 files]  operational/
+swarmGravity/  [2 dirs, 0 files]  gravity/ normaleq/
+teaching/  [3 dirs, 0 files]  2026SS_Informatik2/ 2026SS_WissenschaftlichesRechnen/ 2026WS_Parameterschaetzung/
+tmp/  [1 dirs, 3 files]  FEATS-G/
+tvgogo/  [2 dirs, 0 files]  gravityFieldModels/ orbits/
+CAKAO/combinedGravityFields/  [0 dirs, 25 files]  
+CAKAO/gpsClocks/  [15 dirs, 1 files]  2003/ 2004/ 2005/ 2006/ 2007/ 2008/ 2009/ 2010/ 2011/ 2012/ 2013/ 2014/ 2015/ 2016/ 2017/
+CAKAO/gpsOrbits/  [15 dirs, 1 files]  2003/ 2004/ 2005/ 2006/ 2007/ 2008/ 2009/ 2010/ 2011/ 2012/ 2013/ 2014/ 2015/ 2016/ 2017/
+CAKAO/stationPositions/  [15 dirs, 1 files]  2003/ 2004/ 2005/ 2006/ 2007/ 2008/ 2009/ 2010/ 2011/ 2012/ 2013/ 2014/ 2015/ 2016/ 2017/
+COST-G/softwareComparison/  [3 dirs, 4 files]  documents/ models/ satellite/
+COTAGA/EOT11a_AsciiGrid/  [0 dirs, 26 files]  
+COTAGA/EOT13ag/  [6 dirs, 4 files]  grids/ plotsDegreeVariances/ plots_EOT13ag_2003-2010/ plots_EOT13ag_2003-2012/ plots_GFZ_2003-2010/ plots_GFZ_2003-2012/
+COTAGA/grid_eot11ag/  [0 dirs, 16 files]  
+COTAGA/tideModel/  [3 dirs, 7 files]  data/ eot11a/ eot11ag/
+GOCO/GOCO06s/  [1 dirs, 2 files]  normals/
+GOCO/GOCO2025s/  [0 dirs, 1 files]  
+SLR/Conny/  [0 dirs, 0 files]  
+SLR/solution_2024-01-26/  [1 dirs, 0 files]  cpf/
+SLR/solution_2024-01-27/  [0 dirs, 66 files]  
+groops/data/  [16 dirs, 1 files]  albedo/ border/ earthRadiationPressure/ earthRotation/ gnss/ loading/ magnetosphere/ plot/ potential/ satelliteModel/ slr/ sphericalHarmonicsFilter/ thermosphere/ tides/ troposphere/ wavelets/
+groops/scenario/  [0 dirs, 7 files]  
+groops/videos/  [1 dirs, 0 files]  groops_tutorial/
+oceanAndAtmosphericTides/conversion/  [1 dirs, 4 files]  netcdf/
+oceanAndAtmosphericTides/models/  [10 dirs, 10 files]  DTU23_OCN/ EOT11a_OCN/ EOT20_OCN/ FES2014b_OCN/ FES2022_OCN/ GOT5.6_OCN/ MIXED2025_OCN/ TPXO10_OCN/ TiME22_ATM/ TiME22_OCN/
+oceanAndAtmosphericTides/software/  [3 dirs, 1 files]  fortran/ matlab/ python/
+satelliteOrbitProducts/operational/  [28 dirs, 2 files]  01earthRotation/ 02geocenter/ CHAMP/ GRACE-1/ GRACE-2/ GRACEFO-1/ GRACEFO-2/ Jason-1/ Jason-2/ Jason-3/ MetOp-A/ MetOp-B/ Sentinel-1A/ Sentinel-1B/ Sentinel-1C/ Sentinel-1D/ Sentinel-2A/ Sentinel-2B/ Sentinel-2C/ Sentinel-3A/ Sentinel-3B/ Sentinel-6A/ Sentinel-6B/ Swarm-1/ Swarm-2/ Swarm-3/ TanDEM-X/ TerraSAR-X/
+satelliteOrbitProducts/operational/GRACE-1/  [7 dirs, 0 files]  attitude/ covariance/ kinematicOrbit/ neutralDensity_1.0/ neutralDensity_2.0/ nonConservativeForces/ reducedDynamicOrbit/
+satelliteOrbitProducts/operational/GRACE-1/attitude/  [16 dirs, 0 files]  2002/ 2003/ 2004/ 2005/ 2006/ 2007/ 2008/ 2009/ 2010/ 2011/ 2012/ 2013/ 2014/ 2015/ 2016/ 2017/
+satelliteOrbitProducts/operational/GRACE-2/  [6 dirs, 0 files]  attitude/ covariance/ kinematicOrbit/ neutralDensity_1.0/ nonConservativeForces/ reducedDynamicOrbit/
+satelliteOrbitProducts/operational/GRACE-2/attitude/  [16 dirs, 0 files]  2002/ 2003/ 2004/ 2005/ 2006/ 2007/ 2008/ 2009/ 2010/ 2011/ 2012/ 2013/ 2014/ 2015/ 2016/ 2017/
+satelliteOrbitProducts/operational/GRACEFO-1/  [6 dirs, 0 files]  attitude/ covariance/ kinematicOrbit/ neutralDensity/ nonConservativeForces/ reducedDynamicOrbit/
+satelliteOrbitProducts/operational/GRACEFO-1/attitude/  [9 dirs, 0 files]  2018/ 2019/ 2020/ 2021/ 2022/ 2023/ 2024/ 2025/ 2026/
+satelliteOrbitProducts/operational/GRACEFO-2/  [5 dirs, 0 files]  attitude/ covariance/ kinematicOrbit/ nonConservativeForces/ reducedDynamicOrbit/
+satelliteOrbitProducts/operational/GRACEFO-2/attitude/  [9 dirs, 0 files]  2018/ 2019/ 2020/ 2021/ 2022/ 2023/ 2024/ 2025/ 2026/
+satelliteOrbitProducts/operational/GRACE-1/covariance/  [16 dirs, 0 files]  2002/ 2003/ 2004/ 2005/ 2006/ 2007/ 2008/ 2009/ 2010/ 2011/ 2012/ 2013/ 2014/ 2015/ 2016/ 2017/
+satelliteOrbitProducts/operational/GRACE-1/kinematicOrbit/  [16 dirs, 0 files]  2002/ 2003/ 2004/ 2005/ 2006/ 2007/ 2008/ 2009/ 2010/ 2011/ 2012/ 2013/ 2014/ 2015/ 2016/ 2017/
+satelliteOrbitProducts/operational/GRACE-1/neutralDensity_1.0/  [16 dirs, 0 files]  2002/ 2003/ 2004/ 2005/ 2006/ 2007/ 2008/ 2009/ 2010/ 2011/ 2012/ 2013/ 2014/ 2015/ 2016/ 2017/
+satelliteOrbitProducts/operational/GRACE-1/neutralDensity_2.0/  [0 dirs, 178 files]  
+satelliteOrbitProducts/operational/GRACE-1/nonConservativeForces/  [16 dirs, 0 files]  2002/ 2003/ 2004/ 2005/ 2006/ 2007/ 2008/ 2009/ 2010/ 2011/ 2012/ 2013/ 2014/ 2015/ 2016/ 2017/
+satelliteOrbitProducts/operational/GRACE-1/reducedDynamicOrbit/  [16 dirs, 0 files]  2002/ 2003/ 2004/ 2005/ 2006/ 2007/ 2008/ 2009/ 2010/ 2011/ 2012/ 2013/ 2014/ 2015/ 2016/ 2017/
+satelliteOrbitProducts/operational/GRACE-2/covariance/  [16 dirs, 0 files]  2002/ 2003/ 2004/ 2005/ 2006/ 2007/ 2008/ 2009/ 2010/ 2011/ 2012/ 2013/ 2014/ 2015/ 2016/ 2017/
+satelliteOrbitProducts/operational/GRACE-2/kinematicOrbit/  [16 dirs, 0 files]  2002/ 2003/ 2004/ 2005/ 2006/ 2007/ 2008/ 2009/ 2010/ 2011/ 2012/ 2013/ 2014/ 2015/ 2016/ 2017/
+satelliteOrbitProducts/operational/GRACE-2/neutralDensity_1.0/  [16 dirs, 0 files]  2002/ 2003/ 2004/ 2005/ 2006/ 2007/ 2008/ 2009/ 2010/ 2011/ 2012/ 2013/ 2014/ 2015/ 2016/ 2017/
+satelliteOrbitProducts/operational/GRACE-2/nonConservativeForces/  [16 dirs, 0 files]  2002/ 2003/ 2004/ 2005/ 2006/ 2007/ 2008/ 2009/ 2010/ 2011/ 2012/ 2013/ 2014/ 2015/ 2016/ 2017/
+satelliteOrbitProducts/operational/GRACE-2/reducedDynamicOrbit/  [16 dirs, 0 files]  2002/ 2003/ 2004/ 2005/ 2006/ 2007/ 2008/ 2009/ 2010/ 2011/ 2012/ 2013/ 2014/ 2015/ 2016/ 2017/
+satelliteOrbitProducts/operational/GRACEFO-1/covariance/  [9 dirs, 0 files]  2018/ 2019/ 2020/ 2021/ 2022/ 2023/ 2024/ 2025/ 2026/
+satelliteOrbitProducts/operational/GRACEFO-1/kinematicOrbit/  [9 dirs, 0 files]  2018/ 2019/ 2020/ 2021/ 2022/ 2023/ 2024/ 2025/ 2026/
+satelliteOrbitProducts/operational/GRACEFO-1/neutralDensity/  [0 dirs, 98 files]  
+satelliteOrbitProducts/operational/GRACEFO-1/nonConservativeForces/  [9 dirs, 0 files]  2018/ 2019/ 2020/ 2021/ 2022/ 2023/ 2024/ 2025/ 2026/
+satelliteOrbitProducts/operational/GRACEFO-1/reducedDynamicOrbit/  [9 dirs, 0 files]  2018/ 2019/ 2020/ 2021/ 2022/ 2023/ 2024/ 2025/ 2026/
+satelliteOrbitProducts/operational/GRACEFO-2/covariance/  [9 dirs, 0 files]  2018/ 2019/ 2020/ 2021/ 2022/ 2023/ 2024/ 2025/ 2026/
+satelliteOrbitProducts/operational/GRACEFO-2/kinematicOrbit/  [9 dirs, 0 files]  2018/ 2019/ 2020/ 2021/ 2022/ 2023/ 2024/ 2025/ 2026/
+satelliteOrbitProducts/operational/GRACEFO-2/nonConservativeForces/  [9 dirs, 0 files]  2018/ 2019/ 2020/ 2021/ 2022/ 2023/ 2024/ 2025/ 2026/
+satelliteOrbitProducts/operational/GRACEFO-2/reducedDynamicOrbit/  [9 dirs, 0 files]  2018/ 2019/ 2020/ 2021/ 2022/ 2023/ 2024/ 2025/ 2026/
+satelliteOrbitProducts/operational/GRACE-1/attitude/2008/  [0 dirs, 366 files]  
+satelliteOrbitProducts/operational/GRACE-1/covariance/2008/  [0 dirs, 366 files]  
+satelliteOrbitProducts/operational/GRACE-1/kinematicOrbit/2008/  [0 dirs, 366 files]  
+satelliteOrbitProducts/operational/GRACE-1/neutralDensity_1.0/2008/  [0 dirs, 732 files]  
+satelliteOrbitProducts/operational/GRACE-1/nonConservativeForces/2008/  [0 dirs, 366 files]  
+satelliteOrbitProducts/operational/GRACE-1/reducedDynamicOrbit/2008/  [0 dirs, 366 files]  
+satelliteOrbitProducts/operational/GRACE-2/attitude/2008/  [0 dirs, 366 files]  
+satelliteOrbitProducts/operational/GRACE-2/covariance/2008/  [0 dirs, 366 files]  
+satelliteOrbitProducts/operational/GRACE-2/kinematicOrbit/2008/  [0 dirs, 366 files]  
+satelliteOrbitProducts/operational/GRACE-2/neutralDensity_1.0/2008/  [0 dirs, 731 files]  
+satelliteOrbitProducts/operational/GRACE-2/nonConservativeForces/2008/  [0 dirs, 366 files]  
+satelliteOrbitProducts/operational/GRACE-2/reducedDynamicOrbit/2008/  [0 dirs, 366 files]  
+satelliteOrbitProducts/operational/GRACEFO-1/attitude/2020/  [0 dirs, 359 files]  
+satelliteOrbitProducts/operational/GRACEFO-1/covariance/2020/  [0 dirs, 360 files]  
+satelliteOrbitProducts/operational/GRACEFO-1/kinematicOrbit/2020/  [0 dirs, 360 files]  
+satelliteOrbitProducts/operational/GRACEFO-1/nonConservativeForces/2020/  [0 dirs, 359 files]  
+satelliteOrbitProducts/operational/GRACEFO-1/reducedDynamicOrbit/2020/  [0 dirs, 359 files]  
+satelliteOrbitProducts/operational/GRACEFO-2/attitude/2020/  [0 dirs, 359 files]  
+satelliteOrbitProducts/operational/GRACEFO-2/covariance/2020/  [0 dirs, 360 files]  
+satelliteOrbitProducts/operational/GRACEFO-2/kinematicOrbit/2020/  [0 dirs, 360 files]  
+satelliteOrbitProducts/operational/GRACEFO-2/nonConservativeForces/2020/  [0 dirs, 359 files]  
+satelliteOrbitProducts/operational/GRACEFO-2/reducedDynamicOrbit/2020/  [0 dirs, 359 files]  
+swarmGravity/gravity/  [0 dirs, 152 files]  
+swarmGravity/normaleq/  [0 dirs, 152 files]  
+teaching/2026SS_Informatik2/  [0 dirs, 5 files]  
+teaching/2026SS_WissenschaftlichesRechnen/  [35 dirs, 14 files]  1824/ 1873/ 1874/ 1884/ 1888/ 1889/ 1890/ 1891/ 1893/ 7090/ 7105/ 7110/ 7119/ 7124/ 7237/ 7249/ 7306/ 7329/ 7396/ 7403/ 7501/ 7701/ 7810/ 7811/ 7817/ 7819/ 7821/ 7825/ 7827/ 7838/ 7839/ 7840/ 7841/ 7845/ 8834/
+teaching/2026WS_Parameterschaetzung/  [1 dirs, 0 files]  lab1/
+tmp/FEATS-G/  [3 dirs, 0 files]  solution_version1_all_errors/ solution_version2_no_model_errors/ solution_version3_no_model_errors_no_acc_noise/
+tvgogo/gravityFieldModels/  [17 dirs, 2 files]  Combined/ Goce/ Grace/ Grace1/ Grace2/ Jason2/ Jason3/ Kompsat5/ MetOpA/ MetOpB/ Sentinel3A/ Swarm/ Swarm1/ Swarm2/ Swarm3/ TanDEM-X/ TerraSAR-X/
+tvgogo/gravityFieldModels/Grace/  [2 dirs, 0 files]  v2/ v3/
+tvgogo/gravityFieldModels/Grace1/  [1 dirs, 0 files]  v3/
+tvgogo/gravityFieldModels/Grace2/  [1 dirs, 0 files]  v3/
+tvgogo/gravityFieldModels/Grace/v2/  [0 dirs, 120 files]  
+tvgogo/gravityFieldModels/Grace/v3/  [0 dirs, 68 files]  
+tvgogo/gravityFieldModels/Grace1/v3/  [0 dirs, 67 files]  
+tvgogo/gravityFieldModels/Grace2/v3/  [0 dirs, 67 files]  
+tvgogo/orbits/  [17 dirs, 1 files]  CHAMP/ CNOFS/ Cosmic/ GOCE/ GOCE_ROTI/ GRACE/ Jason1/ Jason2/ Jason3/ Kompsat5/ MetOpA/ MetOpB/ SAC-C/ Sentinel3A/ Swarm/ TanDEM-X/ TerraSAR-X/
+tvgogo/orbits/GRACE/  [2 dirs, 0 files]  v2/ v3/
+tvgogo/orbits/GRACE/v2/  [15 dirs, 0 files]  2002/ 2003/ 2004/ 2005/ 2006/ 2007/ 2008/ 2009/ 2010/ 2011/ 2012/ 2013/ 2014/ 2015/ 2016/
+tvgogo/orbits/GRACE/v3/  [0 dirs, 4596 files]  
+tvgogo/orbits/GRACE/v2/2008/  [0 dirs, 732 files]  

@@ -1,0 +1,171 @@
+{
+ "generated": "2026-10-26 16:23 UTC",
+ "items": [
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/GRACE/L1B/ACT1B/gracefo2_accelerometerTransplant_2020-01.txt",
+   "status": 200,
+   "bytes": 239995373,
+   "sha256": "5646cdb806a1d78daa543ced165d1570b92b386fe3663b1e2d34d68c39e065c9"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACE-1/attitude/2008/GRACE-1_attitude_2008-01-01.txt.gz",
+   "status": 200,
+   "bytes": 438416,
+   "sha256": "b6689a4f2c0fc1f28a5db9eba82dd28a2f4a8f6bf1a77d53b2b38f264446b386"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACE-1/attitude/2008/GRACE-1_attitude_2008-01-02.txt.gz",
+   "status": 200,
+   "bytes": 438461,
+   "sha256": "19a8612a2273416c96a8308a0f27c485b7ac163ad52cf0176559170178531a6c"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACE-1/attitude/2008/GRACE-1_attitude_2008-01-03.txt.gz",
+   "status": 200,
+   "bytes": 438406,
+   "sha256": "8ce5b4fb427fcb317675a4e849f8841033723cdbaf31b0a0012d90dc0823cdd8"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACE-1/attitude/2008/GRACE-1_attitude_2008-01-04.txt.gz",
+   "status": 200,
+   "bytes": 438380,
+   "sha256": "deca05222d5b4149da8a857f233a702335cd3231a38c7a407ddee498fd60fb37"
+  },
+  {
+   "url": "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/GRACE-1/attitude/2008/GRACE-1_attitude_2008-01-05.txt.gz",
+   "status": 200,
+   "bytes": 438211,
+   "sha256": "2a562713283d7100079cd36c93a920add33c92d62e9c568d02abf30eb995fce9"
+  },
+  {
+   "url": "https://isdc-data.gfz.de/grace/Level-1B/",
+   "status": "failed",
+   "note": "URLError: <urlopen error timed out>"
+  },
+  {
+   "url": "https://spdf.gsfc.nasa.gov/pub/data/omni/low_res_omni/omni2.text",
+   "status": 200,
+   "bytes": 18021,
+   "sha256": "be4aca7bdf030a3eb6ed584fb6960913e3be909d5627b2a69fe93a4765962d7f",
+   "note": "OMNI2 format description"
+  },
+  {
+   "url": "https://spdf.gsfc.nasa.gov/pub/data/omni/low_res_omni/omni2_2007.dat",
+   "status": 200,
+   "bytes": 2873280,
+   "sha256": "2bdae448301e6de3863e78643178628e3bcd39dee2aea111fe523d1e393217e7",
+   "note": ""
+  },
+  {
+   "url": "https://spdf.gsfc.nasa.gov/pub/data/omni/low_res_omni/omni2_2008.dat",
+   "status": 200,
+   "bytes": 2881152,
+   "sha256": "3115c8f3c1d28eaca6a4ada84ca2f36865d36d2b2db1c4f8a4c4ba667ac1e274",
+   "note": ""
+  },
+  {
+   "url": "https://spdf.gsfc.nasa.gov/pub/data/omni/low_res_omni/omni2_2019.dat",
+   "status": 200,
+   "bytes": 2873280,
+   "sha256": "8f4e57f313687b4fb86865dbb2df06adf414c7e496b99893b86013d91744b48e",
+   "note": ""
+  },
+  {
+   "url": "https://spdf.gsfc.nasa.gov/pub/data/omni/low_res_omni/omni2_2020.dat",
+   "status": 200,
+   "bytes": 2881152,
+   "sha256": "11c2de98f1fd1ebe0156ca36c439fd4063d28c95e3706ec8752e7f59eea41700",
+   "note": ""
+  },
+  {
+   "url": "https://wdc.kugi.kyoto-u.ac.jp/dst_final/200801/index.html",
+   "status": 200,
+   "bytes": 5603,
+   "sha256": "a3637ae0ffd98a60c641a71f94932544f7bad1b16fba61394a4d964cdb4477d0"
+  },
+  {
+   "url": "https://wdc.kugi.kyoto-u.ac.jp/dst_final/200801/dst0801.for.request",
+   "status": 200,
+   "bytes": 3752,
+   "sha256": "a09c56d390e89bad6d7dd89a3db7858503e52649f6087fd57aee594b8707b23b"
+  },
+  {
+   "url": "https://wdc.kugi.kyoto-u.ac.jp/dst_final/202001/index.html",
+   "status": 200,
+   "bytes": 5625,
+   "sha256": "c72f3bb0825ac9ad0714edccada00c59774eb02ff461e931abd03d32ed580673"
+  },
+  {
+   "url": "https://wdc.kugi.kyoto-u.ac.jp/dst_final/202001/dst2001.for.request",
+   "status": 200,
+   "bytes": 3752,
+   "sha256": "f7545be24ea25aecb985bb5b73f760cd620d2897bbe041bcd6145761c45da483"
+  },
+  {
+   "url": "https://wdc.kugi.kyoto-u.ac.jp/dst_provisional/200801/index.html",
+   "status": 403,
+   "bytes": 0,
+   "sha256": ""
+  },
+  {
+   "url": "https://wdc.kugi.kyoto-u.ac.jp/dst_provisional/200801/dst0801.for.request",
+   "status": 403,
+   "bytes": 0,
+   "sha256": ""
+  },
+  {
+   "url": "https://wdc.kugi.kyoto-u.ac.jp/dst_provisional/202001/index.html",
+   "status": 403,
+   "bytes": 0,
+   "sha256": ""
+  },
+  {
+   "url": "https://wdc.kugi.kyoto-u.ac.jp/dst_provisional/202001/dst2001.for.request",
+   "status": 403,
+   "bytes": 0,
+   "sha256": ""
+  },
+  {
+   "url": "https://wdc.kugi.kyoto-u.ac.jp/dst_realtime/200801/index.html",
+   "status": 404,
+   "bytes": 0,
+   "sha256": ""
+  },
+  {
+   "url": "https://wdc.kugi.kyoto-u.ac.jp/dst_realtime/200801/dst0801.for.request",
+   "status": 404,
+   "bytes": 0,
+   "sha256": ""
+  },
+  {
+   "url": "https://wdc.kugi.kyoto-u.ac.jp/dst_realtime/202001/index.html",
+   "status": 403,
+   "bytes": 0,
+   "sha256": ""
+  },
+  {
+   "url": "https://wdc.kugi.kyoto-u.ac.jp/dst_realtime/202001/dst2001.for.request",
+   "status": 403,
+   "bytes": 0,
+   "sha256": ""
+  },
+  {
+   "url": "https://solar.nro.nao.ac.jp/norp/data/daily/TYKW-NoRP_dailyflux.txt",
+   "status": 200,
+   "bytes": 1193559,
+   "sha256": "d2ec4c86d7b1711e04e675c9db6db5602a93aa45e26d0aed43c667e8d33a9d6f"
+  },
+  {
+   "url": "https://solar.nro.nao.ac.jp/norp/data/daily/TYKW-NoRP_dailyflux_wAUcorr.txt",
+   "status": 200,
+   "bytes": 2200098,
+   "sha256": "afc00307bf7486a6fb6ab1e5f7c494c4424fa75e279399de89afeb07879b4d69"
+  },
+  {
+   "url": "https://spaceweather.cls.fr/services/radioflux/",
+   "status": 200,
+   "bytes": 56389,
+   "sha256": "4e99f95df4170ff746098d062a05dc782cfd5286cfc1392bf176468193d84a0d"
+  }
+ ]
+}
