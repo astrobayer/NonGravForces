@@ -51,7 +51,7 @@ Excerpts of the Institute of Geodesy's operational products, `https://ftp.tugraz
 first fetched 2026-10-26 by `.github/workflows/fetch-data.yml` (run 40361879447). The full products are fetched by
 `setupNonGravForces('FetchPool', ...)` into `<DATAPOOL>/ITSG/operational/<satellite>/<product>/<year>/` and cut by
 `tools/cutFixtures.py`; the workflow does both on the CI runner. Free of charge for
-any use; publications acknowledge TU Graz (their `README.txt`). GRACE-1/-2 are GRACE-A/-B, GRACEFO-1/-2 are GRACE-C/-D.
+any use; publications acknowledge TU Graz (their `README.txt`). GRACE-1/-2 are GRACE-A/-B, GRACEFO-1/-2 are GRACE-C/-D. Days: 2008-01-01 (A, B) and 2020-01-01..03 (C, D).
 
 Each file is the **first 600 epochs (10 s sampling, 00:00:00 to 01:39:50 GPS)** of the day, GROOPS instrument format
 (`groops instrument version=20200123`), with the epoch-count line after the `# ===` rule rewritten from 8641 to 600;
@@ -87,3 +87,13 @@ quasi-inertial frame (`README_referenceFrames.txt`), not referenceSystem's GCRS:
 | `GRACEFO-1_reducedDynamicOrbit_2020-01-02.txt.gz` | 658882 | `24d9065d9895388a41a4dc68978504d6b2e64e7bb8a826578822181594a1daf1` |
 | `GRACEFO-1_reducedDynamicOrbit_2020-01-03.txt.gz` | 658883 | `dc46ecf50d9841629a12a9ea5c47e00dbf6a68e86bb2448e5ec193260072524c` |
 | `GRACEFO-2_reducedDynamicOrbit_2020-01-01.txt.gz` | 659035 | `e90356d8869d8662dbaf8832b3ef57bd7139a4a69aeaf04e7c20999f449426d4` |
+| `GRACEFO-2_attitude_2020-01-02.txt.gz` | 437090 | `9fcbb27b383215391de0c44f98cf7ac90b6c5d3bee32c0029d249c3bd4c6e228` |
+| `GRACEFO-2_nonConservativeForces_2020-01-02.txt.gz` | 340007 | `8c522b5f3d389c8cb43260e91d6bac837e266cdca739b76020e1b77cf87e7423` |
+| `GRACEFO-2_reducedDynamicOrbit_2020-01-02.txt.gz` | 658755 | `7aa138add811d5d1660578d05633c586cf2a3cace677492dff19f64614b867ee` |
+| `GRACEFO-2_attitude_2020-01-03.txt.gz` | 436768 | `04d24a8c35a6a4fa2892cb86efb03253e6c3c41341349ad358851b2a550e559b` |
+| `GRACEFO-2_nonConservativeForces_2020-01-03.txt.gz` | 340378 | `21e045c1efdde7e6ccdd77d15604b9932499691d787eea7c78ed71f9afd28440` |
+| `GRACEFO-2_reducedDynamicOrbit_2020-01-03.txt.gz` | 658867 | `2af1c947b3d1d34f7a0ff4d3eb38b1843778ac70b265731487010274634a0b71` |
+
+Verified 2026-10-26 by run 40381190966: setupNonGravForces('FetchPool') fetched all 30 products into the CI runner's
+DATAPOOL; the 24 already listed arrived with the digests above, and tools/cutFixtures.py reproduced every committed
+excerpt byte for byte (the run's commit adds only the six GRACE-D files of 2020-01-02 and -03).
