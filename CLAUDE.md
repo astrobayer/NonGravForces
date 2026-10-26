@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-10-18 (release 0.16.0) by Claude Opus 5.5. Toolbox version 0.16.0.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-10-18 (release 0.16.0) and 2026-10-26 (PR #107, observation data) by Claude Opus 5.5. Toolbox version 0.16.0.
 
 ---
 
@@ -142,7 +142,11 @@ records — A.2 rule, B.4 — follow with N-02c.)
 run('...\referenceSystem\setupReferenceSystem.m')
 run('...\gracefoReading\setupGraceFOReading.m')     % must run, or reader tests error
 run('...\odeSuite\gjToolboxSetup.m')                % must run, or tNgfIntegration errors
+run('...\timeSeriesPreparation\setupTimeSeriesPreparation.m')   % CRN kernel, qc, Arc (ciGate requires it)
+run('...\lsqvce\lsqvce_setup.m')                     % the estimator of app.fitCalibration (ciGate requires it)
 cd('...\NonGravForces'); setupNonGravForces          % adds root, tests/, tools/; registers doc
+% with DATAPOOL set (or 'DataPool'), setup also fetches the reference days' observations
+% ('FetchPool', default ifMissing; 'PoolDays'): Kyoto Dst, CLS F30, TU Graz attitude/forces/orbits
 runNgfTests                                          % 'ExcludeSlow',false adds the speed tag
 doc NonGravForces
 ```
@@ -171,7 +175,18 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-20, N-10b)
+## 5. Current status (2026-10-26, PR #107)
+
+- **2026-10-26, PR #107 (O-9 data, N-12 attitude, O-19 candidate; owner rulings in HANDOVER Part I):**
+  `setupNonGravForces('FetchPool', 'PoolDays')` fetches the reference days' observations into DATAPOOL --
+  Kyoto FINAL Dst (`SpaceWeather/Dst`), CLS F30 by anonymous FTP (`SpaceWeather/F30`), TU Graz's attitude,
+  nonConservativeForces and reducedDynamicOrbit for GRACE-A/B or C/D (`ITSG/operational/...`); ciGate passes
+  "never". `tools/cutFixtures.py` (no network) cuts the committed excerpts (`data/spaceweather`,
+  `data/samples/itsg`, 30 files); `.github/workflows/fetch-data.yml` runs both on the SELF-HOSTED runner into
+  its `READING_DATA_POOL`, the commit alone on GitHub's machine. First run 40381190966: 30/30 fetched, every
+  committed excerpt reproduced byte for byte; CI green on 108fdc4. **No reader for Dst/F30 yet** (WP-25), TU
+  Graz's forces are not an oracle until TU Graz says whether they are measured or modelled, and classic
+  GRACE Level-1B is PARKED (O-51: GFZ's ISDC is down, unreachable from every runner). Gate unchanged at 444.
 
 - **2026-10-20, N-10b (#67 complete):** GRACE-D's hybrid ACH1B (.ACX, 2020-01, in the pool) against ACT1B on the
   26 complete days: S_zz 0.784 -> 0.815 (6.8 sigma, towards C's 0.825), radial residual -15 %, S_xx agrees.
@@ -398,6 +413,8 @@ is exactly linear in the species densities, so one model evaluation gives the wh
 It does not calibrate and says so; it subtracts the modelled radiation and reports what is left
 across the drag direction, which is the only honest quality flag it can offer.
 
+**SUPERSEDED 2026-10-15 (N-02b): lsqvce is a dependency again and `app.fitCalibration` solves through
+`lsqvce.fit`; see section 2. The paragraph is kept as the record of 2026-09-09.**
 `app.calibrate` (WP-19) is delivered with the TOOLBOX'S OWN SOLVER: the owner ruled lsqvce overkill
 on 2026-09-09, and it is — the problem is linear and separates by axis, so it is three QRs of a few
 dozen unknowns on an equilibrated design matrix. lsqvce is gone from the dependency table; O-24 and
@@ -510,7 +527,7 @@ repository had written down about them.
   under `tests/fixtures/groops/` and committed; neither CI nor the host needs a
   GROOPS installation.
 
-**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-50 with an owner
+**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-51 with an owner
 and a re-entry condition each. This file deliberately does NOT list them: the copy that
 used to live here had drifted to O-15 of 21 and showed two closed items as open, and no
 check compared the two (R1). Read Part H.
@@ -695,6 +712,16 @@ Every one of these was an actual defect found in a predecessor or a dependency.
 - **MATLAB's `websave` times out after 5 s by default.** A research server's first byte can take longer;
   `setupNonGravForces` passes `weboptions('Timeout', 60)` and retries once (O-50). Any new fetch goes through
   its `localDownload`, never a bare `websave`.
+- **A date regex that accepts "yyyy d h" will read "2008    1    1" as day 1 of 2008.** OMNI2's year-doy-hour
+  and CLS's year-month-day look alike; the first F30 cut kept all of 2008 and 2020 and no autumn (PR #107).
+  `tools/cutFixtures.py` tries year-doy-hour only when the caller asks for it, and its reproduction check
+  (feed it a pool built from the committed excerpts, compare byte for byte) is what proves a cut.
+- **GFZ's ISDC does not answer GitHub-hosted runners, and on 2026-10-26 it answered nothing at all**
+  (O-51); `isdcftp.gfz-potsdam.de` no longer resolves. Data from it is fetched on the self-hosted runner.
+- **A push made with GITHUB_TOKEN starts no CI on its commit** (runs show `action_required`). A workflow
+  that commits to a PR branch leaves the head untested until a person or session pushes again.
+- **TU Graz names GRACE-A/B "GRACE-1/-2" and GRACE-C/D "GRACEFO-1/-2"**; its products are GPS time as MJD,
+  10 s, attitude SRF->CRF, forces in the SRF, orbits in its own CoM quasi-inertial frame (not GCRS as such).
 - **A status code is not a file.** `https://www.ngdc.noaa.gov/IAGA/vmod/igrf14.f` answers `200`
   with an HTML error page. Check the content, not the response code — met twice in two days.
 - **Never claim bitwise across a change in BATCH SIZE.** Vectorised products and norms associate
