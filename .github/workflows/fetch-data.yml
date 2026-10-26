@@ -1,0 +1,61 @@
+# Fetch the public data three open gaps need (O-9 Dst/F30, N-12 attitude, N-08 classic
+# GRACE Level-1B) and commit a STAGING record of it to the pull request's own branch.
+#
+# Why a workflow: the development container cannot reach ftp.tugraz.at, isdc-data.gfz.de,
+# spdf.gsfc.nasa.gov, wdc.kugi.kyoto-u.ac.jp or the others (its network policy refuses
+# them, 2026-10-26); GitHub-hosted runners can. It runs on ubuntu-latest, never on the
+# self-hosted runner: nothing third-party is downloaded onto the owner's machine here.
+#
+# What it writes: tools/fetchData.py puts excerpts, head samples, SHA-256s and a probe
+# report into data/incoming/ (no file above 400 kB) and the full downloads into an
+# artefact. The commit is pushed with GITHUB_TOKEN, which by design triggers no further
+# workflow run, so this cannot loop -- and it also means the bot's commit carries no CI of
+# its own: the next human or session commit on the branch is what CI judges.
+#
+# Runs on a pull request only when the script or this file changes, and on demand.
+name: Fetch data
+
+on:
+  pull_request:
+    paths:
+      - tools/fetchData.py
+      - .github/workflows/fetch-data.yml
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    # A fork's pull request gets a read-only token; the push below would fail there anyway.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+      - name: Fetch, record and excerpt
+        run: python3 -I tools/fetchData.py --out data/incoming --raw "$RUNNER_TEMP/fetch_raw"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: always()
+        with:
+          name: fetchedRaw
+          path: ${{ runner.temp }}/fetch_raw
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Commit the staging record to this branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/incoming
+          if git diff --cached --quiet; then
+            echo "nothing changed in data/incoming"
+            exit 0
+          fi
+          git commit -m "data/incoming: fetchData staging record (run ${{ github.run_id }})"
+          git push origin "HEAD:${{ github.head_ref || github.ref_name }}"
