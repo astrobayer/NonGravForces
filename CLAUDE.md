@@ -722,7 +722,10 @@ Every one of these was an actual defect found in a predecessor or a dependency.
 - **A push made with GITHUB_TOKEN starts no CI on its commit** (runs show `action_required`). A workflow
   that commits to a PR branch leaves the head untested until a person or session pushes again.
 - **TU Graz names GRACE-A/B "GRACE-1/-2" and GRACE-C/D "GRACEFO-1/-2"**; its products are GPS time as MJD,
-  10 s, attitude SRF->CRF, forces in the SRF, orbits in its own CoM quasi-inertial frame (not GCRS as such).
+  10 s, forces in the SRF, orbits in its own CoM quasi-inertial frame (not GCRS as such). **Its attitude
+  quaternions are BIT-IDENTICAL to SCA1B's**: their "SRF->CRF" is this toolbox's "ICRF->SRF" in the other
+  quaternion convention, so conjugate exactly once, as `io.readSCA1B` does. Passed unconjugated it put 5.3e-8
+  m/s^2 of drag into the radial axis and anti-correlated the along-track with GROOPS (PR #108, CI 40403910825).
 - **A status code is not a file.** `https://www.ngdc.noaa.gov/IAGA/vmod/igrf14.f` answers `200`
   with an HTML error page. Check the content, not the response code — met twice in two days.
 - **Never claim bitwise across a change in BATCH SIZE.** Vectorised products and norms associate

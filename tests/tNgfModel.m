@@ -176,7 +176,27 @@ classdef tNgfModel < NgfTestCase
             tc.verifyEqual(string(iF.columnUnits), ["m/s^2" "m/s^2" "m/s^2"], 'the legend names the units the comparison assumes');
             tc.verifyEqual(string(iO.columnUnits(1:6)), ["m" "m" "m" "m/s" "m/s" "m/s"]);
             ep = referenceSystem.daySecondToEpoch(tF, "GPS");
-            q = qG' ./ vecnorm(qG');
+            % TU Graz's quaternion is BIT-IDENTICAL to SCA1B's for the same epochs (checked 2026-10-26 on this
+            % day): their "SRF -> CRF" and this toolbox's "SCA1B is ICRF -> SRF" are one rotation in two
+            % quaternion conventions. It is therefore conjugated exactly once, as io.readSCA1B does. Passed as
+            % is, Model received the inverse rotation (CI 40403910825: 5.3e-8 m/s^2 RMS of RADIAL drag), and
+            % checkAttitudeSense is the guard that refuses that sense now.
+            q = referenceSystem.invertQuaternion(qG');
+            [okSense, sense] = NonGravForces.geom.checkAttitudeSense(q, xO(:, 1:3)', xO(:, 4:6)');
+            tc.assertTrue(all(okSense), "TU Graz's attitude, conjugated once, must pass geom.checkAttitudeSense (see its report)");
+            tc.verifyClass(sense, 'struct');
+            % THE ORACLE IS CHECKED TOO: over the 30 min where the committed ACT1B excerpt overlaps, GROOPS
+            % follows the measured accelerometer (an independent standard-library computation on 2026-10-26
+            % gave correlations +0.990, +0.982, +0.910 for x, y, z). Correlation ignores ACT1B's bias and scale.
+            [epa, am] = NonGravForces.io.readACC1B(fullfile(tc.root, 'data', 'samples', 'multiday', 'ACT1B_2020-01-01_C_04.txt'));
+            [tf, loc] = ismember(round(tF(:, 2))', epa.sec);
+            tc.assertEqual(nnz(tf), 180, '30 min of 10 s epochs inside the ACT1B excerpt');
+            actBound = [0.05 0.05 0.2];
+            for i = 1:3
+                cAct = tc.correlation(aG(tf, i)', am(i, loc(tf)));
+                tc.verifyBoundAndRecord("GROOPS vs ACT1B correlation shortfall, axis " + i, 1 - cAct, actBound(i), "-", ...
+                    "the oracle against the measurement; independent value 2026-10-26: shortfalls 0.010, 0.018, 0.090");
+            end
             [a, info] = tc.M.accel(ep, xO(:, 1:3)', xO(:, 4:6)', q);       % body frame = SRF
             g = aG';
             rho = zeros(1, 3); ratio = zeros(1, 3);
@@ -186,9 +206,8 @@ classdef tNgfModel < NgfTestCase
             end
             % DECOMPOSITION, printed so the CI log carries it (a passing bound reaches only last_run.txt).
             % The first run (CI 40401231905) found the along-track ANTI-correlated (-0.686) with an RMS
-            % residual of 2.5x GROOPS, while TU Graz's own attitude, orbit and forces are consistent
-            % (-x along the velocity, +z to nadir: the frame is not the cause). Before any bound moves,
-            % each effect of this model is set against GROOPS per axis.
+            % residual of 2.5x GROOPS; this decomposition (CI 40403910825) then showed drag of 5.3e-8 RMS in
+            % the RADIAL axis, which only a wrong attitude sense produces -- fixed above.
             eff = struct('total', a, 'drag', info.drag, 'radiation', info.radiation, 'thermal', info.thermal);
             fprintf('modelGroopsReference decomposition (2020-01-01 C, 600 x 10 s, m/s^2):\n');
             fprintf('  %-10s %-4s %11s %11s %8s\n', 'effect', 'axis', 'mean', 'rms', 'corr');

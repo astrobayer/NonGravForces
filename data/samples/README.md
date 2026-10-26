@@ -59,7 +59,7 @@ every data line is as published. Times are GPS, as MJD. Frames, from TU Graz's `
 
 | Product | Content | Frame |
 |---|---|---|
-| `attitude` | quaternion, scalar first | rotation satellite reference frame -> celestial reference frame |
+| `attitude` | quaternion, scalar first | "rotation SRF -> CRF" in TU Graz's words; the numbers are bit-identical to SCA1B's, so in THIS toolbox's convention it is ICRF -> SRF and is conjugated once, like `io.readSCA1B` |
 | `nonConservativeForces` | acceleration due to non-conservative forces, m/s^2 | satellite reference frame |
 | `reducedDynamicOrbit` | position, velocity (and three zero acceleration columns), m, m/s | celestial reference frame |
 
