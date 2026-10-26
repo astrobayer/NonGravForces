@@ -362,6 +362,17 @@ def cut_groops(body, keep):
 
 def target_itsg(out, raw, rec):
     rec.h("ITSG operational products: attitude, non-conservative forces, orbits (N-12, O-19)")
+    # The folder holds two loose files besides the satellites (run 40358650063's TREE.txt),
+    # presumably the product description: what "nonConservativeForces" IS, and in which
+    # frame, is read from there rather than guessed from the numbers.
+    for name, isdir, url in listing(ITSG, rec) or []:
+        if isdir:
+            continue
+        status, b, _, err = get(url, max_bytes=20_000_000)
+        rec.item(url=url, status=status or err, bytes=len(b or b""), sha256=sha(b) if b else "")
+        if b:
+            save_out(out, f"itsg/{name}", b, rec) if len(b) <= CAP else \
+                save_out(out, f"itsg/{name}.head.txt", head_sample(b, 400), rec)
     for product in ITSG_PRODUCTS:
         for sat, day in ITSG_DAYS:
             folder = f"{ITSG}{sat}/{product}/{day[:4]}/"
