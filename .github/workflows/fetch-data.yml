@@ -1,0 +1,128 @@
+# Fill the CI runner's DATAPOOL with the observations of the reference days, cut the committed
+# excerpts from it, and commit them to the pull request's own branch (O-9 Dst/F30, N-12
+# attitude, and TU Graz's non-conservative forces for O-19).
+#
+# ALL DATA LIVES ON THE CI RUNNER (owner, 2026-10-26). The full products go into the runner's
+# DATAPOOL (READING_DATA_POOL, the organisation variable ci.yml reads), where they stay; only
+# the excerpts the tests read are committed. The development container cannot reach these
+# hosts at all, and GitHub-hosted runners cannot reach GFZ.
+#
+# ONE AUTHORITY PER STEP (R1):
+#   fetch   setupNonGravForces('FetchPool', ...) -- the toolbox's one place that touches the
+#           network owns every URL, so a user's setup and this job fetch the same files
+#   cut     tools/cutFixtures.py -- reads the pool, writes data/spaceweather and
+#           data/samples/itsg; no network
+#   commit  ubuntu-latest, the only job with a write token: the self-hosted job checks out
+#           WITHOUT persisted credentials, like every checkout in ci.yml on that shared machine,
+#           and hands the excerpts on as an artefact
+#
+# Classic GRACE Level-1B (N-08) is parked: GFZ's ISDC is down (owner, 2026-10-26).
+#
+# The push uses GITHUB_TOKEN, which by design triggers no further workflow run, so this cannot
+# loop -- and the bot's commit carries no CI of its own: the next human or session commit on the
+# branch is what CI judges. Runs on a pull request when the cutter or this file changes, and on
+# demand.
+name: Fetch data
+
+on:
+  pull_request:
+    paths:
+      - tools/cutFixtures.py
+      - .github/workflows/fetch-data.yml
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pool:
+    # A fork's pull request must not reach the self-hosted runner.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 60
+    env:
+      READING_DATA_POOL: ${{ vars.READING_DATA_POOL }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          path: NonGravForcesFetch
+          persist-credentials: false
+      # Only the pool is fetched: no model sources, kernels or repository data, which this job
+      # does not need and which ci.yml's gate fetches for itself.
+      - name: Fill DATAPOOL through setupNonGravForces('FetchPool')
+        uses: matlab-actions/run-command@bfa857648f4895aa98a446fe41c85e0788421ed5 # v3
+        with:
+          command: |
+            cd NonGravForcesFetch
+            pool = string(getenv("READING_DATA_POOL"));
+            assert(strlength(pool) > 0, "fetchData:noPool", "READING_DATA_POOL is not set for this repository -> grant the organisation variable to it");
+            info = setupNonGravForces('Verbose', false, 'FetchMsis', "never", 'FetchData', "never", 'FetchKernels', "never", 'FetchGroops', "never", 'FetchPool', "ifMissing", 'DataPool', pool);
+            items = info.data.items(startsWith([info.data.items.name], ["dst" "f30" "itsg" "pool"]));
+            fprintf("%-50s %s\n", [[items.name]; [items.action]]);
+            failed = items(startsWith([items.action], ["failed" "skipped"]));
+            if ~isempty(failed)
+                error("fetchData:failed", "%d pool item(s) not in the pool -> read the table above", numel(failed));
+            end
+      - name: Cut the committed excerpts from the pool
+        shell: powershell                # Windows PowerShell 5.1 only on this runner (see ci.yml)
+        working-directory: NonGravForcesFetch
+        run: |
+          # Actions runs this shell with ErrorActionPreference 'Stop', under which PowerShell 5.1
+          # turns any stderr line of a native program into a terminating error. Exit codes decide.
+          $ErrorActionPreference = 'Continue'
+          # The Store alias 'python' exists without an interpreter and fails --version, so test it.
+          $py = $null; $pre = @()
+          foreach ($cand in @('py -3', 'python', 'python3')) {
+            $parts = $cand.Split(' ')
+            if (Get-Command $parts[0] -ErrorAction SilentlyContinue) {
+              $rest = @($parts | Select-Object -Skip 1)
+              & $parts[0] @rest --version
+              if ($LASTEXITCODE -eq 0) { $py = $parts[0]; $pre = $rest; break }
+            }
+          }
+          if (-not $py) { Write-Output "::error::no working Python 3 on this runner (tried py -3, python, python3)"; exit 1 }
+          & $py @pre -I tools/cutFixtures.py --pool $env:READING_DATA_POOL --out .
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: fixtures
+          path: |
+            NonGravForcesFetch/data/spaceweather
+            NonGravForcesFetch/data/samples/itsg
+          retention-days: 7
+      - name: Remove the working copy from this machine
+        if: always()
+        shell: powershell
+        run: Remove-Item -Recurse -Force NonGravForcesFetch -ErrorAction SilentlyContinue
+
+  commit:
+    needs: [pool]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+      # The artefact's root is data/ (the common ancestor of its two paths).
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: fixtures
+          path: data
+      - name: Commit the excerpts to this branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A data/spaceweather data/samples/itsg
+          git status --short
+          if git diff --cached --quiet; then
+            echo "the excerpts cut from the pool equal the committed ones"
+            exit 0
+          fi
+          git commit -m "Excerpts cut from the CI runner's DATAPOOL (run ${{ github.run_id }})"
+          git push origin "HEAD:${{ github.head_ref || github.ref_name }}"
