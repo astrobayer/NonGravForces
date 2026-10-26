@@ -184,6 +184,22 @@ classdef tNgfModel < NgfTestCase
                 rho(i) = tc.correlation(a(i, :), g(i, :));
                 ratio(i) = sqrt(mean(a(i, :).^2)) / sqrt(mean(g(i, :).^2));
             end
+            % DECOMPOSITION, printed so the CI log carries it (a passing bound reaches only last_run.txt).
+            % The first run (CI 40401231905) found the along-track ANTI-correlated (-0.686) with an RMS
+            % residual of 2.5x GROOPS, while TU Graz's own attitude, orbit and forces are consistent
+            % (-x along the velocity, +z to nadir: the frame is not the cause). Before any bound moves,
+            % each effect of this model is set against GROOPS per axis.
+            eff = struct('total', a, 'drag', info.drag, 'radiation', info.radiation, 'thermal', info.thermal);
+            fprintf('modelGroopsReference decomposition (2020-01-01 C, 600 x 10 s, m/s^2):\n');
+            fprintf('  %-10s %-4s %11s %11s %8s\n', 'effect', 'axis', 'mean', 'rms', 'corr');
+            for i = 1:3
+                fprintf('  %-10s %-4d %+11.3e %11.3e %8s\n', 'GROOPS', i, mean(g(i, :)), sqrt(mean(g(i, :).^2)), '-');
+                for fn = string(fieldnames(eff))'
+                    x = eff.(fn)(i, :);
+                    c = NaN; if any(x ~= x(1)), c = tc.correlation(x, g(i, :)); end
+                    fprintf('  %-10s %-4d %+11.3e %11.3e %+8.3f\n', fn, i, mean(x), sqrt(mean(x.^2)), c);
+                end
+            end
             mag = median(vecnorm(a)) / median(vecnorm(g));
             resid = sqrt(mean(vecnorm(a - g).^2)) / sqrt(mean(vecnorm(g).^2));
             tc.verifyBoundAndRecord("GROOPS (TU Graz) vs Model: |log| of the median magnitude ratio", abs(log(mag)), log(3), "-", ...
