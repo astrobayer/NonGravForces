@@ -175,8 +175,16 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-26, PR #107)
+## 5. Current status (2026-10-26, PR #108)
 
+- **2026-10-26, PR #108 (O-9 closed, O-19 measured, model vs ACT1B):** `io.spaceWeather` reads Kyoto Dst and
+  CLS F30 (families "dst", "f30"; F30's 81-day mean). `tNgfModel/modelGroopsReference` feeds TU Graz's own
+  attitude and orbit into `Model.accel` against their GROOPS-modelled forces (2020-01-01 C, 600 x 10 s):
+  correlation 0.983 / 1.000 / 0.968, RMS ratio 1.50 / 1.18 / 1.20; radiation agrees (0.999 cross-track), the
+  along-track excess is DRAG. `tNgfModel/modelAct1bReference` compares with ACT1B as Huckfeldt et al. (2024)
+  do -- one bias per day, scale 1, THR1B firings cut: 5.5 / 3.4 / 2.1 nm/s^2 RMS over 3 x 30 min of
+  2020-01-01..03 C (GROOPS against the same ACT1B: 2.7 / 3.1 / 1.8; Huckfeldt: 3-5 x, <= 2 y, z). The first
+  GROOPS run was red on an UNCONJUGATED TU Graz quaternion (section 7). ☑ on CI: 452/452 (40411254932).
 - **2026-10-26, PR #107 (O-9 data, N-12 attitude, O-19 candidate; owner rulings in HANDOVER Part I):**
   `setupNonGravForces('FetchPool', 'PoolDays')` fetches the reference days' observations into DATAPOOL --
   Kyoto FINAL Dst (`SpaceWeather/Dst`), CLS F30 by anonymous FTP (`SpaceWeather/F30`), TU Graz's attitude,

@@ -161,8 +161,8 @@ classdef tNgfModel < NgfTestCase
             % gracefoReading.readGroopsInstrument (>= 1.1, which reads real GROOPS output), the first
             % use of that reader on TU Graz's bytes in this repository (CLAUDE.md section 7).
             %
-            % The per-axis bounds are tightened from the run that first passed (CI 40406425492); the
-            % magnitude, residual and drag-share bounds stay coarse until a run has printed them.
+            % Every bound is tightened from recorded runs: the per-axis ones from CI 40406425492, the
+            % magnitude, residual and drag-share ones from CI 40411254932.
             S = fullfile(tc.root, 'data', 'samples', 'itsg');
             rd = @(p) gracefoReading.readGroopsInstrument(fullfile(S, "GRACEFO-1_" + p + "_2020-01-01.txt"));
             [tF, aG, iF] = rd("nonConservativeForces");
@@ -219,8 +219,8 @@ classdef tNgfModel < NgfTestCase
             end
             mag = median(vecnorm(a)) / median(vecnorm(g));
             resid = sqrt(mean(vecnorm(a - g).^2)) / sqrt(mean(vecnorm(g).^2));
-            tc.verifyBoundAndRecord("GROOPS (TU Graz) vs Model: |log| of the median magnitude ratio", abs(log(mag)), log(3), "-", ...
-                "first run 2026-10-26; a frame or unit error is a factor of 1e3 or a sign, a density model is tens of percent");
+            tc.verifyBoundAndRecord("GROOPS (TU Graz) vs Model: |log| of the median magnitude ratio", abs(log(mag)), log(1.5), "-", ...
+                "measured ratio 1.119 (CI 40411254932); a frame or unit error is a factor of 1e3 or a sign");
             % Tightened from CI 40406425492 (the first run with the attitude conjugated): correlations
             % 0.983 / 1.000 / 0.968, RMS ratios 1.50 / 1.18 / 1.20 (|log| 0.404 / 0.166 / 0.180). The model's
             % along-track drag is 1.5x GROOPS's: a density and gas-surface difference, not a frame one.
@@ -232,10 +232,10 @@ classdef tNgfModel < NgfTestCase
                 tc.verifyBoundAndRecord("GROOPS vs Model RMS ratio, " + axisName(i), abs(log(ratio(i))), ratioBound(i), "-", ...
                     "measured |log| 0.404 / 0.166 / 0.180 (CI 40406425492)");
             end
-            tc.verifyBoundAndRecord("GROOPS vs Model RMS of the difference / RMS of GROOPS", resid, 2.0, "-", ...
-                "first run 2026-10-26: recorded; drag dominates the along-track, radiation the cross-track");
-            tc.verifyBoundAndRecord("GROOPS comparison: modelled drag share of |a| (recorded)", median(vecnorm(info.drag) ./ vecnorm(a)), 10, "-", ...
-                "context for the along-track numbers above");
+            tc.verifyBoundAndRecord("GROOPS vs Model RMS of the difference / RMS of GROOPS", resid, 0.6, "-", ...
+                "measured 0.391 (CI 40411254932); drag dominates the along-track, radiation the cross-track");
+            tc.verifyBoundAndRecord("GROOPS comparison: modelled drag share of |a| (recorded)", median(vecnorm(info.drag) ./ vecnorm(a)), 0.75, "-", ...
+                "measured 0.497 (CI 40411254932): context for the along-track numbers above");
             fprintf('  magnitude ratio %.4f, RMS difference / RMS GROOPS %.4f, drag share %.4f\n', mag, resid, median(vecnorm(info.drag) ./ vecnorm(a)));
         end
         function modelAct1bReference(tc)
@@ -259,8 +259,13 @@ classdef tNgfModel < NgfTestCase
             % bias only, gives 2.7 / 3.1 / 1.8 nm/s^2 RMS (x, y, z), scale 0.92 / 0.85 / 0.87, and the
             % mask moves the x RMS by 4 %. Huckfeldt report 3-5 nm/s^2 along-track and never more than
             % 2 nm/s^2 cross-track and radial for GRACE-C in 2019 at solar minimum, 20 nm/s^2 at worst
-            % along-track. FIRST RUN: the bounds are those published figures with margin, every number
-            % is recorded, and they are tightened from the recorded values.
+            % along-track.
+            %
+            % MEASURED (CI 40411254932), bias only: 5.5 / 3.4 / 2.1 nm/s^2 (x, y, z); per day x 1.1, 2.8,
+            % 8.7 nm/s^2. Fitted scale 1.034 / 1.026 / 0.910, per-day demeaned correlation 0.813 / 0.940 /
+            % 0.955. The day-1 mask moves x by 2 %, y by 27 % (2.0 -> 1.5 nm/s^2). Along-track sits at the
+            % top of Huckfeldt's 3-5 nm/s^2, cross-track and radial just above their 2: the same order as
+            % GROOPS against the same ACT1B (2.7 / 3.1 / 1.8). The bounds are those values with margin.
             f = @(varargin) fullfile(tc.root, 'data', 'samples', varargin{:});
             [~, thr] = NonGravForces.io.readTHR1B(f('THR1B_2020-01-01_C_04.txt'));
             k = any(thr.fired, 1);
@@ -294,18 +299,18 @@ classdef tNgfModel < NgfTestCase
                 fprintf('  %-4d  %13.3e  %5.3f  %14.3e  %+6.3f   %9.3e %9.3e %9.3e   %9.3e\n', i, rb(i), s(i), rs(i), rho(i), rDay(i, :), rb1u(i));
             end
             axisName = ["along-track x", "cross-track y", "radial z"];
-            rbBound = [20e-9 5e-9 5e-9];
+            rbBound = [10e-9 6e-9 4e-9]; rhoBound = [0.3 0.1 0.1];
             for i = 1:3
                 tc.verifyBoundAndRecord("ACT1B vs Model, bias-only RMS (Huckfeldt eq. 10), " + axisName(i), rb(i), rbBound(i), "m/s^2", ...
-                    "first run 2026-10-26; Huckfeldt 2024: 3-5 nm/s^2 x (20 at worst), <= 2 nm/s^2 y and z; GROOPS proxy 2.7 / 3.1 / 1.8");
+                    "measured 5.55 / 3.37 / 2.10 nm/s^2 (CI 40411254932); Huckfeldt 2024: 3-5 x, <= 2 y and z; GROOPS 2.7 / 3.1 / 1.8");
                 tc.verifyBoundAndRecord("ACT1B vs Model, bias+scale RMS over bias-only RMS, " + axisName(i), rs(i) / rb(i), 1 + 1e-12, "-", ...
                     "least squares with one more column cannot do worse: an identity");
-                tc.verifyBoundAndRecord("ACT1B vs Model, |log| of the fitted scale, " + axisName(i), abs(log(s(i))), log(2), "-", ...
-                    "first run 2026-10-26: recorded; GROOPS proxy 0.92 / 0.85 / 0.87");
-                tc.verifyBoundAndRecord("ACT1B vs Model correlation shortfall (per day demeaned), " + axisName(i), 1 - rho(i), 0.5, "-", ...
-                    "first run 2026-10-26: recorded; GROOPS proxy shortfalls 0.07 / 0.06 / 0.03");
-                tc.verifyBoundAndRecord("ACT1B vs Model, day 1: |log| of masked over unmasked bias-only RMS, " + axisName(i), abs(log(rb1(i) / rb1u(i))), log(2), "-", ...
-                    "what the THR1B mask is worth on the one day it is committed for; GROOPS proxy 4 % in x");
+                tc.verifyBoundAndRecord("ACT1B vs Model, |log| of the fitted scale, " + axisName(i), abs(log(s(i))), log(1.25), "-", ...
+                    "measured 1.034 / 1.026 / 0.910 (CI 40411254932); GROOPS against the same ACT1B 0.92 / 0.85 / 0.87");
+                tc.verifyBoundAndRecord("ACT1B vs Model correlation shortfall (per day demeaned), " + axisName(i), 1 - rho(i), rhoBound(i), "-", ...
+                    "measured 0.187 / 0.060 / 0.045 (CI 40411254932); GROOPS against the same ACT1B 0.07 / 0.06 / 0.03");
+                tc.verifyBoundAndRecord("ACT1B vs Model, day 1: |log| of masked over unmasked bias-only RMS, " + axisName(i), abs(log(rb1(i) / rb1u(i))), 0.5, "-", ...
+                    "what the THR1B mask is worth on the one day it is committed for; measured 0.019 / 0.314 / 0.067 (CI 40411254932)");
             end
         end
     end
