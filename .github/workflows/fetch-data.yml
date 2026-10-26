@@ -4,14 +4,25 @@
 #
 # Why a workflow: the development container cannot reach ftp.tugraz.at, isdc-data.gfz.de,
 # spdf.gsfc.nasa.gov, wdc.kugi.kyoto-u.ac.jp or the others (its network policy refuses
-# them, 2026-10-26); GitHub-hosted runners can. It runs on ubuntu-latest, never on the
-# self-hosted runner: nothing third-party is downloaded onto the owner's machine here.
+# them, 2026-10-26); GitHub-hosted runners can -- all but one.
 #
-# What it writes: tools/fetchData.py puts excerpts, head samples, SHA-256s and a probe
-# report into data/incoming/ (no file above 400 kB) and the full downloads into an
-# artefact. The commit is pushed with GITHUB_TOKEN, which by design triggers no further
-# workflow run, so this cannot loop -- and it also means the bot's commit carries no CI of
-# its own: the next human or session commit on the branch is what CI judges.
+# THREE JOBS, because of that one. GFZ ISDC does not answer GitHub-hosted runners at all
+# (connection timeout in runs 40358650063 and 40361879447; isdcftp.gfz-potsdam.de no
+# longer resolves), while the owner's machine fetches from it routinely. The owner chose
+# (2026-10-26) to fetch the classic Level-1B day there:
+#   hosted    ubuntu-latest: Dst, F30, ITSG
+#   classic   self-hosted Windows: ISDC only. Checked out WITHOUT persisted credentials,
+#             like every checkout in ci.yml on that shared machine; it hands its excerpts
+#             on as an artefact and deletes the raw archive, so neither a token nor the
+#             150 MB download stays on the owner's disk
+#   commit    ubuntu-latest: puts both results into data/incoming and pushes. The only job
+#             holding a write token, and it runs on GitHub's machine
+#
+# What lands: tools/fetchData.py writes excerpts, head samples, SHA-256s and a probe report
+# per runner (PROBE_<tag>.md, FETCHED_<tag>.json); no file above 400 kB. Full downloads of
+# the hosted job go to the fetchedRaw artefact. The push uses GITHUB_TOKEN, which by design
+# triggers no further workflow run, so this cannot loop -- and the bot's commit carries no
+# CI of its own: the next human or session commit on the branch is what CI judges.
 #
 # Runs on a pull request only when the script or this file changes, and on demand.
 name: Fetch data
@@ -28,11 +39,11 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  fetch:
-    # A fork's pull request gets a read-only token; the push below would fail there anyway.
+  hosted:
+    # A fork's pull request must not reach the self-hosted runner or get a write token.
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -40,11 +51,14 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ github.head_ref || github.ref_name }}
-      - name: Fetch, record and excerpt
-        # Each run is a whole snapshot: what an earlier run staged and this one did not is removed.
-        run: |
-          rm -rf data/incoming
-          python3 -I tools/fetchData.py --out data/incoming --raw "$RUNNER_TEMP/fetch_raw"
+          persist-credentials: false
+      - name: Fetch, record and excerpt (all but ISDC)
+        run: python3 -I tools/fetchData.py --only dst f30 itsg --tag hosted --out staged --raw "$RUNNER_TEMP/fetch_raw"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: stagedHosted
+          path: staged
+          retention-days: 7
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         if: always()
         with:
@@ -52,8 +66,73 @@ jobs:
           path: ${{ runner.temp }}/fetch_raw
           retention-days: 30
           if-no-files-found: warn
+
+  classic:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          path: NonGravForcesFetch
+          persist-credentials: false
+      - name: Fetch classic GRACE Level-1B from GFZ ISDC and cut excerpts
+        shell: powershell                # Windows PowerShell 5.1 only on this runner (see ci.yml)
+        working-directory: NonGravForcesFetch
+        run: |
+          # Actions runs this shell with ErrorActionPreference 'Stop', under which PowerShell 5.1
+          # turns any stderr line of a native program into a terminating error. Exit codes decide.
+          $ErrorActionPreference = 'Continue'
+          # Which Python this machine has is not known to this file: try the launcher first. The
+          # Store alias 'python' exists without an interpreter and fails --version, so test it.
+          $py = $null; $pre = @()
+          foreach ($cand in @('py -3', 'python', 'python3')) {
+            $parts = $cand.Split(' ')
+            if (Get-Command $parts[0] -ErrorAction SilentlyContinue) {
+              $rest = @($parts | Select-Object -Skip 1)
+              & $parts[0] @rest --version
+              if ($LASTEXITCODE -eq 0) { $py = $parts[0]; $pre = $rest; break }
+            }
+          }
+          if (-not $py) { Write-Output "::error::no working Python 3 on this runner (tried py -3, python, python3)"; exit 1 }
+          $raw = Join-Path $env:RUNNER_TEMP "fetch_raw_classic"
+          & $py @pre -I tools/fetchData.py --only classic --tag classic --out staged --raw $raw
+          $code = $LASTEXITCODE
+          Remove-Item -Recurse -Force $raw -ErrorAction SilentlyContinue
+          exit $code
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: stagedClassic
+          path: NonGravForcesFetch/staged
+          retention-days: 7
+      - name: Remove the working copy and the staged files from this machine
+        if: always()
+        shell: powershell
+        run: Remove-Item -Recurse -Force NonGravForcesFetch -ErrorAction SilentlyContinue
+
+  commit:
+    needs: [hosted, classic]
+    # Commit what arrived even when one source failed: its PROBE file says why.
+    if: always() && (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          pattern: staged*
+          path: staged
       - name: Commit the staging record to this branch
         run: |
+          # Each run is a whole snapshot: what an earlier run staged and this one did not is removed.
+          rm -rf data/incoming
+          mkdir -p data/incoming
+          for d in staged/*/; do [ -d "$d" ] && cp -r "$d". data/incoming/; done
+          ls -R data/incoming | head -100
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A data/incoming

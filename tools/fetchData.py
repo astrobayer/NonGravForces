@@ -13,7 +13,9 @@ Targets (HANDOVER Part H and the open issues):
   f30       O-9   daily 30 cm (1 GHz) solar radio flux: Nobeyama NoRP and CLS, probed
   itsg      N-12  TU Graz operational products per satellite and day: attitude, and for
             O-19  comparison the non-conservative forces and the reduced-dynamic orbit
-  classic   N-08  classic GRACE Level-1B for 2008-01-01 (A and B) from GFZ ISDC
+  classic   N-08  classic GRACE Level-1B for 2008-01-01 (A and B) from GFZ ISDC. ISDC does not
+                  answer GitHub-hosted runners (runs 40358650063, 40361879447), so the workflow
+                  runs this target alone on the self-hosted runner (owner, 2026-10-26)
 
 This is a STAGING step, not a fixture step: the server formats have not been read by
 anyone in this project yet, so every product is committed as (a) the listing that found
@@ -178,7 +180,13 @@ def save_raw(raw, name, b):
 
 def save_out(out, name, data, rec):
     """Write a committed file; refuses anything above CAP (it would bloat the history)."""
-    b = data.encode("utf-8") if isinstance(data, str) else data
+    if isinstance(data, str):
+        try:
+            b = data.encode("latin-1")   # round-trips what was decoded as latin-1: lines stay byte-exact
+        except UnicodeEncodeError:
+            b = data.encode("utf-8")
+    else:
+        b = data
     if len(b) > CAP:
         rec.say(f"  - NOT committed `{name}`: {len(b)} bytes > CAP {CAP}")
         return None
@@ -524,6 +532,7 @@ def main():
     ap.add_argument("--out", default="data/incoming")
     ap.add_argument("--raw", default="fetch_raw")
     ap.add_argument("--only", nargs="*", choices=sorted(TARGETS), default=sorted(TARGETS))
+    ap.add_argument("--tag", default="", help="suffix of PROBE/FETCHED, so two runners' reports can share --out")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     os.makedirs(a.raw, exist_ok=True)
@@ -538,11 +547,12 @@ def main():
             TARGETS[name](a.out, a.raw, rec)
         except Exception as e:  # one target's failure must not hide the others' results
             rec.say(f"**target `{name}` raised {type(e).__name__}: {e}**")
-    with open(os.path.join(a.out, "PROBE.md"), "w", encoding="utf-8") as f:
+    sfx = f"_{a.tag}" if a.tag else ""
+    with open(os.path.join(a.out, f"PROBE{sfx}.md"), "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(rec.lines) + "\n")
-    with open(os.path.join(a.out, "FETCHED.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(a.out, f"FETCHED{sfx}.json"), "w", encoding="utf-8", newline="\n") as f:
         json.dump({"generated": when, "items": rec.items}, f, indent=1)
-    print("\n".join(rec.lines))
+    print("\n".join(rec.lines).encode("ascii", "replace").decode())   # a Windows console is not UTF-8
     return 0
 
 
