@@ -28,7 +28,7 @@ written against.
 | `radio_flux_adjusted_observation_2007-09_2008-03_2019-09_2020-03.txt` | CLS, `ftp://ftpsedr.cls.fr/pub/previsol/solarflux/observation/radio_flux_adjusted_observation.txt` | daily f30, f15, f10.7, f8, f3.2 (sfu) adjusted to 1 AU, each with flare-corrected value, precision and processing flag (1 provisional, 2 interpolated, 4 flare-corrected) |
 | `radio_flux_absolute_observation_2007-09_2008-03_2019-09_2020-03.txt` | CLS, same folder, `radio_flux_absolute_observation.txt` | the same, not adjusted to 1 AU |
 
-The CLS files keep their header unchanged and the data lines of 2007-09-01..2008-03-31 and 2019-09-01..2020-03-31
+The CLS files (cut in run 40375328241, from the same downloads as the digests below) keep their header unchanged and the data lines of 2007-09-01..2008-03-31 and 2019-09-01..2020-03-31
 (213 + 213 daily lines, every line as published). CLS fills gaps by interpolation and flags it: on
 the GRACE-FO fixture days 2020-01-01..03 f30 is flagged 2 (interpolated), because Nobeyama's own daily file
 (`TYKW-NoRP_dailyflux.txt`) has no 1 GHz value on those days. DTM2020 is driven by the CLS series.
