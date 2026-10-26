@@ -161,10 +161,8 @@ classdef tNgfModel < NgfTestCase
             % gracefoReading.readGroopsInstrument (>= 1.1, which reads real GROOPS output), the first
             % use of that reader on TU Graz's bytes in this repository (CLAUDE.md section 7).
             %
-            % FIRST RUN, 2026-10-26: the agreement had never been measured, so the bounds below are
-            % deliberately coarse -- they catch a frame, sign or unit error, not a modelling
-            % difference -- and every number is recorded. They are tightened from the recorded
-            % values, never from an estimate (CLAUDE.md section 7).
+            % The per-axis bounds are tightened from the run that first passed (CI 40406425492); the
+            % magnitude, residual and drag-share bounds stay coarse until a run has printed them.
             S = fullfile(tc.root, 'data', 'samples', 'itsg');
             rd = @(p) gracefoReading.readGroopsInstrument(fullfile(S, "GRACEFO-1_" + p + "_2020-01-01.txt"));
             [tF, aG, iF] = rd("nonConservativeForces");
@@ -223,17 +221,92 @@ classdef tNgfModel < NgfTestCase
             resid = sqrt(mean(vecnorm(a - g).^2)) / sqrt(mean(vecnorm(g).^2));
             tc.verifyBoundAndRecord("GROOPS (TU Graz) vs Model: |log| of the median magnitude ratio", abs(log(mag)), log(3), "-", ...
                 "first run 2026-10-26; a frame or unit error is a factor of 1e3 or a sign, a density model is tens of percent");
+            % Tightened from CI 40406425492 (the first run with the attitude conjugated): correlations
+            % 0.983 / 1.000 / 0.968, RMS ratios 1.50 / 1.18 / 1.20 (|log| 0.404 / 0.166 / 0.180). The model's
+            % along-track drag is 1.5x GROOPS's: a density and gas-surface difference, not a frame one.
             axisName = ["along-track x", "cross-track y", "radial z"];
+            rhoBound = [0.05 0.01 0.1]; ratioBound = log([2 1.5 1.5]);
             for i = 1:3
-                tc.verifyBoundAndRecord("GROOPS vs Model correlation shortfall, " + axisName(i), 1 - rho(i), 1.0, "-", ...
-                    "first run 2026-10-26: recorded; a negative correlation would mean a sign or frame error");
-                tc.verifyBoundAndRecord("GROOPS vs Model RMS ratio, " + axisName(i), abs(log(ratio(i))), log(10), "-", ...
-                    "first run 2026-10-26: recorded");
+                tc.verifyBoundAndRecord("GROOPS vs Model correlation shortfall, " + axisName(i), 1 - rho(i), rhoBound(i), "-", ...
+                    "measured 0.017 / 0.0004 / 0.032 (CI 40406425492)");
+                tc.verifyBoundAndRecord("GROOPS vs Model RMS ratio, " + axisName(i), abs(log(ratio(i))), ratioBound(i), "-", ...
+                    "measured |log| 0.404 / 0.166 / 0.180 (CI 40406425492)");
             end
             tc.verifyBoundAndRecord("GROOPS vs Model RMS of the difference / RMS of GROOPS", resid, 2.0, "-", ...
                 "first run 2026-10-26: recorded; drag dominates the along-track, radiation the cross-track");
             tc.verifyBoundAndRecord("GROOPS comparison: modelled drag share of |a| (recorded)", median(vecnorm(info.drag) ./ vecnorm(a)), 10, "-", ...
                 "context for the along-track numbers above");
+            fprintf('  magnitude ratio %.4f, RMS difference / RMS GROOPS %.4f, drag share %.4f\n', mag, resid, median(vecnorm(info.drag) ./ vecnorm(a)));
+        end
+        function modelAct1bReference(tc)
+            % THE MODEL AGAINST THE MEASUREMENT, the way Huckfeldt et al. (2024, ASR 73, Sec. 3.5, eqs.
+            % 7-10) validate theirs: ACT1B with the thruster firings cut, one bias per day and per axis,
+            % scale 1, then the daily RMS of model minus calibrated ACT1B. A bias-only fit keeps model
+            % errors out of the calibration parameters; a bias-plus-scale fit is recorded beside it,
+            % because GRACE-C's ACT1B scale is not 1 (tools/baseline_reference.json: S_xx 0.762).
+            %
+            % Data: the committed 30 min of each of 2020-01-01..03 (GRACE-C, data/samples/multiday),
+            % this toolbox's own state -- GNV1B, SCA1B conjugated once by io.readSCA1B -- and the
+            % standard preset. THR1B is committed for 2020-01-01 only; that day's three firings in the
+            % excerpt (50 ms attitude pulses at 250, 565 and 1259 s) are masked over [t - 0.5 s, t +
+            % onTime + 7 s] (Huckfeldt Sec. 2.1 and Fig. 3: 500 ms before, the operational margin after)
+            % widened by the CRN kernel's half span of 70.3 s on each side, since ACT1B carries the spike
+            % smeared through the 1407-tap 10 Hz filter. Days 2 and 3 are unmasked; the day-1 numbers
+            % with and without the mask say what that costs. ACT1B is CRN-filtered and the model is not;
+            % over a 30 min arc that matters only at eclipse transitions.
+            %
+            % Independent expectation (stdlib Python, 2026-10-26): GROOPS against the same ACT1B at 10 s,
+            % bias only, gives 2.7 / 3.1 / 1.8 nm/s^2 RMS (x, y, z), scale 0.92 / 0.85 / 0.87, and the
+            % mask moves the x RMS by 4 %. Huckfeldt report 3-5 nm/s^2 along-track and never more than
+            % 2 nm/s^2 cross-track and radial for GRACE-C in 2019 at solar minimum, 20 nm/s^2 at worst
+            % along-track. FIRST RUN: the bounds are those published figures with margin, every number
+            % is recorded, and they are tightened from the recorded values.
+            f = @(varargin) fullfile(tc.root, 'data', 'samples', varargin{:});
+            [~, thr] = NonGravForces.io.readTHR1B(f('THR1B_2020-01-01_C_04.txt'));
+            k = any(thr.fired, 1);
+            tFire = reshape(thr.epoch.sec(k), 1, []); onT = max(thr.onTime_s(:, k), [], 1);
+            halfCrn = (1407 - 1) / 2 * 0.1;                      % s, half span of crnKernel("ACC")
+            masked = @(t) any(t(:) >= tFire - 0.5 - halfCrn & t(:) <= tFire + onT + 7 + halfCrn, 2)';
+            tc.assertEqual(nnz(tFire < 1800), 3, 'three firings inside the 30 min excerpt of 2020-01-01');
+            aM = cell(1, 3); aA = cell(1, 3); keep = cell(1, 3);
+            for d = 1:3
+                day = sprintf('2020-01-%02d', d);
+                [ep, r, v] = NonGravForces.io.readGNV1B(f('multiday', "GNV1B_" + day + "_C_04.txt"), 'Eop', tc.eop);
+                [epq, q] = NonGravForces.io.readSCA1B(f('multiday', "SCA1B_" + day + "_C_04.txt"));
+                [epa, am] = NonGravForces.io.readACC1B(f('multiday', "ACT1B_" + day + "_C_04.txt"));
+                [tf, loc] = ismember(ep.sec, epa.sec);
+                tc.assertGreaterThan(nnz(tf), 1700, 'GNV1B and ACT1B share their 1 s grid over the 30 min');
+                e = referenceSystem.daySecondToEpoch([ep.day(tf) ep.sec(tf)], ep.scale);
+                attD = NonGravForces.geom.AttitudeProvider(epq, q);
+                qk = attD.at(e);
+                aM{d} = tc.M.accel(e, r(:, tf), v(:, tf), qk);
+                aA{d} = am(:, loc(tf));
+                keep{d} = true(1, nnz(tf));
+                if d == 1, keep{d} = ~masked(ep.sec(tf)); end
+            end
+            tc.assertGreaterThan(nnz(~keep{1}), 300, 'the mask removes the three firings with their CRN spread');
+            [rb, rs, s, rho, rDay] = localFit(aM, aA, keep);
+            rb1 = localFit(aM(1), aA(1), keep(1));
+            rb1u = localFit(aM(1), aA(1), {true(size(keep{1}))});
+            fprintf('modelAct1bReference (2020-01-01..03 C, 3 x 30 min at 1 s, standard preset, m/s^2):\n');
+            fprintf('  axis  bias-only rms  scale  bias+scale rms    corr   bias-only RMS of day 1, 2, 3   day 1 unmasked\n');
+            for i = 1:3
+                fprintf('  %-4d  %13.3e  %5.3f  %14.3e  %+6.3f   %9.3e %9.3e %9.3e   %9.3e\n', i, rb(i), s(i), rs(i), rho(i), rDay(i, :), rb1u(i));
+            end
+            axisName = ["along-track x", "cross-track y", "radial z"];
+            rbBound = [20e-9 5e-9 5e-9];
+            for i = 1:3
+                tc.verifyBoundAndRecord("ACT1B vs Model, bias-only RMS (Huckfeldt eq. 10), " + axisName(i), rb(i), rbBound(i), "m/s^2", ...
+                    "first run 2026-10-26; Huckfeldt 2024: 3-5 nm/s^2 x (20 at worst), <= 2 nm/s^2 y and z; GROOPS proxy 2.7 / 3.1 / 1.8");
+                tc.verifyBoundAndRecord("ACT1B vs Model, bias+scale RMS over bias-only RMS, " + axisName(i), rs(i) / rb(i), 1 + 1e-12, "-", ...
+                    "least squares with one more column cannot do worse: an identity");
+                tc.verifyBoundAndRecord("ACT1B vs Model, |log| of the fitted scale, " + axisName(i), abs(log(s(i))), log(2), "-", ...
+                    "first run 2026-10-26: recorded; GROOPS proxy 0.92 / 0.85 / 0.87");
+                tc.verifyBoundAndRecord("ACT1B vs Model correlation shortfall (per day demeaned), " + axisName(i), 1 - rho(i), 0.5, "-", ...
+                    "first run 2026-10-26: recorded; GROOPS proxy shortfalls 0.07 / 0.06 / 0.03");
+                tc.verifyBoundAndRecord("ACT1B vs Model, day 1: |log| of masked over unmasked bias-only RMS, " + axisName(i), abs(log(rb1(i) / rb1u(i))), log(2), "-", ...
+                    "what the THR1B mask is worth on the one day it is committed for; GROOPS proxy 4 % in x");
+            end
         end
     end
 
@@ -398,4 +471,24 @@ classdef tNgfModel < NgfTestCase
             tc.verifyBoundAndRecord("fast preset vs standard preset, same arc (40 epochs)", ratio, 0.75, "-", "measured 0.25 on 2026-09-15 (it was 0.02 before WP-C3; that 88 ms of HANDOVER O-29 was per-call overhead, not physics)");
         end
     end
+end
+
+function [rb, rs, s, rho, rDay] = localFit(aM, aA, keep)
+%LOCALFIT Huckfeldt eqs. 7-10 over days: one bias per day and axis (scale 1), and beside it a common
+% scale with per-day biases. Inputs are 1xD cells of 3xK model, 3xK ACT1B and 1xK logical masks.
+% Per-day demeaning IS the per-day bias estimate (X a column of ones in eq. 9), so both fits are closed form.
+D = numel(aM); rb = zeros(3, 1); rs = zeros(3, 1); s = zeros(3, 1); rho = zeros(3, 1); rDay = zeros(3, D);
+for i = 1:3
+    dm = []; ym = []; xa = [];
+    for d = 1:D
+        m = aM{d}(i, keep{d}); a = aA{d}(i, keep{d});
+        r = (m - a) - mean(m - a);
+        rDay(i, d) = sqrt(mean(r.^2));
+        dm = [dm, r]; ym = [ym, m - mean(m)]; xa = [xa, a - mean(a)]; %#ok<AGROW>
+    end
+    rb(i) = sqrt(mean(dm.^2));
+    s(i) = (xa * ym') / (xa * xa');
+    rs(i) = sqrt(mean((ym - s(i) * xa).^2));
+    rho(i) = (xa * ym') / (norm(xa) * norm(ym));
+end
 end
