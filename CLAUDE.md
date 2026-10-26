@@ -62,7 +62,7 @@ records — A.2 rule, B.4 — follow with N-02c.)
 | Toolbox | Owns |
 |---|---|
 | `referenceSystem` ≥ 2.3 (2.3.0; raised from 2.1 by N-02c for `epochTo(..., "gpsNanoseconds")`) | time scales, EOP, ITRS↔GCRS with derivatives, geodesy, quaternions, attitude interpolation, Sun/Moon states |
-| `gracefoReading` ≥ 1.0.1 (1.0.1) | L1B ASCII reading, quality flags, GROOPS instrument export/import. The PATCH minimum is deliberate and is the one exception to VERSIONING.md's MAJOR.MINOR rule (HANDOVER O-12, O-25) |
+| `gracefoReading` ≥ 1.1 (1.3.0; raised from 1.0.1 on 2026-10-26 for `readGroopsInstrument` on real GROOPS output, O-19) | L1B ASCII reading, quality flags, GROOPS instrument export/import. The 1.0.1 PATCH minimum of O-12/O-25 was the one exception to VERSIONING.md's MAJOR.MINOR rule; 1.1 contains that fix and ends the exception |
 | `timeSeriesPreparation` ≥ 1.5 (1.5.0; raised from 1.4 on 2026-10-20 for the ACH1B preset, its X-19) | The L1B CRN kernel (`crnKernel`), and after N-01 the `qc` stage. **Optional for the toolbox, required by `ciGate`**: `sensor.Electrostatic` filters with `crnKernel("ACC")` by DEFAULT (N-04, owner ruling 2026-10-14) and raises `Electrostatic:depMissing` without it. Its version is the `% Version` line of its `Contents.m` |
 | `lsqvce` ≥ 6.35 (6.35.0; raised from 6.22 on 2026-10-19 for `R.contributions` / `solveContributions`) | The one least-squares estimator (CONCEPT Q2). **Optional for the toolbox, required by `ciGate`**: `app.fitCalibration` declares kind A (one system, one day, one arc per contiguous run) per axis its day bootstrap solves the fit's per-day contributions and its single-arc bootstrap refits kind B. Version from `lsqvce.util.toolboxVersion` |
 | `gjToolbox` (odeSuite) ≥ 0.1 (0.1.0) | Gauss-Jackson integration. **Optional for the toolbox, required by `ciGate`**: `app.DynamicsSource` subclasses `gjToolbox.DynamicsSource` (so it cannot even load without it) and the `buildMex` target `rhs` compiles against `csrc/gj_native.h` (ABI 1). `Model.rhs` is gone — O-4 closed by removal, 2026-09-16 |
@@ -546,9 +546,9 @@ added functionality, PATCH is a fix** — one scheme for every repository,
 defined in ci-actions `VERSIONING.md`, which is the authority this file
 merely states. The local rule it replaced (minor = levels delivered, patch =
 HANDOVER amendment) is dead; 0.12.0 is not renumbered, and the meaning
-changes at the next bump. Note that this repository's one DELIBERATE, argued
-deviation from `VERSIONING.md` is a different clause and is untouched: the
-`gracefoReading >= 1.0.1` PATCH minimum of O-12/O-25.
+changes at the next bump. The repository's one DELIBERATE, argued deviation from
+`VERSIONING.md`, the `gracefoReading >= 1.0.1` PATCH minimum of O-12/O-25, ended on
+2026-10-26 when the minimum rose to 1.1 (O-19).
 `auditPackage.py` compares every copy
 (Contents.m, README, doc/html footers) and checks `FunctionList.html` against
 `tools/buildDocs.py`, which regenerates every page of `doc/html` and `helptoc.xml`; run both before every push.
@@ -593,8 +593,9 @@ Every one of these was an actual defect found in a predecessor or a dependency.
 - **`exist()` does not resolve package-qualified function names.**
 - **Quality, character and `_id` columns belong in `aux`, not `obs`**
   (`gracefoReading` convention).
-- `gracefoReading.writeGroopsInstrument` / `readGroopsInstrument` were never
-  verified against a real GROOPS installation — WP-34 closes this.
+- `gracefoReading.readGroopsInstrument` reads REAL GROOPS output since gracefoReading 1.1.0 (comment
+  header, column legend, `.gz`); its first use on TU Graz's bytes here is `tNgfModel/modelGroopsReference`
+  (O-19, 2026-10-26). `writeGroopsInstrument` is still unverified against a GROOPS installation (WP-34).
 - `clear classes` wipes workspace variables inside a batched MATLAB script;
   split the script if state must survive.
 - **Every oracle generator must run on both tiers**: no numpy anywhere (the host has none

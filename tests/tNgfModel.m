@@ -151,6 +151,55 @@ classdef tNgfModel < NgfTestCase
             % sets -- and exists to catch a sign, a factor or a unit, not to claim agreement.
             tc.verifyBoundAndRecord("thermal recoil cross-track RMS vs Hladczuk 2024 case (a) (4.22 nm/s^2)", abs(sqrt(mean(info.thermal(2, :).^2)) - 4.22e-9), 2.5e-9, "m/s^2", "the residual left by omitting thermal emission bounds its magnitude; measured 5.263e-9, between the GRACE-FO and GRACE-A published figures");
         end
+        function modelGroopsReference(tc)
+            % O-19: GROOPS against this toolbox on the real day. TU Graz's operational
+            % nonConservativeForces for 2020-01-01 GRACE-C (GRACEFO-1) are MODELLED by GROOPS (owner,
+            % 2026-10-26), in the satellite reference frame at 10 s, and published with the attitude
+            % (SRF -> CRF, scalar first) and the reduced-dynamic orbit (CRF) they were computed on.
+            % This test feeds THEIR state into Model.accel, so the two differ only by force model:
+            % density, gas-surface interaction, radiation and thermal. All three files are read with
+            % gracefoReading.readGroopsInstrument (>= 1.1, which reads real GROOPS output), the first
+            % use of that reader on TU Graz's bytes in this repository (CLAUDE.md section 7).
+            %
+            % FIRST RUN, 2026-10-26: the agreement had never been measured, so the bounds below are
+            % deliberately coarse -- they catch a frame, sign or unit error, not a modelling
+            % difference -- and every number is recorded. They are tightened from the recorded
+            % values, never from an estimate (CLAUDE.md section 7).
+            S = fullfile(tc.root, 'data', 'samples', 'itsg');
+            rd = @(p) gracefoReading.readGroopsInstrument(fullfile(S, "GRACEFO-1_" + p + "_2020-01-01.txt"));
+            [tF, aG, iF] = rd("nonConservativeForces");
+            [tA, qG] = rd("attitude");
+            [tO, xO, iO] = rd("reducedDynamicOrbit");
+            tc.assertSize(aG, [600 3]); tc.assertSize(qG, [600 4]); tc.assertSize(xO, [600 9]);
+            tc.assertEqual(tA, tF, 'attitude and forces share their 10 s epochs');
+            tc.assertEqual(tO, tF, 'orbit and forces share their 10 s epochs');
+            tc.verifyEqual(string(iF.columnUnits), ["m/s^2" "m/s^2" "m/s^2"], 'the legend names the units the comparison assumes');
+            tc.verifyEqual(string(iO.columnUnits(1:6)), ["m" "m" "m" "m/s" "m/s" "m/s"]);
+            ep = referenceSystem.daySecondToEpoch(tF, "GPS");
+            q = qG' ./ vecnorm(qG');
+            [a, info] = tc.M.accel(ep, xO(:, 1:3)', xO(:, 4:6)', q);       % body frame = SRF
+            g = aG';
+            rho = zeros(1, 3); ratio = zeros(1, 3);
+            for i = 1:3
+                rho(i) = tc.correlation(a(i, :), g(i, :));
+                ratio(i) = sqrt(mean(a(i, :).^2)) / sqrt(mean(g(i, :).^2));
+            end
+            mag = median(vecnorm(a)) / median(vecnorm(g));
+            resid = sqrt(mean(vecnorm(a - g).^2)) / sqrt(mean(vecnorm(g).^2));
+            tc.verifyBoundAndRecord("GROOPS (TU Graz) vs Model: |log| of the median magnitude ratio", abs(log(mag)), log(3), "-", ...
+                "first run 2026-10-26; a frame or unit error is a factor of 1e3 or a sign, a density model is tens of percent");
+            axisName = ["along-track x", "cross-track y", "radial z"];
+            for i = 1:3
+                tc.verifyBoundAndRecord("GROOPS vs Model correlation shortfall, " + axisName(i), 1 - rho(i), 1.0, "-", ...
+                    "first run 2026-10-26: recorded; a negative correlation would mean a sign or frame error");
+                tc.verifyBoundAndRecord("GROOPS vs Model RMS ratio, " + axisName(i), abs(log(ratio(i))), log(10), "-", ...
+                    "first run 2026-10-26: recorded");
+            end
+            tc.verifyBoundAndRecord("GROOPS vs Model RMS of the difference / RMS of GROOPS", resid, 2.0, "-", ...
+                "first run 2026-10-26: recorded; drag dominates the along-track, radiation the cross-track");
+            tc.verifyBoundAndRecord("GROOPS comparison: modelled drag share of |a| (recorded)", median(vecnorm(info.drag) ./ vecnorm(a)), 10, "-", ...
+                "context for the along-track numbers above");
+        end
     end
 
     % ===================================================================== precision
