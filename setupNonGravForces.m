@@ -110,6 +110,9 @@ function info = setupNonGravForces(options)
 %                                    "never": the gate reads committed excerpts, not the network.
 %   PoolDays   1xN   string   -      Reference days for FetchPool, "yyyy-mm-dd" (default the fixture
 %                                    days "2008-01-01" "2020-01-01" "2020-01-02" "2020-01-03").
+%   SwarmMonths 1xS  string   -      Months of Swarm A/B/C densities alone for FetchPool, "yyyy-mm" from
+%                                    2013-12 (default none): the base of tools/densityDriverFit.m.
+%                                    About 40 MB per month for the three satellites.
 %   PoolMonths 1xM   string   -      Whole months for FetchPool, "yyyy-mm" from 2018-06 (default none):
 %                                    GRACE-C/D Level-1B, Swarm densities and the complete space-weather
 %                                    and EOP files a month run (tools/dragScaleMonth.m) needs. A day
@@ -153,6 +156,7 @@ arguments
     options.FetchPool (1,1) string {mustBeMember(options.FetchPool, ["ifMissing","never","force"])} = "ifMissing"
     options.PoolDays (1,:) string {mustBeNonempty} = ["2008-01-01" "2020-01-01" "2020-01-02" "2020-01-03"]
     options.PoolMonths (1,:) string {localMustBeMonths} = strings(1, 0)
+    options.SwarmMonths (1,:) string = strings(1, 0)
 end
 % THE PINS AND URLS LIVE HERE AND NOWHERE ELSE (rule R1). Moving a pin is an act with a run behind it.
 % NRLMSISE-00: bc9a2fe is "gtd7: fix output at 32.5 km" (Argon densities and a memory corruption fixed
@@ -268,6 +272,10 @@ info.data.items = [info.data.items, localFetchPool(options.DataPool, options.Poo
     ITSG_BASE, ITSG_PRODUCTS, SWARM_HAPI, SWARM_SATS, options.FetchPool)];
 info.data.items = [info.data.items, localFetchPoolMonths(options.DataPool, options.PoolMonths, L1B_BASE, L1B_MONTH_PRODUCTS, ...
     SWARM_HAPI, SWARM_SATS, EOP_URL, SW_URL, options.FetchPool)];
+if ~isempty(options.SwarmMonths) && strlength(options.DataPool) > 0
+    info.data.items = [info.data.items, localFetchTargets(struct('name', {}, 'action', {}, 'file', {}, 'source', {}), ...
+        localSwarmTargets(options.DataPool, datetime(options.SwarmMonths, 'InputFormat', 'yyyy-MM'), SWARM_HAPI, SWARM_SATS), options.FetchPool)];
+end
 info.mex = NonGravForces.buildMex('Check', true);      % 1xT: one element per target
 if options.Verbose
     for m = 1:numel(info.mex)
