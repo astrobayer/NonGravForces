@@ -461,7 +461,7 @@ else:
         # This check governs what this repository asserts, not what it fetched.
         dirnames[:] = [d for d in dirnames
                        if d not in (".git", "html", "helpsearch-v4_en",
-                                    "nrlmsise00", "hwm14", "msis21", "node_modules")]
+                                    "nrlmsise00", "hwm14", "msis21", "nrlmsis21", "dtm2020", "node_modules")]
         for fn in filenames:
             if not fn.endswith((".m", ".md", ".tex", ".c", ".h")):
                 continue

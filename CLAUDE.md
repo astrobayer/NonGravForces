@@ -175,8 +175,28 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-27, PR #109)
+## 5. Current status (2026-10-27, PR #111)
 
+- **2026-10-27, PR #111 (DTM2020 density backend):** `drag.density = "dtm2020"` (opt-in, no preset), CNES's
+  operational DTM2020 (F10.7, Kp) through `mex/ngfDtm2020Shim.F90` + `mex/ngfDtm2020Gateway.c`, built by
+  `buildMex` target `dtm2020` (gfortran `-fdefault-real-8`) from SWAMI MCM files `setupNonGravForces` fetches at a
+  pinned commit and SHA-256 into `mex/dtm2020`. **CNES licence: academic, non-commercial use only, no modification,
+  no redistribution** (THIRD-PARTY-NOTICES.md). Drivers from the celestrak query's new `f107Last81`,
+  `kpDelayed3h`, `kpMean24h`; refused below 150 km and on the native path (O-52). Oracle: CNES's four benchmark
+  cases. CI 40470246057: 457/459 -- the two red tests were OLDER contracts still asserting the 2026-09-15 refusal
+  of dtm2020 (fixed); the six DTM2020 tests pass. ◐ until the re-run is read; predicted gate 459.
+  **THE MONTH ANSWERS O-19** (run 40470246020): with DTM2020 and Sentman alpha 0.85 ACT1B wants k_drag **0.961**
+  (per day 0.81-1.12), median along-track RMS **1.79 nm/s^2** (Huckfeldt: 3-5); DTM2020 + Cd 2.4 overshoots (1.207).
+  DTM2020 is 0.478 of NRLMSISE-00 at 490 km on 2020-01-01. The factor of 2 was the MSIS density in solar minimum;
+  the 'Sentman is 0.66-0.74 of it' below was an inference from two Cd values and the month CONTRADICTS it.
+- **2026-10-27, PR #110 (`tools/dragScaleMonth.m`, `.github/workflows/drag-month.yml`):** the month on the runner's
+  DATAPOOL (run 40460797299, all 31 days of 2020-01 C, THR1B cut, one bias per day): ACT1B wants a joint k_drag of
+  **0.443** (per day 0.34-0.57), GROOPS 0.48 -- two independent references say the along-track drag is about TWICE
+  too large. Median daily RMS x / y / z 6.36 / 2.84 / 3.60 nm/s^2; msis21 + constantCd 2.4 gives 3.86 nm/s^2 and
+  still wants k_drag 0.61. The workflow runs on demand (`workflow_dispatch`, month and satellite) in ~22 min.
+  Decomposition (`tools/pyxcheck/gracefo_cda.py`): Sentman at alpha 0.85 is Cd 3.5-3.8 on the 0.955 m^2 frontal plate
+  (~30 % edge-on shear) against Huckfeldt's 2.4 -- 0.66-0.74 of the factor; the remaining ~0.6 is the MSIS density in
+  solar minimum [SUPERSEDED by PR #111's DTM2020 month: the density is the whole factor]. With Huckfeldt's configuration the month reproduces their 3-5 nm/s^2: no implementation defect.
 - **2026-10-27, PR #109 (drag diagnosis, `tNgfModel/modelDragDiagnosis`):** the along-track difference to GROOPS is a
   DRAG SCALE: k_drag 0.482, constant over the orbit (0.44-0.49 in four 25 min windows); one drag factor takes the
   along-track RMS from 10.6 to 0.53 nm/s^2. Single options move the standard drag to 0.915 (msis21), 0.905 (Sentman
@@ -541,7 +561,7 @@ repository had written down about them.
   under `tests/fixtures/groops/` and committed; neither CI nor the host needs a
   GROOPS installation.
 
-**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-51 with an owner
+**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-52 with an owner
 and a re-entry condition each. This file deliberately does NOT list them: the copy that
 used to live here had drifted to O-15 of 21 and showed two closed items as open, and no
 check compared the two (R1). Read Part H.
@@ -740,6 +760,9 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   quaternions are BIT-IDENTICAL to SCA1B's**: their "SRF->CRF" is this toolbox's "ICRF->SRF" in the other
   quaternion convention, so conjugate exactly once, as `io.readSCA1B` does. Passed unconjugated it put 5.3e-8
   m/s^2 of drag into the radial axis and anti-correlated the along-track with GROOPS (PR #108, CI 40403910825).
+- **Delivering a refused option reddens the tests that asserted its refusal.** DTM2020's first CI run was 457/459
+  because `tNgfCore/optionsContract` and `tNgfEnv/densityContract` still checked the 2026-09-15 refusal. Before
+  pushing a new value, grep the tests for the value's name next to `verifyError`.
 - **A status code is not a file.** `https://www.ngdc.noaa.gov/IAGA/vmod/igrf14.f` answers `200`
   with an HTML error page. Check the content, not the response code — met twice in two days.
 - **Never claim bitwise across a change in BATCH SIZE.** Vectorised products and norms associate

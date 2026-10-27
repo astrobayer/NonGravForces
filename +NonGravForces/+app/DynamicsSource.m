@@ -99,8 +99,8 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
 % ERRORS
 %   NonGravForces:DynamicsSource:inputModel     model is not a NonGravForces.Model, or its options
 %                                               cannot be served (transient thermal, raycast, squad)
-%   NonGravForces:DynamicsSource:unsupportedOption  erp.backend ceresClimatology, which has no native
-%                                               evaluator; use Model.accel or series instead
+%   NonGravForces:DynamicsSource:unsupportedOption  erp.backend ceresClimatology or drag.density dtm2020,
+%                                               which have no native evaluator; use Model.accel or series instead
 %   NonGravForces:DynamicsSource:inputEpoch     no 'Epoch', or a context Epoch that disagrees
 %   NonGravForces:DynamicsSource:inputGravity   'Gravity' is not a gjToolbox.DynamicsSource
 %   NonGravForces:DynamicsSource:depMissing     the rhs MEX is not built (Native), or gjToolbox is absent
@@ -177,6 +177,12 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
             % hand and knocke where they are not (measured 2026-09-18).
             if o.erp.backend == "ceresClimatology"
                 NonGravForces.fail(unit, "unsupportedOption", "erp.backend ceresClimatology has no native evaluator, by design: erp.backend ceres is the same 1-degree measured field and the native path serves it -> use ceres for an integrated arc, knocke if you do not hold the months, or ceresClimatology through Model.accel or series");
+            end
+            % DTM2020 (2026-10-27) has no native evaluator YET: mex/ngfRhs.c links the density models it
+            % evaluates, and CNES's subroutines were not added to it. Refused here, for the same reason as
+            % ceresClimatology above: find() below would return empty and pack 0, "exponential".
+            if o.drag.density == "dtm2020"
+                NonGravForces.fail(unit, "unsupportedOption", "drag.density dtm2020 has no native evaluator (HANDOVER O-52) -> use msis00 or msis21 for an integrated arc, or dtm2020 through Model.accel or series");
             end
             if any(~ismember(nv.Parameters, ["cdScale", "crScale"]))
                 NonGravForces.fail(unit, "inputModel", "'Parameters' may name cdScale and crScale -> got %s", strjoin(nv.Parameters, ", "));
@@ -524,7 +530,7 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
             s.cdScale = o.drag.cdScale; s.crScale = o.srp.crScale;
             s.accommodation = double(find(["fixed","pilinski2010","pilinski2011","walker2014","sesam"] == o.drag.accommodation) - 1);
             s.alphaFixed = localOrZero(o.drag.alpha); s.surfaceMassAmu = localOrZero(o.drag.surfaceMass_amu);
-            s.density = double(find(["exponential","msis00","msis21"] == o.drag.density) - 1);
+            s.density = double(find(["exponential","msis00","msis21"] == o.drag.density) - 1);   % dtm2020 is refused at construction
             s.expRho0 = 0; s.expH0 = 0; s.expH = 1;
             if o.drag.density == "exponential"
                 if isempty(M.exponential)

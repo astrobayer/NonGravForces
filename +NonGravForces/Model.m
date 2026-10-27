@@ -99,7 +99,7 @@ classdef Model
 %   Eop           1x1   struct          -      referenceSystem.readEop result or a file path.
 %                                              REQUIRED to evaluate: the geodetic height needs
 %                                              the ITRS rotation and the co-rotation its rate.
-%   SpaceWeather  1x1   struct          -      io.spaceWeather result. Required by msis00 and msis21.
+%   SpaceWeather  1x1   struct          -      io.spaceWeather result. Required by msis00, msis21 and dtm2020.
 %   Ephemeris     1x1   struct          -      referenceSystem.readEphemeris result, required
 %                                              when sun.source is "rs.de440".
 %   Exponential   1x1   struct          -      .rho0_kg_m3 .h0_m .H_m, required when

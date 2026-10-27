@@ -29,7 +29,7 @@ trap 'rm -rf "$TMP"' EXIT
 echo "runCChecks: compiler $($CC --version | head -1)"
 
 echo "runCChecks: [1/2] compiling the MEX gateways against the shim (no link)"
-for gw in ngfKernelGateway ngfMsis21Gateway ngfHwm14Gateway; do
+for gw in ngfKernelGateway ngfMsis21Gateway ngfHwm14Gateway ngfDtm2020Gateway; do
     $CC -std=c99 -Wall -Wextra -Werror \
         -I "$ROOT/mex/test/shim" -I "$ROOT/mex" \
         -c "$ROOT/mex/$gw.c" -o "$TMP/$gw.o"

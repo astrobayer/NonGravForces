@@ -59,7 +59,7 @@ classdef tNgfCore < NgfTestCase
             tc.verifyErrorId(@() NonGravForces.Options("fast", "drag.alpha", 1.5), 'NonGravForces:Options:inputValue');
             tc.verifyErrorId(@() NonGravForces.Options("fast", "drag.alpha"), 'NonGravForces:Options:inputField');
             % LP-C F4/F5: every admissible value evaluates, so what cannot is refused here, by name
-            for bad = {{"drag.gsi", "cll"}, {"drag.gsi", "schamberg"}, {"drag.density", "dtm2020"}, {"drag.density", "jb2008"}, ...
+            for bad = {{"drag.gsi", "cll"}, {"drag.gsi", "schamberg"}, {"drag.density", "jb2008"}, ...
                        {"drag.accommodation", "dria"}, {"thermal.model", "foldedIntoSrp"}, {"partials.method", "complexStep"}}
                 tc.verifyErrorId(@() NonGravForces.Options("standard", bad{1}{:}), 'NonGravForces:Options:inputValue');
             end

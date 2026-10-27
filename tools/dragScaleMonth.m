@@ -25,9 +25,9 @@ function R = dragScaleMonth(options)
 %   70.3 s, through which ACT1B carries the spike. A day without THR1B in the pool is
 %   used unmasked and flagged.
 %
-%   VARIANTS, one option changed at a time against the preset: msis21, constantCd 2.4
-%   (Huckfeldt's base case) and both; each reports its along-track bias-only RMS and
-%   k_drag.
+%   VARIANTS against the preset: msis21, constantCd 2.4 (Huckfeldt's base case) and both;
+%   DTM2020 (CNES, fitted to TU Delft's accelerometer densities; academic licence) alone and
+%   with Cd 2.4. Each reports its along-track bias-only RMS and k_drag.
 %
 %   IT LIVES IN tools/, like regressionBaseline.m: it reads the DATAPOOL, which a commit's
 %   CI does not, and takes minutes per day. .github/workflows/drag-month.yml runs it on
@@ -81,9 +81,10 @@ days = string({dd([dd.isdir]).name});
 if ~isempty(options.Days), days = days(ismember(str2double(extractAfter(days, 8)), options.Days)); end
 
 o = NonGravForces.Options(options.Preset);
-vName = ["preset" "msis21" "constantCd 2.4" "msis21 + Cd 2.4"];
+vName = ["preset" "msis21" "constantCd 2.4" "msis21 + Cd 2.4" "dtm2020" "dtm2020 + Cd 2.4"];
 vOpt = {o, o.set("drag.density", "msis21"), o.set("drag.gsi", "constantCd").set("drag.cd", 2.4), ...
-    o.set("drag.density", "msis21").set("drag.gsi", "constantCd").set("drag.cd", 2.4)};
+    o.set("drag.density", "msis21").set("drag.gsi", "constantCd").set("drag.cd", 2.4), ...
+    o.set("drag.density", "dtm2020"), o.set("drag.density", "dtm2020").set("drag.gsi", "constantCd").set("drag.cd", 2.4)};
 nV = numel(vName);
 macro = NonGravForces.geom.graceFO(options.Satellite);
 models = cell(1, nV);

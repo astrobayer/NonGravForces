@@ -5,7 +5,8 @@ function report = buildMex(options)
 %   report = NonGravForces.buildMex('Check', true)            % report only, nothing compiled
 %   report = NonGravForces.buildMex('Target', "kernel")       % one target, scalar report
 %
-%   The five places compiled code is sanctioned (HANDOVER C3, LP-C WP-C6, WP-C9 and WP-C11), and no others:
+%   The six places compiled code is sanctioned (HANDOVER C3, LP-C WP-C6, WP-C9, WP-C11 and DTM2020, Part I
+%   2026-10-27), and no others:
 %
 %     msis    the NRLMSISE-00 C source plus the marshalling gateway
 %             mex/ngfMsisGateway.c, built into +env/private/msisGateway, where
@@ -44,6 +45,14 @@ function report = buildMex(options)
 %             setupNonGravForces fetches the files by SHA-256 into mex/hwm14;
 %             'Hwm14Source' and NGF_HWM14 point elsewhere. Same compiler and static
 %             runtime as msis21; the model itself is single precision.
+%     dtm2020 CNES's UNMODIFIED DTM2020 operational subroutines (F10.7, Kp) as SWAMI's MCM
+%             repository ships them, a bind(C) shim (mex/ngfDtm2020Shim.F90) and the
+%             gateway mex/ngfDtm2020Gateway.c, built into +env/private/dtm2020Gateway with
+%             the coefficient file and CNES's licence beside it. Not redistributed (CNES:
+%             academic, non-commercial use only, no modification): setupNonGravForces
+%             fetches the files by SHA-256 into mex/dtm2020; 'Dtm2020Source' and NGF_DTM2020
+%             point elsewhere. Same compiler and static runtime as msis21, compiled in
+%             double precision (-fdefault-real-8), as CNES's benchmark program asks.
 %     rhs     the WHOLE non-gravitational chain for one state in C (mex/ngfRhs.c),
 %             built into +app/private/rhsGateway, where NonGravForces.app.DynamicsSource
 %             can reach it and nothing else can. It links the kernel, NRLMSISE-00,
@@ -68,8 +77,8 @@ function report = buildMex(options)
 %   package root) is placed in MW_MINGW64_LOC for this session and "mex -setup C"
 %   is run, because a fresh MATLAB session forgets that variable (measured
 %   2026-09-07, HANDOVER O-14). Without any compiler the function refuses with
-%   depCompiler; so does the msis21 target when the selected C compiler has no
-%   gfortran beside it (a non-MinGW compiler).
+%   depCompiler; so do the Fortran targets (msis21, hwm14, dtm2020) when the selected C
+%   compiler has no gfortran beside it (a non-MinGW compiler).
 %
 %   STALENESS IS DECIDED BY CONTENT. A SHA-256 digest of the sources is written
 %   beside the binary; 'Check' compares it with the sources on disk, so an
@@ -79,7 +88,7 @@ function report = buildMex(options)
 %   Name     Size  Type     Units  Description
 %   ----     ----  ----     -----  -----------
 %   Check    1x1   logical  -      true: report only (default false).
-%   Target   1x1   string   -      "all" (default), "msis", "msis21", "hwm14", "rhs" or "kernel". "all"
+%   Target   1x1   string   -      "all" (default), "msis", "msis21", "hwm14", "dtm2020", "rhs" or "kernel". "all"
 %                                  returns one report per target, in that order.
 %   MsisSource 1x1 string   -      Directory holding the NRLMSISE-00 C source. Default: the
 %                                  NGF_NRLMSISE00 environment variable if set, else mex/nrlmsise00.
@@ -87,6 +96,8 @@ function report = buildMex(options)
 %                                  NGF_NRLMSIS21 environment variable if set, else mex/nrlmsis21.
 %   Hwm14Source 1x1 string  -      Directory holding the HWM14 files. Default: the NGF_HWM14
 %                                  environment variable if set, else mex/hwm14.
+%   Dtm2020Source 1x1 string -     Directory holding the DTM2020 files. Default: the NGF_DTM2020
+%                                  environment variable if set, else mex/dtm2020.
 %   GjToolboxSource 1x1 string -   Directory holding gj_native.h (odeSuite's csrc). Default: the
 %                                  NGF_GJTOOLBOX environment variable, else the csrc folder of the
 %                                  gjToolbox on the path.
@@ -95,7 +106,7 @@ function report = buildMex(options)
 %   Name     Size  Type    Units  Description
 %   ----     ----  ----    -----  -----------
 %   report   1xT   struct  -      One element per target (T = 1 for a named
-%                                 Target, 5 for "all"), each with
+%                                 Target, 6 for "all"), each with
 %                                 .target (string), .file (string),
 %                                 .present (logical),
 %                                 .upToDate (logical: present and digest
@@ -119,8 +130,8 @@ function report = buildMex(options)
 % ERRORS
 %   NonGravForces:buildMex:depCompiler   no C compiler selected and no MinGW-w64
 %                                        support package found; or no gfortran beside
-%                                        the selected compiler (msis21)
-%   NonGravForces:buildMex:depMissing    the NRLMSISE-00, NRLMSIS 2.1 or HWM14 source is absent
+%                                        the selected compiler (msis21, hwm14, dtm2020)
+%   NonGravForces:buildMex:depMissing    the NRLMSISE-00, NRLMSIS 2.1, HWM14 or DTM2020 source is absent
 %   NonGravForces:buildMex:dataMissing   a source file of mex/ is missing
 %   NonGravForces:buildMex:numericBuild  gfortran refused a file (its output is in the message)
 %   MATLAB:mex:*                         compiler errors propagate unwrapped
@@ -130,14 +141,15 @@ function report = buildMex(options)
 %
 % See also NonGravForces.env.density, NonGravForces.kernel.singleEpoch, setupNonGravForces.
 %
-% KEYWORDS mex build compiler nrlmsise nrlmsis gfortran kernel
-% Created 2026-09-07 by Claude Fable 5.1 (Anthropic); second target 2026-09-08, msis21 2026-09-15 by Claude Opus 5 (Anthropic).
+% KEYWORDS mex build compiler nrlmsise nrlmsis dtm2020 gfortran kernel
+% Created 2026-09-07 by Claude Fable 5.1 (Anthropic); second target 2026-09-08, msis21 2026-09-15 by Claude Opus 5 (Anthropic); dtm2020 2026-10-27 by Claude (Anthropic).
 arguments
     options.Check (1,1) logical = false
-    options.Target (1,1) string {mustBeMember(options.Target, ["all","msis","msis21","hwm14","rhs","kernel"])} = "all"
+    options.Target (1,1) string {mustBeMember(options.Target, ["all","msis","msis21","hwm14","dtm2020","rhs","kernel"])} = "all"
     options.MsisSource (1,1) string = ""
     options.Msis21Source (1,1) string = ""
     options.Hwm14Source (1,1) string = ""
+    options.Dtm2020Source (1,1) string = ""
     options.GjToolboxSource (1,1) string = ""
 end
 unit = "buildMex";
@@ -147,31 +159,39 @@ mexDir = fullfile(root, 'mex');
 msisDir = localSourceDir(options.MsisSource, 'NGF_NRLMSISE00', fullfile(mexDir, 'nrlmsise00'));
 msis21Dir = localSourceDir(options.Msis21Source, 'NGF_NRLMSIS21', fullfile(mexDir, 'nrlmsis21'));
 hwm14Dir = localSourceDir(options.Hwm14Source, 'NGF_HWM14', fullfile(mexDir, 'hwm14'));
+dtm2020Dir = localSourceDir(options.Dtm2020Source, 'NGF_DTM2020', fullfile(mexDir, 'dtm2020'));
 gjDir = localGjDir(options.GjToolboxSource);
 hwm14Fortran = [string(fullfile(hwm14Dir, 'hwm14.f90')), string(fullfile(mexDir, 'ngfHwm14Shim.F90'))];
 % NRL's compile order: each file uses the modules of the files before it (readme.txt).
 msis21Fortran = fullfile(msis21Dir, ["msis_constants" "msis_utils" "msis_init" "msis_gfn" "msis_tfn" "msis_dfn" "msis_calc"] + ".F90");
+% CNES's subroutine file first (the shim calls its external procedures), then the shim.
+dtm2020Fortran = [string(fullfile(dtm2020Dir, 'dtm2020_F107_Kp-subr_MCM.f90')), string(fullfile(mexDir, 'ngfDtm2020Shim.F90'))];
 % One row per target: everything that differs between them lives here and
 % nothing below branches on the name (rule R1 applied to the build recipe).
-% fortran: compiled first, in order, and linked into the gateway; data: copied beside the binary.
+% fortran: compiled first, in order, with fflags, and linked into the gateway; data: copied beside the binary.
+% fflags: -DDBLE selects NRLMSIS 2.1's double-precision kind (rp); DTM2020 has no kind parameter, and
+% CNES's benchmark program asks for a double-precision compile, which is -fdefault-real-8.
 % Both take part in the digest, the parameter file included: other coefficients are another model.
 targets = struct( ...
-    'name',    {"msis", "msis21", "hwm14", "rhs", "kernel"}, ...
-    'output',  {'msisGateway', 'msis21Gateway', 'hwm14Gateway', 'rhsGateway', 'kernelGateway'}, ...
+    'name',    {"msis", "msis21", "hwm14", "dtm2020", "rhs", "kernel"}, ...
+    'output',  {'msisGateway', 'msis21Gateway', 'hwm14Gateway', 'dtm2020Gateway', 'rhsGateway', 'kernelGateway'}, ...
     'outDir',  {fullfile(pkgRoot, '+env', 'private'), fullfile(pkgRoot, '+env', 'private'), fullfile(pkgRoot, '+env', 'private'), ...
-                fullfile(pkgRoot, '+app', 'private'), fullfile(pkgRoot, '+kernel', 'private')}, ...
-    'include', {string(msisDir), string(mexDir), string(mexDir), [string(mexDir), string(msisDir), gjDir], string(mexDir)}, ...
-    'sourceDir', {msisDir, msis21Dir, hwm14Dir, gjDir, ""}, ...
-    'fortran', {strings(1, 0), [msis21Fortran, string(fullfile(mexDir, 'ngfMsis21Shim.F90'))], hwm14Fortran, ...
+                fullfile(pkgRoot, '+env', 'private'), fullfile(pkgRoot, '+app', 'private'), fullfile(pkgRoot, '+kernel', 'private')}, ...
+    'include', {string(msisDir), string(mexDir), string(mexDir), string(mexDir), [string(mexDir), string(msisDir), gjDir], string(mexDir)}, ...
+    'sourceDir', {msisDir, msis21Dir, hwm14Dir, dtm2020Dir, gjDir, ""}, ...
+    'fortran', {strings(1, 0), [msis21Fortran, string(fullfile(mexDir, 'ngfMsis21Shim.F90'))], hwm14Fortran, dtm2020Fortran, ...
                 [msis21Fortran, string(fullfile(mexDir, 'ngfMsis21Shim.F90')), hwm14Fortran], strings(1, 0)}, ...
+    'fflags',  {"", "-DDBLE", "-DDBLE", "-fdefault-real-8", "-DDBLE", ""}, ...
     'data',    {strings(1, 0), fullfile(msis21Dir, ["msis21.parm" "nrlmsis2.1_license..txt"]), ...
-                fullfile(hwm14Dir, ["hwm123114.bin" "dwm07b104i.dat" "gd2qd.dat"]), strings(1, 0), strings(1, 0)}, ...
+                fullfile(hwm14Dir, ["hwm123114.bin" "dwm07b104i.dat" "gd2qd.dat"]), ...
+                fullfile(dtm2020Dir, ["DTM_2020_F107_Kp.dat" "LICENSE_MCM_DTM.txt"]), strings(1, 0), strings(1, 0)}, ...
     'sources', {string({fullfile(mexDir, 'ngfMsisGateway.c'), ...
                         char(fullfile(msisDir, 'nrlmsise-00.c')), ...
                         char(fullfile(msisDir, 'nrlmsise-00_data.c')), ...
                         char(fullfile(msisDir, 'nrlmsise-00.h'))}), ...
                 string(fullfile(mexDir, 'ngfMsis21Gateway.c')), ...
                 string({fullfile(mexDir, 'ngfHwm14Gateway.c'), fullfile(mexDir, 'ngfHwm14Load.c')}), ...
+                string(fullfile(mexDir, 'ngfDtm2020Gateway.c')), ...
                 string({fullfile(mexDir, 'ngfRhsGateway.c'), fullfile(mexDir, 'ngfRhs.c'), fullfile(mexDir, 'ngfKernel.c'), ...
                         fullfile(mexDir, 'ngfHwm14Load.c'), char(fullfile(msisDir, 'nrlmsise-00.c')), ...
                         char(fullfile(msisDir, 'nrlmsise-00_data.c')), fullfile(mexDir, 'ngfRhs.h'), ...
@@ -250,7 +270,7 @@ for t = 1:numel(targets)
         objDir = tempname;
         mkdir(objDir);
         cleanObj = onCleanup(@() rmdir(objDir, 's'));
-        extra = localFortran(unit, cc, tg.fortran, objDir);
+        extra = localFortran(unit, cc, tg.name, tg.fortran, tg.fflags, objDir);
     end
     inc = cellfun(@(d) ['-I' char(d)], cellstr(tg.include), 'UniformOutput', false);
     args = [{'-silent', '-O', '-DNDEBUG'}, inc, {'-outdir', char(tg.outDir), '-output', tg.output}, csrc, extra];
@@ -311,12 +331,14 @@ if name == "msis21"
     h = "NGF_NRLMSIS21 or 'Msis21Source'";
 elseif name == "hwm14"
     h = "NGF_HWM14 or 'Hwm14Source'";
+elseif name == "dtm2020"
+    h = "NGF_DTM2020 or 'Dtm2020Source'";
 else
     h = "NGF_NRLMSISE00 or 'MsisSource'";
 end
 end
 
-function objs = localFortran(unit, cc, files, objDir)
+function objs = localFortran(unit, cc, name, files, fflags, objDir)
 %LOCALFORTRAN Compile Fortran files in the given order with the gfortran beside the selected C compiler.
 % Returns the mex arguments that link them: the objects, then the static runtime archives. The
 % compiler's bin folder is put in front of PATH for the call only, because gfortran runs the
@@ -324,7 +346,7 @@ function objs = localFortran(unit, cc, files, objDir)
 root = string(cc(1).Location);
 gf = fullfile(root, 'bin', 'gfortran.exe');
 if ~isfile(gf)
-    NonGravForces.fail(unit, "depCompiler", "the msis21 target needs gfortran beside the selected C compiler and there is none at %s -> select the MinGW-w64 C compiler (mex -setup C) or install its support package", gf);
+    NonGravForces.fail(unit, "depCompiler", "the %s target needs gfortran beside the selected C compiler and there is none at %s -> select the MinGW-w64 C compiler (mex -setup C) or install its support package", name, gf);
 end
 [st, ver] = system(sprintf('"%s" -dumpversion', gf));
 if st ~= 0
@@ -340,11 +362,11 @@ for k = 1:numel(files)
     [~, name] = fileparts(files(k));
     o = fullfile(objDir, name + ".o");
     % -O2 and no -ffast-math: the package's reference output is reproducible only without it.
-    cmd = sprintf('set "PATH=%s;%%PATH%%" && "%s" -O2 -cpp -DDBLE -c "%s" -J "%s" -o "%s" 2>&1', ...
-                  fullfile(root, 'bin'), gf, files(k), objDir, o);
+    cmd = sprintf('set "PATH=%s;%%PATH%%" && "%s" -O2 -cpp %s -c "%s" -J "%s" -o "%s" 2>&1', ...
+                  fullfile(root, 'bin'), gf, fflags, files(k), objDir, o);
     [st, out] = system(cmd);
     if st ~= 0
-        NonGravForces.fail(unit, "numericBuild", "gfortran refused %s:\n%s -> the source is not the pinned NRLMSIS 2.1 release, or the compiler is broken", files(k), strtrim(out));
+        NonGravForces.fail(unit, "numericBuild", "gfortran refused %s:\n%s -> the source is not the pinned release of target %s, or the compiler is broken", files(k), strtrim(out), name);
     end
     objs{k} = char(o);
 end

@@ -18,7 +18,7 @@ io,spaceWeather,function,L1,WP-04,done,Space-weather provider with query(epoch):
 io,importCERES,function,L1,WP-C8,done,CERES EBAF TOA monthly fluxes (obs4MIPs netCDF) as lat x lon x month grids
 io,importGroopsGrid,function,L1,WP-E1,done,GROOPS binary gridded data: a global grid with solid angles and values (CERES albedo and longwave)
 io,igrfCoefficients,function,L1,WP-23,done,IGRF-14 coefficient loader with the model's own interpolation and SV rule
-env,density,function,L2,WP-05,done,Thermosphere density and composition (exponential msis00 msis21)
+env,density,function,L2,WP-05,done,Thermosphere density and composition (exponential msis00 msis21 dtm2020)
 env,wind,function,L2,WP-25,done,Relative-velocity builder: co-rotation from referenceSystem plus HWM14 or a given wind field
 env,eclipseFactor,function,L2,WP-07,done,Shadow function nu from 0 to 1: cylindrical conical solaarsCF plus lunar
 env,earthRadiance,function,L2,WP-08,done,Earth albedo and longwave emission on cap tiles (pointSource knocke ceres)

@@ -37,7 +37,7 @@ Configure once, evaluate many (principle P5). Every field is validated at constr
 \begin{lstlisting}
 FIDELITY LADDER
   field                   fast          standard        precise
-  drag.density            exponential   msis00          msis21
+  drag.density            exponential   msis00          msis21  (+dtm2020 opt-in)
   drag.wind               corotation    corotation      corotation (+hwm14 opt-in)
   drag.gsi                constantCd    sentman         sentman
   drag.accommodation      fixed 0.85    fixed 0.85      fixed 0.85 (March et al. 2021)
@@ -53,7 +53,8 @@ FIDELITY LADDER
 \subsubsection*{PROPERTIES (read-only after construction; change through set())}
 \begin{lstlisting}
 preset      string    "fast" | "standard" | "precise"
-drag        struct    .density  "exponential" | "msis00" | "msis21"
+drag        struct    .density  "exponential" | "msis00" | "msis21" | "dtm2020" (CNES licence:
+                                academic, non-commercial use only; THIRD-PARTY-NOTICES.md)
                       .wind     "none" | "corotation" | "hwm14"
                       .gsi      "constantCd" | "sentman" | "maxwell"
                       .accommodation "fixed" | "pilinski2010" | "pilinski2011" | "walker2014" | "sesam"
@@ -378,10 +379,11 @@ report = NonGravForces.buildMex('Target', "kernel")       % one target, scalar r
 \bottomrule
 \endlastfoot
 Check & 1x1 & logical & - & true: report only (default false). \\
-Target & 1x1 & string & - & "all" (default), "msis", "msis21", "hwm14", "rhs" or "kernel". "all" returns one report per target, in that order. \\
+Target & 1x1 & string & - & "all" (default), "msis", "msis21", "hwm14", "dtm2020", "rhs" or "kernel". "all" returns one report per target, in that order. \\
 MsisSource & 1x1 & string & - & Directory holding the NRLMSISE-00 C source. Default: the NGF\_NRLMSISE00 environment variable if set, else mex/nrlmsise00. \\
 Msis21Source & 1x1 & string & - & Directory holding the NRLMSIS 2.1 package. Default: the NGF\_NRLMSIS21 environment variable if set, else mex/nrlmsis21. \\
 Hwm14Source & 1x1 & string & - & Directory holding the HWM14 files. Default: the NGF\_HWM14 environment variable if set, else mex/hwm14. \\
+Dtm2020Source & 1x1 & string & - & Directory holding the DTM2020 files. Default: the NGF\_DTM2020 environment variable if set, else mex/dtm2020. \\
 GjToolboxSource & 1x1 & string & - & Directory holding gj\_native.h (odeSuite's csrc). Default: the NGF\_GJTOOLBOX environment variable, else the csrc folder of the gjToolbox on the path. \\
 \end{longtable}
 
@@ -399,13 +401,13 @@ GjToolboxSource & 1x1 & string & - & Directory holding gj\_native.h (odeSuite's 
 \endfoot
 \bottomrule
 \endlastfoot
-report & 1xT & struct & - & One element per target (T = 1 for a named Target, 5 for "all"), each with .target (string), .file (string), .present (logical), .upToDate (logical: present and digest matches the sources), .sourceDigest (string, SHA-256 of the sources), .binaryDigest (string recorded at build time, "" if none), .compiler (string, "" when not built now), .built (logical: compiled in this call), .sources (1xN string), .sourcesPresent (logical: every source file exists; false is a REPORT under 'Check' and an error otherwise), .sourceDir (string, where the third-party source was looked for; "" for the kernel, which has none). The digest covers whatever source was actually used, so a different NRLMSISE-00 release marks the binary stale and forces a rebuild -- which is the mechanism that makes tracking upstream safe rather than merely convenient. \\
+report & 1xT & struct & - & One element per target (T = 1 for a named Target, 6 for "all"), each with .target (string), .file (string), .present (logical), .upToDate (logical: present and digest matches the sources), .sourceDigest (string, SHA-256 of the sources), .binaryDigest (string recorded at build time, "" if none), .compiler (string, "" when not built now), .built (logical: compiled in this call), .sources (1xN string), .sourcesPresent (logical: every source file exists; false is a REPORT under 'Check' and an error otherwise), .sourceDir (string, where the third-party source was looked for; "" for the kernel, which has none). The digest covers whatever source was actually used, so a different NRLMSISE-00 release marks the binary stale and forces a rebuild -- which is the mechanism that makes tracking upstream safe rather than merely convenient. \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}buildMex:\allowbreak{}depCompiler}] no C compiler selected and no MinGW-w64 support package found; or no gfortran beside the selected compiler (msis21)
-\item[\texttt{NonGravForces:\allowbreak{}buildMex:\allowbreak{}depMissing}] the NRLMSISE-00, NRLMSIS 2.1 or HWM14 source is absent
+\item[\texttt{NonGravForces:\allowbreak{}buildMex:\allowbreak{}depCompiler}] no C compiler selected and no MinGW-w64 support package found; or no gfortran beside the selected compiler (msis21, hwm14, dtm2020)
+\item[\texttt{NonGravForces:\allowbreak{}buildMex:\allowbreak{}depMissing}] the NRLMSISE-00, NRLMSIS 2.1, HWM14 or DTM2020 source is absent
 \item[\texttt{NonGravForces:\allowbreak{}buildMex:\allowbreak{}dataMissing}] a source file of mex/ is missing
 \item[\texttt{NonGravForces:\allowbreak{}buildMex:\allowbreak{}numericBuild}] gfortran refused a file (its output is in the message)
 \item[\texttt{MATLAB:\allowbreak{}mex:\allowbreak{}*}] compiler errors propagate unwrapped
@@ -1225,11 +1227,12 @@ aux & 1x1 & struct & - & .file, .generation, .numCoefficients, .validFrom, .vali
 
 \subsection{\texttt{NonGravForces.env.density}}
 \label{api:env.density}
-\noindent Thermosphere density and composition: exponential, NRLMSISE-00 or NRLMSIS 2.1 (both compiled).
+\noindent Thermosphere density and composition: exponential, NRLMSISE-00, NRLMSIS 2.1 or DTM2020 (compiled).
 
 \begin{lstlisting}
 [rho, species, T, info] = NonGravForces.env.density("msis21", epoch, lla, sw)
 [rho, species, T, info] = NonGravForces.env.density("msis00", epoch, lla, sw)
+[rho, species, T, info] = NonGravForces.env.density("dtm2020", epoch, lla, sw)
 [rho, species, T, info] = NonGravForces.env.density("msis00", epoch, lla, [], 'Drivers', d)
 rho = NonGravForces.env.density("exponential", epoch, lla, [], 'Exponential', p)
 \end{lstlisting}
@@ -1248,7 +1251,7 @@ rho = NonGravForces.env.density("exponential", epoch, lla, [], 'Exponential', p)
 \endfoot
 \bottomrule
 \endlastfoot
-model & 1x1 & string & - & "exponential" \textbar{} "msis00" \textbar{} "msis21" \\
+model & 1x1 & string & - & "exponential" \textbar{} "msis00" \textbar{} "msis21" \textbar{} "dtm2020" \\
 epoch & 1x1 & struct & - & referenceSystem epoch struct, K entries, any scale \\
 lla & 3xK & double & rad,rad,m & Geodetic latitude, longitude, height (WGS-84) \\
 sw & 1x1 & struct & - & NonGravForces.io.spaceWeather result of the celestrak family, or [] with 'Drivers' or for "exponential". \\
@@ -1268,10 +1271,10 @@ sw & 1x1 & struct & - & NonGravForces.io.spaceWeather result of the celestrak fa
 \endfoot
 \bottomrule
 \endlastfoot
-Drivers & 1x1 & struct & - & .f107 (1xK, previous-day observed F10.7), .f107a (1xK, 81-day centred), .ap (1xK daily Ap, or 7xK NRLMSISE history). Overrides sw. \\
+Drivers & 1x1 & struct & - & .f107 (1xK, previous-day observed F10.7), .f107a (1xK, 81-day centred), .ap (1xK daily Ap, or 7xK NRLMSISE history). Overrides sw. dtm2020 instead: .f107 (previous day), .f107bar (81 days ending at the day), .kp3 (Kp 3 h back), .kp24 (24 h mean). \\
 AnomalousOxygen & 1x1 & logical & - & true (default): the mass density includes anomalous oxygen (msis00: gtd7d; msis21: the model's default); false: it does not (gtd7). \\
 Exponential & 1x1 & struct & - & .rho0\_kg\_m3, .h0\_m, .H\_m; required for "exponential", ignored otherwise. \\
-LocalSolarTime\_\allowbreak{}h & 1xK & double & h & msis00 only. Override of the local solar time handed to MSIS. Default [] = sec/3600 + lon/15, the consistent choice the reference recommends. The published test cases set an inconsistent 16 h and are reproduced only with this override. \\
+LocalSolarTime\_\allowbreak{}h & 1xK & double & h & msis00 and dtm2020. Override of the local solar time handed to the model. Default [] = sec/3600 + lon/15, the consistent choice the reference recommends. The published test cases set an inconsistent 16 h and are reproduced only with this override. \\
 \end{longtable}
 
 \subsubsection*{OUTPUT ARGUMENTS}
@@ -1291,7 +1294,7 @@ LocalSolarTime\_\allowbreak{}h & 1xK & double & h & msis00 only. Override of the
 rho & 1xK & double & kg/\allowbreak{}m\textasciicircum{}3 & Total mass density. \\
 species & 8xK & double & 1/\allowbreak{}m\textasciicircum{}3 & Number densities He O N2 O2 Ar H N O\_anomalous (const.speciesName order); NaN for "exponential". \\
 T & 2xK & double & K & [exospheric temperature; temperature at h]; NaN for "exponential". \\
-info & 1x1 & struct & - & .backend, .drivers (struct actually used: f107 f107a ap, and .source "spaceWeather" \textbar{} "caller" \textbar{} "none"), .anomalousOxygen, .msisInput (struct doy sec alt\_km lat\_deg lon\_deg, 1xK each, and lst\_h for msis00; both msis backends), .provenance. \\
+info & 1x1 & struct & - & .backend, .drivers (struct actually used: f107 f107a ap, and .source "spaceWeather" \textbar{} "caller" \textbar{} "none"), .anomalousOxygen, .msisInput (struct doy sec alt\_km lat\_deg lon\_deg, 1xK each, and lst\_h for msis00; both msis backends), .dtmInput (doy alt\_km lst\_h lat\_rad lon\_rad; dtm2020), .provenance. \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
@@ -1302,6 +1305,8 @@ info & 1x1 & struct & - & .backend, .drivers (struct actually used: f107 f107a a
 \item[\texttt{NonGravForces:\allowbreak{}density:\allowbreak{}numericNaN}] NaN in lla or in the drivers
 \item[\texttt{NonGravForces:\allowbreak{}density:\allowbreak{}depMissing}] the backend's MEX is not built
 \item[\texttt{NonGravForces:\allowbreak{}density:\allowbreak{}inputOption}] LocalSolarTime\_h given to msis21, which forms local time itself
+\item[\texttt{NonGravForces:\allowbreak{}density:\allowbreak{}inputRange}] dtm2020 below 150 km
+\item[\texttt{NonGravForces:\allowbreak{}dtm2020Gateway:\allowbreak{}*}] path, coefficient file and screening errors of the gateway, unwrapped
 \item[\texttt{NonGravForces:\allowbreak{}msis21Gateway:\allowbreak{}*}] path, parameter file and screening errors of the gateway, unwrapped
 \item[\texttt{NonGravForces:\allowbreak{}spaceWeather:\allowbreak{}*}] from sw.query, unwrapped
 \item[\texttt{referenceSystem:\allowbreak{}*}] propagated unwrapped
@@ -3178,7 +3183,7 @@ options & 1x1 & NonGravForces.\allowbreak{}Options & - & Resolved options (defau
 Attitude & 1x1 & AttitudeProvider & - & BODY-\textgreater{}GCRS quaternions, used when a method is called without q. Default []. \\
 Mass & 1x1 & double\textbar{}\allowbreak{}struct & kg & A constant mass, or an io.massModel result. Default: the macro model's mass\_kg (geom.graceFO carries the handbook value); a macro model without one is REFUSED, never given GRACE-C's (LP-C F10). \\
 Eop & 1x1 & struct & - & referenceSystem.readEop result or a file path. REQUIRED to evaluate: the geodetic height needs the ITRS rotation and the co-rotation its rate. \\
-SpaceWeather & 1x1 & struct & - & io.spaceWeather result. Required by msis00 and msis21. \\
+SpaceWeather & 1x1 & struct & - & io.spaceWeather result. Required by msis00, msis21 and dtm2020. \\
 Ephemeris & 1x1 & struct & - & referenceSystem.readEphemeris result, required when sun.source is "rs.de440". \\
 Exponential & 1x1 & struct & - & .rho0\_kg\_m3 .h0\_m .H\_m, required when drag.density is "exponential". \\
 Ceres & 1x1 & struct & - & io.importCERES result, required when erp.backend is "ceres". \\
@@ -3625,7 +3630,7 @@ release()          Free the native context (called under onCleanup by gjToolbox.
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}inputModel}] model is not a NonGravForces.Model, or its options cannot be served (transient thermal, raycast, squad)
-\item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}unsupportedOption}] erp.backend ceresClimatology, which has no native evaluator; use Model.accel or series instead
+\item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}unsupportedOption}] erp.backend ceresClimatology or drag.density dtm2020, which have no native evaluator; use Model.accel or series instead
 \item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}inputEpoch}] no 'Epoch', or a context Epoch that disagrees
 \item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}inputGravity}] 'Gravity' is not a gjToolbox.DynamicsSource
 \item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}depMissing}] the rhs MEX is not built (Native), or gjToolbox is absent

@@ -27,6 +27,14 @@ function sw = spaceWeather(files, options)
 %                          (the NRLMSISE-00 AP array, in its order)
 %                kp        3-hourly Kp of the epoch, file value / 10  -
 %                          (CelesTrak writes thirds as tenths: 0+ = 0.3)
+%                f107Last81  81-day mean of observed F10.7 ENDING at the
+%                          day (F10.7_OBS_LAST81), DTM2020's fbar        sfu
+%                kpDelayed3h Kp of the 3-h interval containing t - 3 h  -
+%                kpMean24h mean Kp of the eight 3-h intervals ending
+%                          with the one containing t (DTM2020's akp(1)
+%                          and akp(3), stepwise: CNES's documentation
+%                          interpolates ap linearly between intervals
+%                          and converts back to Kp)                    -
 %                dataType  "OBS" | "INT" | "PRD" | "PRM" of the day   -
 %     jb2008     f10, f10b        one day earlier                     sfu
 %                s10, s10b        one day earlier                     sfu
@@ -354,8 +362,8 @@ K = numel(dayQ);
 % 32 consecutive 3-h ap values ending with the day of the epoch: days d-3..d
 rHist = zeros(4, K);
 for j = 1:4, rHist(j, :) = localRows(data.mjd, dayQ - 4 + j, unit, "ap history (57 h)"); end
-A = zeros(32, K);
-for j = 1:4, A(8*(j-1)+(1:8), :) = idx.ap3h(rHist(j, :), :)'; end
+A = zeros(32, K); KP = zeros(32, K);
+for j = 1:4, A(8*(j-1)+(1:8), :) = idx.ap3h(rHist(j, :), :)'; KP(8*(j-1)+(1:8), :) = idx.kp3h(rHist(j, :), :)'; end
 cur = 24 + slot;                                    % index of the current interval in A
 pick = @(off) A(sub2ind(size(A), cur - off, 1:K));
 apNow = pick(0); ap3 = pick(1); ap6 = pick(2); ap9 = pick(3);
@@ -367,12 +375,21 @@ d.f107a = idx.f107ObservedCentre81(r0)';
 d.ap    = idx.apDaily(r0)';
 d.apHistory = [d.ap; apNow; ap3; ap6; ap9; m1 / 8; m2 / 8];
 d.kp    = idx.kp3h(sub2ind(size(idx.kp3h), r0, slot));
+% DTM2020's drivers (operational, F10.7 and Kp): the 81-day mean ENDING at the day and the Kp of the
+% 3-h interval three hours back and the mean of the eight intervals ending with the current one.
+d.f107Last81 = idx.f107ObservedLast81(r0)';
+pickKp = @(off) KP(sub2ind(size(KP), cur - off, 1:K));
+d.kpDelayed3h = pickKp(1);
+d.kpMean24h = zeros(1, K);
+for o = 0:7, d.kpMean24h = d.kpMean24h + pickKp(o) / 8; end
 d.dataType = idx.dataType(r0)';
 localNoNaN(d.f107, "F10.7_OBS (previous day)", dayQ - 1, unit);
 localNoNaN(d.f107a, "F10.7_OBS_CENTER81", dayQ, unit);
 localNoNaN(d.ap, "AP_AVG", dayQ, unit);
 localNoNaN(d.apHistory, "3-hourly ap (57 h history)", dayQ, unit);
 localNoNaN(d.kp, "3-hourly Kp", dayQ, unit);
+localNoNaN(d.f107Last81, "F10.7_OBS_LAST81", dayQ, unit);
+localNoNaN([d.kpDelayed3h; d.kpMean24h], "3-hourly Kp (24 h history)", dayQ, unit);
 end
 
 function d = localQueryJb2008(epoch, data, unit)

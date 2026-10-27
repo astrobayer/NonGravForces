@@ -1,8 +1,9 @@
 function [rho, species, T, info] = density(model, epoch, lla, sw, options)
-%DENSITY Thermosphere density and composition: exponential, NRLMSISE-00 or NRLMSIS 2.1 (both compiled).
+%DENSITY Thermosphere density and composition: exponential, NRLMSISE-00, NRLMSIS 2.1 or DTM2020 (compiled).
 %
 %   [rho, species, T, info] = NonGravForces.env.density("msis21", epoch, lla, sw)
 %   [rho, species, T, info] = NonGravForces.env.density("msis00", epoch, lla, sw)
+%   [rho, species, T, info] = NonGravForces.env.density("dtm2020", epoch, lla, sw)
 %   [rho, species, T, info] = NonGravForces.env.density("msis00", epoch, lla, [], 'Drivers', d)
 %   rho = NonGravForces.env.density("exponential", epoch, lla, [], 'Exponential', p)
 %
@@ -40,7 +41,24 @@ function [rho, species, T, info] = density(model, epoch, lla, sw, options)
 %                  every species this toolbox reads are those of 2.0.
 %     exponential  rho = rho0 exp(-(h - h0)/H) with the caller's rho0, h0, H
 %                  ('Exponential'); sizing only, no composition, no drivers.
-%   DTM2020 and JB2008 are not provided (owner ruling 2026-09-15, HANDOVER Part I).
+%     dtm2020      DTM2020 operational (Bruinsma & Boniface 2021; CNES), driven by F10.7 and Kp,
+%                  through the MEX of CNES's unmodified subroutines as SWAMI's MCM repository
+%                  ships them, compiled in double precision (NonGravForces.buildMex;
+%                  setupNonGravForces fetches them). Fitted to the TU Delft CHAMP, GOCE and
+%                  Swarm-A densities, which were derived with high-fidelity satellite models:
+%                  on average 20-25 % below DTM2013 (SWAMI's documentation). Drivers from a
+%                  celestrak-family spaceWeather struct: previous-day observed F10.7, the
+%                  81-day mean ENDING at the day (not centred), the Kp of the 3-h interval
+%                  three hours back and the mean Kp of the eight intervals ending with the
+%                  current one; or from 'Drivers' (.f107 .f107bar .kp3 .kp24). Local time is
+%                  sec/3600 + lon/15 as for msis00, and 'LocalSolarTime_h' overrides it (CNES's
+%                  benchmark sets 3.1415 rad). Composition He O N2 O2 H N; Ar and anomalous O
+%                  are 0, because the model has neither. Refused below 150 km, where the MCM
+%                  copy of the subroutine blends towards the Met Office's whole-atmosphere
+%                  model and is no longer DTM2020 as published.
+%                  CNES LICENCE: academic, non-commercial use only; no modification, no
+%                  redistribution (THIRD-PARTY-NOTICES.md).
+%   JB2008 is not provided (owner ruling 2026-09-15, HANDOVER Part I).
 %
 %   NaN POLICY: a NaN anywhere in lla or in the drivers raises numericNaN,
 %   because a NaN density silently zeroes the drag (HANDOVER E.2 rule 7).
@@ -48,7 +66,7 @@ function [rho, species, T, info] = density(model, epoch, lla, sw, options)
 % INPUT ARGUMENTS
 %   Name     Size  Type    Units      Description
 %   ----     ----  ----    -----      -----------
-%   model    1x1   string  -          "exponential" | "msis00" | "msis21"
+%   model    1x1   string  -          "exponential" | "msis00" | "msis21" | "dtm2020"
 %   epoch    1x1   struct  -          referenceSystem epoch struct, K entries, any scale
 %   lla      3xK   double  rad,rad,m  Geodetic latitude, longitude, height (WGS-84)
 %   sw       1x1   struct  -          NonGravForces.io.spaceWeather result of the
@@ -62,13 +80,16 @@ function [rho, species, T, info] = density(model, epoch, lla, sw, options)
 %                                             F10.7), .f107a (1xK, 81-day
 %                                             centred), .ap (1xK daily Ap, or 7xK
 %                                             NRLMSISE history). Overrides sw.
+%                                             dtm2020 instead: .f107 (previous day),
+%                                             .f107bar (81 days ending at the day),
+%                                             .kp3 (Kp 3 h back), .kp24 (24 h mean).
 %   AnomalousOxygen   1x1   logical  -        true (default): the mass density includes
 %                                             anomalous oxygen (msis00: gtd7d; msis21: the
 %                                             model's default); false: it does not (gtd7).
 %   Exponential       1x1   struct   -        .rho0_kg_m3, .h0_m, .H_m; required
 %                                             for "exponential", ignored otherwise.
-%   LocalSolarTime_h  1xK   double   h        msis00 only. Override of the local solar time handed
-%                                             to MSIS. Default [] = sec/3600 + lon/15,
+%   LocalSolarTime_h  1xK   double   h        msis00 and dtm2020. Override of the local solar time
+%                                             handed to the model. Default [] = sec/3600 + lon/15,
 %                                             the consistent choice the reference
 %                                             recommends. The published test cases
 %                                             set an inconsistent 16 h and are
@@ -88,7 +109,8 @@ function [rho, species, T, info] = density(model, epoch, lla, sw, options)
 %                                   "caller" | "none"), .anomalousOxygen,
 %                                   .msisInput (struct doy sec alt_km lat_deg
 %                                   lon_deg, 1xK each, and lst_h for msis00;
-%                                   both msis backends), .provenance.
+%                                   both msis backends), .dtmInput (doy
+%                                   alt_km lst_h lat_rad lon_rad; dtm2020), .provenance.
 %
 % ACCURACY
 %   msis00 is bit-identical to the reference C for the same inputs (same
@@ -103,6 +125,13 @@ function [rho, species, T, info] = density(model, epoch, lla, sw, options)
 %   within half a unit of the last printed digit every run. The model error of
 %   the climatology itself is not measured here; the gas-surface interaction and
 %   the drivers' daily and 3-hourly resolution bound what either MSIS can give.
+%   dtm2020 converts the model's g/cm^3 to kg/m^3 (x1e3) and its partial mass densities to
+%   number densities with this toolbox's molar masses (const.speciesMass), so that the drag
+%   kernel's n_j m_j returns DTM2020's partial densities exactly. CNES's four benchmark
+%   cases (Mod_DTM2020F107Kp_Benchmark.f90, printed to 5-6 digits) are reproduced every
+%   run. The drivers are stepwise in time where CNES's documentation interpolates them
+%   (F10.7 to the decimal date, ap linearly between 3-h values, converted back to Kp); the
+%   1-sigma model uncertainty CNES gives is not returned.
 %
 % ERRORS
 %   NonGravForces:density:inputShape        lla not 3xK or K differs from epoch
@@ -114,6 +143,8 @@ function [rho, species, T, info] = density(model, epoch, lla, sw, options)
 %   NonGravForces:density:numericNaN        NaN in lla or in the drivers
 %   NonGravForces:density:depMissing        the backend's MEX is not built
 %   NonGravForces:density:inputOption       LocalSolarTime_h given to msis21, which forms local time itself
+%   NonGravForces:density:inputRange        dtm2020 below 150 km
+%   NonGravForces:dtm2020Gateway:*          path, coefficient file and screening errors of the gateway, unwrapped
 %   NonGravForces:msis21Gateway:*           path, parameter file and screening errors of the gateway, unwrapped
 %   NonGravForces:spaceWeather:*            from sw.query, unwrapped
 %   referenceSystem:*                       propagated unwrapped
@@ -123,6 +154,9 @@ function [rho, species, T, info] = density(model, epoch, lla, sw, options)
 %   Brodowski, NRLMSISE-00 C release 20041227, DOCUMENTATION §5 (inputs) and §7 (table).
 %   Emmert J.T. et al. (2021) NRLMSIS 2.0, Earth Space Sci. 8, e2020EA001321;
 %   NRL, nrlmsis2.1 package (2022-04-04): readme.txt and the header of msis_calc.F90.
+%   Bruinsma S., Boniface C. (2021) The operational and research DTM-2020 thermosphere models,
+%   J. Space Weather Space Clim. 11, 47; SWAMI MCM repository, docs/dtm2020.rst and the header
+%   of DTM3 (dtm2020_F107_Kp-subr_MCM.f90).
 %
 % EXAMPLE
 %   ep = referenceSystem.mjdToEpoch(58849.5, "UTC");
@@ -132,10 +166,10 @@ function [rho, species, T, info] = density(model, epoch, lla, sw, options)
 %
 % See also NonGravForces.io.spaceWeather, NonGravForces.buildMex, referenceSystem.cartesianToGeodetic.
 %
-% KEYWORDS density thermosphere NRLMSISE-00 NRLMSIS exponential drag
-% Created 2026-09-07 by Claude Fable 5.1 (Anthropic); msis21 2026-09-15 by Claude Opus 5 (Anthropic).
+% KEYWORDS density thermosphere NRLMSISE-00 NRLMSIS DTM2020 exponential drag
+% Created 2026-09-07 by Claude Fable 5.1 (Anthropic); msis21 2026-09-15 by Claude Opus 5 (Anthropic); dtm2020 2026-10-27 by Claude (Anthropic).
 arguments
-    model (1,1) string {mustBeMember(model, ["exponential","msis00","msis21"])}
+    model (1,1) string {mustBeMember(model, ["exponential","msis00","msis21","dtm2020"])}
     epoch (1,1) struct
     lla double
     sw = []
@@ -220,8 +254,74 @@ switch model
         info.drivers = drv;
         info.anomalousOxygen = options.AnomalousOxygen;
         info.msisInput = in;
+    case "dtm2020"
+        if any(lla(3, :) < 150e3)
+            NonGravForces.fail(unit, "inputRange", "dtm2020 below 150 km (%.1f km at column %d) is the MCM blend towards another model, not DTM2020 -> use msis21 there", ...
+                min(lla(3, :)) / 1e3, find(lla(3, :) < 150e3, 1));
+        end
+        drv = localDriversDtm(unit, epoch, sw, options.Drivers, K);
+        here = fullfile(fileparts(mfilename('fullpath')), 'private');
+        gw = fullfile(here, "dtm2020Gateway." + mexext);
+        if ~isfile(gw)
+            NonGravForces.fail(unit, "depMissing", "the DTM2020 MEX %s is not built -> run setupNonGravForces (fetches CNES's files) and NonGravForces.buildMex once on this machine", gw);
+        end
+        utc = referenceSystem.convertTimeScale(epoch, "UTC");
+        dt = referenceSystem.epochTo(utc, "datetime");
+        doy = double(day(dt, 'dayofyear'))';
+        if isempty(options.LocalSolarTime_h)
+            lst = double(utc.sec(:))' / 3600 + rad2deg(lla(2, :)) / 15;
+        else
+            lst = double(options.LocalSolarTime_h(:)');
+            if isscalar(lst), lst = repmat(lst, 1, K); end
+            if numel(lst) ~= K || any(~isfinite(lst))
+                NonGravForces.fail(unit, "inputDrivers", "LocalSolarTime_h must be 1x%d finite hours -> match the epoch count", K);
+            end
+        end
+        in = struct('doy', doy, 'alt_km', lla(3, :) / 1000, 'lst_h', mod(lst, 24), 'lat_rad', lla(1, :), 'lon_rad', lla(2, :));
+        [d, t] = dtm2020Gateway(char(fullfile(here, 'DTM_2020_F107_Kp.dat')), in.doy, in.alt_km, in.lst_h * pi / 12, ...
+            in.lat_rad, in.lon_rad, drv.f107, drv.f107bar, drv.kp3, drv.kp24);
+        c = NonGravForces.const();
+        mass_kg = c.speciesMass * 1e3 * c.amu;                % kg per particle, He O N2 O2 Ar H N O_anom
+        rho = d(1, :) * 1e3;                                   % g/cm^3 -> kg/m^3
+        partial = d(2:7, :) * 1e3;                             % H He O N2 O2 N, kg/m^3
+        species = zeros(8, K);
+        species([6 1 2 3 4 7], :) = partial ./ mass_kg([6 1 2 3 4 7])';   % Ar and anomalous O are not modelled: 0
+        T = t;
+        info.drivers = drv;
+        info.anomalousOxygen = false;
+        info.dtmInput = in;
 end
 info.provenance = NonGravForces.provenance("env.density", 'Options', struct('model', model, 'anomalousOxygen', options.AnomalousOxygen, 'lstOverride', ~isempty(options.LocalSolarTime_h)));
+end
+
+function drv = localDriversDtm(unit, epoch, sw, drivers, K)
+%LOCALDRIVERSDTM DTM2020's four drivers from 'Drivers' or a celestrak-family spaceWeather struct.
+names = ["f107" "f107bar" "kp3" "kp24"];
+if ~isempty(drivers)
+    if ~(isstruct(drivers) && all(isfield(drivers, names)))
+        NonGravForces.fail(unit, "inputDrivers", "dtm2020 Drivers must have fields f107, f107bar, kp3, kp24 -> see the help");
+    end
+    for n = names
+        v = double(drivers.(n)(:)');
+        if isscalar(v), v = repmat(v, 1, K); end
+        if numel(v) ~= K
+            NonGravForces.fail(unit, "inputDrivers", "dtm2020 Drivers.%s must be 1x%d or scalar -> match the epoch count", n, K);
+        end
+        drv.(n) = v;
+    end
+    drv.source = "caller";
+elseif isstruct(sw) && isfield(sw, 'format') && isfield(sw, 'query')
+    if sw.format ~= "celestrak"
+        NonGravForces.fail(unit, "inputDrivers", "spaceWeather family %s does not drive DTM2020 operational -> load the CelesTrak SW-All file (family celestrak)", sw.format);
+    end
+    q = sw.query(epoch);
+    drv = struct('f107', q.f107, 'f107bar', q.f107Last81, 'kp3', q.kpDelayed3h, 'kp24', q.kpMean24h, 'source', "spaceWeather");
+else
+    NonGravForces.fail(unit, "inputDrivers", "dtm2020 needs drivers -> pass a celestrak spaceWeather struct as sw, or 'Drivers', struct('f107', .., 'f107bar', .., 'kp3', .., 'kp24', ..)");
+end
+if any(~isfinite([drv.f107 drv.f107bar drv.kp3 drv.kp24]))
+    NonGravForces.fail(unit, "numericNaN", "a DTM2020 driver is NaN/Inf -> spaceWeather never returns NaN; check the caller's Drivers");
+end
 end
 
 function drv = localDrivers(unit, epoch, sw, drivers, K)
