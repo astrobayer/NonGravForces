@@ -1,5 +1,5 @@
 classdef tNgfIo < NgfTestCase
-%TNGFIO Tests of the io layer (LP-2): readACC1B, readSCA1B, readGNV1B, readTHR1B, readMAS1B, readMAG1B, igrfCoefficients, importCERES, massModel, spaceWeather.
+%TNGFIO Tests of the io layer (LP-2): readACC1B, readSCA1B, readGNV1B, readTHR1B, readMAS1B, readMAG1B, igrfCoefficients, importCERES, massModel, spaceWeather, readSwarmDensity.
 %
 %   Oracle: the real 2020-01-01 GRACE-C RL04 products in data/samples (first 600
 %   records of the 1 Hz products; THR1B and MAS1B complete), the IERS
@@ -11,6 +11,10 @@ classdef tNgfIo < NgfTestCase
 %   January 2020, values unchanged) against tools/pyxcheck/ceres_check.py, a
 %   standard-library netCDF-3 reader written from the format specification.
 %   Every bound carries the number it was measured at on 2026-09-06.
+%
+%   readSwarmDensity: ESA's Swarm A/B/C POD densities of 2020-01-01..03 as VirES HAPI serves
+%   them (data/samples/swarm, cut by tools/cutFixtures.py on the CI runner, lines unchanged),
+%   against the raw CSV text parsed here with split/str2double, not with textscan.
 %
 %   No test skips when a fixture is missing: it fails (a skip is `incomplete`
 %   and not evidence).
@@ -35,7 +39,10 @@ classdef tNgfIo < NgfTestCase
                 'ceresCells', fullfile(root, 'tools', 'pyxcheck', 'ceres_cells.csv'), ...
                 'sw', fullfile(W, 'SW-All_2019-09_2020-03.csv'), ...
                 'solfsmy', fullfile(W, 'SOLFSMY_2019-09_2020-03.TXT'), 'dtc', fullfile(W, 'DTCFILE_2019-09_2020-03.TXT'), ...
-                'eop', fullfile(root, 'data', 'eop', 'finals2000A_2019-09_2020-03.all'));
+                'eop', fullfile(root, 'data', 'eop', 'finals2000A_2019-09_2020-03.all'), ...
+                'swA', fullfile(S, 'swarm', 'SW_OPER_DNSAPOD_2_2020-01-01_2020-01-03.csv'), ...
+                'swB', fullfile(S, 'swarm', 'SW_OPER_DNSBPOD_2_2020-01-01_2020-01-03.csv'), ...
+                'swC', fullfile(S, 'swarm', 'SW_OPER_DNSCPOD_2_2020-01-01_2020-01-03.csv'));
             for n = string(fieldnames(tc.f))'
                 tc.assertTrue(isfile(tc.f.(n)), sprintf('fixture %s is missing: %s', n, tc.f.(n)));
             end
@@ -1373,6 +1380,118 @@ classdef tNgfIo < NgfTestCase
             tc.verifyGreaterThan(r, 0.960); tc.verifyLessThan(r, 0.972);
             tc.verifyLessThan(abs(r - r15), 0.004, 'one distance factor per day for all bands');
         end
+
+    end
+    methods (Test, TestTags = {'contract'})
+        % readSwarmDensity (O-19, 2026-10-27)
+        function readSwarmDensityContract(tc)
+            [ep, lla, rho, aux] = NonGravForces.io.readSwarmDensity(tc.f.swB);
+            K = 3 * 2880;                                 % three days at 30 s
+            tc.verifyEqual(aux.numRecords, K); tc.verifySize(lla, [3 K]); tc.verifySize(rho, [1 K]);
+            tc.verifySize(aux.rhoOrbitMean, [1 K]); tc.verifySize(aux.lst_h, [1 K]); tc.verifySize(aux.valid, [1 K]);
+            tc.verifyEqual(numel(ep.day), K); tc.verifyEqual(string(ep.scale), "UTC");
+            tc.verifyEqual(aux.satellite, "B"); tc.verifyEqual(aux.dataset, "SW_OPER_DNSBPOD_2_");
+            tc.verifyClass(aux.valid, 'logical'); tc.verifyEqual(aux.files, string(tc.f.swB));
+            tc.verifyErrorId(@() NonGravForces.io.readSwarmDensity([string(tc.f.swA) string(tc.f.swB)]), 'NonGravForces:readSwarmDensity:dataSatellite');
+            tc.verifyErrorId(@() NonGravForces.io.readSwarmDensity(tc.f.swB, 'TimeRange', [58860 58861]), 'NonGravForces:readSwarmDensity:dataEmpty');
+            tc.verifyErrorId(@() NonGravForces.io.readSwarmDensity(tc.f.swB, 'TimeRange', [58851 58850]), 'NonGravForces:readSwarmDensity:inputRange');
+            tc.verifyErrorId(@() NonGravForces.io.readSwarmDensity(tc.f.thr), 'NonGravForces:readSwarmDensity:dataFormat');
+            % the call that must succeed beside each refusal: one day by TimeRange
+            [~, ~, r1] = NonGravForces.io.readSwarmDensity(tc.f.swB, 'TimeRange', [58849 58850 - 1/86400]);
+            tc.verifyEqual(numel(r1), 2880);
+        end
+    end
+    methods (Test, TestTags = {'reference'})
+        % readSwarmDensity (O-19, 2026-10-27)
+        function readSwarmDensityReference(tc)
+            % Oracle: the raw CSV lines, split on commas with str2double (not textscan), and the calendar.
+            [ep, lla, rho, aux] = NonGravForces.io.readSwarmDensity(tc.f.swB);
+            raw = localSwarmRaw(tc.f.swB);
+            tc.verifyEqual(size(raw.v, 1), aux.numRecords);
+            k = [1 2 1441 aux.numRecords];
+            tc.verifyEqual(rad2deg(lla(1, k))', raw.v(k, 1), 'RelTol', 4 * eps);
+            tc.verifyEqual(rad2deg(lla(2, k))', raw.v(k, 2), 'RelTol', 4 * eps);
+            tc.verifyEqual(lla(3, k)', raw.v(k, 3), 'RelTol', 2 * eps);
+            tc.verifyEqual(aux.lst_h(k)', raw.v(k, 4), 'RelTol', 2 * eps);
+            tc.verifyEqual(rho(k)', raw.v(k, 5), 'RelTol', 2 * eps);
+            tc.verifyEqual(aux.rhoOrbitMean(k)', raw.v(k, 6), 'RelTol', 2 * eps);
+            % the first record of the file as printed: 2020-01-01T00:00:00.000Z = MJD 58849 + 0 s, 512 km
+            tc.verifyEqual([ep.day(1) ep.sec(1)], [58849 0]); tc.verifyEqual(ep.sec(2) - ep.sec(1), 30);
+            tc.verifyEqual(rho(1), 3.249612003359205e-14, 'RelTol', 2 * eps);
+            tc.verifyEqual(lla(3, 1), 511992.9365685731, 'RelTol', 2 * eps);
+            % the last record is 2020-01-03T23:59:30Z
+            tc.verifyEqual([ep.day(end) ep.sec(end)], [58851 86370]);
+        end
+    end
+    methods (Test, TestTags = {'precision'})
+        % readSwarmDensity (O-19, 2026-10-27)
+        function readSwarmDensityPrecision(tc)
+            % deg2rad is one multiplication: rad2deg brings every printed degree back to a few ulp.
+            [~, lla] = NonGravForces.io.readSwarmDensity(tc.f.swA);
+            raw = localSwarmRaw(tc.f.swA);
+            e = max(abs(rad2deg(lla(1:2, :))' - raw.v(:, 1:2)), [], 'all') / 180;
+            tc.verifyBoundAndRecord("readSwarmDensity degrees round trip / 180", e, 4 * eps, "-", "deg2rad then rad2deg");
+        end
+    end
+    methods (Test, TestTags = {'vectorization'})
+        % readSwarmDensity (O-19, 2026-10-27)
+        function readSwarmDensityVectorization(tc)
+            % The three days equal the 1.5-day halves read separately, concatenated (bitwise: nothing is computed across records).
+            [ep, lla, rho, aux] = NonGravForces.io.readSwarmDensity(tc.f.swC);
+            [e1, l1, r1, a1] = NonGravForces.io.readSwarmDensity(tc.f.swC, 'TimeRange', [58849 58850.5]);
+            [e2, l2, r2, a2] = NonGravForces.io.readSwarmDensity(tc.f.swC, 'TimeRange', [58850.5 + 1e-9 58852]);
+            tc.verifyEqual([l1 l2], lla); tc.verifyEqual([r1 r2], rho); tc.verifyEqual([a1.valid a2.valid], aux.valid);
+            tc.verifyEqual([e1.day(:); e2.day(:)], ep.day(:)); tc.verifyEqual([e1.sec(:); e2.sec(:)], ep.sec(:));
+            tc.verifyGreaterThan(numel(r1), 0); tc.verifyGreaterThan(numel(r2), 0);
+        end
+    end
+    methods (Test, TestTags = {'robustness'})
+        % readSwarmDensity (O-19, 2026-10-27)
+        function readSwarmDensityRobustness(tc)
+            % the product's own units, status and flags are read, not assumed
+            txt = fileread(tc.f.swB);
+            bad = localWriteText(tc.tmp, "swarm_units.csv", regexprep(txt, '"units": "kg/m3"', '"units": "g/cm3"', 'once'));
+            tc.verifyErrorId(@() NonGravForces.io.readSwarmDensity(bad), 'NonGravForces:readSwarmDensity:dataUnits');
+            bad = localWriteText(tc.tmp, "swarm_status.csv", regexprep(txt, '"code": 1200', '"code": 1406', 'once'));
+            tc.verifyErrorId(@() NonGravForces.io.readSwarmDensity(bad), 'NonGravForces:readSwarmDensity:dataFormat');
+            bad = localWriteText(tc.tmp, "swarm_column.csv", regexprep(txt, '"name": "density"', '"name": "rho"', 'once'));
+            tc.verifyErrorId(@() NonGravForces.io.readSwarmDensity(bad), 'NonGravForces:readSwarmDensity:dataColumn');
+            % a data line with a column missing is refused, not read shifted
+            L = splitlines(string(txt)); k = find(~startsWith(L, "#"), 1);
+            L(k) = extractBefore(L(k), strlength(L(k)) - 1);          % drop ",0" (the flag)
+            bad = localWriteText(tc.tmp, "swarm_short.csv", strjoin(L, newline));
+            tc.verifyErrorId(@() NonGravForces.io.readSwarmDensity(bad), 'NonGravForces:readSwarmDensity:dataColumn');
+            % validity_flag 1 (anomalous) is kept and marked; Swarm B carries some on these days
+            [~, ~, ~, aux] = NonGravForces.io.readSwarmDensity(tc.f.swB);
+            raw = localSwarmRaw(tc.f.swB);
+            tc.verifyEqual(nnz(~aux.valid), nnz(raw.v(:, 7) ~= 0)); tc.verifyGreaterThan(nnz(~aux.valid), 0);
+        end
+    end
+    methods (Test, TestTags = {'metamorphic'})
+        % readSwarmDensity (O-19, 2026-10-27)
+        function readSwarmDensityMetamorphic(tc)
+            % Physics the product must show: Swarm A and C fly side by side at the same height (same density),
+            % Swarm B ~65 km higher (several times thinner); an epoch present twice is kept once.
+            [~, laA, rA] = NonGravForces.io.readSwarmDensity(tc.f.swA);
+            [~, ~, rC] = NonGravForces.io.readSwarmDensity(tc.f.swC);
+            [~, laB, rB] = NonGravForces.io.readSwarmDensity(tc.f.swB);
+            q = sort(rA ./ rC); mAC = q(ceil(end / 2));
+            tc.verifyBoundAndRecord("Swarm A / C median density ratio, |log|", abs(log(mAC)), log(1.2), "-", "side-by-side pair");
+            tc.verifyGreaterThan(mean(laB(3, :)) - mean(laA(3, :)), 40e3, 'Swarm B flies higher than A');
+            sA = sort(rA); sB = sort(rB);
+            tc.verifyLessThan(sB(ceil(end / 2)) / sA(ceil(end / 2)), 0.6, 'and its density is lower');
+            [~, ~, rAA] = NonGravForces.io.readSwarmDensity([string(tc.f.swA) string(tc.f.swA)]);
+            tc.verifyEqual(rAA, rA);
+        end
+    end
+    methods (Test, TestTags = {'speed'})
+        % readSwarmDensity (O-19, 2026-10-27)
+        function readSwarmDensitySpeed(tc)
+            % Against reading the same file's text and splitting it into lines. Bound 20, an estimate on the
+            % first run (header decode, one textscan); the measured ratio is in tests/last_run.txt.
+            q = tc.speedRatio(@() NonGravForces.io.readSwarmDensity(tc.f.swB), @() splitlines(string(fileread(tc.f.swB))));
+            tc.verifyBoundAndRecord("readSwarmDensity / fileread+splitlines time ratio", q, 20, "-", "first run");
+        end
     end
 
 end
@@ -1395,4 +1514,16 @@ tok = split(strtrim(L(k))); tok(j) = string(value); L(k) = "   " + strjoin(tok, 
 end
 function L = setWdcHour(L, record, hour, value)
 k = startsWith(L, record); L(k) = replaceBetween(L(k), 21 + 4 * (hour - 1), 24 + 4 * (hour - 1), value);
+end
+function raw = localSwarmRaw(file)
+%LOCALSWARMRAW The data lines of a HAPI CSV, split on commas with str2double: the oracle's own parse.
+L = splitlines(string(fileread(file)));
+L = L(~startsWith(L, "#") & strlength(L) > 0);
+parts = split(L, ",");
+raw.time = parts(:, 1);
+raw.v = str2double(parts(:, 2:end));
+end
+function p = localWriteText(folder, name, text)
+p = fullfile(folder, name);
+fid = fopen(p, 'w'); fprintf(fid, '%s', text); fclose(fid);
 end

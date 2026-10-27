@@ -12,3 +12,4 @@
 %   importCERES          - CERES EBAF TOA monthly fluxes (obs4MIPs netCDF) as lat x lon x month grids
 %   importGroopsGrid     - GROOPS binary gridded data: grid, solid angles and values
 %   igrfCoefficients     - IGRF-14 coefficient loader with the model's own interpolation and SV rule
+%   readSwarmDensity     - Swarm POD-only thermosphere density (ESA SW_OPER_DNSxPOD_2_) from VirES HAPI CSV

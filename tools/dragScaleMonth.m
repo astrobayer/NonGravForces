@@ -29,6 +29,17 @@ function R = dragScaleMonth(options)
 %   DTM2020 (CNES, fitted to TU Delft's accelerometer densities; academic licence) alone and
 %   with Cd 2.4. Each reports its along-track bias-only RMS and k_drag.
 %
+%   SWARM DENSITY SCALE (O-19, 2026-10-27): when the pool holds ESA's Swarm POD-only densities
+%   of the month (<Pool>/Swarm/DNSxPOD/<yyyy>/SW_OPER_DNS<x>POD_2_<yyyy-mm>.csv, fetched by
+%   setupNonGravForces('FetchPool')), each day gets f = sum(rho_Swarm) / sum(rho_model) over the
+%   satellite's valid records of the day (every 10th, 5 min), with rho_model the preset's density
+%   model at Swarm's own positions and the same space weather. The preset's drag times f is then
+%   exactly what the preset would give with its density scaled by f, because the gas force is
+%   linear in the species densities at fixed temperature and composition (app.densityInversion
+%   rests on the same fact). Three variants: Swarm B (~515 km, above GRACE-FO), Swarm A+C (~450 km,
+%   below; geometric mean of the two factors) and the factor interpolated in log between them to
+%   GRACE-FO's mean height of the day (|r| - 6371 km against Swarm's geodetic heights: a few km).
+%
 %   IT LIVES IN tools/, like regressionBaseline.m: it reads the DATAPOOL, which a commit's
 %   CI does not, and takes minutes per day. .github/workflows/drag-month.yml runs it on
 %   the self-hosted runner and prints the tables into the job log.
@@ -49,7 +60,9 @@ function R = dragScaleMonth(options)
 %   R     1x1   struct  -      .days (table: day, nUsed, maskedFraction, thr1b, rmsX/Y/Z
 %                              of the preset, kDrag of the preset, rmsX and kDrag per variant)
 %                              .month (table: variant, drag mean ratio, median daily rmsX,
-%                              joint kDrag) .noDataDays .seconds
+%                              joint kDrag) .swarm (table: day, factor and mean height of A, B, C,
+%                              GRACE-FO's height, the interpolated factor; empty without Swarm data)
+%                              .noDataDays .seconds
 %
 % ERRORS
 %   NonGravForces:dragScaleMonth:dataMissing  no pool or no month folder
@@ -85,12 +98,27 @@ vName = ["preset" "msis21" "constantCd 2.4" "msis21 + Cd 2.4" "dtm2020" "dtm2020
 vOpt = {o, o.set("drag.density", "msis21"), o.set("drag.gsi", "constantCd").set("drag.cd", 2.4), ...
     o.set("drag.density", "msis21").set("drag.gsi", "constantCd").set("drag.cd", 2.4), ...
     o.set("drag.density", "dtm2020"), o.set("drag.density", "dtm2020").set("drag.gsi", "constantCd").set("drag.cd", 2.4)};
-nV = numel(vName);
+nM = numel(vName);                              % variants that are a Model of their own
 macro = NonGravForces.geom.graceFO(options.Satellite);
-models = cell(1, nV);
-for v = 1:nV
+models = cell(1, nM);
+for v = 1:nM
     models{v} = NonGravForces.Model(macro, vOpt{v}, 'Eop', eop, 'SpaceWeather', sw);
 end
+% Swarm POD densities of the month, when the pool has them: the density-scale variants
+swSat = ["A" "B" "C"]; swarm = cell(1, 3);
+for j = 1:3
+    swFile = fullfile(options.Pool, "Swarm", "DNSxPOD", extractBefore(options.Month, 5), "SW_OPER_DNS" + swSat(j) + "POD_2_" + options.Month + ".csv");
+    if isfile(swFile)
+        [eS, llaS, rhoS, auxS] = NonGravForces.io.readSwarmDensity(swFile);
+        swarm{j} = struct('day', eS.day(:)', 'sec', eS.sec(:)', 'lla', llaS, 'rho', rhoS, 'valid', auxS.valid);
+    end
+end
+haveSwarm = all(~cellfun(@isempty, swarm));
+if haveSwarm
+    vName = [vName "swarm B scale" "swarm A+C scale" "swarm interp scale"];
+end
+nV = numel(vName);
+swRows = cell(0, 9);
 halfCrn = (1407 - 1) / 2 * 0.1;                % s, half span of timeSeriesPreparation.crnKernel("ACC")
 
 t0 = tic;
@@ -130,8 +158,36 @@ for d = days
         keep = ~cut';
     end
     rmsX = zeros(1, nV); kD = zeros(1, nV); rmsYZ = [NaN NaN];
-    for vv = 1:nV
+    variants = cell(1, nV);                       % {a, drag} per variant
+    for vv = 1:nM
         [a, info] = models{vv}.accel(e, r(:, tf), v(:, tf), qk);
+        variants{vv} = {a, info};
+    end
+    if haveSwarm
+        mjdDay = ep.day(find(tf, 1));
+        fS = zeros(1, 3); hS = zeros(1, 3);
+        for j = 1:3
+            k = find(swarm{j}.day == mjdDay & swarm{j}.valid);
+            k = k(1:10:end);
+            eSw = referenceSystem.daySecondToEpoch([swarm{j}.day(k)' swarm{j}.sec(k)'], "UTC");
+            rhoM = NonGravForces.env.density(o.drag.density, eSw, swarm{j}.lla(:, k), sw);
+            fS(j) = sum(swarm{j}.rho(k)) / sum(rhoM);
+            hS(j) = mean(swarm{j}.lla(3, k));
+        end
+        hG = mean(vecnorm(r(:, tf))) - 6371e3;
+        fAC = sqrt(fS(1) * fS(3)); hAC = (hS(1) + hS(3)) / 2;
+        w = (hG - hAC) / (hS(2) - hAC);
+        fI = exp((1 - w) * log(fAC) + w * log(fS(2)));
+        swRows(end + 1, :) = {d, fS(1), fS(2), fS(3), hS(1), hS(2), hS(3), hG, fI}; %#ok<AGROW>
+        aP = variants{1}{1}; iP = variants{1}{2};
+        fac = [fS(2), fAC, fI];
+        for j = 1:3                               % the preset with its density scaled by fac(j)
+            iS = iP; iS.drag = fac(j) * iP.drag;
+            variants{nM + j} = {aP + (fac(j) - 1) * iP.drag, iS};
+        end
+    end
+    for vv = 1:nV
+        a = variants{vv}{1}; info = variants{vv}{2};
         res = a(:, keep) - act(:, keep);
         res = res - mean(res, 2);
         rmsX(vv) = sqrt(mean(res(1, :).^2));
@@ -163,5 +219,13 @@ for vv = 1:nV
 end
 fprintf('  preset median daily rms y / z: %.2f / %.2f nm/s^2; k_drag per day min / median / max: %.3f / %.3f / %.3f\n', ...
     1e9 * median(T.rmsY), 1e9 * median(T.rmsZ), min(T.kDrag), median(T.kDrag), max(T.kDrag));
-R = struct('days', T, 'month', M, 'noDataDays', noData, 'seconds', toc(t0));
+S = cell2table(swRows, 'VariableNames', {'day', 'fA', 'fB', 'fC', 'hA_m', 'hB_m', 'hC_m', 'hGraceFO_m', 'fInterp'});
+if haveSwarm
+    fprintf('  Swarm density scale rho_Swarm / rho_%s per day, A / B / C / interpolated to GRACE-FO: median %.3f / %.3f / %.3f / %.3f, interp min..max %.3f..%.3f\n', ...
+        o.drag.density, median(S.fA), median(S.fB), median(S.fC), median(S.fInterp), min(S.fInterp), max(S.fInterp));
+    fprintf('  mean heights A / B / C / GRACE-FO: %.1f / %.1f / %.1f / %.1f km\n', mean(S.hA_m) / 1e3, mean(S.hB_m) / 1e3, mean(S.hC_m) / 1e3, mean(S.hGraceFO_m) / 1e3);
+else
+    fprintf('  no Swarm densities of %s in the pool: the density-scale variants were not run\n', options.Month);
+end
+R = struct('days', T, 'month', M, 'swarm', S, 'noDataDays', noData, 'seconds', toc(t0));
 end

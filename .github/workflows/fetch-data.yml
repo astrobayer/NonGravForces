@@ -1,6 +1,7 @@
 # Fill the CI runner's DATAPOOL with the observations of the reference days, cut the committed
 # excerpts from it, and commit them to the pull request's own branch (O-9 Dst/F30, N-12
-# attitude, and TU Graz's non-conservative forces for O-19).
+# attitude, TU Graz's non-conservative forces for O-19, and Swarm's POD densities for O-19's
+# drag scale).
 #
 # ALL DATA LIVES ON THE CI RUNNER (owner, 2026-10-26). The full products go into the runner's
 # DATAPOOL (READING_DATA_POOL, the organisation variable ci.yml reads), where they stay; only
@@ -62,7 +63,7 @@ jobs:
             pool = string(getenv("READING_DATA_POOL"));
             assert(strlength(pool) > 0, "fetchData:noPool", "READING_DATA_POOL is not set for this repository -> grant the organisation variable to it");
             info = setupNonGravForces('Verbose', false, 'FetchMsis', "never", 'FetchData', "never", 'FetchKernels', "never", 'FetchGroops', "never", 'FetchPool', "ifMissing", 'DataPool', pool);
-            items = info.data.items(startsWith([info.data.items.name], ["dst" "f30" "itsg" "pool"]));
+            items = info.data.items(startsWith([info.data.items.name], ["dst" "f30" "itsg" "swarm" "pool"]));
             fprintf("%-50s %s\n", [[items.name]; [items.action]]);
             failed = items(startsWith([items.action], ["failed" "skipped"]));
             if ~isempty(failed)
@@ -94,6 +95,7 @@ jobs:
           path: |
             NonGravForcesFetch/data/spaceweather
             NonGravForcesFetch/data/samples/itsg
+            NonGravForcesFetch/data/samples/swarm
           retention-days: 7
       - name: Remove the working copy from this machine
         if: always()
@@ -118,7 +120,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A data/spaceweather data/samples/itsg
+          git add -A data/spaceweather data/samples/itsg data/samples/swarm
           git status --short
           if git diff --cached --quiet; then
             echo "the excerpts cut from the pool equal the committed ones"

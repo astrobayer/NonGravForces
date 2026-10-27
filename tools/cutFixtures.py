@@ -13,6 +13,9 @@ pool and writes the excerpts the tests are allowed to see:
                                                two windows unchanged
   data/samples/itsg/<sat>_<product>_<day>.txt  TU Graz products: the first 600 epochs (10 s), the
                                                GROOPS epoch-count line rewritten, data unchanged
+  data/samples/swarm/SW_OPER_DNS<x>POD_2_<first>_<last>.csv
+                                               Swarm A/B/C POD densities (VirES HAPI CSV): the JSON
+                                               header unchanged, the 30 s lines of the 2014+ days
 
 Every line it keeps is byte-identical to the source (decoded and re-encoded as latin-1). It
 prints the size and SHA-256 of every source it read, for the READMEs' digest tables. Standard
@@ -39,6 +42,7 @@ F30_FILES = ["radio_flux_adjusted_observation.txt", "radio_flux_absolute_observa
 F30_SUFFIX = "_2007-09_2008-03_2019-09_2020-03.txt"
 ITSG_PRODUCTS = ["attitude", "nonConservativeForces", "reducedDynamicOrbit"]
 GROOPS_EXCERPT = 600
+SWARM_SATS = ["A", "B", "C"]
 
 _DATE_RES = [
     (re.compile(r"^\s*\"?(\d{4})-(\d{2})-(\d{2})"), "ymd"),
@@ -160,6 +164,27 @@ def main():
                     missing.append(f"{base}.gz: not a GROOPS instrument file")
                     continue
                 write(os.path.join("data", "samples", "itsg", base), cut[0])
+
+    swarm_days = sorted(d for d in a.days if d >= "2014")
+    for sat in SWARM_SATS:
+        ds = f"SW_OPER_DNS{sat}POD_2_"
+        parts, total = [], 0
+        for month in sorted({d[:7] for d in swarm_days}):
+            b = read(os.path.join(a.pool, "Swarm", "DNSxPOD", month[:4], f"{ds}{month}.csv"))
+            if b is None:
+                continue
+            want = [dt.date.fromisoformat(d) for d in swarm_days if d.startswith(month)]
+            text, n = excerpt_by_date(b, [(d, d) for d in want])
+            if n == 0:
+                missing.append(f"{ds}{month}.csv: no 30 s line on {', '.join(map(str, want))}")
+            parts.append((text, n))
+            total += n
+        if parts:
+            # one file per satellite: the first month's header, every month's dated lines
+            head = parts[0][0].splitlines(keepends=True)
+            head = [ln for ln in head if line_date(ln) is None]
+            body = [ln for text, _ in parts for ln in text.splitlines(keepends=True) if line_date(ln) is not None]
+            write(os.path.join("data", "samples", "swarm", f"{ds}{swarm_days[0]}_{swarm_days[-1]}.csv"), "".join(head + body))
 
     print("sources read (bytes, SHA-256, path below the pool):")
     print("\n".join(report))
