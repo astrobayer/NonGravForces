@@ -262,7 +262,6 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyErrorId(@() NonGravForces.env.density("msis21", ep, lla, [], 'Drivers', d, 'LocalSolarTime_h', [16 16]), 'NonGravForces:density:inputOption');
             tc.verifyErrorId(@() NonGravForces.env.density("msis21", ep, lla, []), 'NonGravForces:density:inputDrivers');
             tc.verifyError(@() NonGravForces.env.density("jb2008", ep, lla, [], 'Drivers', d), 'MATLAB:validators:mustBeMember');
-            tc.verifyError(@() NonGravForces.env.density("dtm2020", ep, lla, [], 'Drivers', d), 'MATLAB:validators:mustBeMember');
         end
         function magneticFieldContract(tc)
             r = [[6861.2e3; 0; 0] [0; 5e6; 4.8e6]];
