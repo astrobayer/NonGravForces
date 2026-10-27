@@ -49,6 +49,10 @@ function info = setupNonGravForces(options)
 %       TU Graz products    attitude, nonConservativeForces and reducedDynamicOrbit of GRACE-A/B
 %                           (days before 2018) or GRACE-C/D (from 2018) per 'PoolDays' day, as
 %                           published (.txt.gz), into <DataPool>/ITSG/operational/<sat>/<product>/<yyyy>
+%       Swarm densities     ESA's Level-2 SW_OPER_DNSxPOD_2_ (thermosphere density from precise orbit
+%                           determination alone, 30 s) of Swarm A, B and C for the month of each
+%                           'PoolDays' day from 2014 on, through the VirES for Swarm HAPI server as
+%                           CSV with its JSON header, into <DataPool>/Swarm/DNSxPOD/<yyyy>
 %                           The committed excerpts in data/spaceweather and data/samples/itsg are
 %                           cut from these by tools/cutFixtures.py. Classic GRACE Level-1B is not
 %                           here yet: GFZ's ISDC, its only anonymous source, is down (2026-10-26)
@@ -91,9 +95,9 @@ function info = setupNonGravForces(options)
 %                                    environment variable. It is NOT guessed: a 2.5 GB download
 %                                    into a directory nobody named is not a service (R5). The
 %                                    GROOPS files go into <DataPool>/EarthRadiationPressure,
-%                                    FetchPool's into <DataPool>/SpaceWeather and <DataPool>/ITSG.
+%                                    FetchPool's into <DataPool>/SpaceWeather, <DataPool>/ITSG and <DataPool>/Swarm.
 %   FetchPool  1x1   string   -      The same three settings for the observations of the reference
-%                                    days (Dst, F30, TU Graz products), into DataPool (default
+%                                    days (Dst, F30, TU Graz products, Swarm densities), into DataPool (default
 %                                    "ifMissing"; nothing happens without a DataPool). ciGate passes
 %                                    "never": the gate reads committed excerpts, not the network.
 %   PoolDays   1xN   string   -      Reference days for FetchPool, "yyyy-mm-dd" (default the fixture
@@ -209,6 +213,12 @@ F30_BASE = "ftp://ftpsedr.cls.fr/pub/previsol/solarflux/observation";
 F30_FILES = ["radio_flux_adjusted_observation.txt" "radio_flux_absolute_observation.txt"];
 ITSG_BASE = "https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational";
 ITSG_PRODUCTS = ["attitude" "nonConservativeForces" "reducedDynamicOrbit"];
+% Swarm's POD-only densities (ESA Level 2, free and open under ESA's data policy): an observed
+% density independent of GRACE-FO's accelerometer, for the drag scale of O-19 (2026-10-27).
+% HAPI 3 request syntax; a month per satellite per request, the header included so the file
+% describes itself and the content check has a first line to read.
+SWARM_HAPI = "https://vires.services/hapi/data";
+SWARM_SATS = ["A" "B" "C"];
 DE440_FILE = "de440s.bsp";
 DE440_SHA256 = "c1c7feeab882263fc493a9d5a5b2ddd71b54826cdf65d8d17a76126b260a49f2";
 root = fileparts(mfilename('fullpath'));
@@ -240,7 +250,7 @@ info.data.items = [info.data.items, localFetchKernel(root, DE440_FILE, DE440_SHA
 info.dataPool = options.DataPool;
 info.data.items = [info.data.items, localFetchGroops(options.DataPool, GROOPS_BASE, GROOPS_FILES, options.FetchGroops)];
 info.data.items = [info.data.items, localFetchPool(options.DataPool, options.PoolDays, DST_BASE, F30_BASE, F30_FILES, ...
-    ITSG_BASE, ITSG_PRODUCTS, options.FetchPool)];
+    ITSG_BASE, ITSG_PRODUCTS, SWARM_HAPI, SWARM_SATS, options.FetchPool)];
 info.mex = NonGravForces.buildMex('Check', true);      % 1xT: one element per target
 if options.Verbose
     for m = 1:numel(info.mex)
@@ -402,8 +412,8 @@ for k = 1:numel(files)
 end
 end
 
-function items = localFetchPool(pool, days, dstBase, f30Base, f30Files, itsgBase, itsgProducts, mode)
-%LOCALFETCHPOOL Observations of the reference days into DATAPOOL: Dst, F30 and TU Graz's products.
+function items = localFetchPool(pool, days, dstBase, f30Base, f30Files, itsgBase, itsgProducts, swarmHapi, swarmSats, mode)
+%LOCALFETCHPOOL Observations of the reference days into DATAPOOL: Dst, F30, TU Graz's products, Swarm densities.
 %   The pool is named, never guessed (localFetchGroops says why). Every reply is checked by its first
 %   lines before it replaces anything -- for a .gz, those of what it decompresses to -- and a failure
 %   is REPORTED per file, never raised. Kyoto keeps FINAL Dst only for months a few years old; a
@@ -442,6 +452,17 @@ for k = 1:numel(d)
                 'url', itsgBase + "/" + s + "/" + p + "/" + yyyy + "/" + file, ...
                 'dst', string(fullfile(pool, "ITSG", "operational", s, p, yyyy, file)), 'check', "^groops instrument"); %#ok<AGROW>
         end
+    end
+end
+% Swarm DNSxPOD: the month of each day, from 2014 (Swarm was launched in November 2013)
+for m = unique(first(year(first) >= 2014))
+    ym = string(m, 'yyyy-MM');
+    span = "&start=" + string(m, 'yyyy-MM-dd') + "T00:00:00Z&stop=" + string(m + calmonths(1), 'yyyy-MM-dd') + "T00:00:00Z";
+    for s = swarmSats
+        ds = "SW_OPER_DNS" + s + "POD_2_";
+        targets(end+1) = struct('name', "swarm " + s + " " + ym, ...
+            'url', swarmHapi + "?dataset=" + ds + span + "&format=csv&include=header", ...
+            'dst', string(fullfile(pool, "Swarm", "DNSxPOD", string(year(m)), ds + ym + ".csv")), 'check', "^#\s*\{"); %#ok<AGROW>
     end
 end
 for t = targets

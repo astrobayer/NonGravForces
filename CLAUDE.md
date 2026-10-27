@@ -175,8 +175,14 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-27, PR #111)
+## 5. Current status (2026-10-27, PR #112)
 
+- **2026-10-27, PR #112 (Swarm densities, stage 1 of the observed density scale):** DTM2020's licence rules it out
+  as the way forward (owner); the licence-clean route is a per-day density scale from ESA's Swarm A/B/C POD-only
+  densities (`SW_OPER_DNSxPOD_2_`, 30 s, ESA open data), fetched per month through the VirES HAPI server as CSV
+  by `setupNonGravForces('FetchPool')` into `<DataPool>/Swarm/DNSxPOD/<yyyy>` and cut by `tools/cutFixtures.py`
+  into `data/samples/swarm` (2020-01-01..03). Stage 2 (reader, scale, month variant) is written against the bytes
+  the runner fetches, not against the handbook. No MATLAB code changes yet: gate unchanged at 459.
 - **2026-10-27, PR #111 (DTM2020 density backend):** `drag.density = "dtm2020"` (opt-in, no preset), CNES's
   operational DTM2020 (F10.7, Kp) through `mex/ngfDtm2020Shim.F90` + `mex/ngfDtm2020Gateway.c`, built by
   `buildMex` target `dtm2020` (gfortran `-fdefault-real-8`) from SWAMI MCM files `setupNonGravForces` fetches at a
@@ -184,7 +190,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   no redistribution** (THIRD-PARTY-NOTICES.md). Drivers from the celestrak query's new `f107Last81`,
   `kpDelayed3h`, `kpMean24h`; refused below 150 km and on the native path (O-52). Oracle: CNES's four benchmark
   cases. CI 40470246057: 457/459 -- the two red tests were OLDER contracts still asserting the 2026-09-15 refusal
-  of dtm2020 (fixed); the six DTM2020 tests pass. ◐ until the re-run is read; predicted gate 459.
+  of dtm2020 (fixed); ☑ CI 40485043763: 459/459, predicted 459.
   **THE MONTH ANSWERS O-19** (run 40470246020): with DTM2020 and Sentman alpha 0.85 ACT1B wants k_drag **0.961**
   (per day 0.81-1.12), median along-track RMS **1.79 nm/s^2** (Huckfeldt: 3-5); DTM2020 + Cd 2.4 overshoots (1.207).
   DTM2020 is 0.478 of NRLMSISE-00 at 490 km on 2020-01-01. The factor of 2 was the MSIS density in solar minimum;
