@@ -99,7 +99,7 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
 % ERRORS
 %   NonGravForces:DynamicsSource:inputModel     model is not a NonGravForces.Model, or its options
 %                                               cannot be served (transient thermal, raycast, squad)
-%   NonGravForces:DynamicsSource:unsupportedOption  erp.backend ceresClimatology or drag.density dtm2020,
+%   NonGravForces:DynamicsSource:unsupportedOption  erp.backend ceresClimatology, drag.density dtm2020 or drag.densityScale swarm,
 %                                               which have no native evaluator; use Model.accel or series instead
 %   NonGravForces:DynamicsSource:inputEpoch     no 'Epoch', or a context Epoch that disagrees
 %   NonGravForces:DynamicsSource:inputGravity   'Gravity' is not a gjToolbox.DynamicsSource
@@ -183,6 +183,11 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
             % ceresClimatology above: find() below would return empty and pack 0, "exponential".
             if o.drag.density == "dtm2020"
                 NonGravForces.fail(unit, "unsupportedOption", "drag.density dtm2020 has no native evaluator (HANDOVER O-52) -> use msis00 or msis21 for an integrated arc, or dtm2020 through Model.accel or series");
+            end
+            % The observed density scale (2026-10-27, O-19) is a daily table the C evaluator does not carry;
+            % refused rather than integrated without it.
+            if o.drag.densityScale ~= "none"
+                NonGravForces.fail(unit, "unsupportedOption", "drag.densityScale %s has no native evaluator -> integrate with drag.densityScale none, or use it through Model.accel or series", o.drag.densityScale);
             end
             if any(~ismember(nv.Parameters, ["cdScale", "crScale"]))
                 NonGravForces.fail(unit, "inputModel", "'Parameters' may name cdScale and crScale -> got %s", strjoin(nv.Parameters, ", "));

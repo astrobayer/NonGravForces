@@ -631,6 +631,57 @@ classdef tNgfModel < NgfTestCase
             tc.verifyBoundAndRecord("fast preset vs standard preset, same arc (40 epochs)", ratio, 0.75, "-", "measured 0.25 on 2026-09-15 (it was 0.02 before WP-C3; that 88 ms of HANDOVER O-29 was per-call overhead, not physics)");
         end
     end
+    methods
+        function S = swarmScale(tc)
+            %SWARMSCALE env.densityScale over the committed Swarm A/B/C days, for the standard preset's msis00.
+            files = string(fullfile(tc.root, 'data', 'samples', 'swarm', "SW_OPER_DNS" + ["A" "B" "C"] + "POD_2_2020-01-01_2020-01-03.csv"));
+            S = NonGravForces.env.densityScale(files, tc.sw);
+        end
+    end
+    methods (Test, TestTags = {'contract'})
+        % drag.densityScale "swarm" (O-19, 2026-10-27)
+        function modelDensityScaleContract(tc)
+            S = tc.swarmScale();
+            oS = NonGravForces.Options("standard").set("drag.densityScale", "swarm");
+            idx = 101:103;                                % past 00:00:18 GPS: the first 18 s of the GPS day are 2019-12-31 in UTC
+            e = tc.slice(idx); rr = tc.r(:, idx); vv = tc.v(:, idx);
+            % the option without the scale is refused at evaluation, the scale without the option at construction
+            M1 = NonGravForces.Model(tc.macro, oS, 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw);
+            tc.verifyErrorId(@() M1.accel(e, rr, vv), 'NonGravForces:Model:dependDensityScale');
+            tc.verifyErrorId(@() NonGravForces.Model(tc.macro, NonGravForces.Options("standard"), 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', S), ...
+                'NonGravForces:Model:inputOptions');
+            % a scale formed for msis00 is refused by a Model on msis21
+            tc.verifyErrorId(@() NonGravForces.Model(tc.macro, oS.set("drag.density", "msis21"), 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', S), ...
+                'NonGravForces:Model:inputOptions');
+            tc.verifyErrorId(@() NonGravForces.Model(tc.macro, oS, 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', struct('x', 1)), ...
+                'NonGravForces:Model:inputOptions');
+            % and the call that must succeed
+            M = NonGravForces.Model(tc.macro, oS, 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', S);
+            [~, info] = M.accel(e, rr, vv);
+            tc.verifySize(info.densityScale, [1 3]); tc.verifyTrue(all(info.densityScale > 0.3 & info.densityScale < 0.8));
+            [~, info0] = tc.M.accel(e, rr, vv);
+            tc.verifyEqual(info0.densityScale, ones(1, 3));
+        end
+    end
+    methods (Test, TestTags = {'metamorphic'})
+        function modelDensityScaleMetamorphic(tc)
+            % The gas force is linear in the species densities, so the scaled Model's drag is the unscaled Model's
+            % drag times the factor at each epoch, and nothing else moves (radiation, thermal, the factor itself is
+            % S.at at the Model's own geodetic height). Bound from the rounding of one product per term.
+            S = tc.swarmScale();
+            oS = NonGravForces.Options("standard").set("drag.densityScale", "swarm");
+            M = NonGravForces.Model(tc.macro, oS, 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', S);
+            idx = 101:120;                                % UTC 2020-01-01: Swarm has a factor for it
+            e = tc.slice(idx); rr = tc.r(:, idx); vv = tc.v(:, idx);
+            [~, iS] = M.accel(e, rr, vv);
+            [~, i0] = tc.M.accel(e, rr, vv);
+            tc.verifyEqual(iS.densityScale, S.at(e, i0.lla(3, :)));
+            rel = max(vecnorm(iS.drag - iS.densityScale .* i0.drag) ./ vecnorm(i0.drag));
+            tc.verifyBoundAndRecord("scaled drag / (factor x unscaled drag) - 1", rel, 1e-12, "-", "linear in the densities; a few products' rounding");
+            tc.verifyEqual(iS.radiation, i0.radiation); tc.verifyEqual(iS.thermal, i0.thermal);
+            tc.verifyEqual(iS.rho, iS.densityScale .* i0.rho, 'RelTol', 4 * eps);
+        end
+    end
 end
 
 function [rb, rs, s, rho, rDay] = localFit(aM, aA, keep)
