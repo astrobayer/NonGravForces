@@ -185,6 +185,9 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   (driver regression of the Swarm log f over 2014-now, yearly blocked CV, forward/backward across 2020;
   `density-fit.yml`), its data `setupNonGravForces('SwarmMonths')`. drag-month's concurrency group now carries
   month and satellite (two dispatches on one branch cancelled each other).
+  **2024-01 C (F10.7 ~165, run 40574285164): MSIS is RIGHT at high activity** -- preset k_drag 0.964, Swarm option
+  0.978 (rms_x 19.5 nm/s^2, ~10x 2020's with ~10x the drag), DTM2020 1.337 (0.77 of MSIS, too low). The 2020 factor
+  0.48 is a solar-minimum error. GRACE-D's ACT1B has NO records in all of 2024-01 (run 40581217526).
 - **2026-10-27, PR #113 (the observed density scale as a Model option, owner's request):** `Options`
   `drag.densityScale = "swarm"` (opt-in, no preset) and new unit `env.densityScale` (61 units): per UTC day
   f = sum(rho_Swarm)/sum(rho_model) for Swarm A, B, C; `S.at(epoch, h)` interpolates log f linearly in height
