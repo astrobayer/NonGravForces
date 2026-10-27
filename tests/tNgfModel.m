@@ -366,13 +366,21 @@ classdef tNgfModel < NgfTestCase
             %     the standard preset (msis00, Sentman, alpha 0.85). Huckfeldt found a variable Cd from
             %     Sentman/Doornbos "continuously higher" than the shape-based 2.4, with larger residuals.
             %
-            % FIRST RUN: every number is recorded with a coarse bound and printed; the conclusion and the
-            % bounds follow from the run (CLAUDE.md section 7).
+            % FIRST RUN (CI 40447628923): against GROOPS, k_drag along-track is 0.482 and CONSTANT over the
+            % orbit (0.441-0.486 in four windows), with k_rad 0.93 cross-track; one drag scale takes the
+            % along-track RMS from 10.6 to 0.53 nm/s^2. GROOPS's drag is HALF of this toolbox's: a scale
+            % (density, Cd or area), not a shape. No single option reaches it: msis21 0.915, Sentman alpha 1
+            % 0.905, constantCd 2.4 0.751 of the standard drag, so the combination is printed too. Against
+            % ACT1B every option that lowers the drag lowers the residual (5.57 -> 4.56 nm/s^2 for constantCd).
+            % The free three-effect fit against ACT1B was ill-conditioned over 3 x 30 min (k_therm 8.1 along-
+            % track, k_drag -1.7 and 8.6 where drag is a few per cent of the signal), so against ACT1B only
+            % k_drag is fitted, along-track, with radiation and thermal held at 1.
             [epG, rG, vG, qGr, aG] = tc.groopsDay();
             [arcs, keep] = tc.act1bArcs(10);
             o = tc.M.options;
-            variants = struct('name', {"standard", "msis21", "constantCd 2.4", "sentman alpha 1"}, ...
-                'opt', {o, o.set("drag.density", "msis21"), o.set("drag.gsi", "constantCd").set("drag.cd", 2.4), o.set("drag.alpha", 1)});
+            variants = struct('name', {"standard", "msis21", "constantCd 2.4", "sentman alpha 1", "msis21 + Cd 2.4"}, ...
+                'opt', {o, o.set("drag.density", "msis21"), o.set("drag.gsi", "constantCd").set("drag.cd", 2.4), o.set("drag.alpha", 1), ...
+                o.set("drag.density", "msis21").set("drag.gsi", "constantCd").set("drag.cd", 2.4)});
             nV = numel(variants);
             dragG = zeros(3, size(aG, 2), nV); dragA = cell(nV, 3);
             for v = 1:nV
@@ -387,24 +395,22 @@ classdef tNgfModel < NgfTestCase
                 end
             end
             % (a) effect scales against GROOPS (no bias: GROOPS has none) and against ACT1B (one bias per day)
-            kG = zeros(3, 3); kA = zeros(3, 3); fitG = zeros(3, 2); fitA = zeros(3, 2);
+            kG = zeros(3, 3); fitG = zeros(3, 2);
             for i = 1:3
                 X = [dragG(i, :, 1); radG(i, :); thG(i, :)]';
                 y = aG(i, :)';
                 kG(:, i) = X \ y;
                 fitG(i, :) = [sqrt(mean((y - X * kG(:, i)).^2)), sqrt(mean((y - sum(X, 2)).^2))];
-                [XA, yA, D] = deal([], [], []);
-                for d = 1:3
-                    k = keep{d};
-                    XA = [XA; [dragA{1, d}(i, k); arcs(d).rad(i, k); arcs(d).th(i, k)]']; %#ok<AGROW>
-                    yA = [yA; arcs(d).act(i, k)']; %#ok<AGROW>
-                    D = blkdiag(D, ones(nnz(k), 1));
-                end
-                b = [D XA] \ yA;
-                kA(:, i) = b(4:6);
-                b1 = D \ (yA - sum(XA, 2));
-                fitA(i, :) = [sqrt(mean((yA - [D XA] * b).^2)), sqrt(mean((yA - sum(XA, 2) - D * b1).^2))];
             end
+            [dA, yA, D] = deal([], [], []);
+            for d = 1:3
+                k = keep{d};
+                dA = [dA; dragA{1, d}(1, k)']; %#ok<AGROW>
+                yA = [yA; (arcs(d).act(1, k) - arcs(d).rad(1, k) - arcs(d).th(1, k))']; %#ok<AGROW>
+                D = blkdiag(D, ones(nnz(k), 1));
+            end
+            b = [D dA] \ yA; kA = b(end);
+            fitA = [sqrt(mean((yA - [D dA] * b).^2)), sqrt(mean((yA - dA - D * (D \ (yA - dA))).^2))];
             % k_d along-track over the orbit: four 25 min windows of the GROOPS day, k_r and k_t held
             nW = 4; w = reshape(1:size(aG, 2), [], nW); kWin = zeros(1, nW);
             for j = 1:nW
@@ -428,8 +434,8 @@ classdef tNgfModel < NgfTestCase
             fprintf('  axis  ref      k_drag   k_rad   k_therm     rms fit    rms k=1\n');
             for i = 1:3
                 fprintf('  %-4d  GROOPS %7.3f %7.3f %8.3f   %9.3e  %9.3e\n', i, kG(:, i), fitG(i, :));
-                fprintf('  %-4d  ACT1B  %7.3f %7.3f %8.3f   %9.3e  %9.3e\n', i, kA(:, i), fitA(i, :));
             end
+            fprintf('  1     ACT1B  %7.3f  (radiation, thermal held at 1; one bias per day)   %9.3e  %9.3e\n', kA, fitA);
             fprintf('  k_drag along-track vs GROOPS per 25 min window: %s\n', sprintf('%7.3f', kWin));
             fprintf('modelDragDiagnosis (b) variants, along-track:\n');
             fprintf('  %-16s %12s %10s %14s %14s\n', 'variant', 'drag mean', 'vs std', 'rms vs GROOPS', 'rms vs ACT1B');
@@ -440,22 +446,24 @@ classdef tNgfModel < NgfTestCase
             for i = 1:3
                 tc.verifyBoundAndRecord("drag diagnosis: GROOPS effect-scale fit RMS over RMS at k = 1, axis " + i, fitG(i, 1) / fitG(i, 2), 1 + 1e-12, "-", ...
                     "k = (1, 1, 1) is feasible, so the least-squares fit cannot do worse: an identity");
-                tc.verifyBoundAndRecord("drag diagnosis: ACT1B effect-scale fit RMS over bias-only RMS, axis " + i, fitA(i, 1) / fitA(i, 2), 1 + 1e-12, "-", ...
-                    "the bias-only fit is the k = (1, 1, 1) point of the same design: an identity");
             end
-            tc.verifyBoundAndRecord("drag diagnosis: |log k_drag| along-track vs GROOPS", abs(log(kG(1, 1))), log(5), "-", ...
-                "first run: recorded; GROOPS's drag over this toolbox's");
-            tc.verifyBoundAndRecord("drag diagnosis: |log k_drag| along-track vs ACT1B", abs(log(abs(kA(1, 1)))), log(5), "-", ...
+            tc.verifyBoundAndRecord("drag diagnosis: ACT1B drag-scale fit RMS over bias-only RMS, along-track", fitA(1) / fitA(2), 1 + 1e-12, "-", ...
+                "the bias-only fit is the k_drag = 1 point of the same design: an identity");
+            tc.verifyBoundAndRecord("drag diagnosis: GROOPS along-track, effect-scale fit RMS over RMS at k = 1", fitG(1, 1) / fitG(1, 2), 0.1, "-", ...
+                "measured 0.050 (CI 40447628923): one drag scale explains 95 % of the along-track difference");
+            tc.verifyBoundAndRecord("drag diagnosis: |log k_drag| along-track vs GROOPS", abs(log(kG(1, 1))), log(2.5), "-", ...
+                "measured k 0.482 (CI 40447628923): GROOPS's drag is half of this toolbox's");
+            tc.verifyBoundAndRecord("drag diagnosis: |log k_drag| along-track vs ACT1B", abs(log(abs(kA))), log(5), "-", ...
                 "first run: recorded; the measurement's drag over this toolbox's (ACT1B's own scale is in it)");
-            tc.verifyBoundAndRecord("drag diagnosis: k_drag window spread (max/min) along-track vs GROOPS", max(kWin) / min(kWin), 5, "-", ...
-                "first run: recorded; near 1 is a SCALE, far from 1 an orbit-dependent shape");
+            tc.verifyBoundAndRecord("drag diagnosis: k_drag window spread (max/min) along-track vs GROOPS", max(kWin) / min(kWin), 1.3, "-", ...
+                "measured 1.10 (0.441-0.486, CI 40447628923): a SCALE, not an orbit-dependent shape");
             for v = 2:nV
-                tc.verifyBoundAndRecord("drag diagnosis: |log| along-track drag mean, " + variants(v).name + " over standard", abs(log(dMean(v) / dMean(1))), log(3), "-", ...
-                    "first run: recorded; one option changed against the standard preset");
+                tc.verifyBoundAndRecord("drag diagnosis: |log| along-track drag mean, " + variants(v).name + " over standard", abs(log(dMean(v) / dMean(1))), log(2), "-", ...
+                    "ratios 0.915 msis21, 0.751 constantCd 2.4, 0.905 alpha 1 (CI 40447628923); the combination recorded");
             end
             for v = 1:nV
-                tc.verifyBoundAndRecord("drag diagnosis: along-track bias-only RMS vs ACT1B, " + variants(v).name, rmsA(v), 30e-9, "m/s^2", ...
-                    "first run: recorded; the standard preset is 5.5 nm/s^2 at 1 s (modelAct1bReference)");
+                tc.verifyBoundAndRecord("drag diagnosis: along-track bias-only RMS vs ACT1B, " + variants(v).name, rmsA(v), 8e-9, "m/s^2", ...
+                    "measured 5.57 / 4.82 / 4.56 / 4.89 nm/s^2 (standard, msis21, constantCd 2.4, alpha 1; CI 40447628923)");
             end
         end
     end
