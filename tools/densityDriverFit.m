@@ -53,6 +53,8 @@ function R = densityDriverFit(options)
 %   Split       1x1   string  -      "yyyy-mm-dd" of the forward/backward split; default 2020-01-01
 %   NBoot       1x1   double  -      bootstrap replicates of the full fits; default 200
 %   MaxVif      1x1   double  -      regressDrivers' VIF gate; default 10
+%   Cache       1x1   logical -      keep the passes in <Pool>/Swarm/densityDriverFit_<model>_<span>_s<Stride>_n<MinRecords>.mat
+%                                    and reuse them (default true); false recomputes and does not write
 %
 % OUTPUT ARGUMENTS
 %   R  1x1 struct: .rows (table: mjd, satellite, ascending, logF, height_m, lt_h, n),
@@ -81,6 +83,7 @@ arguments
     options.Split (1,1) string = "2020-01-01"
     options.NBoot (1,1) double {mustBeInteger, mustBePositive} = 200
     options.MaxVif (1,1) double {mustBeGreaterThanOrEqual(options.MaxVif, 1)} = 10
+    options.Cache (1,1) logical = true
 end
 unit = "densityDriverFit";
 swFile = fullfile(options.Pool, "SpaceWeather", "SW-All.csv");
@@ -97,6 +100,15 @@ sats = ["A" "B" "C"];
 months = datetime(options.First, 'InputFormat', 'yyyy-MM'):calmonths(1):datetime(options.Last, 'InputFormat', 'yyyy-MM');
 rows = zeros(0, 7);                 % mjd, satellite, ascending, log f, height, LT, n
 missingFiles = strings(1, 0); emptyFiles = strings(1, 0);
+% The passes take ~50 min for 2014-2026 and depend only on the files and these settings: kept in the pool.
+cache = fullfile(options.Pool, "Swarm", "densityDriverFit_" + options.Model + "_" + options.First + "_" + options.Last + ...
+    "_s" + options.Stride + "_n" + options.MinRecords + ".mat");
+if options.Cache && isfile(cache)
+    c = load(cache, 'rows', 'missingFiles', 'emptyFiles');
+    rows = c.rows; missingFiles = c.missingFiles; emptyFiles = c.emptyFiles;
+    months = months([]);
+    fprintf('densityDriverFit: %d passes from %s\n', size(rows, 1), cache);
+end
 for m = months
     for is = 1:numel(sats)
         file = fullfile(options.Pool, "Swarm", "DNSxPOD", string(year(m)), "SW_OPER_DNS" + sats(is) + "POD_2_" + string(m, 'yyyy-MM') + ".csv");
@@ -136,6 +148,9 @@ if isempty(rows)
         options.First, options.Last, options.Pool);
 end
 rows = sortrows(rows, [1 2 3]);     % time order: crossval's blocks are blocks of time
+if options.Cache && ~isfile(cache)
+    save(cache, 'rows', 'missingFiles', 'emptyFiles');
+end
 
 % ---- 2. the drivers, from data that exist on and before each day
 mjd = rows(:, 1); y = rows(:, 4);
@@ -245,7 +260,7 @@ for s = 1:numel(spec)
     else
         Ztr = tr(itr, spec(s).cols);
         try
-            r = timeSeriesPreparation.regressDrivers(ytr, Ztr, MaxVif = maxVif, NBoot = 1);
+            r = timeSeriesPreparation.regressDrivers(ytr, Ztr, MaxVif = maxVif, NBoot = 2);   % the minimum regressDrivers takes; CV reads coef only
         catch err
             if err.identifier ~= "timeSeriesPreparation:regressDrivers:collinear", rethrow(err); end
             continue
