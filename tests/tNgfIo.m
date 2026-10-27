@@ -1381,7 +1381,9 @@ classdef tNgfIo < NgfTestCase
             tc.verifyLessThan(abs(r - r15), 0.004, 'one distance factor per day for all bands');
         end
 
-        % ---------------------------------------------------------------- readSwarmDensity (O-19, 2026-10-27)
+    end
+    methods (Test, TestTags = {'contract'})
+        % readSwarmDensity (O-19, 2026-10-27)
         function readSwarmDensityContract(tc)
             [ep, lla, rho, aux] = NonGravForces.io.readSwarmDensity(tc.f.swB);
             K = 3 * 2880;                                 % three days at 30 s
@@ -1398,6 +1400,9 @@ classdef tNgfIo < NgfTestCase
             [~, ~, r1] = NonGravForces.io.readSwarmDensity(tc.f.swB, 'TimeRange', [58849 58850 - 1/86400]);
             tc.verifyEqual(numel(r1), 2880);
         end
+    end
+    methods (Test, TestTags = {'reference'})
+        % readSwarmDensity (O-19, 2026-10-27)
         function readSwarmDensityReference(tc)
             % Oracle: the raw CSV lines, split on commas with str2double (not textscan), and the calendar.
             [ep, lla, rho, aux] = NonGravForces.io.readSwarmDensity(tc.f.swB);
@@ -1417,6 +1422,9 @@ classdef tNgfIo < NgfTestCase
             % the last record is 2020-01-03T23:59:30Z
             tc.verifyEqual([ep.day(end) ep.sec(end)], [58851 86370]);
         end
+    end
+    methods (Test, TestTags = {'precision'})
+        % readSwarmDensity (O-19, 2026-10-27)
         function readSwarmDensityPrecision(tc)
             % deg2rad is one multiplication: rad2deg brings every printed degree back to a few ulp.
             [~, lla] = NonGravForces.io.readSwarmDensity(tc.f.swA);
@@ -1424,6 +1432,9 @@ classdef tNgfIo < NgfTestCase
             e = max(abs(rad2deg(lla(1:2, :))' - raw.v(:, 1:2)), [], 'all') / 180;
             tc.verifyBoundAndRecord("readSwarmDensity degrees round trip / 180", e, 4 * eps, "-", "deg2rad then rad2deg");
         end
+    end
+    methods (Test, TestTags = {'vectorization'})
+        % readSwarmDensity (O-19, 2026-10-27)
         function readSwarmDensityVectorization(tc)
             % The three days equal the 1.5-day halves read separately, concatenated (bitwise: nothing is computed across records).
             [ep, lla, rho, aux] = NonGravForces.io.readSwarmDensity(tc.f.swC);
@@ -1433,6 +1444,9 @@ classdef tNgfIo < NgfTestCase
             tc.verifyEqual([e1.day(:); e2.day(:)], ep.day(:)); tc.verifyEqual([e1.sec(:); e2.sec(:)], ep.sec(:));
             tc.verifyGreaterThan(numel(r1), 0); tc.verifyGreaterThan(numel(r2), 0);
         end
+    end
+    methods (Test, TestTags = {'robustness'})
+        % readSwarmDensity (O-19, 2026-10-27)
         function readSwarmDensityRobustness(tc)
             % the product's own units, status and flags are read, not assumed
             txt = fileread(tc.f.swB);
@@ -1452,6 +1466,9 @@ classdef tNgfIo < NgfTestCase
             raw = localSwarmRaw(tc.f.swB);
             tc.verifyEqual(nnz(~aux.valid), nnz(raw.v(:, 7) ~= 0)); tc.verifyGreaterThan(nnz(~aux.valid), 0);
         end
+    end
+    methods (Test, TestTags = {'metamorphic'})
+        % readSwarmDensity (O-19, 2026-10-27)
         function readSwarmDensityMetamorphic(tc)
             % Physics the product must show: Swarm A and C fly side by side at the same height (same density),
             % Swarm B ~65 km higher (several times thinner); an epoch present twice is kept once.
@@ -1466,6 +1483,9 @@ classdef tNgfIo < NgfTestCase
             [~, ~, rAA] = NonGravForces.io.readSwarmDensity([string(tc.f.swA) string(tc.f.swA)]);
             tc.verifyEqual(rAA, rA);
         end
+    end
+    methods (Test, TestTags = {'speed'})
+        % readSwarmDensity (O-19, 2026-10-27)
         function readSwarmDensitySpeed(tc)
             % Against reading the same file's text and splitting it into lines. Bound 20, an estimate on the
             % first run (header decode, one textscan); the measured ratio is in tests/last_run.txt.

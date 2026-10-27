@@ -184,7 +184,10 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   into `data/samples/swarm` (2020-01-01..03; first run 40494585676 fetched all three for 2020-01). Stage 2 in the
   same PR, written against those bytes: `io.readSwarmDensity` (60 units; HAPI header decoded, columns by name, units
   checked) and three density-scale variants in `tools/dragScaleMonth.m` (preset drag x rho_Swarm/rho_model per day:
-  Swarm B, A+C, interpolated in height). Written without MATLAB: ◐, predicted gate 466 (459 + 7).
+  Swarm B, A+C, interpolated in height). Written without MATLAB: ◐, predicted gate 466 (459 + 7). First CI run
+  40500042251: 466/466 passed, gate red on a category shortfall (the tests sat in a 'metamorphic' TestTags block).
+  **THE MONTH WITHOUT DTM2020** (run 40500042274): rho_Swarm/rho_msis00 per day ~0.48 at GRACE-FO's height;
+  scaled by it, ACT1B wants k_drag **0.903** and the median along-track RMS is **2.08 nm/s^2** (DTM2020: 0.961, 1.79).
 - **2026-10-27, PR #111 (DTM2020 density backend):** `drag.density = "dtm2020"` (opt-in, no preset), CNES's
   operational DTM2020 (F10.7, Kp) through `mex/ngfDtm2020Shim.F90` + `mex/ngfDtm2020Gateway.c`, built by
   `buildMex` target `dtm2020` (gfortran `-fdefault-real-8`) from SWAMI MCM files `setupNonGravForces` fetches at a
@@ -771,6 +774,9 @@ Every one of these was an actual defect found in a predecessor or a dependency.
 - **Delivering a refused option reddens the tests that asserted its refusal.** DTM2020's first CI run was 457/459
   because `tNgfCore/optionsContract` and `tNgfEnv/densityContract` still checked the 2026-09-15 refusal. Before
   pushing a new value, grep the tests for the value's name next to `verifyError`.
+- **A test's category is the `TestTags` of its `methods` block, not its name.** `readSwarmDensity`'s seven tests
+  were appended to the file's last block, tagged 'metamorphic': 466/466 passed and the gate was RED on a category
+  shortfall (PR #112). Give every new unit's tests their own tagged blocks.
 - **A status code is not a file.** `https://www.ngdc.noaa.gov/IAGA/vmod/igrf14.f` answers `200`
   with an HTML error page. Check the content, not the response code — met twice in two days.
 - **Never claim bitwise across a change in BATCH SIZE.** Vectorised products and norms associate
