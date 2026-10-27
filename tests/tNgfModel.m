@@ -53,6 +53,44 @@ classdef tNgfModel < NgfTestCase
             a = x(:) - mean(x(:)); b = y(:) - mean(y(:));
             c = (a' * b) / (norm(a) * norm(b));
         end
+        function [ep, r, v, q, a] = groopsDay(tc)
+            %GROOPSDAY TU Graz's 2020-01-01 GRACE-C state and GROOPS forces (600 x 10 s), attitude conjugated
+            % once (modelGroopsReference says why), as GPS epochs, 3xK GCRS-like CRF state, 4xK quaternions, 3xK forces.
+            S = fullfile(tc.root, 'data', 'samples', 'itsg');
+            rd = @(p) gracefoReading.readGroopsInstrument(fullfile(S, "GRACEFO-1_" + p + "_2020-01-01.txt"));
+            [tF, aG] = rd("nonConservativeForces");
+            [~, qG] = rd("attitude");
+            [~, xO] = rd("reducedDynamicOrbit");
+            ep = referenceSystem.daySecondToEpoch(tF, "GPS");
+            r = xO(:, 1:3)'; v = xO(:, 4:6)'; q = referenceSystem.invertQuaternion(qG'); a = aG';
+        end
+        function [arcs, keep] = act1bArcs(tc, step)
+            %ACT1BARCS The committed 3 x 30 min of 2020-01-01..03 GRACE-C on a STEP-second grid: GNV1B state,
+            % SCA1B attitude and ACT1B, with day 1's THR1B firings masked as in modelAct1bReference.
+            f = @(varargin) fullfile(tc.root, 'data', 'samples', varargin{:});
+            [~, thr] = NonGravForces.io.readTHR1B(f('THR1B_2020-01-01_C_04.txt'));
+            k = any(thr.fired, 1);
+            tFire = reshape(thr.epoch.sec(k), 1, []); onT = max(thr.onTime_s(:, k), [], 1);
+            halfCrn = (1407 - 1) / 2 * 0.1;
+            arcs = struct('e', {}, 'r', {}, 'v', {}, 'q', {}, 'act', {}, 'rad', {}, 'th', {});
+            keep = cell(1, 3);
+            for d = 1:3
+                day = sprintf('2020-01-%02d', d);
+                [ep, r, v] = NonGravForces.io.readGNV1B(f('multiday', "GNV1B_" + day + "_C_04.txt"), 'Eop', tc.eop);
+                [epq, q] = NonGravForces.io.readSCA1B(f('multiday', "SCA1B_" + day + "_C_04.txt"));
+                [epa, am] = NonGravForces.io.readACC1B(f('multiday', "ACT1B_" + day + "_C_04.txt"));
+                [tf, loc] = ismember(ep.sec, epa.sec);
+                tf = tf & mod(round(ep.sec), step) == 0;
+                e = referenceSystem.daySecondToEpoch([ep.day(tf) ep.sec(tf)], ep.scale);
+                attD = NonGravForces.geom.AttitudeProvider(epq, q);
+                arcs(d) = struct('e', e, 'r', r(:, tf), 'v', v(:, tf), 'q', attD.at(e), 'act', am(:, loc(tf)), 'rad', [], 'th', []);
+                t = ep.sec(tf);
+                keep{d} = true(1, nnz(tf));
+                if d == 1
+                    keep{d} = ~any(t(:) >= tFire - 0.5 - halfCrn & t(:) <= tFire + onT + 7 + halfCrn, 2)';
+                end
+            end
+        end
         function q = speedRatio(~, fcn, base)
             fcn(); base();
             rr = zeros(1, 3);
@@ -311,6 +349,113 @@ classdef tNgfModel < NgfTestCase
                     "measured 0.187 / 0.060 / 0.045 (CI 40411254932); GROOPS against the same ACT1B 0.07 / 0.06 / 0.03");
                 tc.verifyBoundAndRecord("ACT1B vs Model, day 1: |log| of masked over unmasked bias-only RMS, " + axisName(i), abs(log(rb1(i) / rb1u(i))), 0.5, "-", ...
                     "what the THR1B mask is worth on the one day it is committed for; measured 0.019 / 0.314 / 0.067 (CI 40411254932)");
+            end
+        end
+        function modelDragDiagnosis(tc)
+            % WHERE THE ALONG-TRACK EXCESS COMES FROM. modelGroopsReference and modelAct1bReference found the
+            % model's along-track 1.5x GROOPS's RMS (drag mean 1.67e-8 against a GROOPS total of 0.71e-8) and
+            % 5.5 nm/s^2 from ACT1B against GROOPS's 2.7. Two diagnoses on the same committed data, 10 s grid:
+            %
+            % (a) EFFECT SCALES: each reference is written as k_d drag + k_r radiation + k_t thermal of the
+            %     standard preset, per axis (against ACT1B with one bias per day besides). A k_d that is
+            %     constant over the orbit says SCALE (density or Cd); one that varies with the orbit says
+            %     geometry, wind or the gas-surface model. k = (1, 1, 1) is a feasible point, so the fitted
+            %     residual can only be smaller: that identity is the tight assertion.
+            % (b) VARIANTS, one option changed at a time: the density (msis21), the gas-surface model
+            %     (constantCd 2.4, Huckfeldt et al. 2024's base case; Sentman fully diffuse, alpha 1) against
+            %     the standard preset (msis00, Sentman, alpha 0.85). Huckfeldt found a variable Cd from
+            %     Sentman/Doornbos "continuously higher" than the shape-based 2.4, with larger residuals.
+            %
+            % FIRST RUN: every number is recorded with a coarse bound and printed; the conclusion and the
+            % bounds follow from the run (CLAUDE.md section 7).
+            [epG, rG, vG, qGr, aG] = tc.groopsDay();
+            [arcs, keep] = tc.act1bArcs(10);
+            o = tc.M.options;
+            variants = struct('name', {"standard", "msis21", "constantCd 2.4", "sentman alpha 1"}, ...
+                'opt', {o, o.set("drag.density", "msis21"), o.set("drag.gsi", "constantCd").set("drag.cd", 2.4), o.set("drag.alpha", 1)});
+            nV = numel(variants);
+            dragG = zeros(3, size(aG, 2), nV); dragA = cell(nV, 3);
+            for v = 1:nV
+                Mv = NonGravForces.Model(tc.macro, variants(v).opt, 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw);
+                [~, iv] = Mv.accel(epG, rG, vG, qGr);
+                dragG(:, :, v) = iv.drag;
+                if v == 1, radG = iv.radiation; thG = iv.thermal; end
+                for d = 1:3
+                    [~, ia] = Mv.accel(arcs(d).e, arcs(d).r, arcs(d).v, arcs(d).q);
+                    dragA{v, d} = ia.drag;
+                    if v == 1, arcs(d).rad = ia.radiation; arcs(d).th = ia.thermal; end
+                end
+            end
+            % (a) effect scales against GROOPS (no bias: GROOPS has none) and against ACT1B (one bias per day)
+            kG = zeros(3, 3); kA = zeros(3, 3); fitG = zeros(3, 2); fitA = zeros(3, 2);
+            for i = 1:3
+                X = [dragG(i, :, 1); radG(i, :); thG(i, :)]';
+                y = aG(i, :)';
+                kG(:, i) = X \ y;
+                fitG(i, :) = [sqrt(mean((y - X * kG(:, i)).^2)), sqrt(mean((y - sum(X, 2)).^2))];
+                [XA, yA, D] = deal([], [], []);
+                for d = 1:3
+                    k = keep{d};
+                    XA = [XA; [dragA{1, d}(i, k); arcs(d).rad(i, k); arcs(d).th(i, k)]']; %#ok<AGROW>
+                    yA = [yA; arcs(d).act(i, k)']; %#ok<AGROW>
+                    D = blkdiag(D, ones(nnz(k), 1));
+                end
+                b = [D XA] \ yA;
+                kA(:, i) = b(4:6);
+                b1 = D \ (yA - sum(XA, 2));
+                fitA(i, :) = [sqrt(mean((yA - [D XA] * b).^2)), sqrt(mean((yA - sum(XA, 2) - D * b1).^2))];
+            end
+            % k_d along-track over the orbit: four 25 min windows of the GROOPS day, k_r and k_t held
+            nW = 4; w = reshape(1:size(aG, 2), [], nW); kWin = zeros(1, nW);
+            for j = 1:nW
+                dx = dragG(1, w(:, j), 1)'; yx = aG(1, w(:, j))' - kG(2, 1) * radG(1, w(:, j))' - kG(3, 1) * thG(1, w(:, j))';
+                kWin(j) = dx \ yx;
+            end
+            % (b) variants: along-track drag mean, RMS against GROOPS, bias-only RMS against ACT1B
+            dMean = zeros(1, nV); rmsG = zeros(1, nV); rmsA = zeros(1, nV);
+            for v = 1:nV
+                dMean(v) = mean(dragG(1, :, v));
+                rmsG(v) = sqrt(mean((dragG(1, :, v) + radG(1, :) + thG(1, :) - aG(1, :)).^2));
+                r = [];
+                for d = 1:3
+                    k = keep{d};
+                    e = dragA{v, d}(1, k) + arcs(d).rad(1, k) + arcs(d).th(1, k) - arcs(d).act(1, k);
+                    r = [r, e - mean(e)]; %#ok<AGROW>
+                end
+                rmsA(v) = sqrt(mean(r.^2));
+            end
+            fprintf('modelDragDiagnosis (a) effect scales, standard preset (m/s^2 RMS of the fit, fitted / at k = 1):\n');
+            fprintf('  axis  ref      k_drag   k_rad   k_therm     rms fit    rms k=1\n');
+            for i = 1:3
+                fprintf('  %-4d  GROOPS %7.3f %7.3f %8.3f   %9.3e  %9.3e\n', i, kG(:, i), fitG(i, :));
+                fprintf('  %-4d  ACT1B  %7.3f %7.3f %8.3f   %9.3e  %9.3e\n', i, kA(:, i), fitA(i, :));
+            end
+            fprintf('  k_drag along-track vs GROOPS per 25 min window: %s\n', sprintf('%7.3f', kWin));
+            fprintf('modelDragDiagnosis (b) variants, along-track:\n');
+            fprintf('  %-16s %12s %10s %14s %14s\n', 'variant', 'drag mean', 'vs std', 'rms vs GROOPS', 'rms vs ACT1B');
+            for v = 1:nV
+                fprintf('  %-16s %+12.3e %10.3f %14.3e %14.3e\n', variants(v).name, dMean(v), dMean(v) / dMean(1), rmsG(v), rmsA(v));
+            end
+            fprintf('  GROOPS minus modelled radiation and thermal, along-track mean: %+.3e\n', mean(aG(1, :) - radG(1, :) - thG(1, :)));
+            for i = 1:3
+                tc.verifyBoundAndRecord("drag diagnosis: GROOPS effect-scale fit RMS over RMS at k = 1, axis " + i, fitG(i, 1) / fitG(i, 2), 1 + 1e-12, "-", ...
+                    "k = (1, 1, 1) is feasible, so the least-squares fit cannot do worse: an identity");
+                tc.verifyBoundAndRecord("drag diagnosis: ACT1B effect-scale fit RMS over bias-only RMS, axis " + i, fitA(i, 1) / fitA(i, 2), 1 + 1e-12, "-", ...
+                    "the bias-only fit is the k = (1, 1, 1) point of the same design: an identity");
+            end
+            tc.verifyBoundAndRecord("drag diagnosis: |log k_drag| along-track vs GROOPS", abs(log(kG(1, 1))), log(5), "-", ...
+                "first run: recorded; GROOPS's drag over this toolbox's");
+            tc.verifyBoundAndRecord("drag diagnosis: |log k_drag| along-track vs ACT1B", abs(log(abs(kA(1, 1)))), log(5), "-", ...
+                "first run: recorded; the measurement's drag over this toolbox's (ACT1B's own scale is in it)");
+            tc.verifyBoundAndRecord("drag diagnosis: k_drag window spread (max/min) along-track vs GROOPS", max(kWin) / min(kWin), 5, "-", ...
+                "first run: recorded; near 1 is a SCALE, far from 1 an orbit-dependent shape");
+            for v = 2:nV
+                tc.verifyBoundAndRecord("drag diagnosis: |log| along-track drag mean, " + variants(v).name + " over standard", abs(log(dMean(v) / dMean(1))), log(3), "-", ...
+                    "first run: recorded; one option changed against the standard preset");
+            end
+            for v = 1:nV
+                tc.verifyBoundAndRecord("drag diagnosis: along-track bias-only RMS vs ACT1B, " + variants(v).name, rmsA(v), 30e-9, "m/s^2", ...
+                    "first run: recorded; the standard preset is 5.5 nm/s^2 at 1 s (modelAct1bReference)");
             end
         end
     end
