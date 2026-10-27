@@ -182,6 +182,9 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   **0.443** (per day 0.34-0.57), GROOPS 0.48 -- two independent references say the along-track drag is about TWICE
   too large. Median daily RMS x / y / z 6.36 / 2.84 / 3.60 nm/s^2; msis21 + constantCd 2.4 gives 3.86 nm/s^2 and
   still wants k_drag 0.61. The workflow runs on demand (`workflow_dispatch`, month and satellite) in ~22 min.
+  Decomposition (`tools/pyxcheck/gracefo_cda.py`): Sentman at alpha 0.85 is Cd 3.5-3.8 on the 0.955 m^2 frontal plate
+  (~30 % edge-on shear) against Huckfeldt's 2.4 -- 0.66-0.74 of the factor; the remaining ~0.6 is the MSIS density in
+  solar minimum. With Huckfeldt's configuration the month reproduces their 3-5 nm/s^2: no implementation defect.
 - **2026-10-27, PR #109 (drag diagnosis, `tNgfModel/modelDragDiagnosis`):** the along-track difference to GROOPS is a
   DRAG SCALE: k_drag 0.482, constant over the orbit (0.44-0.49 in four 25 min windows); one drag factor takes the
   along-track RMS from 10.6 to 0.53 nm/s^2. Single options move the standard drag to 0.915 (msis21), 0.905 (Sentman
