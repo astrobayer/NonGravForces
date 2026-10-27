@@ -1,0 +1,102 @@
+# Step 2 of the drag investigation (HANDOVER O-19): the model's along-track drag scale against
+# ACT1B over whole days of the reference month, from the CI runner's DATAPOOL.
+#
+# tools/dragScaleMonth.m does the work and prints every day and the month summary into this log;
+# nothing is committed. It is a tool, not a gate (like tools/regressionBaseline.m): it reads the
+# DATAPOOL and takes minutes per day, so it runs on demand and when the tool or this file changes
+# in a pull request -- never on every commit.
+#
+# Dependencies: referenceSystem (time, frames), gracefoReading (L1B reading) and
+# timeSeriesPreparation (io.readTHR1B's event table). The checkouts follow ci.yml's rules:
+# REFERENCE_READ_TOKEN, persist-credentials false, ref given where ci.yml gives it.
+name: Drag scale month
+
+on:
+  pull_request:
+    paths:
+      - tools/dragScaleMonth.m
+      - .github/workflows/drag-month.yml
+  workflow_dispatch:
+    inputs:
+      month:
+        description: "yyyy-mm"
+        default: "2020-01"
+      satellite:
+        description: "C or D"
+        default: "C"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  month:
+    # A fork's pull request must not reach the self-hosted runner.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 150
+    env:
+      READING_DATA_POOL: ${{ vars.READING_DATA_POOL }}
+      DRAG_MONTH: ${{ github.event.inputs.month || '2020-01' }}
+      DRAG_SATELLITE: ${{ github.event.inputs.satellite || 'C' }}
+    steps:
+      - name: Report the DATAPOOL this job sees
+        shell: powershell
+        run: |
+          if (-not $env:READING_DATA_POOL) { Write-Output "READING_DATA_POOL is not set for this repository"; exit 1 }
+          $m = Join-Path $env:READING_DATA_POOL ("GRACEFO\L1B\RL04\" + $env:DRAG_MONTH.Substring(0, 4))
+          Write-Output "READING_DATA_POOL = $($env:READING_DATA_POOL)"
+          $d = @(Get-ChildItem $m -Directory -Filter "$($env:DRAG_MONTH)-*")
+          Write-Output ("$($env:DRAG_MONTH) days present: " + $d.Count)
+          $t = @($d | Where-Object { Test-Path (Join-Path $_.FullName ("THR1B_" + $_.Name + "_" + $env:DRAG_SATELLITE + "_04.txt")) })
+          Write-Output ("of them with THR1B for " + $env:DRAG_SATELLITE + ": " + $t.Count)
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with: { path: NonGravForces, persist-credentials: false }
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: astrobayer/referenceSystem
+          path: referenceSystem
+          token: ${{ secrets.REFERENCE_READ_TOKEN }}
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: astrobayer/gracefoReading
+          path: gracefoReading
+          token: ${{ secrets.REFERENCE_READ_TOKEN }}
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: astrobayer/timeSeriesPreparation
+          ref: main
+          path: timeSeriesPreparation
+          token: ${{ secrets.REFERENCE_READ_TOKEN }}
+          persist-credentials: false
+      - uses: astrobayer/ci-actions/matlab-probe@v1.2.0
+        timeout-minutes: 2
+      - uses: matlab-actions/run-command@bfa857648f4895aa98a446fe41c85e0788421ed5 # v3
+        with:
+          command: |
+            ws = pwd;
+            % The dependency setups call savepath; the machine keeps the path it had (O-43, as ciGate does).
+            pd = which("pathdef"); before = ""; if ~isempty(pd), before = fileread(pd); end
+            run(fullfile(ws, "referenceSystem", "setupReferenceSystem.m"));
+            run(fullfile(ws, "gracefoReading", "setupGraceFOReading.m"));
+            run(fullfile(ws, "timeSeriesPreparation", "setupTimeSeriesPreparation.m"));
+            if strlength(before) > 0 && ~isequal(fileread(pd), char(before))
+                fid = fopen(pd, "w"); fwrite(fid, before, "char"); fclose(fid);
+            end
+            cd(fullfile(ws, "NonGravForces"));
+            setupNonGravForces('Verbose', false, 'FetchData', "never", 'FetchKernels', "never", 'FetchGroops', "never", 'FetchPool', "never");
+            for target = ["msis" "msis21"]
+                rep = NonGravForces.buildMex('Target', target);
+                assert(rep.upToDate, "dragMonth:mex", "MEX target %s did not build", target);
+            end
+            R = dragScaleMonth('Month', string(getenv("DRAG_MONTH")), 'Satellite', string(getenv("DRAG_SATELLITE")));
+            disp(R.month);
+      - name: Remove the working copies from this machine
+        if: always()
+        shell: powershell
+        run: Remove-Item -Recurse -Force NonGravForces, referenceSystem, gracefoReading, timeSeriesPreparation -ErrorAction SilentlyContinue
