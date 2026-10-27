@@ -195,3 +195,15 @@ needs (GNV1B, SCA1B, MAG1B) and discards the rest. Since 2026-09-15 every fetche
 file must also pass a check of its first lines before it replaces anything.
 
 `'FetchData', "never"` leaves the network alone entirely.
+
+### ESA Swarm thermosphere densities (2026-10-27)
+
+`data/samples/swarm/` holds three days (2020-01-01..03) of ESA's Swarm A, B and C Level-2
+thermosphere density derived from precise orbit determination only (`SW_OPER_DNSxPOD_2_`),
+as the VirES for Swarm HAPI server (`https://vires.services/hapi/data`) returns them: the
+HAPI JSON header and the 30 s lines unchanged, cut by `tools/cutFixtures.py` from the month
+files `setupNonGravForces('FetchPool')` puts into DATAPOOL. Swarm data are provided by the
+European Space Agency, freely and openly, and their use is subject to ESA's terms as the
+header of every file names them (`https://vires.services/data_terms`). **Data provided by
+the European Space Agency (ESA), Swarm mission.** They are not covered by the MIT licence of
+this toolbox.

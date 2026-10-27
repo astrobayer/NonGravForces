@@ -44,11 +44,11 @@ L3 geom     MacroModel, graceFO, grace, boxWing, selfShadow, flowShadow, thermal
             AttitudeProvider, checkAttitudeSense
 L2 env      density, wind, eclipseFactor, earthRadiance, magneticField, radiationSources
 L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
-            importCERES, importGroopsGrid, igrfCoefficients
+            importCERES, importGroopsGrid, igrfCoefficients, readSwarmDensity
 L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options, buildMex
 ```
 
-59 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
+60 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
 both directions against the files on disk, and this sentence's number against it
 — which it genuinely did not until 2026-09-16, when the sentence said 53 and the
 catalogue held 55; `auditPackage.py` check 5 now compares both this number and
@@ -181,8 +181,10 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   as the way forward (owner); the licence-clean route is a per-day density scale from ESA's Swarm A/B/C POD-only
   densities (`SW_OPER_DNSxPOD_2_`, 30 s, ESA open data), fetched per month through the VirES HAPI server as CSV
   by `setupNonGravForces('FetchPool')` into `<DataPool>/Swarm/DNSxPOD/<yyyy>` and cut by `tools/cutFixtures.py`
-  into `data/samples/swarm` (2020-01-01..03). Stage 2 (reader, scale, month variant) is written against the bytes
-  the runner fetches, not against the handbook. No MATLAB code changes yet: gate unchanged at 459.
+  into `data/samples/swarm` (2020-01-01..03; first run 40494585676 fetched all three for 2020-01). Stage 2 in the
+  same PR, written against those bytes: `io.readSwarmDensity` (60 units; HAPI header decoded, columns by name, units
+  checked) and three density-scale variants in `tools/dragScaleMonth.m` (preset drag x rho_Swarm/rho_model per day:
+  Swarm B, A+C, interpolated in height). Written without MATLAB: ◐, predicted gate 466 (459 + 7).
 - **2026-10-27, PR #111 (DTM2020 density backend):** `drag.density = "dtm2020"` (opt-in, no preset), CNES's
   operational DTM2020 (F10.7, Kp) through `mex/ngfDtm2020Shim.F90` + `mex/ngfDtm2020Gateway.c`, built by
   `buildMex` target `dtm2020` (gfortran `-fdefault-real-8`) from SWAMI MCM files `setupNonGravForces` fetches at a

@@ -5,7 +5,7 @@
 %
 % \input-able from a report-class document; it opens no document and no chapter.
 
-\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 59 units, toolbox version 0.16.0.
+\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 60 units, toolbox version 0.16.0.
 
 \section{L0 \texttt{core} --- constants, options, provenance, uniform errors and the MEX build}
 
@@ -1221,6 +1221,79 @@ aux & 1x1 & struct & - & .file, .generation, .numCoefficients, .validFrom, .vali
 \item[\texttt{NonGravForces:\allowbreak{}igrfCoefficients:\allowbreak{}dataColumn}] a row is neither g nor h, or n and m are not a valid Schmidt pair (m \textless{}= n, n \textgreater{}= 1)
 \item[\texttt{NonGravForces:\allowbreak{}igrfCoefficients:\allowbreak{}inputRange}] 'Epoch' before the first epoch or more than five years past the last
 \item[\texttt{NonGravForces:\allowbreak{}igrfCoefficients:\allowbreak{}numericNaN}] a coefficient does not parse as a number
+\end{description}
+
+\subsection{\texttt{NonGravForces.io.readSwarmDensity}}
+\label{api:io.readSwarmDensity}
+\noindent Swarm POD-only thermosphere density (ESA SW\_OPER\_DNSxPOD\_2\_) from VirES HAPI CSV.
+
+\begin{lstlisting}
+[epoch, lla, rho, aux] = NonGravForces.io.readSwarmDensity(file)
+[epoch, lla, rho, aux] = NonGravForces.io.readSwarmDensity(files, 'TimeRange', [mjd0 mjd1])
+\end{lstlisting}
+
+\subsubsection*{INPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+files & 1xF & string & - & One or more HAPI CSV files of ONE Swarm satellite (dataset SW\_OPER\_DNS\textless{}A\textbar{}B\textbar{}C\textgreater{}POD\_2\_); concatenated and sorted by time, duplicates of an epoch kept once. \\
+\end{longtable}
+
+\subsubsection*{NAME-VALUE ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+TimeRange & 1x2 & double & MJD(UTC) & Keep records with mjd0 \textless{}= t \textless{}= mjd1. Default [] (all). \\
+\end{longtable}
+
+\subsubsection*{OUTPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+epoch & 1x1 & struct & - & referenceSystem epoch struct, K entries, scale "UTC" \\
+lla & 3xK & double & rad,rad,m & Geodetic latitude, longitude, height (GRS80, as the product states; see ACCURACY for WGS-84) \\
+rho & 1xK & double & kg/\allowbreak{}m\textasciicircum{}3 & Thermosphere mass density \\
+aux & 1x1 & struct & - & .rhoOrbitMean (1xK kg/m\textasciicircum{}3, the product's orbit average), .lst\_h (1xK local solar time, h), .valid (1xK logical, validity\_flag == 0), .satellite ("A"\textbar{}"B"\textbar{}"C"), .dataset, .header (decoded HAPI header of the first file), .files, .numRecords, .provenance \\
+\end{longtable}
+
+\subsubsection*{ERRORS}
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
+\item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}inputRange}] TimeRange is not [mjd0 mjd1] with mjd0 \textless{}= mjd1
+\item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}dataFormat}] no HAPI JSON header, an undecodable one, or a status other than 1200 (OK)
+\item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}dataColumn}] a required parameter is missing from the header, or a data line does not have the header's columns
+\item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}dataUnits}] a parameter's units are not the ones converted here
+\item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}dataSatellite}] the files are of different datasets
+\item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}dataEmpty}] no record survives TimeRange
 \end{description}
 
 \section{L2 \texttt{env} --- the environment: density, wind, shadow, Earth radiance, magnetic field}
