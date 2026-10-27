@@ -183,7 +183,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   between A+C and B, at GRACE-FO's GEODETIC height per epoch. `Model(..., 'DensityScale', S)` scales density and
   every species density (the gas force is linear in them); refused without the option, or formed for another
   drag.density; `app.DynamicsSource` refuses the option. `tools/dragScaleMonth.m` runs it as a Model variant.
-  Written without MATLAB: ◐, predicted gate 475 (466 + 9).
+  Written without MATLAB, predicted gate 475 (466 + 9); ☑ CI 40528955139: 475/475.
   **BOTH SATELLITES WITH THE OPTION** (month runs 40514608768 C, 40514618274 D, 2020-01): k_drag / median rms_x
   C 0.882 / 2.13, D 0.937 / 2.11 nm/s^2 (DTM2020: 0.961 / 1.79, 1.024 / 1.80; preset 0.443 / 6.36, 0.479 / 6.21).
   D runs 27 days (19-21 empty, 22 THR1B not on GPS time).
