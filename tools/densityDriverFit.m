@@ -57,10 +57,16 @@ function R = densityDriverFit(options)
 %                                    and reuse them (default true); false recomputes and does not write
 %
 % OUTPUT ARGUMENTS
-%   R  1x1 struct: .rows (table: mjd, satellite, ascending, logF, height_m, lt_h, n),
-%      .drivers (names), .cv (table: model, cvRms, cvSe, forwardRms, backwardRms),
-%      .fit (struct per proxy: regressDrivers result of the largest model), .missingFiles,
-%      .emptyFiles, .seconds
+%   R  1x1 struct: .rows (table: mjd, satellite, ascending, logF, height_m, lt_h, n, sumObs, sumModel),
+%      .drivers (names), .sets.pass, .passTrimmed, .day, .dayTrimmed (each: .cv table of model, cvRms, cvMae,
+%      forwardRms, forwardMae, backwardRms, backwardMae; .cvSe; .fit, the regressDrivers result of each proxy's
+%      largest model; .nRows), .missingFiles, .emptyFiles, .seconds
+%
+%   DATA SETS (2026-10-28, after the first run found std(log f) 0.65 per pass while the yearly medians
+%   moved only between 0.5 and 1.07): per pass and per day (both nodes, the ratio of the summed sums),
+%   each also TRIMMED of rows more than log 2 from their satellite's 27-day running median. The losses
+%   are reported as RMS and as median absolute error, so that a few noise-dominated passes cannot decide
+%   between models.
 %
 % ERRORS
 %   NonGravForces:densityDriverFit:dataMissing  SW-All or the CLS F30 file is not in the pool,
@@ -98,11 +104,11 @@ t0 = tic;
 % ---- 1. the observed factor per satellite, UTC day and node
 sats = ["A" "B" "C"];
 months = datetime(options.First, 'InputFormat', 'yyyy-MM'):calmonths(1):datetime(options.Last, 'InputFormat', 'yyyy-MM');
-rows = zeros(0, 7);                 % mjd, satellite, ascending, log f, height, LT, n
+rows = zeros(0, 9);                 % mjd, satellite, ascending, log f, height, LT, n, sum rho_obs, sum rho_model
 missingFiles = strings(1, 0); emptyFiles = strings(1, 0);
-% The passes take ~50 min for 2014-2026 and depend only on the files and these settings: kept in the pool.
+% The passes depend only on the files and these settings: kept in the pool (v2: with the two sums).
 cache = fullfile(options.Pool, "Swarm", "densityDriverFit_" + options.Model + "_" + options.First + "_" + options.Last + ...
-    "_s" + options.Stride + "_n" + options.MinRecords + ".mat");
+    "_s" + options.Stride + "_n" + options.MinRecords + "_v2.mat");
 if options.Cache && isfile(cache)
     c = load(cache, 'rows', 'missingFiles', 'emptyFiles');
     rows = c.rows; missingFiles = c.missingFiles; emptyFiles = c.emptyFiles;
@@ -138,7 +144,7 @@ for m = months
             a = aux.lst_h(eq) * pi / 12;
             lt = mod(atan2(mean(sin(a)), mean(cos(a))) * 12 / pi, 24);
             rows(end + 1, :) = [floor(g(k) / 2), is, mod(g(k), 2), log(sum(rho(j)) / sum(rhoM(jm))), ...
-                mean(lla(3, j)), lt, numel(j)]; %#ok<AGROW>
+                mean(lla(3, j)), lt, numel(j), sum(rho(j)), sum(rhoM(jm))]; %#ok<AGROW>
         end
     end
     fprintf('densityDriverFit: %s  %6d passes  (%.0f s)\n', string(m, 'yyyy-MM'), size(rows, 1), toc(t0));
@@ -152,7 +158,47 @@ if options.Cache && ~isfile(cache)
     save(cache, 'rows', 'missingFiles', 'emptyFiles');
 end
 
-% ---- 2. the drivers, from data that exist on and before each day
+% ---- 2. the data sets: per pass (node) and per day (both nodes, ratio of the summed sums), each raw and
+% trimmed. Trimmed drops a row whose log f is more than log 2 from its satellite's 27-day running median:
+% the POD-only density is noise-dominated where the density is low (ESA's product notes), and one such row
+% weighs in an RMS like a hundred good ones.
+[gd, ~, gi] = unique(rows(:, [1 2]), 'rows');
+sumObs = accumarray(gi, rows(:, 8)); sumMod = accumarray(gi, rows(:, 9)); nDay = accumarray(gi, rows(:, 7));
+hDay = accumarray(gi, rows(:, 5) .* rows(:, 7)) ./ nDay;
+dayRows = [gd(:, 1), gd(:, 2), nan(size(gd, 1), 1), log(sumObs ./ sumMod), hDay, nan(size(gd, 1), 1), nDay, sumObs, sumMod];
+sets = struct('name', {"pass", "pass trimmed", "day", "day trimmed"}, 'rows', {rows, localTrim(rows), dayRows, localTrim(dayRows)}, ...
+    'lt', {true, true, false, false});
+names = ["Fbar" "dF" "ap" "sinAnnual" "cosAnnual" "sinSemiannual" "cosSemiannual" "sinLT" "cosLT" "height" "trend"];
+fprintf('\ndensityDriverFit %s..%s: %d passes (%s), missing files %d, empty files %d\n', options.First, options.Last, size(rows, 1), ...
+    strjoin(sats + ":" + string(arrayfun(@(k) sum(rows(:, 2) == k), 1:3)), " "), numel(missingFiles), numel(emptyFiles));
+out = struct();
+for d = 1:numel(sets)
+    out.(matlab.lang.makeValidName(sets(d).name)) = localValidate(sets(d).rows, sets(d).name, sets(d).lt, names, sw, cls, options);
+end
+fprintf('  %.0f s\n', toc(t0));
+
+R.rows = array2table(rows, 'VariableNames', ["mjd" "satellite" "ascending" "logF" "height_m" "lt_h" "n" "sumObs" "sumModel"]);
+R.drivers = names;
+R.sets = out;
+R.missingFiles = missingFiles;
+R.emptyFiles = emptyFiles;
+R.seconds = toc(t0);
+end
+
+function rows = localTrim(rows)
+%LOCALTRIM Drop rows more than log 2 from their satellite's 27-day running median of log f.
+keep = true(size(rows, 1), 1);
+for s = unique(rows(:, 2))'
+    k = find(rows(:, 2) == s);
+    t = rows(k, 1) + 0.25 * (rows(k, 3) == 1);        % the two nodes of a day apart: SamplePoints are unique
+    med = movmedian(rows(k, 4), [13.5 13.5], 'SamplePoints', t);
+    keep(k) = abs(rows(k, 4) - med) <= log(2);
+end
+rows = rows(keep, :);
+end
+
+function V = localValidate(rows, label, useLT, names, sw, cls, options)
+%LOCALVALIDATE Drivers, blocked CV, forward/backward prediction and the full fits of one data set; printed.
 mjd = rows(:, 1); y = rows(:, 4);
 Fbar = nan(size(mjd)); dF = Fbar; ap = Fbar; F30bar = Fbar; dF30 = Fbar;
 [ok, i] = ismember(mjd - 1, sw.mjd);
@@ -168,13 +214,16 @@ dF30(ok) = f30(i(ok)) - F30bar(ok);
 t = datetime(mjd + 2400000.5, 'ConvertFrom', 'juliandate');
 ph = 2 * pi * (day(t, 'dayofyear') - 1) / 365.25;
 lt = rows(:, 6) * pi / 12;
+if ~useLT, lt = zeros(size(mjd)); end               % columns present, never selected
 common = [sin(ph) cos(ph) sin(2 * ph) cos(2 * ph) sin(lt) cos(lt) (rows(:, 5) - 470e3) / 100e3 (mjd - 58849) / 365.25];
-names = ["Fbar" "dF" "ap" "sinAnnual" "cosAnnual" "sinSemiannual" "cosSemiannual" "sinLT" "cosLT" "height" "trend"];
 X = [y, Fbar, dF, ap, common, F30bar, dF30, ap, common];   % columns 2..12 F10.7, 13..23 F30
 keep = all(isfinite(X), 2);
 X = X(keep, :); rows = rows(keep, :); mjd = mjd(keep);
-nested = {1:3, 1:7, 1:10, 1:11};
-nestName = ["solar+ap" "+season" "+LT+height" "+trend"];
+if useLT
+    nested = {1:3, 1:7, 1:10, 1:11}; nestName = ["solar+ap" "+season" "+LT+height" "+trend"];
+else
+    nested = {1:3, 1:7, [1:7 10], [1:7 10 11]}; nestName = ["solar+ap" "+season" "+height" "+trend"];
+end
 spec = struct('name', "constant", 'cols', zeros(1, 0));
 for proxy = ["F10.7" "F30"]
     off = 1 + (proxy == "F30") * 11;
@@ -183,77 +232,72 @@ for proxy = ["F10.7" "F30"]
     end
 end
 S = numel(spec);
-
-% ---- 3. validation
 yr = year(datetime(mjd + 2400000.5, 'ConvertFrom', 'juliandate'));
 folds = numel(unique(yr));
-% The buffer is one solar rotation (27 days) of passes: the automatic Politis-White length would
-% take the trend and the 81-day mean, perfectly persistent by construction, as the dependence range.
+% The buffer is one solar rotation (27 days) of rows: the automatic Politis-White length would take the
+% trend and the 81-day mean, perfectly persistent by construction, as the dependence range.
 gap = ceil(27 * size(X, 1) / numel(unique(mjd)));
-[cvRms, cv] = timeSeriesPreparation.crossval(X, @(tr, te) localLoss(tr, te, spec, options.MaxVif), Folds = folds, Gap = gap);
+[cvL, cv] = timeSeriesPreparation.crossval(X, @(tr, te) localLoss(tr, te, spec, options.MaxVif), Folds = folds, Gap = gap);
 split = juliandate(datetime(options.Split, 'InputFormat', 'yyyy-MM-dd')) - 2400000.5;
 before = mjd < split;
-fwd = nan(1, S); bwd = nan(1, S);
+fwd = nan(1, 2 * S); bwd = nan(1, 2 * S);
 if any(before) && any(~before)
     tr = X; tr(~before, :) = NaN; te = X; te(before, :) = NaN;
     fwd = localLoss(tr, te, spec, options.MaxVif);
     tr = X; tr(before, :) = NaN; te = X; te(~before, :) = NaN;
     bwd = localLoss(tr, te, spec, options.MaxVif);
 end
-cvTable = table([spec.name]', cvRms', cv.se', fwd', bwd', 'VariableNames', ["model" "cvRms" "cvSe" "forwardRms" "backwardRms"]);
-
-% ---- 4. full fits of each proxy's largest model, with bootstrap sigmas
-fit = struct();
+fprintf('\n== %s: %d rows, log f median %.3f (f %.3f), std %.3f, MAD %.3f\n', label, size(X, 1), localQuantile(X(:, 1), 0.5), ...
+    exp(localQuantile(X(:, 1), 0.5)), std(X(:, 1)), localQuantile(abs(X(:, 1) - localQuantile(X(:, 1), 0.5)), 0.5));
+fprintf('  per year: f at the 5 / 50 / 95 %% quantile of log f, rows\n');
+for yy = unique(yr)'
+    v = X(yr == yy, 1);
+    fprintf('    %d  %.3f  %.3f  %.3f  %6d\n', yy, exp(localQuantile(v, 0.05)), exp(localQuantile(v, 0.5)), exp(localQuantile(v, 0.95)), numel(v));
+end
+fprintf('  %-20s %8s %8s %8s %8s %8s %8s   (held-out log f; RMS and median |error|)\n', "model", "cvRMS", "cvMAE", "fwdRMS", "fwdMAE", "bwdRMS", "bwdMAE");
+for s = 1:S
+    fprintf('  %-20s %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f\n', spec(s).name, cvL(s), cvL(S + s), fwd(s), fwd(S + s), bwd(s), bwd(S + s));
+end
+fits = struct();
 for proxy = ["F10.7" "F30"]
     s = find([spec.name] == proxy + " " + nestName(end));
     try
-        fit.(matlab.lang.makeValidName(proxy)) = timeSeriesPreparation.regressDrivers(X(:, 1), X(:, spec(s).cols), ...
-            DriverNames = names, MaxVif = options.MaxVif, NBoot = options.NBoot, Stage = "densityDriverFit." + proxy);
+        r = timeSeriesPreparation.regressDrivers(X(:, 1), X(:, spec(s).cols), DriverNames = names(nested{end}), ...
+            MaxVif = options.MaxVif, NBoot = options.NBoot, Stage = "densityDriverFit." + label + "." + proxy);
+        fprintf('  %s full fit: r2 %.3f; coefficient +- block-bootstrap sigma (log f per unit), VIF\n', proxy, r.r2);
+        fprintf('    %-14s %10.4f +- %.4f\n', "intercept", r.coef(1), r.sigma(1));
+        for k = 1:numel(r.driverNames)
+            fprintf('    %-14s %10.4g +- %.2g   VIF %.1f\n', r.driverNames(k), r.coef(k + 1), r.sigma(k + 1), r.vif(k));
+        end
     catch err
         if err.identifier ~= "timeSeriesPreparation:regressDrivers:collinear", rethrow(err); end
-        fit.(matlab.lang.makeValidName(proxy)) = struct('collinear', string(err.message));
+        r = struct('collinear', string(err.message));
+        fprintf('  %s full fit refused: %s\n', proxy, r.collinear);
     end
+    fits.(matlab.lang.makeValidName(proxy)) = r;
+end
+V.cv = table([spec.name]', cvL(1:S)', cvL(S + 1:end)', fwd(1:S)', fwd(S + 1:end)', bwd(1:S)', bwd(S + 1:end)', ...
+    'VariableNames', ["model" "cvRms" "cvMae" "forwardRms" "forwardMae" "backwardRms" "backwardMae"]);
+V.cvSe = cv.se;
+V.fit = fits;
+V.nRows = size(X, 1);
 end
 
-% ---- 5. report
-fprintf('\ndensityDriverFit %s..%s: %d passes (%s), %d folds (one per year), log f mean %.3f (f = %.3f), std %.3f\n', ...
-    options.First, options.Last, size(rows, 1), strjoin(sats + ":" + string(arrayfun(@(k) sum(rows(:, 2) == k), 1:3)), " "), ...
-    folds, mean(X(:, 1)), exp(mean(X(:, 1))), std(X(:, 1)));
-fprintf('  %-22s %9s %9s %11s %11s   (RMS of held-out log f, i.e. relative error of f)\n', "model", "cv", "+-se", "forward", "backward");
-for s = 1:S
-    fprintf('  %-22s %9.4f %9.4f %11.4f %11.4f\n', spec(s).name, cvRms(s), cv.se(s), fwd(s), bwd(s));
-end
-for proxy = string(fieldnames(fit))'
-    r = fit.(proxy);
-    if isfield(r, 'collinear'), fprintf('\n  %s full fit refused: %s\n', proxy, r.collinear); continue, end
-    fprintf('\n  %s full fit: r2 %.3f, %d rows; coefficient +- block-bootstrap sigma (log f per unit), VIF\n', proxy, r.r2, r.nRows);
-    fprintf('    %-14s %10.4f +- %.4f\n', "intercept", r.coef(1), r.sigma(1));
-    for k = 1:numel(names)
-        fprintf('    %-14s %10.4g +- %.2g   VIF %.1f\n', names(k), r.coef(k + 1), r.sigma(k + 1), r.vif(k));
-    end
-end
-fprintf('\n  per year, observed mean f by satellite (A B C):\n');
-for yy = unique(yr)'
-    sel = yr == yy;
-    fprintf('    %d  %s\n', yy, strjoin(compose("%.3f", arrayfun(@(k) exp(mean(X(sel & rows(:, 2) == k, 1))), 1:3)), "  "));
-end
-fprintf('  missing files %d, empty files %d, %.0f s\n', numel(missingFiles), numel(emptyFiles), toc(t0));
-
-R.rows = array2table(rows, 'VariableNames', ["mjd" "satellite" "ascending" "logF" "height_m" "lt_h" "n"]);
-R.drivers = names;
-R.cv = cvTable;
-R.fit = fit;
-R.missingFiles = missingFiles;
-R.emptyFiles = emptyFiles;
-R.seconds = toc(t0);
+function q = localQuantile(x, p)
+%LOCALQUANTILE The p-quantile by sorting, linear between order statistics (prctile is the Statistics Toolbox).
+x = sort(x(isfinite(x)));
+if isempty(x), q = NaN; return, end
+h = 1 + (numel(x) - 1) * p;
+q = x(floor(h)) + (h - floor(h)) * (x(min(ceil(h), end)) - x(floor(h)));
 end
 
 function L = localLoss(tr, te, spec, maxVif)
-%LOCALLOSS RMS of the held-out log f for each model, fitted on the training rows.
-L = nan(1, numel(spec));
+%LOCALLOSS RMS and median absolute error of the held-out log f for each model, fitted on the training rows.
+S = numel(spec);
+L = nan(1, 2 * S);
 itr = all(isfinite(tr), 2); ite = all(isfinite(te), 2);
 if ~any(itr) || ~any(ite), return, end
-for s = 1:numel(spec)
+for s = 1:S
     ytr = tr(itr, 1);
     if isempty(spec(s).cols)
         yhat = repmat(mean(ytr), nnz(ite), 1);
@@ -267,6 +311,8 @@ for s = 1:numel(spec)
         end
         yhat = r.coef(1) + (te(ite, spec(s).cols) - mean(Ztr, 1)) * r.coef(2:end);
     end
-    L(s) = sqrt(mean((te(ite, 1) - yhat) .^ 2));
+    e = te(ite, 1) - yhat;
+    L(s) = sqrt(mean(e .^ 2));
+    L(S + s) = localQuantile(abs(e), 0.5);
 end
 end

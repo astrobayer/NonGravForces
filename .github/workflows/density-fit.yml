@@ -81,7 +81,7 @@ jobs:
             rep = NonGravForces.buildMex('Target', "msis");
             assert(rep.upToDate, "densityFit:mex", "MEX target msis did not build");
             R = densityDriverFit('First', string(getenv("FIT_FIRST")), 'Last', string(getenv("FIT_LAST")));
-            disp(R.cv);
+            disp(R.sets.dayTrimmed.cv);
       - name: Remove the working copies from this machine
         if: always()
         shell: powershell
