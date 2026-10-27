@@ -42,13 +42,13 @@ L4 kernel   gsiCoefficients, accommodation, dragPanelForce, radiationPanelForce,
             thermalRecoil, assemble, bodyTorques, partials, singleEpoch (C/MEX)
 L3 geom     MacroModel, graceFO, grace, boxWing, selfShadow, flowShadow, thermalState,
             AttitudeProvider, checkAttitudeSense
-L2 env      density, wind, eclipseFactor, earthRadiance, magneticField, radiationSources
+L2 env      density, densityScale, wind, eclipseFactor, earthRadiance, magneticField, radiationSources
 L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
             importCERES, importGroopsGrid, igrfCoefficients, readSwarmDensity
 L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options, buildMex
 ```
 
-60 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
+61 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
 both directions against the files on disk, and this sentence's number against it
 — which it genuinely did not until 2026-09-16, when the sentence said 53 and the
 catalogue held 55; `auditPackage.py` check 5 now compares both this number and
@@ -175,8 +175,18 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-27, PR #112)
+## 5. Current status (2026-10-27, PR #113)
 
+- **2026-10-27, PR #113 (the observed density scale as a Model option, owner's request):** `Options`
+  `drag.densityScale = "swarm"` (opt-in, no preset) and new unit `env.densityScale` (61 units): per UTC day
+  f = sum(rho_Swarm)/sum(rho_model) for Swarm A, B, C; `S.at(epoch, h)` interpolates log f linearly in height
+  between A+C and B, at GRACE-FO's GEODETIC height per epoch. `Model(..., 'DensityScale', S)` scales density and
+  every species density (the gas force is linear in them); refused without the option, or formed for another
+  drag.density; `app.DynamicsSource` refuses the option. `tools/dragScaleMonth.m` runs it as a Model variant.
+  Written without MATLAB, predicted gate 475 (466 + 9); ☑ CI 40528955139: 475/475.
+  **BOTH SATELLITES WITH THE OPTION** (month runs 40514608768 C, 40514618274 D, 2020-01): k_drag / median rms_x
+  C 0.882 / 2.13, D 0.937 / 2.11 nm/s^2 (DTM2020: 0.961 / 1.79, 1.024 / 1.80; preset 0.443 / 6.36, 0.479 / 6.21).
+  D runs 27 days (19-21 empty, 22 THR1B not on GPS time).
 - **2026-10-27, PR #112 (Swarm densities, stage 1 of the observed density scale):** DTM2020's licence rules it out
   as the way forward (owner); the licence-clean route is a per-day density scale from ESA's Swarm A/B/C POD-only
   densities (`SW_OPER_DNSxPOD_2_`, 30 s, ESA open data), fetched per month through the VirES HAPI server as CSV
@@ -185,7 +195,8 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   same PR, written against those bytes: `io.readSwarmDensity` (60 units; HAPI header decoded, columns by name, units
   checked) and three density-scale variants in `tools/dragScaleMonth.m` (preset drag x rho_Swarm/rho_model per day:
   Swarm B, A+C, interpolated in height). Written without MATLAB: ◐, predicted gate 466 (459 + 7). First CI run
-  40500042251: 466/466 passed, gate red on a category shortfall (the tests sat in a 'metamorphic' TestTags block).
+  40500042251: 466/466 passed, gate red on a category shortfall (the tests sat in a 'metamorphic' TestTags block);
+  ☑ CI 40505746004: 466/466, predicted 466.
   **THE MONTH WITHOUT DTM2020** (run 40500042274): rho_Swarm/rho_msis00 per day ~0.48 at GRACE-FO's height;
   scaled by it, ACT1B wants k_drag **0.903** and the median along-track RMS is **2.08 nm/s^2** (DTM2020: 0.961, 1.79).
 - **2026-10-27, PR #111 (DTM2020 density backend):** `drag.density = "dtm2020"` (opt-in, no preset), CNES's

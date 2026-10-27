@@ -1422,4 +1422,115 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyBoundAndRecord("radiationSources / earthRadiance time ratio (600 epochs)", ratio, 6, "-", "");
         end
     end
+    methods
+        function [S, files, sw] = swarmScale(tc, varargin)
+            %SWARMSCALE env.densityScale over the committed Swarm A/B/C days (2020-01-01..03), msis00.
+            files = string(fullfile(tc.root, 'data', 'samples', 'swarm', "SW_OPER_DNS" + ["A" "B" "C"] + "POD_2_2020-01-01_2020-01-03.csv"));
+            sw = NonGravForces.io.spaceWeather(fullfile(tc.root, 'data', 'spaceweather', 'SW-All_2019-09_2020-03.csv'));
+            S = NonGravForces.env.densityScale(files, sw, varargin{:});
+        end
+    end
+    methods (Test, TestTags = {'contract'})
+        % densityScale (O-19, 2026-10-27)
+        function densityScaleContract(tc)
+            [S, files, sw] = tc.swarmScale();
+            tc.verifyEqual(S.day, [58849 58850 58851]); tc.verifyEqual(S.satellite, ["A" "B" "C"]);
+            tc.verifySize(S.factor, [3 3]); tc.verifySize(S.height_m, [3 3]); tc.verifyTrue(all(isfinite(S.factor), 'all'));
+            tc.verifyEqual(S.model, "msis00"); tc.verifyEqual(S.stride, 10);
+            e = referenceSystem.daySecondToEpoch([58849 0; 58850 43200; 58851 86399], "UTC");
+            f = S.at(e, [490e3 490e3 490e3]);
+            tc.verifySize(f, [1 3]); tc.verifyTrue(all(f > 0 & isfinite(f)));
+            tc.verifyErrorId(@() NonGravForces.env.densityScale(files(2), sw), 'NonGravForces:densityScale:inputSatellites');
+            tc.verifyErrorId(@() NonGravForces.env.densityScale(files([1 3]), sw), 'NonGravForces:densityScale:inputSatellites');
+            tc.verifyErrorId(@() NonGravForces.env.densityScale(files, sw, 'Model', "exponential"), 'NonGravForces:densityScale:inputModel');
+            tc.verifyErrorId(@() S.at(referenceSystem.mjdToEpoch(58852.5, "UTC"), 490e3), 'NonGravForces:densityScale:dataDay');
+            tc.verifyErrorId(@() S.at(referenceSystem.mjdToEpoch(58849.5, "UTC"), 900e3), 'NonGravForces:densityScale:inputRange');
+            tc.verifyErrorId(@() S.at(e, 490e3), 'NonGravForces:densityScale:inputRange');
+        end
+    end
+    methods (Test, TestTags = {'reference'})
+        function densityScaleReference(tc)
+            % Oracle: an INDEPENDENT density model. CNES's DTM2020 (fitted to accelerometer densities, among them
+            % Swarm A's) against NRLMSISE-00 at Swarm A's own positions must show the same ratio ESA's POD densities
+            % show, to the 10-30 % both are uncertain by; the month gave 0.53 (DTM2020) against 0.49 (Swarm).
+            [S, files, sw] = tc.swarmScale();
+            [ep, lla, ~, aux] = NonGravForces.io.readSwarmDensity(files(1));
+            k = find(aux.valid & ep.day(:)' == 58849); k = k(1:10:end);
+            e = referenceSystem.daySecondToEpoch([ep.day(k) ep.sec(k)], "UTC");
+            rD = NonGravForces.env.density("dtm2020", e, lla(:, k), sw);
+            rM = NonGravForces.env.density("msis00", e, lla(:, k), sw);
+            fD = sum(rD) / sum(rM);
+            tc.verifyBoundAndRecord("Swarm A / msis00 vs DTM2020 / msis00 on 2020-01-01, |log|", abs(log(S.factor(1, 1) / fD)), log(1.3), "-", "two independent sources of the same ratio");
+            % and the ratio itself is the solar-minimum excess of NRLMSISE-00 the month measured (0.41..0.61 per day)
+            tc.verifyGreaterThan(min(S.factor, [], 'all'), 0.3); tc.verifyLessThan(max(S.factor, [], 'all'), 0.8);
+        end
+    end
+    methods (Test, TestTags = {'precision'})
+        function densityScalePrecision(tc)
+            % At the bracket's own heights the interpolation returns the bracket's factors: an identity up to
+            % exp(log(x)) rounding, a few ulp.
+            S = tc.swarmScale();
+            e = referenceSystem.daySecondToEpoch([S.day' repmat(43200, 3, 1)], "UTC");
+            fl = S.at(e, S.hLow_m); fh = S.at(e, S.hHigh_m);
+            err = max(abs([fl ./ S.low, fh ./ S.high] - 1));
+            tc.verifyBoundAndRecord("densityScale.at at the bracket heights / bracket factors - 1", err, 8 * eps, "-", "exp(log(x)) round trip");
+            tc.verifyEqual(S.low, sqrt(S.factor(1, :) .* S.factor(3, :)), 'RelTol', 8 * eps, 'the lower factor is the geometric mean of A and C');
+        end
+    end
+    methods (Test, TestTags = {'vectorization'})
+        function densityScaleVectorization(tc)
+            % S.at is element-wise: 300 epochs over three days at once equal 300 single calls, bitwise.
+            S = tc.swarmScale();
+            t = linspace(58849, 58851.999, 300);
+            e = referenceSystem.daySecondToEpoch([floor(t') round((t' - floor(t')) * 86400)], "UTC");
+            h = 470e3 + 30e3 * sin(1:300);
+            f = S.at(e, h);
+            g = zeros(1, 300);
+            for k = 1:300
+                g(k) = S.at(referenceSystem.daySecondToEpoch([e.day(k) e.sec(k)], "UTC"), h(k));
+            end
+            tc.verifyEqual(f, g);
+        end
+    end
+    methods (Test, TestTags = {'robustness'})
+        function densityScaleRobustness(tc)
+            % A day with too few records is refused, not filled; one lower satellite suffices, and is then the bracket.
+            [~, files, sw] = tc.swarmScale();
+            S = NonGravForces.env.densityScale(files, sw, 'MinRecords', 2000);      % 288 records a day at Stride 10
+            tc.verifyTrue(all(isnan(S.factor), 'all'));
+            tc.verifyErrorId(@() S.at(referenceSystem.mjdToEpoch(58849.5, "UTC"), 490e3), 'NonGravForces:densityScale:dataDay');
+            S2 = NonGravForces.env.densityScale(files([1 2]), sw);
+            tc.verifyEqual(S2.satellite, ["A" "B"]); tc.verifyEqual(S2.low, S2.factor(1, :), 'RelTol', 4 * eps);
+            % an epoch in GPS time is put on its UTC day: 2020-01-02T00:00:10 GPS is still 2020-01-01 in UTC
+            Sall = tc.swarmScale();
+            eG = referenceSystem.daySecondToEpoch([58850 10], "GPS");
+            eU = referenceSystem.daySecondToEpoch([58849 86392], "UTC");
+            tc.verifyEqual(Sall.at(eG, 490e3), Sall.at(eU, 490e3));
+        end
+    end
+    methods (Test, TestTags = {'metamorphic'})
+        function densityScaleMetamorphic(tc)
+            % log f is linear in height: the midpoint of the bracket gets the geometric mean of its ends; the order of
+            % the files changes nothing; a denser stride moves the daily factor by less than the product's own noise.
+            [S, files, sw] = tc.swarmScale();
+            e = referenceSystem.daySecondToEpoch([S.day' repmat(43200, 3, 1)], "UTC");
+            fm = S.at(e, (S.hLow_m + S.hHigh_m) / 2);
+            tc.verifyEqual(fm, sqrt(S.low .* S.high), 'RelTol', 1e-12);
+            Sr = NonGravForces.env.densityScale(files([3 1 2]), sw);
+            tc.verifyEqual(Sr.factor, S.factor);
+            S1 = NonGravForces.env.densityScale(files, sw, 'Stride', 2);
+            tc.verifyBoundAndRecord("densityScale Stride 2 vs 10, max |log ratio|", max(abs(log(S1.factor ./ S.factor)), [], 'all'), 0.05, "-", "5-min sampling of a ~20-min product");
+        end
+    end
+    methods (Test, TestTags = {'speed'})
+        function densityScaleSpeed(tc)
+            % Three satellites x three days: three reads and 2592 msis00 points. Against the same number of msis00
+            % points alone; the reads and the bookkeeping are what the ratio measures. Bound 20, first run.
+            [~, files, sw] = tc.swarmScale();
+            e = referenceSystem.daySecondToEpoch([repmat(58849, 2592, 1) (0:2591)' * 30], "UTC");
+            lla = [zeros(2, 2592); 480e3 * ones(1, 2592)];
+            q = tc.speedRatio(@() NonGravForces.env.densityScale(files, sw), @() NonGravForces.env.density("msis00", e, lla, sw));
+            tc.verifyBoundAndRecord("densityScale / msis00 on as many points, time ratio", q, 20, "-", "first run");
+        end
+    end
 end

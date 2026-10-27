@@ -64,7 +64,8 @@ classdef Model
 %   WHAT IT COMPOSES, in order, per epoch:
 %     1. the relative velocity            env.wind (co-rotation from referenceSystem)
 %     2. the geodetic height              referenceSystem.cartesianToGeodetic on the ITRS position
-%     3. density and composition          env.density with the space-weather drivers
+%     3. density and composition          env.density with the space-weather drivers, times the observed
+%                                         daily scale of env.densityScale when drag.densityScale is "swarm"
 %     4. the radiation source list        env.radiationSources (Sun, Earth tiles, eclipse)
 %     5. occlusion                        geom.selfShadow per radiation source; geom.flowShadow for the gas
 %                                         (Method "table" when geom.flowShadow is "table", the standard preset)
@@ -107,6 +108,11 @@ classdef Model
 %   Ceres         1x1   struct          -      io.importCERES result, required when erp.backend is "ceres".
 %   Climatology   1x1   struct          -      .albedo and .longwave io.importGroopsGrid results,
 %                                              required when erp.backend is "ceresClimatology".
+%   DensityScale  1x1   struct          -      env.densityScale result, required when drag.densityScale
+%                                              is "swarm" and refused otherwise; it must have been formed
+%                                              for this Model's drag.density. Density and every species
+%                                              density are multiplied by S.at(epoch, geodetic height), so
+%                                              the gas force scales exactly (it is linear in them).
 %
 % OUTPUT (accel / torque / evaluate)
 %   a, tau   3xK   double         acceleration [m/s^2] or torque [N m]
@@ -114,7 +120,8 @@ classdef Model
 %                                 same frame), .bodyTorque (torque only), .rho (1xK),
 %                                 .nu (1xK shadow factor), .mass_kg (1xK), .vrel_body,
 %                                 .sources (M), .temperature_K (NxK), .flowShadow,
-%                                 .accommodation, .lla, .backends, .provenance
+%                                 .accommodation, .lla, .densityScale (1xK, ones without
+%                                 drag.densityScale "swarm"), .backends, .provenance
 %
 % ACCURACY
 %   The Model adds no approximation: every number comes from the unit that owns
@@ -129,12 +136,14 @@ classdef Model
 %   NonGravForces:Model:inputOptions    options is not an Options object, or its choices contradict each other
 %                                       (alpha beside a non-fixed accommodation, maxwell without a specular
 %                                       fraction, walker2014 without a surface mass, internal power without shares,
-%                                       geom.flowShadow table beside selfShadow raycast)
+%                                       geom.flowShadow table beside selfShadow raycast, a 'DensityScale' without
+%                                       drag.densityScale "swarm" or formed for another drag.density)
 %   NonGravForces:Model:inputMass       no 'Mass' and no mass on the macro model, or 'Mass' not a positive mass / massModel
 %   NonGravForces:Model:inputState      epoch, r, v or q disagree in size, or are not finite
 %   NonGravForces:Model:inputAttitude   no q was given and the Model has no attitude provider
 %   NonGravForces:Model:dependEop       evaluated without 'Eop'
 %   NonGravForces:Model:dependWeather   evaluated without 'SpaceWeather' or 'Exponential' for the density backend, or without 'SpaceWeather' for drag.wind hwm14
+%   NonGravForces:Model:dependDensityScale  evaluated with drag.densityScale "swarm" and no 'DensityScale'
 %   NonGravForces:Model:dependCeres     evaluated with erp.backend ceres and no 'Ceres', or
 %                                       ceresClimatology and no 'Climatology'
 %   NonGravForces:Model:unsupported     a method option this Model cannot honour (partials of alpha for a
@@ -170,6 +179,7 @@ classdef Model
         exponential
         ceres
         climatology
+        densityScale
         lut struct
         provenance struct
     end
@@ -186,6 +196,7 @@ classdef Model
                 nv.Exponential = []
                 nv.Ceres = []
                 nv.Climatology = []
+                nv.DensityScale = []
             end
             if ~isa(options, 'NonGravForces.Options') || ~isscalar(options)
                 NonGravForces.fail("Model", "inputOptions", ...
@@ -206,6 +217,8 @@ classdef Model
             obj.exponential = nv.Exponential;
             obj.ceres = nv.Ceres;
             obj.climatology = nv.Climatology;
+            localCheckDensityScale(options, nv.DensityScale);
+            obj.densityScale = nv.DensityScale;
             % The self-shadow table costs a ray cast per cube-map node, so it is built once here.
             if options.geom.selfShadow == "lut"
                 obj.lut = struct('built', true, 'table', ...
@@ -449,7 +462,7 @@ classdef Model
             rItrs = reshape(pagemtimes(pagetranspose(Ritrs), reshape(r, 3, 1, K)), 3, K);
             lla = referenceSystem.cartesianToGeodetic(rItrs', 'Ellipsoid', "WGS84")';   % the dependency is Nx3
             % 3. density and composition
-            [rho, species, Tgas] = obj.callDensity(epoch, lla);
+            [rho, species, Tgas, fScale] = obj.callDensity(epoch, lla);
             % 4. radiation sources
             srcArgs = {};
             if ~isempty(obj.ephemeris), srcArgs = [srcArgs, {'Ephemeris', obj.ephemeris}]; end
@@ -495,7 +508,7 @@ classdef Model
                 st.Fthermal = NonGravForces.kernel.thermalRecoil(obj.macro, Tpanel);
             end
             st.K = K; st.R = R; st.r = r; st.rho = rho; st.species = species; st.Tgas = Tgas;
-            st.vrelBody = vrelBody; st.lla = lla; st.src = src; st.nu = src.nu;
+            st.vrelBody = vrelBody; st.lla = lla; st.src = src; st.nu = src.nu; st.densityScale = fScale;
             st.flow = flow; st.shadowRad = fRad; st.Tpanel = Tpanel; st.acc = acc;
             st.mass_kg = obj.mass.at(epoch);
             st.backends = struct('density', o.drag.density, 'wind', windInfo.model, 'gsi', o.drag.gsi, ...
@@ -537,8 +550,9 @@ classdef Model
             info.drag = tD; info.radiation = tR; info.thermal = tT; info.bodyTorque = tB;
         end
 
-        function [rho, species, Tgas] = callDensity(obj, epoch, lla)
-            %CALLDENSITY The density backend with the drivers the Model was given, never a default set.
+        function [rho, species, Tgas, f] = callDensity(obj, epoch, lla)
+            %CALLDENSITY The density backend with the drivers the Model was given, never a default set,
+            %times the observed daily scale when drag.densityScale is "swarm".
             o = obj.options;
             if o.drag.density == "exponential"
                 if isempty(obj.exponential)
@@ -552,6 +566,15 @@ classdef Model
                 [rho, species, T] = NonGravForces.env.density(o.drag.density, epoch, lla, obj.spaceWeather);
             end
             Tgas = T(2, :);
+            f = ones(1, numel(rho));
+            if o.drag.densityScale == "swarm"
+                if isempty(obj.densityScale)
+                    NonGravForces.fail("Model", "dependDensityScale", "drag.densityScale swarm needs 'DensityScale' at construction -> pass env.densityScale(swarmFiles, sw, 'Model', ""%s"")", o.drag.density);
+                end
+                f = reshape(obj.densityScale.at(epoch, lla(3, :)), 1, []);
+                rho = rho .* f;
+                species = species .* f;               % every species alike: composition and T are the model's
+            end
         end
 
         function [F, acc] = dragForces(obj, rho, species, Tgas, vrelBody, flow)
@@ -642,7 +665,7 @@ classdef Model
             info = struct('frame', frame, 'K', st.K, 'rho', st.rho, 'nu', st.nu, ...
                 'mass_kg', st.mass_kg, 'vrel_body', st.vrelBody, 'sources', size(st.src.dir, 2), ...
                 'temperature_K', st.Tpanel, 'flowShadow', st.flow, 'accommodation', st.acc, 'lla', st.lla, ...
-                'backends', st.backends);
+                'densityScale', st.densityScale, 'backends', st.backends);
         end
 
         function [a, tq, Tlast] = chunkEval(obj, epoch, r, v, q, i0, i1, wantA, wantT, frame, T0)
@@ -751,6 +774,22 @@ if o.geom.flowShadow == "table" && o.geom.selfShadow == "raycast"
 end
 if o.thermal.internalPower_W > 0 && any(isnan(macro.internalShare))
     NonGravForces.fail("Model", "inputOptions", "thermal.internalPower_W > 0 needs every panel's internalShare on the macro model '%s' -> give the panels internalShare, or set the power to 0", macro.name);
+end
+end
+
+function localCheckDensityScale(o, S)
+%LOCALCHECKDENSITYSCALE A density scale is used only when asked for, and only on the density it was formed for.
+if isempty(S)
+    return
+end
+if o.drag.densityScale ~= "swarm"
+    NonGravForces.fail("Model", "inputOptions", "'DensityScale' was given and drag.densityScale is ""%s"" -> set('drag.densityScale', ""swarm"") or leave 'DensityScale' out, so it is not silently ignored", o.drag.densityScale);
+end
+if ~isstruct(S) || ~isfield(S, 'at') || ~isfield(S, 'model')
+    NonGravForces.fail("Model", "inputOptions", "'DensityScale' must be an env.densityScale result -> build it with NonGravForces.env.densityScale(files, sw)");
+end
+if S.model ~= o.drag.density
+    NonGravForces.fail("Model", "inputOptions", "the density scale was formed for %s and drag.density is %s -> form it with 'Model', ""%s""", S.model, o.drag.density, o.drag.density);
 end
 end
 

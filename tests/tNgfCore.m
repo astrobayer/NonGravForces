@@ -51,6 +51,10 @@ classdef tNgfCore < NgfTestCase
             o = NonGravForces.Options;
             tc.verifyEqual(o.preset, "standard");
             tc.verifyEqual(o.drag.density, "msis00");
+            % the observed density scale is an opt-in no preset enables (O-19, 2026-10-27)
+            tc.verifyEqual([o.drag.densityScale, NonGravForces.Options("fast").drag.densityScale, NonGravForces.Options("precise").drag.densityScale], ["none" "none" "none"]);
+            tc.verifyEqual(o.set("drag.densityScale", "swarm").drag.densityScale, "swarm");
+            tc.verifyErrorId(@() NonGravForces.Options("standard", "drag.densityScale", "dtm"), 'NonGravForces:Options:inputValue');
             p = NonGravForces.Options("precise"); tc.verifyEqual(p.erp.backend, "ceres");
             f = NonGravForces.Options("fast");    tc.verifyEqual(f.erp.backend, "none");
             tc.verifyErrorId(@() NonGravForces.Options("best"), 'NonGravForces:Options:inputPreset');

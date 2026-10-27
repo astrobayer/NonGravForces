@@ -119,6 +119,10 @@ classdef tNgfIntegration < NgfTestCase
             Md = tc.modelFor(NonGravForces.Options("standard").set("drag.density", "dtm2020"));
             tc.verifyErrorId(@() NonGravForces.app.DynamicsSource(Md, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60), ...
                 'NonGravForces:DynamicsSource:unsupportedOption');
+            % and for the observed density scale (2026-10-27, O-19): a daily table the C evaluator does not carry
+            Ms = tc.modelFor(NonGravForces.Options("standard").set("drag.densityScale", "swarm"));
+            tc.verifyErrorId(@() NonGravForces.app.DynamicsSource(Ms, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60), ...
+                'NonGravForces:DynamicsSource:unsupportedOption');
             ctx = struct('Span', [120 420], 'StencilSpan', [120 420], 'MaxColumns', 7, 'Epoch', tc.tai);
             src = src.prepare(ctx);
             tc.verifyTrue(src.IsPrepared);
