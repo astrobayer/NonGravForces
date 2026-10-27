@@ -3,10 +3,17 @@
 # and across the 2020 solar minimum, on the CI runner's DATAPOOL.
 #
 # tools/densityDriverFit.m does the work and prints the tables into this log; nothing is committed.
-# On demand only: the Swarm months must be in the pool first (fetch-data.yml, input 'swarm').
+# On demand and when the tool changes in a pull request; the Swarm months must be in the pool first
+# (fetch-data.yml, input 'swarm').
 name: Density driver fit
 
 on:
+  # On the pull request too: a workflow_dispatch workflow can be dispatched only once it is on the
+  # default branch, and this one is new. The Swarm months are in the pool (fetch-data input 'swarm').
+  pull_request:
+    paths:
+      - tools/densityDriverFit.m
+      - .github/workflows/density-fit.yml
   workflow_dispatch:
     inputs:
       first:
@@ -25,6 +32,8 @@ permissions:
 
 jobs:
   fit:
+    # A fork's pull request must not reach the self-hosted runner.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, Windows]
     timeout-minutes: 240
     env:
