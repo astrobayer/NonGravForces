@@ -154,6 +154,7 @@ for d = days
         [epq, q] = NonGravForces.io.readSCA1B(f("SCA1B"));
     catch err
         if err.identifier ~= "gracefoReading:readL1b:noData", rethrow(err); end
+        fprintf('dragScaleMonth %s %s: skipped, a product has no records (%s)\n', options.Satellite, d, err.message);
         noData(end + 1) = d; %#ok<AGROW>
         continue
     end
@@ -162,7 +163,12 @@ for d = days
     % With the Swarm scale every variant drops the GPS day's first 20 s: they belong to the previous UTC
     % day (GPS - UTC = 18 s), whose factor the month's Swarm files do not hold on the 1st.
     if haveSwarm, tf = tf & ep.sec >= 20; end
-    if nnz(tf) < 100, noData(end + 1) = d; continue, end %#ok<AGROW>
+    if nnz(tf) < 100
+        fprintf('dragScaleMonth %s %s: skipped, %d GNV1B epochs on the %d s grid shared with ACT1B (GNV1B %d records, ACT1B %d, first secs %s / %s)\n', ...
+            options.Satellite, d, nnz(tf), options.Step_s, numel(ep.sec), numel(epa.sec), mat2str(ep.sec(1:min(3, end))', 8), mat2str(epa.sec(1:min(3, end))', 8));
+        noData(end + 1) = d; %#ok<AGROW>
+        continue
+    end
     e = referenceSystem.daySecondToEpoch([ep.day(tf) ep.sec(tf)], ep.scale);
     att = NonGravForces.geom.AttitudeProvider(epq, q);
     qk = att.at(e);
