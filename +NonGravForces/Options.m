@@ -26,7 +26,7 @@ classdef Options
 %
 %   FIDELITY LADDER
 %     field                   fast          standard        precise
-%     drag.density            exponential   msis00          msis21
+%     drag.density            exponential   msis00          msis21  (+dtm2020 opt-in)
 %     drag.wind               corotation    corotation      corotation (+hwm14 opt-in)
 %     drag.gsi                constantCd    sentman         sentman
 %     drag.accommodation      fixed 0.85    fixed 0.85      fixed 0.85 (March et al. 2021)
@@ -40,7 +40,8 @@ classdef Options
 %
 % PROPERTIES (read-only after construction; change through set())
 %   preset      string    "fast" | "standard" | "precise"
-%   drag        struct    .density  "exponential" | "msis00" | "msis21"
+%   drag        struct    .density  "exponential" | "msis00" | "msis21" | "dtm2020" (CNES licence:
+%                                   academic, non-commercial use only; THIRD-PARTY-NOTICES.md)
 %                         .wind     "none" | "corotation" | "hwm14"
 %                         .gsi      "constantCd" | "sentman" | "maxwell"
 %                         .accommodation "fixed" | "pilinski2010" | "pilinski2011" | "walker2014" | "sesam"
@@ -189,7 +190,7 @@ classdef Options
     methods (Static, Access = private)
         function validateValue(field, value)
             sets = struct( ...
-                'drag_density',       ["exponential","msis00","msis21"], ...
+                'drag_density',       ["exponential","msis00","msis21","dtm2020"], ...
                 'drag_wind',          ["none","corotation","hwm14"], ...
                 'drag_gsi',           ["constantCd","sentman","maxwell"], ...
                 'drag_accommodation', ["fixed","pilinski2010","pilinski2011","walker2014","sesam"], ...

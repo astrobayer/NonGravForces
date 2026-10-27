@@ -127,7 +127,7 @@ end
 % every test reads the committed excerpts, and a 147 MB archive per CI run would test the network.
 info = setupNonGravForces('Verbose', true, 'FetchData', "never", 'FetchPool', "never");
 mexReport = NonGravForces.buildMex();          % O-14: a runner without a compiler turns the gate red here, by design
-for m = 1:numel(mexReport)                     % one element per target (msis, msis21, hwm14, rhs, kernel)
+for m = 1:numel(mexReport)                     % one element per target (msis, msis21, hwm14, dtm2020, rhs, kernel)
     fprintf("ciGate: MEX %s (%s) present=%d, built with %s\n", mexReport(m).file, mexReport(m).target, ...
         mexReport(m).upToDate, mexReport(m).compiler);
 end

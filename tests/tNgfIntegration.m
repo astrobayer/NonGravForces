@@ -115,6 +115,10 @@ classdef tNgfIntegration < NgfTestCase
             Mc = tc.modelFor(NonGravForces.Options("standard").set("erp.backend", "ceresClimatology"));
             tc.verifyErrorId(@() NonGravForces.app.DynamicsSource(Mc, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60), ...
                 'NonGravForces:DynamicsSource:unsupportedOption');
+            % The same rule for drag.density dtm2020 (2026-10-27, O-52): the C evaluator links no DTM2020.
+            Md = tc.modelFor(NonGravForces.Options("standard").set("drag.density", "dtm2020"));
+            tc.verifyErrorId(@() NonGravForces.app.DynamicsSource(Md, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60), ...
+                'NonGravForces:DynamicsSource:unsupportedOption');
             ctx = struct('Span', [120 420], 'StencilSpan', [120 420], 'MaxColumns', 7, 'Epoch', tc.tai);
             src = src.prepare(ctx);
             tc.verifyTrue(src.IsPrepared);

@@ -219,6 +219,13 @@ classdef tNgfIo < NgfTestCase
             tc.verifySize(sw.index.ap3h, [213 8]); tc.verifySize(sw.index.kp3h, [213 8]); tc.verifyClass(sw.index.dataType, 'string');
             d = sw.query(referenceSystem.mjdToEpoch([58849.5; 58850.2], "UTC"));
             tc.verifySize(d.f107, [1 2]); tc.verifySize(d.apHistory, [7 2]); tc.verifySize(d.kp, [1 2]); tc.verifySize(d.dataType, [1 2]);
+            % DTM2020's drivers (2026-10-27): at 2020-01-01 12:00 UTC (interval 5) the Kp three hours back is
+            % interval 4, and the 24 h mean covers intervals 6..8 of 2019-12-31 and 1..5 of 2020-01-01.
+            row = find(sw.mjd == 58849);
+            tc.verifySize(d.f107Last81, [1 2]); tc.verifySize(d.kpDelayed3h, [1 2]); tc.verifySize(d.kpMean24h, [1 2]);
+            tc.verifyEqual(d.f107Last81(1), sw.index.f107ObservedLast81(row));
+            tc.verifyEqual(d.kpDelayed3h(1), sw.index.kp3h(row, 4));
+            tc.verifyEqual(d.kpMean24h(1), mean([sw.index.kp3h(row - 1, 6:8) sw.index.kp3h(row, 1:5)]), 'AbsTol', 1e-12);
             sj = NonGravForces.io.spaceWeather([string(tc.f.dtc) string(tc.f.solfsmy)]);
             tc.verifyEqual(sj.format, "jb2008"); tc.verifyEqual(numel(sj.mjd), 213); tc.verifySize(sj.index.dtc, [213 24]);
             dj = sj.query(referenceSystem.mjdToEpoch(58849.5, "UTC"));

@@ -90,7 +90,7 @@ jobs:
             end
             cd(fullfile(ws, "NonGravForces"));
             setupNonGravForces('Verbose', false, 'FetchData', "never", 'FetchKernels', "never", 'FetchGroops', "never", 'FetchPool', "never");
-            for target = ["msis" "msis21"]
+            for target = ["msis" "msis21" "dtm2020"]
                 rep = NonGravForces.buildMex('Target', target);
                 assert(rep.upToDate, "dragMonth:mex", "MEX target %s did not build", target);
             end

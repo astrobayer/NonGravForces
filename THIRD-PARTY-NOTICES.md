@@ -123,6 +123,47 @@ own check driver, built from exactly these seven files, reproducing NRL's
 `Check/gfortran.txt` line for line (2026-09-15). No file is modified; the model is
 called through `mex/ngfHwm14Shim.F90` and `mex/ngfHwm14Gateway.c`.
 
+## DTM2020 — fetched, not redistributed (2026-10-27)
+
+> The DTM software is property of the Centre National d'Etudes Spatiales (CNES,
+> France). CNES grants a free non-exclusive and non-transferable licence for the
+> DTM software for academic, non-commercial purposes only. A user shall not use it
+> for any non-academic, commercial purposes, make any modification or improvement
+> to the Software, disseminate it or partly disseminate it, or any of its
+> supporting data, or copy it except for archival or emergency repair.
+> (`LICENSE` of the SWAMI MCM repository, abridged.)
+
+**The MIT licence of this toolbox does not and cannot widen that: the `dtm2020`
+density backend is available to you only on CNES's terms** -- academic,
+non-commercial use, and CNES's DTM named in any publication of results based on
+it. Every other backend is unaffected, and no preset selects `dtm2020`.
+
+What this repository does about it:
+
+- **Nothing of CNES's is committed.** `setupNonGravForces` fetches three files of
+  the SWAMI project's repository `swami-h2020-eu/mcm` at commit
+  `a488a7c9d030bfbe86e88ab3d28a7ec5589b92e0` into `mex/dtm2020` (ignored by git),
+  each kept only if its SHA-256 is the pinned one: `src/libswamif/dtm2020_F107_Kp-subr_MCM.f90`
+  (the operational DTM2020 subroutines), `data/DTM_2020_F107_Kp.dat` (the
+  coefficients) and `LICENSE` (saved as `LICENSE_MCM_DTM.txt`), and prints the
+  licence statement when it does.
+- **No CNES file is modified.** The subroutine file is compiled as shipped
+  (gfortran, `-O2 -cpp -fdefault-real-8`: CNES's benchmark program asks for a
+  double-precision compile) and called through two `bind(C)` wrappers of this
+  toolbox's own (`mex/ngfDtm2020Shim.F90`) and a C gateway
+  (`mex/ngfDtm2020Gateway.c`). The libswamif copy is the one used because its
+  `LECDTM` takes the unit number the documentation asks the caller to define;
+  above 150 km its `DTM3` is the published operational model, and
+  `NonGravForces.env.density` refuses `dtm2020` below 150 km, where the MCM copy
+  blends towards the Met Office model.
+- **The licence travels with the binary.** `NonGravForces.buildMex` copies
+  `LICENSE_MCM_DTM.txt` beside `dtm2020Gateway.<mexext>` together with the
+  coefficient file, and the build digest covers both.
+
+**Model authors:** Sean Bruinsma and Claude Boniface (CNES). Reference: Bruinsma
+& Boniface (2021), The operational and research DTM-2020 thermosphere models,
+*J. Space Weather Space Clim.* 11, 47.
+
 ## Data files under data/
 
 `data/eop/`, `data/spaceweather/`, `data/samples/` and `data/ceres/` hold small

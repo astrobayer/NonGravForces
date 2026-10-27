@@ -62,12 +62,28 @@ classdef tNgfEnv < NgfTestCase
             tc.assertSize(tc.msis21Ref, [200 20], 'msis2.1_test_ref_dp.txt repeats the 9 inputs and prints 11 outputs');
             tc.assertEqual(tc.msis21Ref(:, 1:2), tc.msis21In(:, 1:2), 'the reference rows are the input rows, in order');
             tc.msis21Ref = tc.msis21Ref(:, 10:20);
+            % DTM2020 (2026-10-27): the oracle is CNES's own benchmark (Mod_DTM2020F107Kp_Benchmark.f90), transcribed below.
+            tc.assertTrue(NonGravForces.buildMex('Check', true, 'Target', "dtm2020").upToDate, ...
+                'the DTM2020 MEX must be built and current before this class runs (setupNonGravForces fetches CNES''s files, ciGate builds them)');
             tc.igrf = NonGravForces.io.igrfCoefficients(fullfile(tc.root, 'data', 'igrf', 'igrf14coeffs.txt'), 'Epoch', 2020.0);
             tc.cer = NonGravForces.io.importCERES(string(fullfile(tc.root, 'data', 'ceres', ...
                 ["rsut" "rlut" "rsdt"] + "_mon_CERES-EBAF-4-2-1_NASA-GISS_gn_201912-202001.nc")));
         end
     end
     methods
+        function [ep, lla, drv, lst, ref] = dtmBenchmark(~)
+            %DTMBENCHMARK CNES's four DTM2020 operational benchmark cases (Mod_DTM2020F107Kp_Benchmark.f90,
+            % S. Bruinsma 22/10/20): day 180, latitude and longitude 0, local time 3.1415 rad, Kp 3 and its
+            % 24 h mean 3; F10.7 = its 81-day mean = 80 or 180; altitude 300 or 800 km. Order as printed:
+            % (80, 300), (180, 300), (80, 800), (180, 800). ref: tz [K], tinf [K], ro [g/cm^3], as printed.
+            ep = referenceSystem.daySecondToEpoch([59394 * ones(4, 1), 43200 * ones(4, 1)], "UTC");   % 2021-06-29: day 180
+            lla = [zeros(2, 4); [300 300 800 800] * 1e3];
+            f = [80 180 80 180];
+            drv = struct('f107', f, 'f107bar', f, 'kp3', 3, 'kp24', 3);
+            lst = 3.1415 * 12 / pi;
+            ref = struct('tz', [843.243 1312.266 844.099 1334.874], 'tinf', [844.099 1334.875 844.099 1334.875], ...
+                         'ro', [0.94719e-14 0.29053e-13 0.26600e-17 0.39104e-16]);
+        end
         function [rho, sp, T] = msisCases(tc, idx, anomalous)
             % Evaluate the published cases idx (1-based) with the published (inconsistent) local time.
             in = tc.msisInput;
@@ -201,6 +217,29 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyErrorId(@() w("none", ep, bad, v), 'NonGravForces:wind:numericNaN');
             tc.verifyErrorId(@() w("none", ep, r, v, 'Wind_m_s', nan(size(v))), 'NonGravForces:wind:numericNaN');
             tc.verifyError(@() w("hwm07", ep, r, v), 'MATLAB:validators:mustBeMember');
+        end
+        function densityDtm2020Contract(tc)
+            [ep, lla, drv, lst] = tc.dtmBenchmark();
+            [rho, sp, T, info] = NonGravForces.env.density("dtm2020", ep, lla, [], 'Drivers', drv, 'LocalSolarTime_h', lst);
+            tc.verifySize(rho, [1 4]); tc.verifySize(sp, [8 4]); tc.verifySize(T, [2 4]); tc.verifyTrue(all(rho > 0));
+            tc.verifyEqual(info.backend, "dtm2020"); tc.verifyEqual(info.drivers.source, "caller"); tc.verifyFalse(info.anomalousOxygen);
+            tc.verifyEqual(sp([5 8], :), zeros(2, 4), 'DTM2020 has no argon and no anomalous oxygen');
+            tc.verifyEqual(info.dtmInput.doy, 180 * ones(1, 4)); tc.verifyEqual(info.dtmInput.alt_km, [300 300 800 800]);
+            % from a celestrak spaceWeather struct: the query's DTM fields, unchanged
+            sw = NonGravForces.io.spaceWeather(fullfile(tc.root, 'data', 'spaceweather', 'SW-All_2019-09_2020-03.csv'));
+            e2 = referenceSystem.mjdToEpoch([58849.5; 58850.25], "UTC"); l2 = [0 0.5; 1 2; 490e3 495e3];
+            [~, ~, ~, i2] = NonGravForces.env.density("dtm2020", e2, l2, sw);
+            q = sw.query(e2);
+            tc.verifyEqual([i2.drivers.f107; i2.drivers.f107bar; i2.drivers.kp3; i2.drivers.kp24], [q.f107; q.f107Last81; q.kpDelayed3h; q.kpMean24h]);
+            tc.verifyEqual(i2.drivers.source, "spaceWeather");
+            % refusals, each paired with the call that must succeed
+            e1 = referenceSystem.mjdToEpoch(58849.5, "UTC");
+            d1 = struct('f107', 80, 'f107bar', 80, 'kp3', 3, 'kp24', 3);
+            tc.verifyErrorId(@() NonGravForces.env.density("dtm2020", e1, [0; 0; 149.9e3], [], 'Drivers', d1), 'NonGravForces:density:inputRange');
+            tc.verifyTrue(NonGravForces.env.density("dtm2020", e1, [0; 0; 150e3], [], 'Drivers', d1) > 0, '150 km is DTM2020 and evaluates');
+            tc.verifyErrorId(@() NonGravForces.env.density("dtm2020", e1, [0; 0; 490e3], [], 'Drivers', struct('f107', 80, 'f107a', 80, 'ap', 4)), 'NonGravForces:density:inputDrivers');
+            tc.verifyErrorId(@() NonGravForces.env.density("dtm2020", e1, [0; 0; 490e3], []), 'NonGravForces:density:inputDrivers');
+            tc.verifyErrorId(@() NonGravForces.env.density("dtm2020", e1, [0; 0; 490e3], [], 'Drivers', setfield(d1, 'kp3', NaN)), 'NonGravForces:density:numericNaN'); %#ok<SFLD>
         end
         function densityContract(tc)
             ep = referenceSystem.mjdToEpoch([58849.5; 58849.6], "UTC"); lla = [0 0.1; 0 0.2; 490e3 500e3];
@@ -353,7 +392,7 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyTrue(endsWith(rep.file, "msisGateway." + mexext));
             tc.verifyEqual(rep.target, "msis");
             all2 = NonGravForces.buildMex('Check', true);
-            tc.verifyEqual([all2.target], ["msis" "msis21" "hwm14" "rhs" "kernel"]);
+            tc.verifyEqual([all2.target], ["msis" "msis21" "hwm14" "dtm2020" "rhs" "kernel"]);
             rh = all2(3);
             % 7 = the gateway, the shared chdir-guarded loader ngfHwm14Load.c (which the rhs target
             % links too), NRL's hwm14.f90, this toolbox's shim, and the three data files.
@@ -367,7 +406,12 @@ classdef tNgfEnv < NgfTestCase
             % rhs (LP-C WP-C9): the one target that links everything -- its own C, the kernel's,
             % NRLMSISE-00's, and the NRLMSIS 2.1 and HWM14 Fortran -- and the one that compiles
             % against a source it does not own, gjToolbox's csrc/gj_native.h.
-            rr = all2(4);
+            % dtm2020 (2026-10-27): the gateway, CNES's subroutine file, the shim, the coefficient file and
+            % CNES's licence, all digested; the coefficients and the licence travel beside the binary.
+            rd = all2(4);
+            tc.verifyTrue(rd.upToDate); tc.verifyEqual(numel(rd.sources), 5); tc.verifyTrue(endsWith(rd.file, "dtm2020Gateway." + mexext));
+            tc.verifyTrue(all(isfile(fullfile(fileparts(rd.file), ["DTM_2020_F107_Kp.dat" "LICENSE_MCM_DTM.txt"]))), 'the coefficient file and CNES''s licence are copied beside the gateway');
+            rr = all2(5);
             tc.verifyTrue(rr.upToDate); tc.verifyTrue(endsWith(rr.file, "rhsGateway." + mexext));
             tc.verifyEqual(numel(rr.sources), 19);                    % 9 C/H + 8 msis21 F90 + 2 hwm14 F90
             tc.verifyTrue(any(endsWith(rr.sources, "gj_native.h")), 'the frozen ABI header takes part in the digest, so a new ABI rebuilds this target');
@@ -383,7 +427,7 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyEqual(fromPath.sourceDir, rr.sourceDir, 'the path walk must reach the same csrc the environment variable names');
             tc.verifyTrue(fromPath.sourcesPresent, 'gj_native.h must be found through the gjToolbox on the path alone');
             clear restore
-            tc.verifyEqual(all2(5).sourceDir, "", 'the kernel has no third-party source');
+            tc.verifyEqual(all2(6).sourceDir, "", 'the kernel has no third-party source');
             tc.verifyError(@() NonGravForces.buildMex('Check', true, 'Target', "nosuch"), 'MATLAB:validators:mustBeMember');
         end
     end
@@ -454,6 +498,17 @@ classdef tNgfEnv < NgfTestCase
             tc.assertGreaterThan(rows, 90, 'the six profiles must be exercised');
             tc.verifyBoundAndRecord("hwm14 through env.wind vs NRL Check/gfortran.txt (" + string(rows) + " rows, m/s)", worst, 6e-4, "m/s", ...
                 "half a printed unit (5e-4) plus the model's single-precision response to a geodetic round trip; disturbed = total - quiet carries two roundings, halved");
+        end
+        function densityDtm2020Reference(tc)
+            % CNES's benchmark, every printed number: tz and tinf to 3 decimals, ro to 5 significant digits.
+            [ep, lla, drv, lst, ref] = tc.dtmBenchmark();
+            [rho, ~, T] = NonGravForces.env.density("dtm2020", ep, lla, [], 'Drivers', drv, 'LocalSolarTime_h', lst);
+            tc.verifyBoundAndRecord("dtm2020 vs CNES benchmark: tz (4 cases)", max(abs(T(2, :) - ref.tz)), 1e-3, "K", ...
+                "printed to 3 decimals (half a unit 5e-4); first run 2026-10-27");
+            tc.verifyBoundAndRecord("dtm2020 vs CNES benchmark: tinf (4 cases)", max(abs(T(1, :) - ref.tinf)), 1e-3, "K", ...
+                "printed to 3 decimals (half a unit 5e-4); first run 2026-10-27");
+            tc.verifyBoundAndRecord("dtm2020 vs CNES benchmark: ro, relative (4 cases)", max(abs(rho / 1e3 - ref.ro) ./ ref.ro), 1e-4, "-", ...
+                "printed to 5 significant digits (half a unit <= 1.9e-5 relative); first run 2026-10-27");
         end
         function densityReference(tc)
             % The 17 published cases of DOCUMENTATION §7 (printed with %E, 7 significant digits)
@@ -658,6 +713,16 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyBoundAndRecord("hwm14 north and east recovered from the GCRS vector", ...
                 max(abs([sum(wI .* north, 1) - info.hwm14.northEast_m_s(1, :), sum(wI .* east, 1) - info.hwm14.northEast_m_s(2, :)])), 1e-12, "m/s", "the same two rotations");
         end
+        function densityDtm2020Precision(tc)
+            % DTM3 forms ro as the plain sum of its six partial densities; env.density converts each with the
+            % toolbox's molar masses, so n_j m_j summed must return rho to a few ulps.
+            [ep, lla, drv, lst] = tc.dtmBenchmark();
+            [rho, sp, ~] = NonGravForces.env.density("dtm2020", ep, lla, [], 'Drivers', drv, 'LocalSolarTime_h', lst);
+            c = NonGravForces.const();
+            back = sum(sp .* (c.speciesMass(:) * 1e3 * c.amu), 1);
+            tc.verifyBoundAndRecord("dtm2020: sum of n_j m_j over rho - 1", max(abs(back ./ rho - 1)), 8 * eps, "-", ...
+                "six conversions and a sum against the model's own sum: rounding only");
+        end
         function densitySpeciesSumPrecision(tc)
             % kernel.dragPanelForce re-forms the mass density from the species and const.speciesMass,
             % while NRLMSISE-00 forms its own total from ITS molecular masses. Its ACCURACY block
@@ -797,6 +862,19 @@ classdef tNgfEnv < NgfTestCase
                 tc.verifyEqual(i4.hwm14.northEast_m_s(:, k), i1.hwm14.northEast_m_s); tc.verifyEqual(v4(:, k), v1);
             end
         end
+        function densityDtm2020Vectorization(tc)
+            % The gateway loops over epochs, so a batch equals the same epochs one at a time, bitwise.
+            ep = referenceSystem.mjdToEpoch(58849 + (0:5)' / 6, "UTC");
+            lla = [deg2rad([-80 -30 0 20 60 89]); deg2rad([0 60 120 180 240 300]); (480:4:500) * 1e3];
+            d = struct('f107', 71, 'f107bar', 70, 'kp3', [0 1 2 3 4 5], 'kp24', 2);
+            [rho, sp, T] = NonGravForces.env.density("dtm2020", ep, lla, [], 'Drivers', d);
+            for k = 1:6
+                dk = d; dk.kp3 = d.kp3(k);
+                ek = referenceSystem.daySecondToEpoch([ep.day(k) ep.sec(k)], ep.scale);
+                [r1, s1, t1] = NonGravForces.env.density("dtm2020", ek, lla(:, k), [], 'Drivers', dk);
+                tc.verifyEqual([r1; s1; t1], [rho(k); sp(:, k); T(:, k)], sprintf('epoch %d batched vs alone', k));
+            end
+        end
         function densityVectorization(tc)
             % The 15 daily-ap published cases in one call equal the 15 single calls, bitwise (the MEX loop is per epoch).
             [rhoAll, spAll, TAll] = tc.msisCases(1:15, true);
@@ -914,6 +992,22 @@ classdef tNgfEnv < NgfTestCase
             % HWM14 does not return for a negative altitude (measured in a standalone build): refused before the model
             below = R(:, :, 1) * referenceSystem.geodeticToCartesian([10 20 -1], 'Ellipsoid', "WGS84", 'AngleUnit', "deg")';
             tc.verifyErrorId(@() NonGravForces.env.wind("hwm14", e1, below, zeros(3, 1), 'Eop', eop, 'Ap', 4), 'NonGravForces:wind:inputRange');
+        end
+        function densityDtm2020Robustness(tc)
+            % The edges of the drivers and of the position all evaluate to finite positive densities, and a
+            % local time of 24 h is 0 h.
+            e = referenceSystem.mjdToEpoch(58849.5 * ones(4, 1), "UTC");
+            lla = [deg2rad([90 -90 0 0]); 0 0 0 0; 490e3 490e3 150e3 1500e3];
+            for kp = [0 9]
+                rho = NonGravForces.env.density("dtm2020", e, lla, [], 'Drivers', struct('f107', 65, 'f107bar', 65, 'kp3', kp, 'kp24', kp));
+                tc.verifyTrue(all(isfinite(rho) & rho > 0), sprintf('Kp %d at the poles, at 150 km and at 1500 km', kp));
+            end
+            d = struct('f107', 70, 'f107bar', 70, 'kp3', 2, 'kp24', 2);
+            e1 = referenceSystem.mjdToEpoch(58849.5, "UTC");
+            r0 = NonGravForces.env.density("dtm2020", e1, [0; 0; 490e3], [], 'Drivers', d, 'LocalSolarTime_h', 0);
+            r24 = NonGravForces.env.density("dtm2020", e1, [0; 0; 490e3], [], 'Drivers', d, 'LocalSolarTime_h', 24);
+            tc.verifyEqual(r24, r0, 'local time 24 h is 0 h');
+            tc.verifyErrorId(@() NonGravForces.env.density("dtm2020", e1, [0; 0; 490e3], [], 'Drivers', d, 'LocalSolarTime_h', [1 2]), 'NonGravForces:density:inputDrivers');
         end
         function densityRobustness(tc)
             ep = referenceSystem.mjdToEpoch(58849.5, "UTC"); d = struct('f107', 70, 'f107a', 71, 'ap', 3);
@@ -1091,6 +1185,31 @@ classdef tNgfEnv < NgfTestCase
             [~, iq2] = NonGravForces.env.wind("hwm14", e, r(:, idx), v(:, idx), 'Eop', eop, 'Ap', 30);
             tc.verifyEqual(iq2.hwm14.northEast_m_s, iq.hwm14.northEast_m_s, 'repeated calls at the same inputs are bitwise (no internal cursor)');
             tc.verifyNotEqual(iq.hwm14.northEast_m_s, ih.hwm14.northEast_m_s, 'ap 30 must add a disturbance wind at 490 km');
+        end
+        function densityDtm2020Metamorphic(tc)
+            % More solar flux, more density; higher, less. And beside NRLMSISE-00 on the reference day at GRACE-FO's
+            % altitude -- the number O-19 asks about: CNES fitted DTM2020 to the TU Delft CHAMP, GOCE and Swarm
+            % densities derived with high-fidelity satellite models.
+            e1 = referenceSystem.mjdToEpoch(58849.5, "UTC");
+            f = [70 120 180];
+            rho = arrayfun(@(x) NonGravForces.env.density("dtm2020", e1, [0; 0; 490e3], [], 'Drivers', struct('f107', x, 'f107bar', x, 'kp3', 2, 'kp24', 2)), f);
+            tc.verifyTrue(all(diff(rho) > 0), 'density rises with F10.7');
+            rh = arrayfun(@(h) NonGravForces.env.density("dtm2020", e1, [0; 0; h], [], 'Drivers', struct('f107', 70, 'f107bar', 70, 'kp3', 2, 'kp24', 2)), [300 400 500] * 1e3);
+            tc.verifyTrue(all(diff(rh) < 0), 'density falls with altitude');
+            sw = NonGravForces.io.spaceWeather(fullfile(tc.root, 'data', 'spaceweather', 'SW-All_2019-09_2020-03.csv'));
+            [lat, lon] = meshgrid(deg2rad(-80:20:80), deg2rad(0:45:315));
+            K = numel(lat);
+            ep = referenceSystem.mjdToEpoch(58849 + (0:K-1)' / K, "UTC");
+            lla = [lat(:)'; lon(:)'; 490e3 * ones(1, K)];
+            rD = NonGravForces.env.density("dtm2020", ep, lla, sw);
+            rM = NonGravForces.env.density("msis00", ep, lla, sw);
+            rN = NonGravForces.env.density("msis21", ep, lla, sw);
+            tc.verifyBoundAndRecord("dtm2020 / msis00 at 490 km, 2020-01-01: |log| of the median ratio", abs(log(median(rD ./ rM))), log(3), "-", ...
+                "first run 2026-10-27: recorded; the solar-minimum density level O-19 asks about");
+            tc.verifyBoundAndRecord("dtm2020 / msis21 at 490 km, 2020-01-01: |log| of the median ratio", abs(log(median(rD ./ rN))), log(3), "-", ...
+                "first run 2026-10-27: recorded");
+            fprintf('densityDtm2020Metamorphic: 490 km, 2020-01-01, %d points: median dtm2020/msis00 %.4f, dtm2020/msis21 %.4f, msis21/msis00 %.4f\n', ...
+                K, median(rD ./ rM), median(rD ./ rN), median(rN ./ rM));
         end
         function densityMetamorphic(tc)
             % gtd7d - gtd7: the mass density gains exactly 16 * 1.66e-24 g times the anomalous-oxygen number density

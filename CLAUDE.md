@@ -175,8 +175,15 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-27, PR #110/#111)
+## 5. Current status (2026-10-27, PR #111)
 
+- **2026-10-27, PR #111 (DTM2020 density backend):** `drag.density = "dtm2020"` (opt-in, no preset), CNES's
+  operational DTM2020 (F10.7, Kp) through `mex/ngfDtm2020Shim.F90` + `mex/ngfDtm2020Gateway.c`, built by
+  `buildMex` target `dtm2020` (gfortran `-fdefault-real-8`) from SWAMI MCM files `setupNonGravForces` fetches at a
+  pinned commit and SHA-256 into `mex/dtm2020`. **CNES licence: academic, non-commercial use only, no modification,
+  no redistribution** (THIRD-PARTY-NOTICES.md). Drivers from the celestrak query's new `f107Last81`,
+  `kpDelayed3h`, `kpMean24h`; refused below 150 km and on the native path (O-52). Oracle: CNES's four benchmark
+  cases. Written without MATLAB: ◐ until CI has run it; predicted gate 459 (453 + 6).
 - **2026-10-27, PR #110 (`tools/dragScaleMonth.m`, `.github/workflows/drag-month.yml`):** the month on the runner's
   DATAPOOL (run 40460797299, all 31 days of 2020-01 C, THR1B cut, one bias per day): ACT1B wants a joint k_drag of
   **0.443** (per day 0.34-0.57), GROOPS 0.48 -- two independent references say the along-track drag is about TWICE
@@ -549,7 +556,7 @@ repository had written down about them.
   under `tests/fixtures/groops/` and committed; neither CI nor the host needs a
   GROOPS installation.
 
-**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-51 with an owner
+**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-52 with an owner
 and a re-entry condition each. This file deliberately does NOT list them: the copy that
 used to live here had drifted to O-15 of 21 and showed two closed items as open, and no
 check compared the two (R1). Read Part H.

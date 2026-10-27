@@ -23,6 +23,11 @@ function info = setupNonGravForces(options)
 %                           two DWM/QD data files NRL's server refuses (HTTP 403, 2026-09-15)
 %                           from the pyHWM14 repository at a pinned commit, where the model's
 %                           own check output, reproduced exactly, is what vouches for them
+%       DTM2020 Fortran     CNES's operational DTM2020 (F10.7, Kp) as SWAMI's MCM repository
+%                           ships it, at a pinned commit, each file pinned by SHA-256, into
+%                           mex/dtm2020: the subroutine file, the coefficient file and the
+%                           licence (CNES: academic, non-commercial use only; no modification,
+%                           no redistribution -- printed when fetched, THIRD-PARTY-NOTICES.md)
 %     data ('FetchData'), the DE440 ephemeris ('FetchKernels'), the GROOPS Earth-radiation
 %     grids ('FetchGroops', into DATAPOOL)
 %       finals2000A.all     IERS Earth orientation, into data/eop
@@ -153,6 +158,17 @@ HWM14_FILES = struct( ...
                "6a58eaafb065ffa9d34cfba409f865531b8cbe7c1a0ee274ca6c21fcbeb26091", "2b1d4f4f103be3531393c48bf32d034548babfb6c080549884cad9fd3a2c8652", ...
                "14b6e5e48d346ff034e2f6bfd7f26dc550945c9b90ad9661c7710e721ac89b15", "f2b8eff002d55b0f6d49d202c73b7a9cb6685f2c6bb57f1291a2adc7aa07cf4f", ...
                "6bb1f2384e30b409240ee92c32726ed2a3d73eb550c05e0969d1178032319804"});
+% DTM2020 (operational: F10.7 and Kp; Bruinsma & Boniface 2021), CNES, as distributed by the SWAMI project.
+% The libswamif subroutine file is used because its lecdtm takes the unit number the documentation asks
+% the caller to define; the src/dtm2020 copy opens a fixed file name and reads an undefined unit, and the
+% licence forbids editing it. Above 150 km the two dtm3 are the same code (the MCM file adds a blend
+% below 150 km for its whole-atmosphere model). Digests measured 2026-10-27 from git blobs at the pin.
+DTM2020_BASE = "https://raw.githubusercontent.com/swami-h2020-eu/mcm/a488a7c9d030bfbe86e88ab3d28a7ec5589b92e0/";
+DTM2020_FILES = struct( ...
+    'name', {"dtm2020_F107_Kp-subr_MCM.f90", "DTM_2020_F107_Kp.dat", "LICENSE_MCM_DTM.txt"}, ...
+    'url',  {DTM2020_BASE + "src/libswamif/dtm2020_F107_Kp-subr_MCM.f90", DTM2020_BASE + "data/DTM_2020_F107_Kp.dat", DTM2020_BASE + "LICENSE"}, ...
+    'sha256', {"1b109af61c85b90177d028e89fa0a6ba1c7208fb6e0f50fb1a793062a1e2f208", "c08f7ca61a3521a736a857850bd6cacd169f9302c356dc8523608b1a1d941588", ...
+               "b45cc69494a849efd7232d3e2de85480c8ac6e389c974244a9b882aeab4e5085"});
 EOP_URL = "https://datacenter.iers.org/data/9/finals2000A.all";
 SW_URL = "https://celestrak.org/SpaceData/SW-All.csv";
 % IGRF-14, IAGA V-MOD. Verified 2026-09-09: byte-identical to the SHA-256 data/igrf/README.md records.
@@ -211,7 +227,13 @@ msis21 = localFetchArchive("nrlmsis21", fullfile(root, 'mex', 'nrlmsis21'), "msi
     options.FetchMsis, "This software incorporates the MSIS(R) empirical atmospheric model software designed and provided by NRL. " + ...
     "Use is governed by the Open Source Academic Research License Agreement contained in the file nrlmsis2.1_license.txt (research, academic and non-profit use only).");
 hwm14 = localFetchFiles("hwm14", fullfile(root, 'mex', 'hwm14'), HWM14_FILES, options.FetchMsis);
-info.sources = [struct('name', "nrlmsise00", 'action', info.msis.action, 'dir', info.msis.dir, 'source', MSIS_URL, 'message', info.msis.message), msis21, hwm14];
+dtm2020 = localFetchFiles("dtm2020", fullfile(root, 'mex', 'dtm2020'), DTM2020_FILES, options.FetchMsis);
+if dtm2020.action == "fetched"
+    dtm2020.message = "The DTM software is property of CNES, licensed for academic, non-commercial purposes only; it may not be modified " + ...
+        "or redistributed (mex/dtm2020/LICENSE_MCM_DTM.txt). Mention CNES's DTM in any publication of results based on it.";
+    fprintf('setupNonGravForces: %s\n', dtm2020.message);
+end
+info.sources = [struct('name', "nrlmsise00", 'action', info.msis.action, 'dir', info.msis.dir, 'source', MSIS_URL, 'message', info.msis.message), msis21, hwm14, dtm2020];
 info.data = localFetchData(root, EOP_URL, SW_URL, IGRF_URL, L1B_BASE, L1B_DAY, L1B_MEMBERS, options.FetchData);
 info.data.items = [info.data.items, localFetchCeres(root, CERES_BASE, CERES_FILES, CERES_SHA256, options.FetchData)];
 info.data.items = [info.data.items, localFetchKernel(root, DE440_FILE, DE440_SHA256, options.FetchKernels)];
