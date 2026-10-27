@@ -180,7 +180,8 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 - **2026-10-27, PR #109 (drag diagnosis, `tNgfModel/modelDragDiagnosis`):** the along-track difference to GROOPS is a
   DRAG SCALE: k_drag 0.482, constant over the orbit (0.44-0.49 in four 25 min windows); one drag factor takes the
   along-track RMS from 10.6 to 0.53 nm/s^2. Single options move the standard drag to 0.915 (msis21), 0.905 (Sentman
-  alpha 1), 0.751 (constantCd 2.4); each lowers the ACT1B residual too (5.57 -> 4.56 nm/s^2 for constantCd). Next
+  alpha 1), 0.751 (constantCd 2.4); each lowers the ACT1B residual too (5.57 -> 4.56 nm/s^2 for constantCd; msis21 + Cd 2.4: 0.685, 3.98 nm/s^2).
+  ACT1B itself wants k_drag 0.21 over 3 x 30 min (weakly determined; whole days pin it). Next
   question: TU Graz's density model and Cd (O-19), then DTM2020 or the gas-surface model.
 - **2026-10-26, PR #108 (O-9 closed, O-19 measured, model vs ACT1B):** `io.spaceWeather` reads Kyoto Dst and
   CLS F30 (families "dst", "f30"; F30's 81-day mean). `tNgfModel/modelGroopsReference` feeds TU Graz's own

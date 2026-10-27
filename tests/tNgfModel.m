@@ -375,6 +375,8 @@ classdef tNgfModel < NgfTestCase
             % The free three-effect fit against ACT1B was ill-conditioned over 3 x 30 min (k_therm 8.1 along-
             % track, k_drag -1.7 and 8.6 where drag is a few per cent of the signal), so against ACT1B only
             % k_drag is fitted, along-track, with radiation and thermal held at 1.
+            % SECOND RUN (CI 40450067703): against ACT1B k_drag = 0.209 (RMS 5.57 -> 1.64 nm/s^2), and
+            % msis21 + constantCd 2.4 together give 0.685 of the standard drag, 3.98 nm/s^2 against ACT1B.
             [epG, rG, vG, qGr, aG] = tc.groopsDay();
             [arcs, keep] = tc.act1bArcs(10);
             o = tc.M.options;
@@ -453,8 +455,8 @@ classdef tNgfModel < NgfTestCase
                 "measured 0.050 (CI 40447628923): one drag scale explains 95 % of the along-track difference");
             tc.verifyBoundAndRecord("drag diagnosis: |log k_drag| along-track vs GROOPS", abs(log(kG(1, 1))), log(2.5), "-", ...
                 "measured k 0.482 (CI 40447628923): GROOPS's drag is half of this toolbox's");
-            tc.verifyBoundAndRecord("drag diagnosis: |log k_drag| along-track vs ACT1B", abs(log(abs(kA))), log(5), "-", ...
-                "first run: recorded; the measurement's drag over this toolbox's (ACT1B's own scale is in it)");
+            tc.verifyBoundAndRecord("drag diagnosis: |log k_drag| along-track vs ACT1B", abs(log(abs(kA))), log(10), "-", ...
+                "measured 0.209 (CI 40450067703; 3 x 30 min, ACT1B's own scale and per-day biases in it): the measurement wants less drag too");
             tc.verifyBoundAndRecord("drag diagnosis: k_drag window spread (max/min) along-track vs GROOPS", max(kWin) / min(kWin), 1.3, "-", ...
                 "measured 1.10 (0.441-0.486, CI 40447628923): a SCALE, not an orbit-dependent shape");
             for v = 2:nV
