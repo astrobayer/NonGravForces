@@ -14,7 +14,7 @@ on:
         default: "2014-01"
       last:
         description: "last Swarm month, yyyy-mm"
-        default: "2026-09"
+        default: "2026-08"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -30,7 +30,7 @@ jobs:
     env:
       READING_DATA_POOL: ${{ vars.READING_DATA_POOL }}
       FIT_FIRST: ${{ github.event.inputs.first || '2014-01' }}
-      FIT_LAST: ${{ github.event.inputs.last || '2026-09' }}
+      FIT_LAST: ${{ github.event.inputs.last || '2026-08' }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with: { path: NonGravForces, persist-credentials: false }

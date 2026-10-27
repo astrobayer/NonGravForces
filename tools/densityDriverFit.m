@@ -1,7 +1,7 @@
 function R = densityDriverFit(options)
 %DENSITYDRIVERFIT A driver model of the observed density scale: Swarm 2014-now, cross-validated over years.
 %
-%   R = densityDriverFit                                  % Swarm 2014-01..2026-09 from READING_DATA_POOL
+%   R = densityDriverFit                                  % Swarm 2014-01..2026-08 from READING_DATA_POOL
 %   R = densityDriverFit('First', "2019-01", 'Last', "2020-12")
 %
 %   STEP 1 OF THE EXTRAPOLABLE DENSITY CORRECTION (HANDOVER O-19, owner 2026-10-27). The
@@ -46,7 +46,7 @@ function R = densityDriverFit(options)
 %   Name        Size  Type    Units  Description
 %   ----        ----  ----    -----  -----------
 %   Pool        1x1   string  -      DATAPOOL root; default getenv("READING_DATA_POOL")
-%   First, Last 1x1   string  -      "yyyy-mm" span of Swarm months; default 2014-01..2026-09
+%   First, Last 1x1   string  -      "yyyy-mm" span of Swarm months; default 2014-01..2026-08
 %   Model       1x1   string  -      env.density backend the factor is for; default "msis00"
 %   Stride      1x1   double  -      every Stride-th valid 30 s record; default 10
 %   MinRecords  1x1   double  -      fewer records in a pass drop it; default 40
@@ -74,7 +74,7 @@ function R = densityDriverFit(options)
 arguments
     options.Pool (1,1) string = string(getenv("READING_DATA_POOL"))
     options.First (1,1) string = "2014-01"
-    options.Last (1,1) string = "2026-09"
+    options.Last (1,1) string = "2026-08"
     options.Model (1,1) string = "msis00"
     options.Stride (1,1) double {mustBeInteger, mustBePositive} = 10
     options.MinRecords (1,1) double {mustBeInteger, mustBePositive} = 40
