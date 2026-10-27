@@ -19,9 +19,9 @@ these sources (HANDOVER O-9); they came separately, below.
 
 First fetched by `.github/workflows/fetch-data.yml` on 2026-10-26 (run 40361879447). The full products are now
 fetched by `setupNonGravForces('FetchPool', ...)` into `<DATAPOOL>/SpaceWeather` (on the CI runner, its
-`READING_DATA_POOL`), and these excerpts are cut from them by `tools/cutFixtures.py`; the workflow does both. **No reader exists for either yet**:
-`io.spaceWeather` identifies the three families above only, and these files are the oracle a reader must be
-written against.
+`READING_DATA_POOL`), and these excerpts are cut from them by `tools/cutFixtures.py`; the workflow does both. `io.spaceWeather` reads both as families of their own (2026-10-26): `"dst"` from one or more Kyoto month
+files (hourly Dst, `query(epoch).dst`), `"f30"` from one CLS file (`query(epoch)`: f30 of the day, of the day
+before, and its 81-day centred mean). These files are the oracle of `tNgfIo/spaceWeatherDstF30*`.
 
 | File | Source | Content |
 |---|---|---|

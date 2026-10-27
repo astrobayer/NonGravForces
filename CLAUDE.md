@@ -62,7 +62,7 @@ records — A.2 rule, B.4 — follow with N-02c.)
 | Toolbox | Owns |
 |---|---|
 | `referenceSystem` ≥ 2.3 (2.3.0; raised from 2.1 by N-02c for `epochTo(..., "gpsNanoseconds")`) | time scales, EOP, ITRS↔GCRS with derivatives, geodesy, quaternions, attitude interpolation, Sun/Moon states |
-| `gracefoReading` ≥ 1.0.1 (1.0.1) | L1B ASCII reading, quality flags, GROOPS instrument export/import. The PATCH minimum is deliberate and is the one exception to VERSIONING.md's MAJOR.MINOR rule (HANDOVER O-12, O-25) |
+| `gracefoReading` ≥ 1.1 (1.3.0; raised from 1.0.1 on 2026-10-26 for `readGroopsInstrument` on real GROOPS output, O-19) | L1B ASCII reading, quality flags, GROOPS instrument export/import. The 1.0.1 PATCH minimum of O-12/O-25 was the one exception to VERSIONING.md's MAJOR.MINOR rule; 1.1 contains that fix and ends the exception |
 | `timeSeriesPreparation` ≥ 1.5 (1.5.0; raised from 1.4 on 2026-10-20 for the ACH1B preset, its X-19) | The L1B CRN kernel (`crnKernel`), and after N-01 the `qc` stage. **Optional for the toolbox, required by `ciGate`**: `sensor.Electrostatic` filters with `crnKernel("ACC")` by DEFAULT (N-04, owner ruling 2026-10-14) and raises `Electrostatic:depMissing` without it. Its version is the `% Version` line of its `Contents.m` |
 | `lsqvce` ≥ 6.35 (6.35.0; raised from 6.22 on 2026-10-19 for `R.contributions` / `solveContributions`) | The one least-squares estimator (CONCEPT Q2). **Optional for the toolbox, required by `ciGate`**: `app.fitCalibration` declares kind A (one system, one day, one arc per contiguous run) per axis its day bootstrap solves the fit's per-day contributions and its single-arc bootstrap refits kind B. Version from `lsqvce.util.toolboxVersion` |
 | `gjToolbox` (odeSuite) ≥ 0.1 (0.1.0) | Gauss-Jackson integration. **Optional for the toolbox, required by `ciGate`**: `app.DynamicsSource` subclasses `gjToolbox.DynamicsSource` (so it cannot even load without it) and the `buildMex` target `rhs` compiles against `csrc/gj_native.h` (ABI 1). `Model.rhs` is gone — O-4 closed by removal, 2026-09-16 |
@@ -175,8 +175,16 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-26, PR #107)
+## 5. Current status (2026-10-26, PR #108)
 
+- **2026-10-26, PR #108 (O-9 closed, O-19 measured, model vs ACT1B):** `io.spaceWeather` reads Kyoto Dst and
+  CLS F30 (families "dst", "f30"; F30's 81-day mean). `tNgfModel/modelGroopsReference` feeds TU Graz's own
+  attitude and orbit into `Model.accel` against their GROOPS-modelled forces (2020-01-01 C, 600 x 10 s):
+  correlation 0.983 / 1.000 / 0.968, RMS ratio 1.50 / 1.18 / 1.20; radiation agrees (0.999 cross-track), the
+  along-track excess is DRAG. `tNgfModel/modelAct1bReference` compares with ACT1B as Huckfeldt et al. (2024)
+  do -- one bias per day, scale 1, THR1B firings cut: 5.5 / 3.4 / 2.1 nm/s^2 RMS over 3 x 30 min of
+  2020-01-01..03 C (GROOPS against the same ACT1B: 2.7 / 3.1 / 1.8; Huckfeldt: 3-5 x, <= 2 y, z). The first
+  GROOPS run was red on an UNCONJUGATED TU Graz quaternion (section 7). ☑ on CI: 452/452 (40411254932).
 - **2026-10-26, PR #107 (O-9 data, N-12 attitude, O-19 candidate; owner rulings in HANDOVER Part I):**
   `setupNonGravForces('FetchPool', 'PoolDays')` fetches the reference days' observations into DATAPOOL --
   Kyoto FINAL Dst (`SpaceWeather/Dst`), CLS F30 by anonymous FTP (`SpaceWeather/F30`), TU Graz's attitude,
@@ -185,7 +193,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   `data/samples/itsg`, 30 files); `.github/workflows/fetch-data.yml` runs both on the SELF-HOSTED runner into
   its `READING_DATA_POOL`, the commit alone on GitHub's machine. First run 40381190966: 30/30 fetched, every
   committed excerpt reproduced byte for byte; CI green on 108fdc4. **No reader for Dst/F30 yet** (WP-25), TU
-  Graz's forces are not an oracle until TU Graz says whether they are measured or modelled, and classic
+  Graz's forces are MODELLED (owner, 2026-10-26): GROOPS output, the O-19 comparison still to write; classic
   GRACE Level-1B is PARKED (O-51: GFZ's ISDC is down, unreachable from every runner). Gate unchanged at 444.
 
 - **2026-10-20, N-10b (#67 complete):** GRACE-D's hybrid ACH1B (.ACX, 2020-01, in the pool) against ACT1B on the
@@ -546,9 +554,9 @@ added functionality, PATCH is a fix** — one scheme for every repository,
 defined in ci-actions `VERSIONING.md`, which is the authority this file
 merely states. The local rule it replaced (minor = levels delivered, patch =
 HANDOVER amendment) is dead; 0.12.0 is not renumbered, and the meaning
-changes at the next bump. Note that this repository's one DELIBERATE, argued
-deviation from `VERSIONING.md` is a different clause and is untouched: the
-`gracefoReading >= 1.0.1` PATCH minimum of O-12/O-25.
+changes at the next bump. The repository's one DELIBERATE, argued deviation from
+`VERSIONING.md`, the `gracefoReading >= 1.0.1` PATCH minimum of O-12/O-25, ended on
+2026-10-26 when the minimum rose to 1.1 (O-19).
 `auditPackage.py` compares every copy
 (Contents.m, README, doc/html footers) and checks `FunctionList.html` against
 `tools/buildDocs.py`, which regenerates every page of `doc/html` and `helptoc.xml`; run both before every push.
@@ -593,8 +601,9 @@ Every one of these was an actual defect found in a predecessor or a dependency.
 - **`exist()` does not resolve package-qualified function names.**
 - **Quality, character and `_id` columns belong in `aux`, not `obs`**
   (`gracefoReading` convention).
-- `gracefoReading.writeGroopsInstrument` / `readGroopsInstrument` were never
-  verified against a real GROOPS installation — WP-34 closes this.
+- `gracefoReading.readGroopsInstrument` reads REAL GROOPS output since gracefoReading 1.1.0 (comment
+  header, column legend, `.gz`); its first use on TU Graz's bytes here is `tNgfModel/modelGroopsReference`
+  (O-19, 2026-10-26). `writeGroopsInstrument` is still unverified against a GROOPS installation (WP-34).
 - `clear classes` wipes workspace variables inside a batched MATLAB script;
   split the script if state must survive.
 - **Every oracle generator must run on both tiers**: no numpy anywhere (the host has none
@@ -721,7 +730,10 @@ Every one of these was an actual defect found in a predecessor or a dependency.
 - **A push made with GITHUB_TOKEN starts no CI on its commit** (runs show `action_required`). A workflow
   that commits to a PR branch leaves the head untested until a person or session pushes again.
 - **TU Graz names GRACE-A/B "GRACE-1/-2" and GRACE-C/D "GRACEFO-1/-2"**; its products are GPS time as MJD,
-  10 s, attitude SRF->CRF, forces in the SRF, orbits in its own CoM quasi-inertial frame (not GCRS as such).
+  10 s, forces in the SRF, orbits in its own CoM quasi-inertial frame (not GCRS as such). **Its attitude
+  quaternions are BIT-IDENTICAL to SCA1B's**: their "SRF->CRF" is this toolbox's "ICRF->SRF" in the other
+  quaternion convention, so conjugate exactly once, as `io.readSCA1B` does. Passed unconjugated it put 5.3e-8
+  m/s^2 of drag into the radial axis and anti-correlated the along-track with GROOPS (PR #108, CI 40403910825).
 - **A status code is not a file.** `https://www.ngdc.noaa.gov/IAGA/vmod/igrf14.f` answers `200`
   with an HTML error page. Check the content, not the response code — met twice in two days.
 - **Never claim bitwise across a change in BATCH SIZE.** Vectorised products and norms associate

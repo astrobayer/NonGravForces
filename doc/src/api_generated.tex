@@ -936,11 +936,13 @@ mass & 1x1 & struct & - & .kind ("constant"\textbar{}"mas1b"), .satellite, .valu
 
 \subsection{\texttt{NonGravForces.io.spaceWeather}}
 \label{api:io.spaceWeather}
-\noindent Space-weather provider: CelesTrak SW-All (MSIS drivers) or SET SOLFSMY+DTCFILE (JB2008 drivers), with query(epoch).
+\noindent Space-weather provider: CelesTrak SW-All, SET SOLFSMY+DTCFILE, Kyoto Dst or CLS F30, with query(epoch).
 
 \begin{lstlisting}
 sw = NonGravForces.io.spaceWeather(swAllCsv)                       % family celestrak
 sw = NonGravForces.io.spaceWeather([solfsmyTxt dtcfileTxt])        % family jb2008
+sw = NonGravForces.io.spaceWeather([dst0712 dst0801 ...])          % family dst (Kyoto WDC months)
+sw = NonGravForces.io.spaceWeather(clsRadioFluxTxt)                % family f30 (CLS)
 d  = sw.query(epoch)                                               % drivers at K epochs
 \end{lstlisting}
 
@@ -958,7 +960,7 @@ d  = sw.query(epoch)                                               % drivers at 
 \endfoot
 \bottomrule
 \endlastfoot
-files & 1xF & string & - & One CelesTrak SW-All CSV, or the SET SOLFSMY and DTCFILE text files (either order). \\
+files & 1xF & string & - & One CelesTrak SW-All CSV; or the SET SOLFSMY and DTCFILE text files (either order); or one or more Kyoto WDC Dst month files (dst\textless{}yymm\textgreater{}.for.request, any order, no day twice); or one CLS radio\_flux\_*\_observation.txt. \\
 \end{longtable}
 
 \subsubsection*{NAME-VALUE ARGUMENTS}
@@ -975,7 +977,7 @@ files & 1xF & string & - & One CelesTrak SW-All CSV, or the SET SOLFSMY and DTCF
 \endfoot
 \bottomrule
 \endlastfoot
-Format & 1x1 & string & - & "auto" (default; identified from content), "celestrak" or "jb2008" (must then match). \\
+Format & 1x1 & string & - & "auto" (default; identified from content), "celestrak", "jb2008", "dst" or "f30" (must then match). \\
 \end{longtable}
 
 \subsubsection*{OUTPUT ARGUMENTS}
@@ -992,7 +994,7 @@ Format & 1x1 & string & - & "auto" (default; identified from content), "celestra
 \endfoot
 \bottomrule
 \endlastfoot
-sw & 1x1 & struct & - & .format ("celestrak"\textbar{}"jb2008"), .mjd (Nx1, 0h UTC of each day), .span (1x2 MJD), .index (struct of Nx1 / Nx8 / Nx24 arrays, names below), .files, .query (handle), .provenance. celestrak .index: f107Observed f107Adjusted f107ObservedCentre81 f107ObservedLast81 apDaily ap3h (Nx8) kp3h (Nx8, /10) kpSum sunspotNumber dataType (string) jb2008 .index: f10 f10b s10 s10b m10 m10b y10 y10b ssrc (string) dtc (Nx24, NaN where DTCFILE has no day) \\
+sw & 1x1 & struct & - & .format ("celestrak"\textbar{}"jb2008"), .mjd (Nx1, 0h UTC of each day), .span (1x2 MJD), .index (struct of Nx1 / Nx8 / Nx24 arrays, names below), .files, .query (handle), .provenance. celestrak .index: f107Observed f107Adjusted f107ObservedCentre81 f107ObservedLast81 apDaily ap3h (Nx8) kp3h (Nx8, /10) kpSum sunspotNumber dataType (string) jb2008 .index: f10 f10b s10 s10b m10 m10b y10 y10b ssrc (string) dtc (Nx24, NaN where DTCFILE has no day) dst .index: dst (Nx24 nT, base value applied, NaN for the WDC missing value 9999), dailyMean (Nx1 nT, as printed), version (Nx1 string) f30 .index: for each band b of f30 f15 f107 f8 f32 (CLS f30, f15, f10.7, f8, f3.2): b, bCorrected (CLS \_c, flare-corrected), bPrecision (\_p), bFlag (\_f); Nx1 sfu, NaN where CLS writes -1 f30 also sets .adjusted (true: "adjusted to 1 AU", false: "not adjusted"), read from the file header. \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
@@ -1000,7 +1002,7 @@ sw & 1x1 & struct & - & .format ("celestrak"\textbar{}"jb2008"), .mjd (Nx1, 0h U
 \item[\texttt{NonGravForces:\allowbreak{}spaceWeather:\allowbreak{}inputFiles}] wrong number of files for the family
 \item[\texttt{NonGravForces:\allowbreak{}spaceWeather:\allowbreak{}inputFormat}] a file's content matches no known family, or not the requested one
 \item[\texttt{NonGravForces:\allowbreak{}spaceWeather:\allowbreak{}dataColumn}] a required column is missing
-\item[\texttt{NonGravForces:\allowbreak{}spaceWeather:\allowbreak{}dataMalformed}] a record does not parse (bad date, DTC row without 24 values, JD and YYYY/DDD disagree)
+\item[\texttt{NonGravForces:\allowbreak{}spaceWeather:\allowbreak{}dataMalformed}] a record does not parse (bad date, DTC row without 24 values, JD and YYYY/DDD disagree, a WDC Dst record not 120 columns, a CLS cont\_day that disagrees with its date, a day twice)
 \item[\texttt{NonGravForces:\allowbreak{}spaceWeather:\allowbreak{}inputEpoch}] (query) not an epoch struct
 \item[\texttt{NonGravForces:\allowbreak{}spaceWeather:\allowbreak{}dataRange}] (query) a needed day is not in the table
 \item[\texttt{NonGravForces:\allowbreak{}spaceWeather:\allowbreak{}dataMissing}] (query) a needed value is empty
