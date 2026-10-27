@@ -175,8 +175,12 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-27, PR #113)
+## 5. Current status (2026-10-27, PR #114)
 
+- **2026-10-27, PR #114 (a drag month at high solar activity, O-19):** `setupNonGravForces('PoolMonths')` fetches
+  whole months into DATAPOOL (GRACE-C/D L1B day archives, members only; Swarm; complete SW-All and finals2000A,
+  refetched when stale); `fetch-data.yml` input `months`; `tools/dragScaleMonth.m` uses the pool's complete space
+  weather and EOP and refuses a month they do not cover. No unit or test changes: gate stays 475.
 - **2026-10-27, PR #113 (the observed density scale as a Model option, owner's request):** `Options`
   `drag.densityScale = "swarm"` (opt-in, no preset) and new unit `env.densityScale` (61 units): per UTC day
   f = sum(rho_Swarm)/sum(rho_model) for Swarm A, B, C; `S.at(epoch, h)` interpolates log f linearly in height

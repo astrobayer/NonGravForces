@@ -31,6 +31,10 @@ on:
       - tools/cutFixtures.py
       - .github/workflows/fetch-data.yml
   workflow_dispatch:
+    inputs:
+      months:
+        description: "Whole months for the drag month, space-separated yyyy-mm (GRACE-C/D L1B, Swarm, SW-All, finals2000A; ~4.5 GB each)"
+        default: ""
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -44,9 +48,10 @@ jobs:
     # A fork's pull request must not reach the self-hosted runner.
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, Windows]
-    timeout-minutes: 60
+    timeout-minutes: 300                   # a whole month of Level-1B is ~31 archives of ~150 MB
     env:
       READING_DATA_POOL: ${{ vars.READING_DATA_POOL }}
+      POOL_MONTHS: ${{ github.event.inputs.months || '' }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -62,7 +67,8 @@ jobs:
             cd NonGravForcesFetch
             pool = string(getenv("READING_DATA_POOL"));
             assert(strlength(pool) > 0, "fetchData:noPool", "READING_DATA_POOL is not set for this repository -> grant the organisation variable to it");
-            info = setupNonGravForces('Verbose', false, 'FetchMsis', "never", 'FetchData', "never", 'FetchKernels', "never", 'FetchGroops', "never", 'FetchPool', "ifMissing", 'DataPool', pool);
+            months = split(strtrim(string(getenv("POOL_MONTHS"))))'; months = months(strlength(months) > 0);
+            info = setupNonGravForces('Verbose', false, 'FetchMsis', "never", 'FetchData', "never", 'FetchKernels', "never", 'FetchGroops', "never", 'FetchPool', "ifMissing", 'DataPool', pool, 'PoolMonths', months);
             items = info.data.items(startsWith([info.data.items.name], ["dst" "f30" "itsg" "swarm" "pool"]));
             fprintf("%-50s %s\n", [[items.name]; [items.action]]);
             failed = items(startsWith([items.action], ["failed" "skipped"]));
