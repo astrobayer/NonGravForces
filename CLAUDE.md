@@ -184,6 +184,9 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   every species density (the gas force is linear in them); refused without the option, or formed for another
   drag.density; `app.DynamicsSource` refuses the option. `tools/dragScaleMonth.m` runs it as a Model variant.
   Written without MATLAB: ◐, predicted gate 475 (466 + 9).
+  **BOTH SATELLITES WITH THE OPTION** (month runs 40514608768 C, 40514618274 D, 2020-01): k_drag / median rms_x
+  C 0.882 / 2.13, D 0.937 / 2.11 nm/s^2 (DTM2020: 0.961 / 1.79, 1.024 / 1.80; preset 0.443 / 6.36, 0.479 / 6.21).
+  D runs 27 days (19-21 empty, 22 THR1B not on GPS time).
 - **2026-10-27, PR #112 (Swarm densities, stage 1 of the observed density scale):** DTM2020's licence rules it out
   as the way forward (owner); the licence-clean route is a per-day density scale from ESA's Swarm A/B/C POD-only
   densities (`SW_OPER_DNSxPOD_2_`, 30 s, ESA open data), fetched per month through the VirES HAPI server as CSV
