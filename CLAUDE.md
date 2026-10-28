@@ -198,11 +198,16 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   even with F10.7 near 10 sfu. On the 87 % it keeps, F30 + season + square has CV 0.178 against its constant's 0.194
   (-8 %; the factor set: 0.172 against 0.234, -27 %), r2 0.23 (factor: 0.52), and the mission levels do not close: in log
   f Swarm +0.007..+0.018, CHAMP -0.050, GRACE-A +0.034, GRACE-FO 1 -0.011 (factor: -0.041..+0.045) -- the same spread,
-  CHAMP's sign flipped. A temperature shift does not carry MSIS's solar-minimum error. Month runs 2020-01 / 2024-01 C
-  dispatched for the record. **The owner's fallback follows: drag.densityScale "combined"** -- `env.densityScale(files,
+  CHAMP's sign flipped. A temperature shift does not carry MSIS's solar-minimum error. **But the months say
+  otherwise, mildly** (runs 40747620518 2020-01, 40747623096 2024-01, GRACE-C; joint k_drag / median rms_x / drag
+  ratio): 2020-01 flux driver 0.805 / 2.47 / 0.585 against driver 0.740 / 2.81 / 0.601 (-0.041: 0.771 / 2.63) and
+  Swarm 0.882 / 2.13; 2024-01 flux 1.095 / 20.19 / 0.877 against driver 1.072 / 20.34 (-0.041: 1.117 / 20.39) and
+  Swarm 0.978 / 19.50. On ACT1B the flux shift is as good as the factor or slightly better (its MSIS height profile
+  helps at GRACE-FO), while the fit statistics, over all missions and cycles, favour the factor; neither reaches Swarm. **The owner's fallback follows: drag.densityScale "combined"** -- `env.densityScale(files,
   sw, 'Fallback', D)` with D an `env.densityDriverScale`: Swarm's factor on every day that has one, D's elsewhere, never
   mixed within a day (`S.source(epoch)`). Four tests (fallback contract, reference = the two scales bitwise,
-  vectorization, robustness) and the Model case. Written without MATLAB, ◐, predicted gate 490 (486 + 4).
+  vectorization, robustness) and the Model case. Written without MATLAB, predicted gate 490 (486 + 4);
+  ☑ CI 40747620816: 490/490, predicted 490.
 - **2026-10-28, PR #119 (the correction unit, `env.densityDriverScale`, owner's request):** f = rho_obs/rho_msis00 per UTC
   day PREDICTED from drivers that exist for every date -- F30's 81-day mean ending the day before, the day-before
   deviation, the day's Ap, annual and semiannual harmonics and ((Fbar - 75.712)/100)^2 -- with the F30 coefficient record
