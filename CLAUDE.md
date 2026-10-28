@@ -184,7 +184,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   0.248). 'Offset' adds a satellite's level in log f (GRACE-FO 1 -0.041). `Options` `drag.densityScale = "driver"`,
   `Model(..., 'DensityScale', S)` as for "swarm"; `S.kind` must match the option, both ways. 62 units. Written without
   MATLAB, ◐, predicted gate 486 (479 + 7). First CI run 40682547930: 485/486, `densityDriverScaleVectorization`
-  red -- `beta' * z` is a BLAS product, batch-size dependent (section 7); now a column-wise sum.
+  red -- `beta' * z` is a BLAS product, batch-size dependent (section 7); now a column-wise sum. ☑ CI 40685698661: 486/486, predicted 486.
 - **2026-10-28, PR #118 (driver fit: each proxy's square centred at its own mean, mission residuals):**
   `tools/densityDriverFit.m` centres ((Fbar - c)/100)^2 at the data set's mean of each proxy (was 120 sfu for both,
   which made F30's forward fit collinear) and prints, after each full fit, the residual of log f per satellite --
