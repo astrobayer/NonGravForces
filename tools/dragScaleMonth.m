@@ -157,7 +157,7 @@ if haveDriver
     % query returns the shifted fluxes.
     if isfile(options.FluxRecord)
         rec = load(options.FluxRecord, 'records');
-        fr = rec.records.day_trimmed_flux;
+        fr = rec.records.dayTrimmedFlux;              % matlab.lang.makeValidName("day trimmed flux")
         if isfield(fr, 'coef')
             Dz = NonGravForces.env.densityDriverScale(sw, cls);
             deltaAt = @(e) localFluxShift(Dz.drivers(e), fr);
