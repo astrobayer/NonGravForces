@@ -65,7 +65,8 @@ classdef Model
 %     1. the relative velocity            env.wind (co-rotation from referenceSystem)
 %     2. the geodetic height              referenceSystem.cartesianToGeodetic on the ITRS position
 %     3. density and composition          env.density with the space-weather drivers, times the observed
-%                                         daily scale of env.densityScale when drag.densityScale is "swarm"
+%                                         daily scale when drag.densityScale is "swarm" (env.densityScale,
+%                                         observed) or "driver" (env.densityDriverScale, predicted)
 %     4. the radiation source list        env.radiationSources (Sun, Earth tiles, eclipse)
 %     5. occlusion                        geom.selfShadow per radiation source; geom.flowShadow for the gas
 %                                         (Method "table" when geom.flowShadow is "table", the standard preset)
@@ -108,9 +109,10 @@ classdef Model
 %   Ceres         1x1   struct          -      io.importCERES result, required when erp.backend is "ceres".
 %   Climatology   1x1   struct          -      .albedo and .longwave io.importGroopsGrid results,
 %                                              required when erp.backend is "ceresClimatology".
-%   DensityScale  1x1   struct          -      env.densityScale result, required when drag.densityScale
-%                                              is "swarm" and refused otherwise; it must have been formed
-%                                              for this Model's drag.density. Density and every species
+%   DensityScale  1x1   struct          -      env.densityScale result (drag.densityScale "swarm") or
+%                                              env.densityDriverScale result ("driver"), required by those
+%                                              and refused otherwise; its kind must match the option and it
+%                                              must have been formed for this Model's drag.density. Density and every species
 %                                              density are multiplied by S.at(epoch, geodetic height), so
 %                                              the gas force scales exactly (it is linear in them).
 %
@@ -120,8 +122,8 @@ classdef Model
 %                                 same frame), .bodyTorque (torque only), .rho (1xK),
 %                                 .nu (1xK shadow factor), .mass_kg (1xK), .vrel_body,
 %                                 .sources (M), .temperature_K (NxK), .flowShadow,
-%                                 .accommodation, .lla, .densityScale (1xK, ones without
-%                                 drag.densityScale "swarm"), .backends, .provenance
+%                                 .accommodation, .lla, .densityScale (1xK, ones with
+%                                 drag.densityScale "none"), .backends, .provenance
 %
 % ACCURACY
 %   The Model adds no approximation: every number comes from the unit that owns
@@ -136,14 +138,14 @@ classdef Model
 %   NonGravForces:Model:inputOptions    options is not an Options object, or its choices contradict each other
 %                                       (alpha beside a non-fixed accommodation, maxwell without a specular
 %                                       fraction, walker2014 without a surface mass, internal power without shares,
-%                                       geom.flowShadow table beside selfShadow raycast, a 'DensityScale' without
-%                                       drag.densityScale "swarm" or formed for another drag.density)
+%                                       geom.flowShadow table beside selfShadow raycast, a 'DensityScale' with
+%                                       drag.densityScale "none", of the other kind, or formed for another drag.density)
 %   NonGravForces:Model:inputMass       no 'Mass' and no mass on the macro model, or 'Mass' not a positive mass / massModel
 %   NonGravForces:Model:inputState      epoch, r, v or q disagree in size, or are not finite
 %   NonGravForces:Model:inputAttitude   no q was given and the Model has no attitude provider
 %   NonGravForces:Model:dependEop       evaluated without 'Eop'
 %   NonGravForces:Model:dependWeather   evaluated without 'SpaceWeather' or 'Exponential' for the density backend, or without 'SpaceWeather' for drag.wind hwm14
-%   NonGravForces:Model:dependDensityScale  evaluated with drag.densityScale "swarm" and no 'DensityScale'
+%   NonGravForces:Model:dependDensityScale  evaluated with drag.densityScale "swarm" or "driver" and no 'DensityScale'
 %   NonGravForces:Model:dependCeres     evaluated with erp.backend ceres and no 'Ceres', or
 %                                       ceresClimatology and no 'Climatology'
 %   NonGravForces:Model:unsupported     a method option this Model cannot honour (partials of alpha for a
@@ -552,7 +554,7 @@ classdef Model
 
         function [rho, species, Tgas, f] = callDensity(obj, epoch, lla)
             %CALLDENSITY The density backend with the drivers the Model was given, never a default set,
-            %times the observed daily scale when drag.densityScale is "swarm".
+            %times the daily scale when drag.densityScale is "swarm" (observed) or "driver" (predicted).
             o = obj.options;
             if o.drag.density == "exponential"
                 if isempty(obj.exponential)
@@ -567,9 +569,9 @@ classdef Model
             end
             Tgas = T(2, :);
             f = ones(1, numel(rho));
-            if o.drag.densityScale == "swarm"
+            if o.drag.densityScale ~= "none"
                 if isempty(obj.densityScale)
-                    NonGravForces.fail("Model", "dependDensityScale", "drag.densityScale swarm needs 'DensityScale' at construction -> pass env.densityScale(swarmFiles, sw, 'Model', ""%s"")", o.drag.density);
+                    NonGravForces.fail("Model", "dependDensityScale", "drag.densityScale %s needs 'DensityScale' at construction -> pass env.densityScale(swarmFiles, sw) for swarm, env.densityDriverScale(sw, cls) for driver", o.drag.densityScale);
                 end
                 f = reshape(obj.densityScale.at(epoch, lla(3, :)), 1, []);
                 rho = rho .* f;
@@ -782,11 +784,14 @@ function localCheckDensityScale(o, S)
 if isempty(S)
     return
 end
-if o.drag.densityScale ~= "swarm"
-    NonGravForces.fail("Model", "inputOptions", "'DensityScale' was given and drag.densityScale is ""%s"" -> set('drag.densityScale', ""swarm"") or leave 'DensityScale' out, so it is not silently ignored", o.drag.densityScale);
+if o.drag.densityScale == "none"
+    NonGravForces.fail("Model", "inputOptions", "'DensityScale' was given and drag.densityScale is ""none"" -> set('drag.densityScale', ""swarm"" or ""driver"") or leave 'DensityScale' out, so it is not silently ignored");
 end
-if ~isstruct(S) || ~isfield(S, 'at') || ~isfield(S, 'model')
-    NonGravForces.fail("Model", "inputOptions", "'DensityScale' must be an env.densityScale result -> build it with NonGravForces.env.densityScale(files, sw)");
+if ~isstruct(S) || ~isfield(S, 'at') || ~isfield(S, 'model') || ~isfield(S, 'kind')
+    NonGravForces.fail("Model", "inputOptions", "'DensityScale' must be an env.densityScale or env.densityDriverScale result -> build it with one of them");
+end
+if S.kind ~= o.drag.densityScale
+    NonGravForces.fail("Model", "inputOptions", "the density scale is of kind %s and drag.densityScale is %s -> pass env.densityScale for swarm, env.densityDriverScale for driver", S.kind, o.drag.densityScale);
 end
 if S.model ~= o.drag.density
     NonGravForces.fail("Model", "inputOptions", "the density scale was formed for %s and drag.density is %s -> form it with 'Model', ""%s""", S.model, o.drag.density, o.drag.density);

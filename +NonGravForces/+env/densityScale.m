@@ -53,7 +53,7 @@ function S = densityScale(files, sw, options)
 % OUTPUT ARGUMENTS
 %   Name  Size  Type    Units  Description
 %   ----  ----  ----    -----  -----------
-%   S     1x1   struct  -      .day (1xD UTC MJD of each day), .satellite (1xP "A"|"B"|"C"),
+%   S     1x1   struct  -      .kind "swarm", .day (1xD UTC MJD of each day), .satellite (1xP "A"|"B"|"C"),
 %                              .factor (PxD), .height_m (PxD mean geodetic height of the used
 %                              records), .nUsed (PxD), .low (1xD) and .high (1xD) bracket factors,
 %                              .hLow_m .hHigh_m (1xD), .model, .stride, .files, .provenance, and
@@ -144,6 +144,7 @@ isLow = P == "A" | P == "C";
 low = exp(mean(log(factor(isLow, :)), 1, 'omitnan'));   % geometric mean of A and C, or the one with a factor
 hLow = mean(height(isLow, :), 1, 'omitnan');
 high = factor(P == "B", :); hHigh = height(P == "B", :);
+S.kind = "swarm";
 S.day = days;
 S.satellite = P;
 S.factor = factor;
