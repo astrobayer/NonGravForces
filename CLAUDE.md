@@ -181,7 +181,14 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   `tools/densityDriverFit.m` centres ((Fbar - c)/100)^2 at the data set's mean of each proxy (was 120 sfu for both,
   which made F30's forward fit collinear) and prints, after each full fit, the residual of log f per satellite --
   the test for a mission offset between Swarm's POD densities and TU Delft's accelerometer densities. Tool only:
-  gate stays 479.
+  gate stays 479 (☑ CI 40666690352). The first fit run died at parse time on an unescaped apostrophe in a fprintf
+  format (`'` inside a char literal must be doubled) -- tools are not parsed by the gate, so only their own run finds it.
+  **Run 40666688202 (2000-08..2026-08, all missions, trimmed days):** centres F10.7 112.0 sfu, F30 75.7 sfu; F30's VIF
+  9.5 -> 1.4 and its forward fit is no longer refused: **F30 + season + square CV 0.172 / fwd 0.181 / bwd 0.180**
+  (F10.7 + square 0.178 / 0.181 / 0.186, unchanged: moving the centre of a quadratic that keeps its linear term is a
+  reparametrisation). Residual median per satellite (F30 fit, log f): Swarm A/B/C -0.004 / -0.018 / -0.003, CHAMP +0.036,
+  GRACE-A +0.045, GRACE-FO 1 -0.041 -- mission offsets of 3-5 %, a quarter of the per-day scatter (RMS 0.15-0.18).
+  GRACE-FO 1 sits 4 % below Swarm in the same years, the one offset that matters when the target is GRACE-FO.
 - **2026-10-28, PR #117 (the TOLEOS months, edge requests clipped):** fetch-data run 40637542696 (densities
   2000-07..2026-04, 29 min) fetched CHAMP, GRACE-A and GRACE-FO 1 into the runner's pool except the SIX partial months
   at the ends of the three spans: VirES answers 400 to a request reaching outside a dataset's startDate..stopDate (even
