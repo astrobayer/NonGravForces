@@ -1533,6 +1533,68 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyBoundAndRecord("densityScale / msis00 on as many points, time ratio", q, 20, "-", "first run");
         end
     end
+    methods (Test, TestTags = {'contract'})
+        % densityScale with 'Fallback': the combined scale (O-19, 2026-10-28)
+        function densityScaleFallbackContract(tc)
+            D = tc.driverScale();
+            [C, files, sw] = tc.swarmScale('Fallback', D);
+            tc.verifyEqual(C.kind, "combined"); tc.verifyEqual(C.fallback.kind, "driver");
+            S = tc.swarmScale();
+            tc.verifyEqual(S.kind, "swarm"); tc.verifyEmpty(S.fallback);
+            % a fallback that is not a driver scale, or was formed for another model, is refused
+            tc.verifyErrorId(@() NonGravForces.env.densityScale(files, sw, 'Fallback', S), 'NonGravForces:densityScale:inputFallback');
+            tc.verifyErrorId(@() NonGravForces.env.densityScale(files, sw, 'Fallback', struct('x', 1)), 'NonGravForces:densityScale:inputFallback');
+            tc.verifyErrorId(@() NonGravForces.env.densityScale(files, sw, 'Model', "msis21", 'Fallback', D), 'NonGravForces:densityScale:inputFallback');
+            % the day the plain scale refuses (2020-01-05) the combined one takes from the fallback, and says so
+            e = referenceSystem.daySecondToEpoch([58849 43200; 58853 43200], "UTC");
+            tc.verifyErrorId(@() S.at(e, [490e3 490e3]), 'NonGravForces:densityScale:dataDay');
+            f = C.at(e, [490e3 490e3]);
+            tc.verifySize(f, [1 2]); tc.verifyTrue(all(f > 0 & isfinite(f)));
+            tc.verifyEqual(C.source(e), ["swarm" "driver"]);
+            tc.verifyEqual(S.source(e), ["swarm" "none"]);
+        end
+    end
+    methods (Test, TestTags = {'reference'})
+        function densityScaleFallbackReference(tc)
+            % Oracle: the two scales it combines. On Swarm's days it IS the plain Swarm scale, on every other day it IS
+            % the driver scale, bitwise -- epochs of both kinds interleaved in one call.
+            D = tc.driverScale(); C = tc.swarmScale('Fallback', D); S = tc.swarmScale();
+            e = referenceSystem.daySecondToEpoch([58853 3600; 58849 3600; 58854 70000; 58850 50000; 58851 100], "UTC");
+            h = [480e3 485e3 490e3 495e3 500e3];
+            f = C.at(e, h);
+            iS = [2 4 5]; iD = [1 3];
+            tc.verifyEqual(f(iS), S.at(referenceSystem.daySecondToEpoch([e.day(iS) e.sec(iS)], "UTC"), h(iS)));
+            tc.verifyEqual(f(iD), D.at(referenceSystem.daySecondToEpoch([e.day(iD) e.sec(iD)], "UTC"), h(iD)));
+        end
+    end
+    methods (Test, TestTags = {'vectorization'})
+        function densityScaleFallbackVectorization(tc)
+            % 300 epochs over six days, three with Swarm and three without, at once equal 300 single calls, bitwise.
+            C = tc.swarmScale('Fallback', tc.driverScale());
+            t = linspace(58849, 58854.999, 300);
+            e = referenceSystem.daySecondToEpoch([floor(t') round((t' - floor(t')) * 86400)], "UTC");
+            h = 470e3 + 30e3 * sin(1:300);
+            f = C.at(e, h);
+            g = zeros(1, 300);
+            for k = 1:300
+                g(k) = C.at(referenceSystem.daySecondToEpoch([e.day(k) e.sec(k)], "UTC"), h(k));
+            end
+            tc.verifyEqual(f, g);
+        end
+    end
+    methods (Test, TestTags = {'robustness'})
+        function densityScaleFallbackRobustness(tc)
+            % A Swarm day with too few records hands the whole day to the fallback, never half of it; a day neither
+            % covers (2019-10-01: F30's 81 days before it are not in the excerpt) is refused by the fallback.
+            D = tc.driverScale();
+            [~, files, sw] = tc.swarmScale();
+            C = NonGravForces.env.densityScale(files, sw, 'MinRecords', 2000, 'Fallback', D);
+            e = referenceSystem.daySecondToEpoch([58849 600; 58849 80000], "UTC");
+            tc.verifyEqual(C.source(e), ["driver" "driver"]);
+            tc.verifyEqual(C.at(e, [490e3 495e3]), D.at(e, [490e3 495e3]));
+            tc.verifyErrorId(@() C.at(referenceSystem.mjdToEpoch(58757.5, "UTC"), 490e3), 'NonGravForces:densityDriverScale:dataDay');
+        end
+    end
     methods
         function [S, sw, cls] = driverScale(tc, varargin)
             %DRIVERSCALE env.densityDriverScale over the committed space-weather excerpts (2019-09..2020-03).

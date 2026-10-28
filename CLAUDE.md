@@ -192,7 +192,17 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   log rho) that matches the observed sum -- an exospheric-temperature correction whose height profile is MSIS's own --
   and regresses delta on the same drivers; losses and residuals are multiplied by d log rho / d delta, so they read in
   log f. Its F30 + season + square record goes to `<Pool>/Swarm/densityDriverFit_record_*.mat`, which
-  `tools/dragScaleMonth.m` reads for the variant "flux driver" (a space-weather struct with shifted fluxes). Pending.
+  `tools/dragScaleMonth.m` reads for the variant "flux driver" (a space-weather struct with shifted fluxes).
+  **Fit run 40727237248 (2000-08..2026-08, all missions, 30 min): WORSE than the factor.** 3292 of 25070 trimmed days
+  (13 %) lie outside -60..+30 sfu -- solar-minimum days (2008: 379 of 729 kept, 2019: 832 of 1456) that MSIS cannot reach
+  even with F10.7 near 10 sfu. On the 87 % it keeps, F30 + season + square has CV 0.178 against its constant's 0.194
+  (-8 %; the factor set: 0.172 against 0.234, -27 %), r2 0.23 (factor: 0.52), and the mission levels do not close: in log
+  f Swarm +0.007..+0.018, CHAMP -0.050, GRACE-A +0.034, GRACE-FO 1 -0.011 (factor: -0.041..+0.045) -- the same spread,
+  CHAMP's sign flipped. A temperature shift does not carry MSIS's solar-minimum error. Month runs 2020-01 / 2024-01 C
+  dispatched for the record. **The owner's fallback follows: drag.densityScale "combined"** -- `env.densityScale(files,
+  sw, 'Fallback', D)` with D an `env.densityDriverScale`: Swarm's factor on every day that has one, D's elsewhere, never
+  mixed within a day (`S.source(epoch)`). Four tests (fallback contract, reference = the two scales bitwise,
+  vectorization, robustness) and the Model case. Written without MATLAB, ◐, predicted gate 490 (486 + 4).
 - **2026-10-28, PR #119 (the correction unit, `env.densityDriverScale`, owner's request):** f = rho_obs/rho_msis00 per UTC
   day PREDICTED from drivers that exist for every date -- F30's 81-day mean ending the day before, the day-before
   deviation, the day's Ap, annual and semiannual harmonics and ((Fbar - 75.712)/100)^2 -- with the F30 coefficient record

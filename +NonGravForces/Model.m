@@ -109,8 +109,9 @@ classdef Model
 %   Ceres         1x1   struct          -      io.importCERES result, required when erp.backend is "ceres".
 %   Climatology   1x1   struct          -      .albedo and .longwave io.importGroopsGrid results,
 %                                              required when erp.backend is "ceresClimatology".
-%   DensityScale  1x1   struct          -      env.densityScale result (drag.densityScale "swarm") or
-%                                              env.densityDriverScale result ("driver"), required by those
+%   DensityScale  1x1   struct          -      env.densityScale result (drag.densityScale "swarm"; with
+%                                              'Fallback' "combined") or env.densityDriverScale result
+%                                              ("driver"), required by those
 %                                              and refused otherwise; its kind must match the option and it
 %                                              must have been formed for this Model's drag.density. Density and every species
 %                                              density are multiplied by S.at(epoch, geodetic height), so
@@ -145,7 +146,7 @@ classdef Model
 %   NonGravForces:Model:inputAttitude   no q was given and the Model has no attitude provider
 %   NonGravForces:Model:dependEop       evaluated without 'Eop'
 %   NonGravForces:Model:dependWeather   evaluated without 'SpaceWeather' or 'Exponential' for the density backend, or without 'SpaceWeather' for drag.wind hwm14
-%   NonGravForces:Model:dependDensityScale  evaluated with drag.densityScale "swarm" or "driver" and no 'DensityScale'
+%   NonGravForces:Model:dependDensityScale  evaluated with drag.densityScale "swarm", "driver" or "combined" and no 'DensityScale'
 %   NonGravForces:Model:dependCeres     evaluated with erp.backend ceres and no 'Ceres', or
 %                                       ceresClimatology and no 'Climatology'
 %   NonGravForces:Model:unsupported     a method option this Model cannot honour (partials of alpha for a
@@ -554,7 +555,7 @@ classdef Model
 
         function [rho, species, Tgas, f] = callDensity(obj, epoch, lla)
             %CALLDENSITY The density backend with the drivers the Model was given, never a default set,
-            %times the daily scale when drag.densityScale is "swarm" (observed) or "driver" (predicted).
+            %times the daily scale when drag.densityScale is "swarm" (observed), "driver" (predicted) or "combined".
             o = obj.options;
             if o.drag.density == "exponential"
                 if isempty(obj.exponential)
@@ -571,7 +572,7 @@ classdef Model
             f = ones(1, numel(rho));
             if o.drag.densityScale ~= "none"
                 if isempty(obj.densityScale)
-                    NonGravForces.fail("Model", "dependDensityScale", "drag.densityScale %s needs 'DensityScale' at construction -> pass env.densityScale(swarmFiles, sw) for swarm, env.densityDriverScale(sw, cls) for driver", o.drag.densityScale);
+                    NonGravForces.fail("Model", "dependDensityScale", "drag.densityScale %s needs 'DensityScale' at construction -> pass env.densityScale(swarmFiles, sw) for swarm, env.densityDriverScale(sw, cls) for driver, env.densityScale(swarmFiles, sw, 'Fallback', D) for combined", o.drag.densityScale);
                 end
                 f = reshape(obj.densityScale.at(epoch, lla(3, :)), 1, []);
                 rho = rho .* f;
@@ -785,7 +786,7 @@ if isempty(S)
     return
 end
 if o.drag.densityScale == "none"
-    NonGravForces.fail("Model", "inputOptions", "'DensityScale' was given and drag.densityScale is ""none"" -> set('drag.densityScale', ""swarm"" or ""driver"") or leave 'DensityScale' out, so it is not silently ignored");
+    NonGravForces.fail("Model", "inputOptions", "'DensityScale' was given and drag.densityScale is ""none"" -> set('drag.densityScale', ""swarm"", ""driver"" or ""combined"") or leave 'DensityScale' out, so it is not silently ignored");
 end
 if ~isstruct(S) || ~isfield(S, 'at') || ~isfield(S, 'model') || ~isfield(S, 'kind')
     NonGravForces.fail("Model", "inputOptions", "'DensityScale' must be an env.densityScale or env.densityDriverScale result -> build it with one of them");

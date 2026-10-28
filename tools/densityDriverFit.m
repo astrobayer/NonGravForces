@@ -404,7 +404,7 @@ for proxy = ["F10.7" "F30"]
     try
         r = timeSeriesPreparation.regressDrivers(X(:, 1), X(:, spec(s).cols), DriverNames = names(nested{spec(s).n}), ...
             MaxVif = options.MaxVif, NBoot = options.NBoot, Stage = "densityDriverFit." + label + "." + proxy);
-        fprintf('  %s full fit: r2 %.3f; coefficient +- block-bootstrap sigma (log f per unit), VIF\n', proxy, r.r2);
+        fprintf('  %s full fit: r2 %.3f; coefficient +- block-bootstrap sigma (%s per unit), VIF\n', proxy, r.r2, respName);
         fprintf('    %-14s %10.4f +- %.4f\n', "intercept", r.coef(1), r.sigma(1));
         for k = 1:numel(r.driverNames)
             fprintf('    %-14s %10.4g +- %.2g   VIF %.1f\n', r.driverNames(k), r.coef(k + 1), r.sigma(k + 1), r.vif(k));
@@ -428,7 +428,7 @@ for proxy = ["F10.7" "F30"]
         for refDay = [54466 58849]
             j = find(mjd == refDay, 1);
             if isempty(j), continue, end
-            fprintf('      reference MJD %d: z = %s  log f = %.17g\n', refDay, mat2str(Z(j, :), 17), a0 + Z(j, :) * r.coef(2:end));
+            fprintf('      reference MJD %d: z = %s  %s = %.17g\n', refDay, mat2str(Z(j, :), 17), respName, a0 + Z(j, :) * r.coef(2:end));
         end
         fprintf('    residual per satellite: rows, median, mean, RMS (log f)\n');
         sat = rows(:, 2);
