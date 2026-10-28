@@ -175,8 +175,23 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-28, PR #116)
+## 5. Current status (2026-10-28, PR #117)
 
+- **2026-10-28, PR #117 (the TOLEOS months, edge requests clipped):** fetch-data run 40637542696 (densities
+  2000-07..2026-04, 29 min) fetched CHAMP, GRACE-A and GRACE-FO 1 into the runner's pool except the SIX partial months
+  at the ends of the three spans: VirES answers 400 to a request reaching outside a dataset's startDate..stopDate (even
+  by the 10 s of stop = next month 00:00 against stopDate 23:59:50). `setupNonGravForces`' TOLEOS table now carries the
+  headers' start and stop and clips the first and last month to them (stop is exclusive, so a span's very last record
+  is not fetched). No unit or test change: gate stays 479.
+  **THE MULTI-MISSION FIT (run 40651219543, 2000-08..2026-08, 31 min):** 50376 passes (Swarm A/B/C 9214/9239/9233,
+  CHAMP 6950, GRACE-A 10038, GRACE-FO 1 5702). The yearly median f repeats across cycles: 0.57-0.59 in the minimum
+  2008-09, 0.51-0.53 in 2019-20, 0.80-0.95 in the maxima; the missions agree where they overlap. Trimmed days, CV / fwd /
+  bwd RMS of log f: constant 0.234 / 0.228 / 0.248, linear F10.7 0.206 / 0.229 / 0.210, **F10.7 + season + square 0.178 /
+  0.181 / 0.186** -- FORWARD across 2020 now beats the constant by 21 % (Swarm alone: 0.291 against 0.232). Full fit:
+  d log f / dFbar = 0 at Fbar ~150 sfu (0.00362 - 2 x 0.614 (F - 120)/1e4), r2 0.48. F30 + square has the best CV (0.171)
+  but its forward fit is refused: the square is centred at 120 for both proxies and F30 runs lower, so on 2000-19 Fbar
+  and its square are collinear (VIF 9.5 on all data). Next: centre each proxy's square at its own mean; a mission
+  offset term; then a correction unit.
 - **2026-10-28, PR #116 (step 3 of the driver fit: densities of other missions):** TU Delft's CHAMP, GRACE-A/B and
   GRACE-FO accelerometer densities (ESA TOLEOS v02, CC BY 4.0) via VirES HAPI: `setupNonGravForces('DensityMonths')`
   into `<DataPool>/TOLEOS`, `fetch-data.yml` input `densities`, each dataset's header printed in the run log. Run
@@ -186,7 +201,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   cuts six hours of each into `data/samples/toleos` (bot commit 4c1e81e). Written against those bytes: `io.readSwarmDensity`
   reads the TOLEOS datasets too (satellite from the dataset name, the fill 9.99e+32 -> NaN and not valid, an unknown
   dataset refused), four tests; `tools/densityDriverFit.m` 'Missions' (swarm, champ, grace, gracefo), `density-fit.yml`
-  input `missions`. Written without MATLAB: ◐, predicted gate 479 (475 + 4).
+  input `missions`. Written without MATLAB, predicted gate 479 (475 + 4); ☑ CI 40636131057: 479/479.
 - **2026-10-28, PR #115 (nonlinear solar terms in `tools/densityDriverFit.m`, owner's choice):** log Fbar, a centred
   square ((Fbar-120)/100)^2 and the cycle's phase. Run 40624842064 (trimmed days, CV / fwd / bwd RMS of log f): constant
   0.252 / 0.232 / 0.280, linear F30 0.217 / 0.287 / 0.220, **F10.7 + square 0.192 / 0.291 / 0.192**, F30 + square 0.179 /
