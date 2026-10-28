@@ -1229,7 +1229,7 @@ aux & 1x1 & struct & - & .file, .generation, .numCoefficients, .validFrom, .vali
 
 \subsection{\texttt{NonGravForces.io.readSwarmDensity}}
 \label{api:io.readSwarmDensity}
-\noindent Swarm POD-only thermosphere density (ESA SW\_OPER\_DNSxPOD\_2\_) from VirES HAPI CSV.
+\noindent Thermosphere density from VirES HAPI CSV: Swarm POD-only, CHAMP/GRACE/GRACE-FO accelerometer.
 
 \begin{lstlisting}
 [epoch, lla, rho, aux] = NonGravForces.io.readSwarmDensity(file)
@@ -1250,7 +1250,7 @@ aux & 1x1 & struct & - & .file, .generation, .numCoefficients, .validFrom, .vali
 \endfoot
 \bottomrule
 \endlastfoot
-files & 1xF & string & - & One or more HAPI CSV files of ONE Swarm satellite (dataset SW\_OPER\_DNS\textless{}A\textbar{}B\textbar{}C\textgreater{}POD\_2\_); concatenated and sorted by time, duplicates of an epoch kept once. \\
+files & 1xF & string & - & One or more HAPI CSV files of ONE dataset (SW\_OPER\_DNS\textless{}A\textbar{}B\textbar{}C\textgreater{}POD\_2\_, CH\_OPER\_DNS\_ACC\_2\_, GR\_OPER\_DNS\textless{}1\textbar{}2\textgreater{}ACC\_2\_, GF\_OPER\_DNS\textless{}1\textbar{}2\textgreater{}ACC\_2\_); concatenated and sorted by time, duplicates of an epoch kept once. \\
 \end{longtable}
 
 \subsubsection*{NAME-VALUE ARGUMENTS}
@@ -1286,8 +1286,8 @@ TimeRange & 1x2 & double & MJD(UTC) & Keep records with mjd0 \textless{}= t \tex
 \endlastfoot
 epoch & 1x1 & struct & - & referenceSystem epoch struct, K entries, scale "UTC" \\
 lla & 3xK & double & rad,rad,m & Geodetic latitude, longitude, height (GRS80, as the product states; see ACCURACY for WGS-84) \\
-rho & 1xK & double & kg/\allowbreak{}m\textasciicircum{}3 & Thermosphere mass density \\
-aux & 1x1 & struct & - & .rhoOrbitMean (1xK kg/m\textasciicircum{}3, the product's orbit average), .lst\_h (1xK local solar time, h), .valid (1xK logical, validity\_flag == 0), .satellite ("A"\textbar{}"B"\textbar{}"C"), .dataset, .header (decoded HAPI header of the first file), .files, .numRecords, .provenance \\
+rho & 1xK & double & kg/\allowbreak{}m\textasciicircum{}3 & Thermosphere mass density (NaN where the product has its fill) \\
+aux & 1x1 & struct & - & .rhoOrbitMean (1xK kg/m\textasciicircum{}3, the product's orbit average, NaN at the fill), .lst\_h (1xK local solar time, h), .valid (1xK logical, validity\_flag == 0 and the density not the fill), .satellite ("A"\textbar{}"B"\textbar{}"C" for Swarm, "CHAMP", "GRACE-A"\textbar{}"GRACE-B", "GRACE-C"\textbar{}"GRACE-D" for GRACE-FO 1\textbar{}2), .dataset, .header (decoded HAPI header of the first file), .files, .numRecords, .provenance \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
@@ -1296,7 +1296,7 @@ aux & 1x1 & struct & - & .rhoOrbitMean (1xK kg/m\textasciicircum{}3, the product
 \item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}dataFormat}] no HAPI JSON header, an undecodable one, or a status other than 1200 (OK)
 \item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}dataColumn}] a required parameter is missing from the header, or a data line does not have the header's columns
 \item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}dataUnits}] a parameter's units are not the ones converted here
-\item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}dataSatellite}] the files are of different datasets
+\item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}dataSatellite}] the files are of different datasets, or of a dataset this reader does not know
 \item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}dataEmpty}] no record survives TimeRange
 \end{description}
 

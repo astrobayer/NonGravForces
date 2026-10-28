@@ -42,7 +42,10 @@ classdef tNgfIo < NgfTestCase
                 'eop', fullfile(root, 'data', 'eop', 'finals2000A_2019-09_2020-03.all'), ...
                 'swA', fullfile(S, 'swarm', 'SW_OPER_DNSAPOD_2_2020-01-01_2020-01-03.csv'), ...
                 'swB', fullfile(S, 'swarm', 'SW_OPER_DNSBPOD_2_2020-01-01_2020-01-03.csv'), ...
-                'swC', fullfile(S, 'swarm', 'SW_OPER_DNSCPOD_2_2020-01-01_2020-01-03.csv'));
+                'swC', fullfile(S, 'swarm', 'SW_OPER_DNSCPOD_2_2020-01-01_2020-01-03.csv'), ...
+                'tlCH', fullfile(S, 'toleos', 'CH_OPER_DNS_ACC_2_2008-01-01_00-06.csv'), ...
+                'tlGR', fullfile(S, 'toleos', 'GR_OPER_DNS1ACC_2_2008-01-01_00-06.csv'), ...
+                'tlGF', fullfile(S, 'toleos', 'GF_OPER_DNS1ACC_2_2020-01-01_00-06.csv'));
             for n = string(fieldnames(tc.f))'
                 tc.assertTrue(isfile(tc.f.(n)), sprintf('fixture %s is missing: %s', n, tc.f.(n)));
             end
@@ -1400,6 +1403,23 @@ classdef tNgfIo < NgfTestCase
             [~, ~, r1] = NonGravForces.io.readSwarmDensity(tc.f.swB, 'TimeRange', [58849 58850 - 1/86400]);
             tc.verifyEqual(numel(r1), 2880);
         end
+        % readSwarmDensity on TOLEOS (O-19 step 3, 2026-10-28)
+        function readSwarmDensityToleosContract(tc)
+            % CHAMP, GRACE-A and GRACE-FO 1 accelerometer densities in the same layout, 10 s, six hours each
+            files = [string(tc.f.tlCH) string(tc.f.tlGR) string(tc.f.tlGF)];
+            sats = ["CHAMP" "GRACE-A" "GRACE-C"];
+            sets = ["CH_OPER_DNS_ACC_2_" "GR_OPER_DNS1ACC_2_" "GF_OPER_DNS1ACC_2_"];
+            for k = 1:3
+                [ep, lla, rho, aux] = NonGravForces.io.readSwarmDensity(files(k));
+                tc.verifyEqual(aux.numRecords, 2160); tc.verifySize(lla, [3 2160]); tc.verifySize(rho, [1 2160]);
+                tc.verifyEqual(aux.satellite, sats(k)); tc.verifyEqual(aux.dataset, sets(k));
+                tc.verifyEqual(ep.sec(2) - ep.sec(1), 10);
+            end
+            % a dataset the reader does not know is refused, not given a made-up satellite
+            txt = fileread(tc.f.tlGR);
+            bad = localWriteText(tc.tmp, "toleos_dataset.csv", strrep(txt, '"x_dataset": "GR_OPER_DNS1ACC_2_"', '"x_dataset": "GO_CONS_DNS_ACC_2_"'));
+            tc.verifyErrorId(@() NonGravForces.io.readSwarmDensity(bad), 'NonGravForces:readSwarmDensity:dataSatellite');
+        end
     end
     methods (Test, TestTags = {'reference'})
         % readSwarmDensity (O-19, 2026-10-27)
@@ -1421,6 +1441,22 @@ classdef tNgfIo < NgfTestCase
             tc.verifyEqual(lla(3, 1), 511992.9365685731, 'RelTol', 2 * eps);
             % the last record is 2020-01-03T23:59:30Z
             tc.verifyEqual([ep.day(end) ep.sec(end)], [58851 86370]);
+        end
+        % readSwarmDensity on TOLEOS (O-19 step 3, 2026-10-28)
+        function readSwarmDensityToleosReference(tc)
+            % Oracle: the raw lines split with str2double; the fill 9.99e+32 of CHAMP's orbit mean is NaN, the rest unchanged.
+            [ep, lla, rho, aux] = NonGravForces.io.readSwarmDensity(tc.f.tlCH);
+            raw = localSwarmRaw(tc.f.tlCH);
+            tc.verifyEqual(rad2deg(lla(1, :))', raw.v(:, 1), 'RelTol', 4 * eps);
+            tc.verifyEqual(lla(3, :)', raw.v(:, 3), 'RelTol', 2 * eps);
+            tc.verifyEqual(rho', raw.v(:, 5), 'RelTol', 2 * eps);
+            fill = raw.v(:, 6) >= 1e30;
+            tc.verifyTrue(all(isnan(aux.rhoOrbitMean(fill)))); tc.verifyEqual(aux.rhoOrbitMean(~fill)', raw.v(~fill, 6), 'RelTol', 2 * eps);
+            % the first record as printed: 2008-01-01T00:00:00.000Z = MJD 54466, 358.6 km, 8.12e-13 kg/m^3
+            tc.verifyEqual([ep.day(1) ep.sec(1)], [54466 0]);
+            tc.verifyEqual(rho(1), 8.12393969342479e-13, 'RelTol', 2 * eps);
+            tc.verifyEqual(lla(3, 1), 358646.0609579934, 'RelTol', 2 * eps);
+            tc.verifyEqual([ep.day(end) ep.sec(end)], [54466 21590]);
         end
     end
     methods (Test, TestTags = {'precision'})
@@ -1466,6 +1502,18 @@ classdef tNgfIo < NgfTestCase
             raw = localSwarmRaw(tc.f.swB);
             tc.verifyEqual(nnz(~aux.valid), nnz(raw.v(:, 7) ~= 0)); tc.verifyGreaterThan(nnz(~aux.valid), 0);
         end
+        % readSwarmDensity on TOLEOS (O-19 step 3, 2026-10-28)
+        function readSwarmDensityToleosRobustness(tc)
+            % CHAMP's orbit mean carries the fill on 359 of these records (validity_flag_orbitmean 1): NaN, density kept
+            [~, ~, rho, aux] = NonGravForces.io.readSwarmDensity(tc.f.tlCH);
+            tc.verifyEqual(nnz(isnan(aux.rhoOrbitMean)), 359); tc.verifyTrue(all(isfinite(rho))); tc.verifyTrue(all(aux.valid));
+            % a filled DENSITY is NaN and not valid -- not 9.99e+32 kg/m^3 averaged into a factor
+            L = splitlines(string(fileread(tc.f.tlGF))); k = find(~startsWith(L, "#"), 1) + 5;
+            p = split(L(k), ","); p(6) = "9.99e+32"; L(k) = strjoin(p, ",");
+            bad = localWriteText(tc.tmp, "toleos_fill.csv", strjoin(L, newline));
+            [~, ~, r, a] = NonGravForces.io.readSwarmDensity(bad);
+            tc.verifyTrue(isnan(r(6))); tc.verifyFalse(a.valid(6)); tc.verifyEqual(nnz(isnan(r)), 1); tc.verifyEqual(nnz(~a.valid), 1);
+        end
     end
     methods (Test, TestTags = {'metamorphic'})
         % readSwarmDensity (O-19, 2026-10-27)
@@ -1482,6 +1530,15 @@ classdef tNgfIo < NgfTestCase
             tc.verifyLessThan(sB(ceil(end / 2)) / sA(ceil(end / 2)), 0.6, 'and its density is lower');
             [~, ~, rAA] = NonGravForces.io.readSwarmDensity([string(tc.f.swA) string(tc.f.swA)]);
             tc.verifyEqual(rAA, rA);
+        end
+        % readSwarmDensity on TOLEOS (O-19 step 3, 2026-10-28)
+        function readSwarmDensityToleosMetamorphic(tc)
+            % Physics the products must show on 2008-01-01: CHAMP ~130 km below GRACE-A flies in several times the density
+            [~, lC, rC] = NonGravForces.io.readSwarmDensity(tc.f.tlCH);
+            [~, lG, rG] = NonGravForces.io.readSwarmDensity(tc.f.tlGR);
+            tc.verifyGreaterThan(mean(lG(3, :)) - mean(lC(3, :)), 100e3, 'GRACE-A flies higher than CHAMP');
+            sC = sort(rC); sG = sort(rG);
+            tc.verifyGreaterThan(sC(ceil(end / 2)) / sG(ceil(end / 2)), 3, 'and CHAMP sees the denser gas');
         end
     end
     methods (Test, TestTags = {'speed'})

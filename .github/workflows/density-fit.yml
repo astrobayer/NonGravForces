@@ -17,11 +17,14 @@ on:
   workflow_dispatch:
     inputs:
       first:
-        description: "first Swarm month, yyyy-mm"
+        description: "first month, yyyy-mm"
         default: "2014-01"
       last:
-        description: "last Swarm month, yyyy-mm"
+        description: "last month, yyyy-mm"
         default: "2026-08"
+      missions:
+        description: "space-separated: swarm champ grace gracefo (TOLEOS months via fetch-data input 'densities')"
+        default: "swarm"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -40,6 +43,7 @@ jobs:
       READING_DATA_POOL: ${{ vars.READING_DATA_POOL }}
       FIT_FIRST: ${{ github.event.inputs.first || '2014-01' }}
       FIT_LAST: ${{ github.event.inputs.last || '2026-08' }}
+      FIT_MISSIONS: ${{ github.event.inputs.missions || 'swarm' }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with: { path: NonGravForces, persist-credentials: false }
@@ -80,7 +84,7 @@ jobs:
             setupNonGravForces('Verbose', false, 'FetchData', "never", 'FetchKernels', "never", 'FetchGroops', "never", 'FetchPool', "never");
             rep = NonGravForces.buildMex('Target', "msis");
             assert(rep.upToDate, "densityFit:mex", "MEX target msis did not build");
-            R = densityDriverFit('First', string(getenv("FIT_FIRST")), 'Last', string(getenv("FIT_LAST")));
+            R = densityDriverFit('First', string(getenv("FIT_FIRST")), 'Last', string(getenv("FIT_LAST")), 'Missions', split(strtrim(string(getenv("FIT_MISSIONS"))))');
             disp(R.sets.dayTrimmed.cv);
       - name: Remove the working copies from this machine
         if: always()

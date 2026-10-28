@@ -1,5 +1,5 @@
 function [epoch, lla, rho, aux] = readSwarmDensity(files, options)
-%READSWARMDENSITY Swarm POD-only thermosphere density (ESA SW_OPER_DNSxPOD_2_) from VirES HAPI CSV.
+%READSWARMDENSITY Thermosphere density from VirES HAPI CSV: Swarm POD-only, CHAMP/GRACE/GRACE-FO accelerometer.
 %
 %   [epoch, lla, rho, aux] = NonGravForces.io.readSwarmDensity(file)
 %   [epoch, lla, rho, aux] = NonGravForces.io.readSwarmDensity(files, 'TimeRange', [mjd0 mjd1])
@@ -17,12 +17,21 @@ function [epoch, lla, rho, aux] = readSwarmDensity(files, options)
 %   which is what makes it usable as a density SCALE for GRACE-FO's drag
 %   (HANDOVER O-19): rho_Swarm / rho_model at Swarm's positions.
 %
+%   The same server serves TU Delft's ACCELEROMETER-derived densities of CHAMP,
+%   GRACE and GRACE-FO (ESA TOLEOS, datasets CH_OPER_DNS_ACC_2_, GR_OPER_DNS<1|2>ACC_2_,
+%   GF_OPER_DNS<1|2>ACC_2_; CC BY 4.0) in exactly this layout -- the same nine
+%   parameters and units, at 10 s -- and this reader reads them too (2026-10-28,
+%   O-19 step 3: densities of solar cycle 23 for tools/densityDriverFit.m). The name
+%   stays: renaming a public unit breaks its callers. TOLEOS marks a missing value
+%   with the fill 9.99e+32 although its header declares no fill; any value >= 1e30
+%   is returned as NaN, and a record whose density is NaN is not valid.
+%
 % INPUT ARGUMENTS
 %   Name     Size  Type    Units  Description
 %   ----     ----  ----    -----  -----------
-%   files    1xF   string  -      One or more HAPI CSV files of ONE Swarm satellite
-%                                 (dataset SW_OPER_DNS<A|B|C>POD_2_); concatenated and
-%                                 sorted by time, duplicates of an epoch kept once.
+%   files    1xF   string  -      One or more HAPI CSV files of ONE dataset (SW_OPER_DNS<A|B|C>POD_2_,
+%                                 CH_OPER_DNS_ACC_2_, GR_OPER_DNS<1|2>ACC_2_, GF_OPER_DNS<1|2>ACC_2_);
+%                                 concatenated and sorted by time, duplicates of an epoch kept once.
 %
 % NAME-VALUE ARGUMENTS
 %   Name        Size  Type    Units     Description
@@ -35,10 +44,12 @@ function [epoch, lla, rho, aux] = readSwarmDensity(files, options)
 %   epoch    1x1   struct  -          referenceSystem epoch struct, K entries, scale "UTC"
 %   lla      3xK   double  rad,rad,m  Geodetic latitude, longitude, height (GRS80, as the
 %                                     product states; see ACCURACY for WGS-84)
-%   rho      1xK   double  kg/m^3     Thermosphere mass density
+%   rho      1xK   double  kg/m^3     Thermosphere mass density (NaN where the product has its fill)
 %   aux      1x1   struct  -          .rhoOrbitMean (1xK kg/m^3, the product's orbit
-%                                     average), .lst_h (1xK local solar time, h), .valid
-%                                     (1xK logical, validity_flag == 0), .satellite ("A"|"B"|"C"),
+%                                     average, NaN at the fill), .lst_h (1xK local solar time, h),
+%                                     .valid (1xK logical, validity_flag == 0 and the density not
+%                                     the fill), .satellite ("A"|"B"|"C" for Swarm, "CHAMP",
+%                                     "GRACE-A"|"GRACE-B", "GRACE-C"|"GRACE-D" for GRACE-FO 1|2),
 %                                     .dataset, .header (decoded HAPI header of the first
 %                                     file), .files, .numRecords, .provenance
 %
@@ -51,7 +62,9 @@ function [epoch, lla, rho, aux] = readSwarmDensity(files, options)
 %   itself is ESA's: derived from POD-only non-gravitational accelerations with a
 %   satellite aerodynamic model, nominal 30 s sampling, effective resolution of the
 %   order of 20 min, uncertainty stated as 30 % of the model variance (Swarm L2 product
-%   specification); it is NOT smoothed or filtered here.
+%   specification); it is NOT smoothed or filtered here. TOLEOS's densities come from the
+%   calibrated accelerometers with TU Delft's high-fidelity geometry models, version 02
+%   (March et al. 2019, 2021), and are likewise passed through unchanged.
 %
 % ERRORS
 %   NonGravForces:readSwarmDensity:inputRange    TimeRange is not [mjd0 mjd1] with mjd0 <= mjd1
@@ -60,13 +73,16 @@ function [epoch, lla, rho, aux] = readSwarmDensity(files, options)
 %   NonGravForces:readSwarmDensity:dataColumn     a required parameter is missing from the header,
 %                                                 or a data line does not have the header's columns
 %   NonGravForces:readSwarmDensity:dataUnits      a parameter's units are not the ones converted here
-%   NonGravForces:readSwarmDensity:dataSatellite  the files are of different datasets
+%   NonGravForces:readSwarmDensity:dataSatellite  the files are of different datasets, or of a
+%                                                 dataset this reader does not know
 %   NonGravForces:readSwarmDensity:dataEmpty      no record survives TimeRange
 %
 % REFERENCES
 %   ESA Swarm Level 2 Product Specification, SW_DNSxPOD_2_ (density, density_orbitmean,
 %   validity_flag); van den IJssel, Encarnacao, Doornbos, Visser (2015), Adv. Space Res. 56,
-%   1015-1029 (thermosphere densities from Swarm GPS); HAPI 3.0 specification (header and CSV).
+%   1015-1029 (thermosphere densities from Swarm GPS); March, Visser, Doornbos et al. (2019),
+%   Adv. Space Res. 63, 213-238 (CHAMP, GOCE, GRACE, Swarm densities with high-fidelity
+%   geometries); HAPI 3.0 specification (header and CSV).
 %
 % EXAMPLE
 %   f = fullfile(fileparts(fileparts(fileparts(mfilename('fullpath')))), 'data', 'samples', 'swarm', ...
@@ -75,7 +91,7 @@ function [epoch, lla, rho, aux] = readSwarmDensity(files, options)
 %
 % See also NonGravForces.env.density, setupNonGravForces, NonGravForces.io.spaceWeather.
 %
-% KEYWORDS Swarm density POD thermosphere HAPI VirES drag scale
+% KEYWORDS Swarm CHAMP GRACE TOLEOS density POD accelerometer thermosphere HAPI VirES drag scale
 % Created 2026-10-27 by Claude (Anthropic) for Matthias Weigelt.
 arguments
     files (1,:) string {mustBeNonempty, mustBeFile}
@@ -94,6 +110,7 @@ for f = files
     [hdr, body] = localSplit(unit, f);
     if dataset == ""
         dataset = string(hdr.x_dataset); header = hdr;
+        satellite = localSatellite(unit, f, dataset);
     elseif string(hdr.x_dataset) ~= dataset
         NonGravForces.fail(unit, "dataSatellite", "%s is %s, the first file %s -> read one satellite per call", f, hdr.x_dataset, dataset);
     end
@@ -101,7 +118,7 @@ for f = files
     if ~iscell(par), par = num2cell(par); end
     names = string(cellfun(@(p) p.name, par, 'UniformOutput', false));
     if names(1) ~= "Timestamp"
-        NonGravForces.fail(unit, "dataColumn", "%s: the first parameter is %s, not Timestamp -> this is not a VirES HAPI DNSxPOD file", f, names(1));
+        NonGravForces.fail(unit, "dataColumn", "%s: the first parameter is %s, not Timestamp -> this is not a VirES HAPI density file", f, names(1));
     end
     col = zeros(1, numel(need));
     for k = 1:numel(need)
@@ -144,16 +161,32 @@ if isempty(mjd)
 end
 epoch = referenceSystem.daySecondToEpoch([mjd sec], "UTC");
 lla = [deg2rad(val(:, 1))'; deg2rad(val(:, 2))'; val(:, 3)'];
+r = val(:, 5:6); r(r >= 1e30) = NaN; val(:, 5:6) = r;   % TOLEOS's fill 9.99e+32 (its header declares none)
 rho = val(:, 5)';
 aux.rhoOrbitMean = val(:, 6)';
 aux.lst_h = val(:, 4)';
-aux.valid = val(:, 7)' == 0;
-aux.satellite = extractBetween(dataset, "SW_OPER_DNS", "POD_2_");
+aux.valid = val(:, 7)' == 0 & ~isnan(rho);
+aux.satellite = satellite;
 aux.dataset = dataset;
 aux.header = header;
 aux.files = files;
 aux.numRecords = numel(mjd);
 aux.provenance = NonGravForces.provenance("io.readSwarmDensity", 'Files', files, 'Options', options);
+end
+
+function s = localSatellite(unit, file, dataset)
+%LOCALSATELLITE The spacecraft of a known dataset: Swarm A/B/C, CHAMP, GRACE-A/B, GRACE-C/D (GRACE-FO 1/2).
+t = regexp(dataset, '^(SW_OPER_DNS([ABC])POD_2_|CH_OPER_DNS_ACC_2_|GR_OPER_DNS([12])ACC_2_|GF_OPER_DNS([12])ACC_2_)$', 'tokens', 'once');
+if isempty(t)
+    NonGravForces.fail(unit, "dataSatellite", "%s is dataset %s, which this reader does not know -> read Swarm DNSxPOD or TOLEOS DNSxACC files", file, dataset);
+end
+d = char(dataset);
+switch d(1:2)
+    case 'SW', s = string(d(12));
+    case 'CH', s = "CHAMP";
+    case 'GR', s = "GRACE-" + string(char('A' + (d(12) - '1')));
+    otherwise, s = "GRACE-" + string(char('C' + (d(12) - '1')));
+end
 end
 
 function mjd = localMjd(y, m, d)
