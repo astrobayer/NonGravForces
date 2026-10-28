@@ -37,6 +37,11 @@ function R = dragScaleMonth(options)
 %   gas force is linear in the species densities -- and the Model option drag.densityScale "swarm",
 %   which interpolates log f in height to GRACE-FO's geodetic height at every epoch.
 %
+%   SPACE WEATHER AND EOP: the complete files in the pool (<Pool>/SpaceWeather/SW-All.csv,
+%   <Pool>/EOP/finals2000A.all, fetched with the month by setupNonGravForces('PoolMonths')) when
+%   they are there, else the committed 2019-09..2020-03 excerpts, which serve 2020-01 only. A month
+%   the chosen files do not cover is refused rather than evaluated with a held driver.
+%
 %   IT LIVES IN tools/, like regressionBaseline.m: it reads the DATAPOOL, which a commit's
 %   CI does not, and takes minutes per day. .github/workflows/drag-month.yml runs it on
 %   the self-hosted runner and prints the tables into the job log.
@@ -63,7 +68,8 @@ function R = dragScaleMonth(options)
 %                              .noDataDays .seconds
 %
 % ERRORS
-%   NonGravForces:dragScaleMonth:dataMissing  no pool or no month folder
+%   NonGravForces:dragScaleMonth:dataMissing  no pool or no month folder, or space weather / EOP files
+%                                             that do not cover the month (81 days before it included)
 %   gracefoReading:*, referenceSystem:*       propagated, except gracefoReading:readL1b:noData,
 %                                             which lists the day in noDataDays
 %
@@ -85,8 +91,24 @@ monthDir = fullfile(options.Pool, "GRACEFO", "L1B", "RL04", extractBefore(option
 if strlength(options.Pool) == 0 || ~isfolder(monthDir)
     NonGravForces.fail(unit, "dataMissing", "no DATAPOOL month folder %s -> set READING_DATA_POOL or pass 'Pool'", monthDir);
 end
-eop = referenceSystem.readEop(fullfile(root, 'data', 'eop', 'finals2000A_2019-09_2020-03.all'));
-sw = NonGravForces.io.spaceWeather(fullfile(root, 'data', 'spaceweather', 'SW-All_2019-09_2020-03.csv'));
+eopFile = fullfile(options.Pool, "EOP", "finals2000A.all");
+swFile = fullfile(options.Pool, "SpaceWeather", "SW-All.csv");
+if ~isfile(eopFile) || ~isfile(swFile)
+    eopFile = fullfile(root, 'data', 'eop', 'finals2000A_2019-09_2020-03.all');
+    swFile = fullfile(root, 'data', 'spaceweather', 'SW-All_2019-09_2020-03.csv');
+end
+eop = referenceSystem.readEop(eopFile);
+sw = NonGravForces.io.spaceWeather(swFile);
+m0 = datetime(options.Month, 'InputFormat', 'yyyy-MM');
+mjd0 = juliandate(m0 - caldays(81)) - 2400000.5;   % DTM2020's 81-day mean reaches back that far
+mjd1 = juliandate(dateshift(m0, 'end', 'month') + caldays(1)) - 2400000.5;
+seen = sw.mjd(all(isfinite(sw.index.kp3h), 2) & isfinite(sw.index.f107Observed));   % observed rows, not predictions
+swSpan = [min(seen) max(seen)];
+if swSpan(1) > mjd0 || swSpan(2) < mjd1
+    NonGravForces.fail(unit, "dataMissing", "%s spans MJD %d..%d, the month needs %d..%d -> fetch the month with setupNonGravForces('PoolMonths', ""%s"")", ...
+        swFile, swSpan(1), swSpan(2), mjd0, mjd1, options.Month);
+end
+fprintf('dragScaleMonth: space weather %s, EOP %s\n', swFile, eopFile);
 dd = dir(fullfile(monthDir, options.Month + "-*"));
 days = string({dd([dd.isdir]).name});
 if ~isempty(options.Days), days = days(ismember(str2double(extractAfter(days, 8)), options.Days)); end
@@ -132,6 +154,7 @@ for d = days
         [epq, q] = NonGravForces.io.readSCA1B(f("SCA1B"));
     catch err
         if err.identifier ~= "gracefoReading:readL1b:noData", rethrow(err); end
+        fprintf('dragScaleMonth %s %s: skipped, a product has no records (%s)\n', options.Satellite, d, err.message);
         noData(end + 1) = d; %#ok<AGROW>
         continue
     end
@@ -140,7 +163,12 @@ for d = days
     % With the Swarm scale every variant drops the GPS day's first 20 s: they belong to the previous UTC
     % day (GPS - UTC = 18 s), whose factor the month's Swarm files do not hold on the 1st.
     if haveSwarm, tf = tf & ep.sec >= 20; end
-    if nnz(tf) < 100, noData(end + 1) = d; continue, end %#ok<AGROW>
+    if nnz(tf) < 100
+        fprintf('dragScaleMonth %s %s: skipped, %d GNV1B epochs on the %d s grid shared with ACT1B (GNV1B %d records, ACT1B %d, first secs %s / %s)\n', ...
+            options.Satellite, d, nnz(tf), options.Step_s, numel(ep.sec), numel(epa.sec), mat2str(ep.sec(1:min(3, end))', 8), mat2str(epa.sec(1:min(3, end))', 8));
+        noData(end + 1) = d; %#ok<AGROW>
+        continue
+    end
     e = referenceSystem.daySecondToEpoch([ep.day(tf) ep.sec(tf)], ep.scale);
     att = NonGravForces.geom.AttitudeProvider(epq, q);
     qk = att.at(e);

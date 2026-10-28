@@ -57,6 +57,14 @@ function info = setupNonGravForces(options)
 %                           cut from these by tools/cutFixtures.py. Classic GRACE Level-1B is not
 %                           here yet: GFZ's ISDC, its only anonymous source, is down (2026-10-26)
 %                           and no archive name has been read from it.
+%     whole months ('PoolMonths', into DATAPOOL, with FetchPool's setting; O-19)
+%       GRACE-FO Level-1B   ACT1B, GNV1B, SCA1B and THR1B of GRACE-C and GRACE-D for every day of
+%                           each month, members only, from ISDC's daily archives into
+%                           <DataPool>/GRACEFO/L1B/RL04/<yyyy>/<yyyy-mm-dd> (tools/dragScaleMonth.m)
+%       Swarm densities     as above, for each month
+%       SW-All, finals2000A CelesTrak's complete space-weather file and IERS finals2000A.all into
+%                           <DataPool>/SpaceWeather and <DataPool>/EOP; refetched when the file in the
+%                           pool ends before the last month (a stale copy is replaced, not trusted)
 %
 %   PRESENCE IS DECIDED BY THE EXACT FILE, AND A DOWNLOAD BY ITS CONTENT. Until
 %   2026-09-15 a glob decided presence, so the committed seven-month excerpts
@@ -102,6 +110,13 @@ function info = setupNonGravForces(options)
 %                                    "never": the gate reads committed excerpts, not the network.
 %   PoolDays   1xN   string   -      Reference days for FetchPool, "yyyy-mm-dd" (default the fixture
 %                                    days "2008-01-01" "2020-01-01" "2020-01-02" "2020-01-03").
+%   SwarmMonths 1xS  string   -      Months of Swarm A/B/C densities alone for FetchPool, "yyyy-mm" from
+%                                    2013-12 (default none): the base of tools/densityDriverFit.m.
+%                                    About 40 MB per month for the three satellites.
+%   PoolMonths 1xM   string   -      Whole months for FetchPool, "yyyy-mm" from 2018-06 (default none):
+%                                    GRACE-C/D Level-1B, Swarm densities and the complete space-weather
+%                                    and EOP files a month run (tools/dragScaleMonth.m) needs. A day
+%                                    archive is about 150 MB, a month about 4.5 GB.
 %   FetchKernels 1x1 string   -      The same three settings for the DE440 ephemeris. It is SEPARATE
 %                                    from FetchData on purpose: ciGate passes FetchData "never" so
 %                                    that the gate does not test the network for OBSERVATIONS, which
@@ -140,6 +155,8 @@ arguments
     options.DataPool (1,1) string = string(getenv('DATAPOOL'))
     options.FetchPool (1,1) string {mustBeMember(options.FetchPool, ["ifMissing","never","force"])} = "ifMissing"
     options.PoolDays (1,:) string {mustBeNonempty} = ["2008-01-01" "2020-01-01" "2020-01-02" "2020-01-03"]
+    options.PoolMonths (1,:) string {localMustBeMonths} = strings(1, 0)
+    options.SwarmMonths (1,:) string = strings(1, 0)
 end
 % THE PINS AND URLS LIVE HERE AND NOWHERE ELSE (rule R1). Moving a pin is an act with a run behind it.
 % NRLMSISE-00: bc9a2fe is "gtd7: fix output at 32.5 km" (Argon densities and a memory corruption fixed
@@ -181,6 +198,8 @@ IGRF_URL = "https://www.ngdc.noaa.gov/IAGA/vmod/coeffs/igrf14coeffs.txt";
 L1B_BASE = "https://isdc-data.gfz.de/grace-fo/Level-1B/JPL/INSTRUMENT/RL04";
 L1B_DAY = "2020-01-01";
 L1B_MEMBERS = ["GNV1B_2020-01-01_C_04.txt", "SCA1B_2020-01-01_C_04.txt", "MAG1B_2020-01-01_C_04.txt"];
+% What tools/dragScaleMonth.m reads of a month day, for both satellites (FetchPool 'PoolMonths').
+L1B_MONTH_PRODUCTS = ["ACT1B" "GNV1B" "SCA1B" "THR1B"];
 % CERES EBAF 4.2.1 on ESGF (obs4MIPs, dataset version v20260220), anonymous; the SHA-256 are ESGF's own
 % (esgf-1-5-bridge search, 2026-09-15), and each download was checked against them the same day.
 CERES_BASE = "https://esgf-node.ornl.gov/thredds/fileServer/user_pub_work/obs4MIPs/NASA-LaRC/CERES-EBAF-4-2-1/mon";
@@ -251,6 +270,12 @@ info.dataPool = options.DataPool;
 info.data.items = [info.data.items, localFetchGroops(options.DataPool, GROOPS_BASE, GROOPS_FILES, options.FetchGroops)];
 info.data.items = [info.data.items, localFetchPool(options.DataPool, options.PoolDays, DST_BASE, F30_BASE, F30_FILES, ...
     ITSG_BASE, ITSG_PRODUCTS, SWARM_HAPI, SWARM_SATS, options.FetchPool)];
+info.data.items = [info.data.items, localFetchPoolMonths(options.DataPool, options.PoolMonths, L1B_BASE, L1B_MONTH_PRODUCTS, ...
+    SWARM_HAPI, SWARM_SATS, EOP_URL, SW_URL, options.FetchPool)];
+if ~isempty(options.SwarmMonths) && strlength(options.DataPool) > 0
+    info.data.items = [info.data.items, localFetchTargets(struct('name', {}, 'action', {}, 'file', {}, 'source', {}), ...
+        localSwarmTargets(options.DataPool, datetime(options.SwarmMonths, 'InputFormat', 'yyyy-MM'), SWARM_HAPI, SWARM_SATS), options.FetchPool)];
+end
 info.mex = NonGravForces.buildMex('Check', true);      % 1xT: one element per target
 if options.Verbose
     for m = 1:numel(info.mex)
@@ -455,16 +480,27 @@ for k = 1:numel(d)
     end
 end
 % Swarm DNSxPOD: the month of each day, from 2014 (Swarm was launched in November 2013)
-for m = unique(first(year(first) >= 2014))
+targets = [targets, localSwarmTargets(pool, unique(first(year(first) >= 2014)), swarmHapi, swarmSats)];
+items = localFetchTargets(items, targets, mode);
+end
+
+function t = localSwarmTargets(pool, months, swarmHapi, swarmSats)
+%LOCALSWARMTARGETS One HAPI CSV per Swarm satellite and month (datetime first days of the months).
+t = struct('name', {}, 'url', {}, 'dst', {}, 'check', {});
+for m = months
     ym = string(m, 'yyyy-MM');
     span = "&start=" + string(m, 'yyyy-MM-dd') + "T00:00:00Z&stop=" + string(m + calmonths(1), 'yyyy-MM-dd') + "T00:00:00Z";
     for s = swarmSats
         ds = "SW_OPER_DNS" + s + "POD_2_";
-        targets(end+1) = struct('name', "swarm " + s + " " + ym, ...
+        t(end+1) = struct('name', "swarm " + s + " " + ym, ...
             'url', swarmHapi + "?dataset=" + ds + span + "&format=csv&include=header", ...
             'dst', string(fullfile(pool, "Swarm", "DNSxPOD", string(year(m)), ds + ym + ".csv")), 'check', "^#\s*\{"); %#ok<AGROW>
     end
 end
+end
+
+function items = localFetchTargets(items, targets, mode)
+%LOCALFETCHTARGETS Fetch each target unless present, keep a reply only when its head matches.
 for t = targets
     rec = struct('name', t.name, 'action', "present", 'file', t.dst, 'source', t.url);
     if isfile(t.dst) && mode ~= "force"
@@ -505,6 +541,120 @@ for t = targets
     end
     items(end+1) = rec; %#ok<AGROW>
     clear cleanup
+end
+end
+
+function items = localFetchPoolMonths(pool, months, l1bBase, products, swarmHapi, swarmSats, eopUrl, swUrl, mode)
+%LOCALFETCHPOOLMONTHS Whole months into DATAPOOL: GRACE-C/D Level-1B members, Swarm, SW-All and finals2000A.
+%   Everything a month run of tools/dragScaleMonth.m reads. The two complete files are judged by
+%   COVERAGE, not existence: one that ends before the last month's last day is refetched, since an
+%   old copy is a file that exists and is wrong. A Level-1B day is present when all its members are;
+%   otherwise its archive (about 150 MB) is fetched, the members are cut out with localTarMembers and
+%   kept only if each starts with an L1B 'header:', and the archive is deleted.
+items = struct('name', {}, 'action', {}, 'file', {}, 'source', {});
+if isempty(months), return, end
+if strlength(pool) == 0
+    items(end+1) = struct('name', "pool months", 'action', ...
+        "skipped: DATAPOOL is not set -> set the DATAPOOL environment variable or pass 'DataPool'", 'file', "", 'source', "");
+    return
+end
+m = unique(datetime(months, 'InputFormat', 'yyyy-MM'));
+lastDay = dateshift(max(m), 'end', 'month');
+% complete space weather and EOP, refetched when stale
+whole = struct('name', {"pool spaceweather", "pool eop"}, 'url', {swUrl, eopUrl}, ...
+    'dst', {string(fullfile(pool, "SpaceWeather", "SW-All.csv")), string(fullfile(pool, "EOP", "finals2000A.all"))}, ...
+    'check', {'^DATE,BSRN,ND,KP1', '^\s*\d{1,2}\s*\d{1,2}\s*\d{1,2}\s+\d{5}\.\d{2}\s+[IP]'});
+kinds = ["sw" "eop"];
+for k = 1:numel(whole)
+    use = mode;
+    if mode == "ifMissing" && isfile(whole(k).dst) && ~(localLastDate(whole(k).dst, kinds(k)) >= lastDay)
+        use = "force";
+    end
+    items = localFetchTargets(items, whole(k), use);
+end
+items = localFetchTargets(items, localSwarmTargets(pool, m(year(m) >= 2014), swarmHapi, swarmSats), mode);
+% GRACE-FO Level-1B, both satellites, every day of every month
+for mm = m
+    for day = mm:caldays(1):dateshift(mm, 'end', 'month')
+        ymd = string(day, 'yyyy-MM-dd');
+        dst = fullfile(pool, "GRACEFO", "L1B", "RL04", string(year(day)), ymd);
+        members = reshape(products' + "_" + ymd + "_" + ["C" "D"] + "_04.txt", 1, []);
+        url = l1bBase + "/" + string(year(day)) + "/gracefo_1B_" + ymd + "_RL04.ascii.noLRI.tgz";
+        rec = struct('name', "pool l1b " + ymd, 'action', "present", 'file', string(dst), 'source', url);
+        missing = members(~isfile(fullfile(dst, members)));
+        if isempty(missing) && mode ~= "force"
+            items(end+1) = rec; %#ok<AGROW>
+            continue
+        end
+        if mode == "never"
+            rec.action = "missing (FetchPool never)"; rec.file = "";
+            items(end+1) = rec; %#ok<AGROW>
+            continue
+        end
+        tmp = [tempname '.tgz']; unpack = tempname;
+        cleanup = onCleanup(@() localQuietDelete(tmp));
+        fprintf('setupNonGravForces: fetching GRACE-FO Level-1B %s (about 150 MB) from %s\n', ymd, url);
+        try
+            localDownload(tmp, url);
+            mkdir(unpack);
+            tarFile = gunzip(tmp, unpack);
+            localTarMembers(tarFile{1}, members, unpack);
+            delete(tarFile{1});
+            got = members(isfile(fullfile(unpack, members)));
+            got = got(arrayfun(@(f) localHeadMatches(fullfile(unpack, f), '^header:'), got));
+            if ~isfolder(dst), mkdir(dst); end
+            for f = got, movefile(fullfile(unpack, f), fullfile(dst, f), 'f'); end
+            if numel(got) == numel(members)
+                rec.action = "fetched";
+            else
+                rec.action = "incomplete: the archive did not hold readable " + strjoin(setdiff(members, got), ", ");
+            end
+        catch err
+            rec.action = "failed: " + string(err.message);
+            rec.file = "";
+            fprintf('setupNonGravForces: %s -> fetch it by hand from %s\n', rec.action, url);
+        end
+        if isfolder(unpack), rmdir(unpack, 's'); end
+        localQuietDelete(tmp);
+        clear cleanup
+        items(end+1) = rec; %#ok<AGROW>
+    end
+end
+end
+
+function t = localLastDate(file, kind)
+%LOCALLASTDATE The date of a complete file's last record: SW-All "yyyy-mm-dd,...", finals2000A "yymmdd".
+t = NaT;
+fid = fopen(file, 'r');
+if fid < 0, return, end
+closer = onCleanup(@() fclose(fid));
+fseek(fid, 0, 'eof');
+n = ftell(fid);
+fseek(fid, max(0, n - 8192), 'bof');
+lines = splitlines(string(fread(fid, [1 Inf], '*char')));
+lines = lines(strlength(strtrim(lines)) > 0);
+if isempty(lines), return, end
+last = lines(end);
+if kind == "sw"
+    tok = regexp(last, '^(\d{4}-\d{2}-\d{2}),', 'tokens', 'once');
+    if ~isempty(tok), t = datetime(tok{1}, 'InputFormat', 'yyyy-MM-dd'); end
+else
+    tok = regexp(last, '^\s*(\d{1,2})\s*(\d{1,2})\s*(\d{1,2})\s', 'tokens', 'once');
+    if ~isempty(tok)
+        y = str2double(tok{1}); y = y + 1900 + 100 * (y < 73);
+        t = datetime(y, str2double(tok{2}), str2double(tok{3}));
+    end
+end
+end
+
+function localMustBeMonths(m)
+%LOCALMUSTBEMONTHS PoolMonths are "yyyy-mm" from 2018-06, when GRACE-FO's Level-1B begins.
+if isempty(m), return, end
+if ~all(matches(m, digitsPattern(4) + "-" + digitsPattern(2)))
+    error('setupNonGravForces:poolMonths', 'PoolMonths must be "yyyy-mm" strings -> e.g. "2024-01"');
+end
+if any(datetime(m, 'InputFormat', 'yyyy-MM') < datetime(2018, 6, 1))
+    error('setupNonGravForces:poolMonths', 'PoolMonths start at 2018-06 (GRACE-FO Level-1B) -> pass a later month');
 end
 end
 

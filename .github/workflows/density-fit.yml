@@ -1,0 +1,88 @@
+# Step 1 of the extrapolable density correction (HANDOVER O-19): a driver regression of the
+# observed density scale log(rho_Swarm / rho_model) over Swarm 2014-now, cross-validated by year
+# and across the 2020 solar minimum, on the CI runner's DATAPOOL.
+#
+# tools/densityDriverFit.m does the work and prints the tables into this log; nothing is committed.
+# On demand and when the tool changes in a pull request; the Swarm months must be in the pool first
+# (fetch-data.yml, input 'swarm').
+name: Density driver fit
+
+on:
+  # On the pull request too: a workflow_dispatch workflow can be dispatched only once it is on the
+  # default branch, and this one is new. The Swarm months are in the pool (fetch-data input 'swarm').
+  pull_request:
+    paths:
+      - tools/densityDriverFit.m
+      - .github/workflows/density-fit.yml
+  workflow_dispatch:
+    inputs:
+      first:
+        description: "first Swarm month, yyyy-mm"
+        default: "2014-01"
+      last:
+        description: "last Swarm month, yyyy-mm"
+        default: "2026-08"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  fit:
+    # A fork's pull request must not reach the self-hosted runner.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 240
+    env:
+      READING_DATA_POOL: ${{ vars.READING_DATA_POOL }}
+      FIT_FIRST: ${{ github.event.inputs.first || '2014-01' }}
+      FIT_LAST: ${{ github.event.inputs.last || '2026-08' }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with: { path: NonGravForces, persist-credentials: false }
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: astrobayer/referenceSystem
+          path: referenceSystem
+          token: ${{ secrets.REFERENCE_READ_TOKEN }}
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: astrobayer/gracefoReading
+          path: gracefoReading
+          token: ${{ secrets.REFERENCE_READ_TOKEN }}
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: astrobayer/timeSeriesPreparation
+          ref: main
+          path: timeSeriesPreparation
+          token: ${{ secrets.REFERENCE_READ_TOKEN }}
+          persist-credentials: false
+      - uses: astrobayer/ci-actions/matlab-probe@v1.2.0
+        timeout-minutes: 2
+      - uses: matlab-actions/run-command@bfa857648f4895aa98a446fe41c85e0788421ed5 # v3
+        with:
+          command: |
+            ws = pwd;
+            % The dependency setups call savepath; the machine keeps the path it had (O-43, as ciGate does).
+            pd = which("pathdef"); before = ""; if ~isempty(pd), before = fileread(pd); end
+            run(fullfile(ws, "referenceSystem", "setupReferenceSystem.m"));
+            run(fullfile(ws, "gracefoReading", "setupGraceFOReading.m"));
+            run(fullfile(ws, "timeSeriesPreparation", "setupTimeSeriesPreparation.m"));
+            if strlength(before) > 0 && ~isequal(fileread(pd), char(before))
+                fid = fopen(pd, "w"); fwrite(fid, before, "char"); fclose(fid);
+            end
+            cd(fullfile(ws, "NonGravForces"));
+            setupNonGravForces('Verbose', false, 'FetchData', "never", 'FetchKernels', "never", 'FetchGroops', "never", 'FetchPool', "never");
+            rep = NonGravForces.buildMex('Target', "msis");
+            assert(rep.upToDate, "densityFit:mex", "MEX target msis did not build");
+            R = densityDriverFit('First', string(getenv("FIT_FIRST")), 'Last', string(getenv("FIT_LAST")));
+            disp(R.sets.dayTrimmed.cv);
+      - name: Remove the working copies from this machine
+        if: always()
+        shell: powershell
+        run: Remove-Item -Recurse -Force NonGravForces, referenceSystem, gracefoReading, timeSeriesPreparation -ErrorAction SilentlyContinue

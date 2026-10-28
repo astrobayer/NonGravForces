@@ -26,7 +26,8 @@ on:
         default: "C"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # month and satellite in the group: two dispatches on one branch (C and D) must not cancel each other
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.inputs.month || '2020-01' }}-${{ github.event.inputs.satellite || 'C' }}
   cancel-in-progress: true
 
 permissions:
