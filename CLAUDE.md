@@ -187,6 +187,12 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   in log k (2020: 0.443 -> 0.77) and overshoots 7-12 % at high activity (2024: 0.964 -> 1.07-1.12); in both months it
   sits within the fit's own per-day scatter (0.17-0.18 in log f) of the measured Swarm factor (0.60 vs 0.49; 0.90 vs
   0.98). GRACE-FO's -0.041 helps in 2020 and hurts in 2024: one month cannot pin a mission offset.
+  **Step 2, the FLUX correction (owner: try it; if worse, combine Swarm where it exists with the driver scale):**
+  `tools/densityDriverFit.m` finds per row the shift delta of NRLMSISE-00's F10.7 and F10.7A (grid -60..+30 sfu, pchip in
+  log rho) that matches the observed sum -- an exospheric-temperature correction whose height profile is MSIS's own --
+  and regresses delta on the same drivers; losses and residuals are multiplied by d log rho / d delta, so they read in
+  log f. Its F30 + season + square record goes to `<Pool>/Swarm/densityDriverFit_record_*.mat`, which
+  `tools/dragScaleMonth.m` reads for the variant "flux driver" (a space-weather struct with shifted fluxes). Pending.
 - **2026-10-28, PR #119 (the correction unit, `env.densityDriverScale`, owner's request):** f = rho_obs/rho_msis00 per UTC
   day PREDICTED from drivers that exist for every date -- F30's 81-day mean ending the day before, the day-before
   deviation, the day's Ap, annual and semiannual harmonics and ((Fbar - 75.712)/100)^2 -- with the F30 coefficient record
