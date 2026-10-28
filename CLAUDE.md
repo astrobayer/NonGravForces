@@ -175,8 +175,13 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-27, PR #114)
+## 5. Current status (2026-10-28, PR #115)
 
+- **2026-10-28, PR #115 (nonlinear solar terms in `tools/densityDriverFit.m`, owner's choice):** log Fbar, a centred
+  square ((Fbar-120)/100)^2 and the cycle's phase. Run 40624842064 (trimmed days, CV / fwd / bwd RMS of log f): constant
+  0.252 / 0.232 / 0.280, linear F30 0.217 / 0.287 / 0.220, **F10.7 + square 0.192 / 0.291 / 0.192**, F30 + square 0.179 /
+  refused (collinear on 2014-19) / 0.184. The square is the gain (log f peaks at Fbar ~148 sfu); forward still loses to
+  the constant because 2014-19 never reached Fbar ~200: cover driver space (step 3), give it a physical shape (step 2).
 - **2026-10-27, PR #114 (a drag month at high solar activity, O-19):** `setupNonGravForces('PoolMonths')` fetches
   whole months into DATAPOOL (GRACE-C/D L1B day archives, members only; Swarm; complete SW-All and finals2000A,
   refetched when stale); `fetch-data.yml` input `months`; `tools/dragScaleMonth.m` uses the pool's complete space
