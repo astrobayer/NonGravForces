@@ -38,6 +38,9 @@ on:
       swarm:
         description: "Swarm densities alone, a span yyyy-mm..yyyy-mm (tools/densityDriverFit.m; ~40 MB per month)"
         default: ""
+      densities:
+        description: "TU Delft CHAMP/GRACE/GRACE-FO densities (ESA TOLEOS), a span yyyy-mm..yyyy-mm"
+        default: ""
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -56,6 +59,7 @@ jobs:
       READING_DATA_POOL: ${{ vars.READING_DATA_POOL }}
       POOL_MONTHS: ${{ github.event.inputs.months || '' }}
       SWARM_SPAN: ${{ github.event.inputs.swarm || '' }}
+      DENSITY_SPAN: ${{ github.event.inputs.densities || '' }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -72,14 +76,29 @@ jobs:
             pool = string(getenv("READING_DATA_POOL"));
             assert(strlength(pool) > 0, "fetchData:noPool", "READING_DATA_POOL is not set for this repository -> grant the organisation variable to it");
             months = split(strtrim(string(getenv("POOL_MONTHS"))))'; months = months(strlength(months) > 0);
-            span = strtrim(string(getenv("SWARM_SPAN"))); swarm = strings(1, 0);
+            swarm = strings(1, 0); dens = strings(1, 0);
+            span = strtrim(string(getenv("SWARM_SPAN")));
             if strlength(span) > 0
                 ends = datetime(split(span, ".."), 'InputFormat', 'yyyy-MM');
                 swarm = string(ends(1):calmonths(1):ends(2), 'yyyy-MM');
             end
-            info = setupNonGravForces('Verbose', false, 'FetchMsis', "never", 'FetchData', "never", 'FetchKernels', "never", 'FetchGroops', "never", 'FetchPool', "ifMissing", 'DataPool', pool, 'PoolMonths', months, 'SwarmMonths', swarm);
-            items = info.data.items(startsWith([info.data.items.name], ["dst" "f30" "itsg" "swarm" "pool"]));
+            span = strtrim(string(getenv("DENSITY_SPAN")));
+            if strlength(span) > 0
+                ends = datetime(split(span, ".."), 'InputFormat', 'yyyy-MM');
+                dens = string(ends(1):calmonths(1):ends(2), 'yyyy-MM');
+            end
+            info = setupNonGravForces('Verbose', false, 'FetchMsis', "never", 'FetchData', "never", 'FetchKernels', "never", 'FetchGroops', "never", 'FetchPool', "ifMissing", 'DataPool', pool, 'PoolMonths', months, 'SwarmMonths', swarm, 'DensityMonths', dens);
+            items = info.data.items(startsWith([info.data.items.name], ["dst" "f30" "itsg" "swarm" "toleos" "pool"]));
             fprintf("%-50s %s\n", [[items.name]; [items.action]]);
+            % the first TOLEOS file of each dataset, header and three records, so its format is read from the log
+            shown = strings(1, 0);
+            for it = items(startsWith([items.name], "toleos") & ~startsWith([items.action], ["failed" "skipped"]))
+                ds = extractBetween(it.name, "toleos ", " ");
+                if any(shown == ds), continue, end
+                shown(end+1) = ds;
+                lines = readlines(it.file); h = find(~startsWith(lines, "#"), 1); if isempty(h), h = numel(lines); end
+                fprintf("==== %s\n%s\n", it.file, join(lines(1:min(numel(lines), h + 3)), newline));
+            end
             failed = items(startsWith([items.action], ["failed" "skipped"]));
             if ~isempty(failed)
                 error("fetchData:failed", "%d pool item(s) not in the pool -> read the table above", numel(failed));
@@ -111,6 +130,7 @@ jobs:
             NonGravForcesFetch/data/spaceweather
             NonGravForcesFetch/data/samples/itsg
             NonGravForcesFetch/data/samples/swarm
+            NonGravForcesFetch/data/samples/toleos
           retention-days: 7
       - name: Remove the working copy from this machine
         if: always()
@@ -135,7 +155,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A data/spaceweather data/samples/itsg data/samples/swarm
+          git add -A data/spaceweather data/samples/itsg data/samples/swarm data/samples/toleos
           git status --short
           if git diff --cached --quiet; then
             echo "the excerpts cut from the pool equal the committed ones"

@@ -3,6 +3,7 @@ function R = densityDriverFit(options)
 %
 %   R = densityDriverFit                                  % Swarm 2014-01..2026-08 from READING_DATA_POOL
 %   R = densityDriverFit('First', "2019-01", 'Last', "2020-12")
+%   R = densityDriverFit('First', "2000-08", 'Missions', ["swarm" "champ" "grace" "gracefo"])
 %
 %   STEP 1 OF THE EXTRAPOLABLE DENSITY CORRECTION (HANDOVER O-19, owner 2026-10-27). The
 %   Swarm factor of env.densityScale exists only where Swarm measured. A correction that
@@ -17,6 +18,11 @@ function R = densityDriverFit(options)
 %   local solar time at the equator (circular mean of |lat| < 30 deg). Two nodes per day
 %   give two local times 12 h apart; the planes drift through all local times in ~4.5
 %   months (A/C) and ~4.8 months (B).
+%   MISSIONS (2026-10-28, step 3): 'Missions' adds TU Delft's ACCELEROMETER densities of CHAMP
+%   (2000-2010, ~300-450 km), GRACE-A (2002-2017, ~350-500 km) and GRACE-FO 1 (2018-, ~490 km),
+%   ESA TOLEOS v02 from <Pool>/TOLEOS (setupNonGravForces('DensityMonths')), each its own
+%   satellite in the rows. They bring solar cycle 23 -- Fbar up to ~250 sfu in 2000-2002 -- which
+%   2014-2019 never reached, so the solar terms are fitted where 2024 lies instead of extrapolated.
 %
 %   MODEL: log f = c0 + c . (z - mean z), the drivers z
 %     Fbar    81-day mean of the solar proxy ENDING the previous day (no future data)
@@ -50,20 +56,24 @@ function R = densityDriverFit(options)
 %   Name        Size  Type    Units  Description
 %   ----        ----  ----    -----  -----------
 %   Pool        1x1   string  -      DATAPOOL root; default getenv("READING_DATA_POOL")
-%   First, Last 1x1   string  -      "yyyy-mm" span of Swarm months; default 2014-01..2026-08
+%   First, Last 1x1   string  -      "yyyy-mm" span of months; default 2014-01..2026-08
+%   Missions    1xM   string  -      "swarm" (A, B, C; satellites 1-3), "champ", "grace" (GRACE-A),
+%                                    "gracefo" (GRACE-FO 1), numbered on in this order; default "swarm".
+%                                    A month outside a mission's span is skipped, not missing
 %   Model       1x1   string  -      env.density backend the factor is for; default "msis00"
-%   Stride      1x1   double  -      every Stride-th valid 30 s record; default 10
+%   Stride      1x1   double  -      every Stride-th valid record (30 s Swarm, 10 s TOLEOS); default 10
 %   MinRecords  1x1   double  -      fewer records in a pass drop it; default 40
 %   Split       1x1   string  -      "yyyy-mm-dd" of the forward/backward split; default 2020-01-01
 %   NBoot       1x1   double  -      bootstrap replicates of the full fits; default 200
 %   MaxVif      1x1   double  -      regressDrivers' VIF gate; default 10
 %   Sets        1xS   string  -      data sets validated: "pass", "pass trimmed", "day", "day trimmed"
 %                                    (default the two trimmed ones; the raw ones are noise-dominated)
-%   Cache       1x1   logical -      keep the passes in <Pool>/Swarm/densityDriverFit_<model>_<span>_s<Stride>_n<MinRecords>.mat
+%   Cache       1x1   logical -      keep the passes in <Pool>/Swarm/densityDriverFit_<model>_<span>_s<Stride>_n<MinRecords>[_<missions>].mat
 %                                    and reuse them (default true); false recomputes and does not write
 %
 % OUTPUT ARGUMENTS
 %   R  1x1 struct: .rows (table: mjd, satellite, ascending, logF, height_m, lt_h, n, sumObs, sumModel),
+%      .satellites (the labels of the satellite numbers),
 %      .drivers (names), .sets.pass, .passTrimmed, .day, .dayTrimmed (each: .cv table of model, cvRms, cvMae,
 %      forwardRms, forwardMae, backwardRms, backwardMae; .cvSe; .fit, the regressDrivers result of each proxy's
 %      largest model; .nRows), .missingFiles, .emptyFiles, .seconds
@@ -96,6 +106,7 @@ arguments
     options.NBoot (1,1) double {mustBeInteger, mustBePositive} = 200
     options.MaxVif (1,1) double {mustBeGreaterThanOrEqual(options.MaxVif, 1)} = 10
     options.Cache (1,1) logical = true
+    options.Missions (1,:) string {mustBeMember(options.Missions, ["swarm" "champ" "grace" "gracefo"])} = "swarm"
     options.Sets (1,:) string {mustBeMember(options.Sets, ["pass" "pass trimmed" "day" "day trimmed"])} = ["pass trimmed" "day trimmed"]
 end
 unit = "densityDriverFit";
@@ -109,13 +120,27 @@ cls = NonGravForces.io.spaceWeather(f30File);
 t0 = tic;
 
 % ---- 1. the observed factor per satellite, UTC day and node
-sats = ["A" "B" "C"];
+% the sources: label, file of a month, months covered (the HAPI headers' spans)
+src = struct('label', {}, 'file', {}, 'first', {}, 'last', {});
+toleos = struct('mission', {"champ", "grace", "gracefo"}, 'label', {"CHAMP", "GRACE-A", "GRACE-FO1"}, ...
+    'dataset', {"CH_OPER_DNS_ACC_2_", "GR_OPER_DNS1ACC_2_", "GF_OPER_DNS1ACC_2_"}, ...
+    'first', {"2000-07", "2002-04", "2018-05"}, 'last', {"2010-09", "2017-10", "2100-01"});
+if any(options.Missions == "swarm")
+    for s = ["A" "B" "C"]
+        src(end + 1) = struct('label', "Swarm " + s, 'file', @(m) fullfile(options.Pool, "Swarm", "DNSxPOD", string(year(m)), ...
+            "SW_OPER_DNS" + s + "POD_2_" + string(m, 'yyyy-MM') + ".csv"), 'first', "2013-12", 'last', "2100-01"); %#ok<AGROW>
+    end
+end
+for t = toleos(ismember([toleos.mission], options.Missions))
+    src(end + 1) = struct('label', t.label, 'file', @(m) fullfile(options.Pool, "TOLEOS", t.dataset, string(year(m)), ...
+        t.dataset + string(m, 'yyyy-MM') + ".csv"), 'first', t.first, 'last', t.last); %#ok<AGROW>
+end
 months = datetime(options.First, 'InputFormat', 'yyyy-MM'):calmonths(1):datetime(options.Last, 'InputFormat', 'yyyy-MM');
 rows = zeros(0, 9);                 % mjd, satellite, ascending, log f, height, LT, n, sum rho_obs, sum rho_model
 missingFiles = strings(1, 0); emptyFiles = strings(1, 0);
 % The passes depend only on the files and these settings: kept in the pool (v2: with the two sums).
 cache = fullfile(options.Pool, "Swarm", "densityDriverFit_" + options.Model + "_" + options.First + "_" + options.Last + ...
-    "_s" + options.Stride + "_n" + options.MinRecords + "_v2.mat");
+    "_s" + options.Stride + "_n" + options.MinRecords + "_v2" + localMissionTag(options.Missions) + ".mat");
 if options.Cache && isfile(cache)
     c = load(cache, 'rows', 'missingFiles', 'emptyFiles');
     rows = c.rows; missingFiles = c.missingFiles; emptyFiles = c.emptyFiles;
@@ -123,8 +148,9 @@ if options.Cache && isfile(cache)
     fprintf('densityDriverFit: %d passes from %s\n', size(rows, 1), cache);
 end
 for m = months
-    for is = 1:numel(sats)
-        file = fullfile(options.Pool, "Swarm", "DNSxPOD", string(year(m)), "SW_OPER_DNS" + sats(is) + "POD_2_" + string(m, 'yyyy-MM') + ".csv");
+    for is = 1:numel(src)
+        if string(m, 'yyyy-MM') < src(is).first || string(m, 'yyyy-MM') > src(is).last, continue, end
+        file = src(is).file(m);
         if ~isfile(file), missingFiles(end + 1) = file; continue, end %#ok<AGROW>
         try
             [ep, lla, rho, aux] = NonGravForces.io.readSwarmDensity(file);
@@ -157,7 +183,7 @@ for m = months
     fprintf('densityDriverFit: %s  %6d passes  (%.0f s)\n', string(m, 'yyyy-MM'), size(rows, 1), toc(t0));
 end
 if isempty(rows)
-    NonGravForces.fail(unit, "dataMissing", "no Swarm pass between %s and %s in %s -> fetch the months with setupNonGravForces('SwarmMonths', ...)", ...
+    NonGravForces.fail(unit, "dataMissing", "no pass between %s and %s in %s -> fetch the months with setupNonGravForces('SwarmMonths' or 'DensityMonths', ...)", ...
         options.First, options.Last, options.Pool);
 end
 rows = sortrows(rows, [1 2 3]);     % time order: crossval's blocks are blocks of time
@@ -177,7 +203,7 @@ sets = struct('name', {"pass", "pass trimmed", "day", "day trimmed"}, 'rows', {r
     'lt', {true, true, false, false});
 names = ["Fbar" "dF" "ap" "sinAnnual" "cosAnnual" "sinSemiannual" "cosSemiannual" "sinLT" "cosLT" "height" "trend" "logFbar" "FbarSq" "phase"];
 fprintf('\ndensityDriverFit %s..%s: %d passes (%s), missing files %d, empty files %d\n', options.First, options.Last, size(rows, 1), ...
-    strjoin(sats + ":" + string(arrayfun(@(k) sum(rows(:, 2) == k), 1:3)), " "), numel(missingFiles), numel(emptyFiles));
+    strjoin([src.label] + ":" + string(arrayfun(@(k) sum(rows(:, 2) == k), 1:numel(src))), ", "), numel(missingFiles), numel(emptyFiles));
 out = struct();
 for d = find(ismember([sets.name], options.Sets))
     out.(matlab.lang.makeValidName(sets(d).name)) = localValidate(sets(d).rows, sets(d).name, sets(d).lt, names, sw, cls, options);
@@ -186,10 +212,17 @@ fprintf('  %.0f s\n', toc(t0));
 
 R.rows = array2table(rows, 'VariableNames', ["mjd" "satellite" "ascending" "logF" "height_m" "lt_h" "n" "sumObs" "sumModel"]);
 R.drivers = names;
+R.satellites = [src.label];
 R.sets = out;
 R.missingFiles = missingFiles;
 R.emptyFiles = emptyFiles;
 R.seconds = toc(t0);
+end
+
+function tag = localMissionTag(missions)
+%LOCALMISSIONTAG The cache name's mission part: empty for Swarm alone, so the caches of 2026-10-27/28 stay valid.
+tag = "";
+if ~isequal(missions, "swarm"), tag = "_" + strjoin(sort(missions), "+"); end
 end
 
 function rows = localTrim(rows)

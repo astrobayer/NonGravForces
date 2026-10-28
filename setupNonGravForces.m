@@ -53,6 +53,11 @@ function info = setupNonGravForces(options)
 %                           determination alone, 30 s) of Swarm A, B and C for the month of each
 %                           'PoolDays' day from 2014 on, through the VirES for Swarm HAPI server as
 %                           CSV with its JSON header, into <DataPool>/Swarm/DNSxPOD/<yyyy>
+%       TOLEOS densities    TU Delft's accelerometer densities of CHAMP (CH_OPER_DNS_ACC_2_), GRACE-A
+%                           (GR_OPER_DNS1ACC_2_) and GRACE-FO 1 (GF_OPER_DNS1ACC_2_), 10 s,
+%                           ESA TOLEOS version 02 (CC BY 4.0), for the month of each 'PoolDays' day the
+%                           mission flew in, through the same HAPI server, into
+%                           <DataPool>/TOLEOS/<dataset>/<yyyy>
 %                           The committed excerpts in data/spaceweather and data/samples/itsg are
 %                           cut from these by tools/cutFixtures.py. Classic GRACE Level-1B is not
 %                           here yet: GFZ's ISDC, its only anonymous source, is down (2026-10-26)
@@ -103,7 +108,7 @@ function info = setupNonGravForces(options)
 %                                    environment variable. It is NOT guessed: a 2.5 GB download
 %                                    into a directory nobody named is not a service (R5). The
 %                                    GROOPS files go into <DataPool>/EarthRadiationPressure,
-%                                    FetchPool's into <DataPool>/SpaceWeather, <DataPool>/ITSG and <DataPool>/Swarm.
+%                                    FetchPool's into <DataPool>/SpaceWeather, <DataPool>/ITSG, <DataPool>/Swarm and <DataPool>/TOLEOS.
 %   FetchPool  1x1   string   -      The same three settings for the observations of the reference
 %                                    days (Dst, F30, TU Graz products, Swarm densities), into DataPool (default
 %                                    "ifMissing"; nothing happens without a DataPool). ciGate passes
@@ -113,6 +118,9 @@ function info = setupNonGravForces(options)
 %   SwarmMonths 1xS  string   -      Months of Swarm A/B/C densities alone for FetchPool, "yyyy-mm" from
 %                                    2013-12 (default none): the base of tools/densityDriverFit.m.
 %                                    About 40 MB per month for the three satellites.
+%   DensityMonths 1xD string -       Months of TU Delft's CHAMP, GRACE and GRACE-FO accelerometer
+%                                    densities (ESA TOLEOS) for FetchPool, "yyyy-mm" (default none);
+%                                    each month fetches the missions flying in it.
 %   PoolMonths 1xM   string   -      Whole months for FetchPool, "yyyy-mm" from 2018-06 (default none):
 %                                    GRACE-C/D Level-1B, Swarm densities and the complete space-weather
 %                                    and EOP files a month run (tools/dragScaleMonth.m) needs. A day
@@ -157,6 +165,7 @@ arguments
     options.PoolDays (1,:) string {mustBeNonempty} = ["2008-01-01" "2020-01-01" "2020-01-02" "2020-01-03"]
     options.PoolMonths (1,:) string {localMustBeMonths} = strings(1, 0)
     options.SwarmMonths (1,:) string = strings(1, 0)
+    options.DensityMonths (1,:) string = strings(1, 0)
 end
 % THE PINS AND URLS LIVE HERE AND NOWHERE ELSE (rule R1). Moving a pin is an act with a run behind it.
 % NRLMSISE-00: bc9a2fe is "gtd7: fix output at 32.5 km" (Argon densities and a memory corruption fixed
@@ -238,6 +247,14 @@ ITSG_PRODUCTS = ["attitude" "nonConservativeForces" "reducedDynamicOrbit"];
 % describes itself and the content check has a first line to read.
 SWARM_HAPI = "https://vires.services/hapi/data";
 SWARM_SATS = ["A" "B" "C"];
+% TU Delft's accelerometer densities of CHAMP, GRACE and GRACE-FO (ESA TOLEOS, version 02; CC BY 4.0),
+% served by the same HAPI server: densities of solar cycle 23 and of 24-25 from other spacecraft, for
+% the driver fit's extrapolation (O-19 step 3, 2026-10-28). Names and spans read from the HAPI headers
+% of fetch-data run 40632322798 (CHAMP 2000-07-29..2010-09-04, GRACE-A 2002-04-04..2017-10-31, GRACE-FO 1
+% 2018-05-29.., published to 2026-04-30 then). GRACE-B (GR_OPER_DNS2ACC_2_) is left out: it flies 220 km
+% behind GRACE-A through the same density and would only double cycle 23's weight.
+TOLEOS = struct('dataset', {"CH_OPER_DNS_ACC_2_", "GR_OPER_DNS1ACC_2_", "GF_OPER_DNS1ACC_2_"}, ...
+    'first', {"2000-07", "2002-04", "2018-05"}, 'last', {"2010-09", "2017-10", "2100-01"});
 DE440_FILE = "de440s.bsp";
 DE440_SHA256 = "c1c7feeab882263fc493a9d5a5b2ddd71b54826cdf65d8d17a76126b260a49f2";
 root = fileparts(mfilename('fullpath'));
@@ -269,12 +286,16 @@ info.data.items = [info.data.items, localFetchKernel(root, DE440_FILE, DE440_SHA
 info.dataPool = options.DataPool;
 info.data.items = [info.data.items, localFetchGroops(options.DataPool, GROOPS_BASE, GROOPS_FILES, options.FetchGroops)];
 info.data.items = [info.data.items, localFetchPool(options.DataPool, options.PoolDays, DST_BASE, F30_BASE, F30_FILES, ...
-    ITSG_BASE, ITSG_PRODUCTS, SWARM_HAPI, SWARM_SATS, options.FetchPool)];
+    ITSG_BASE, ITSG_PRODUCTS, SWARM_HAPI, SWARM_SATS, TOLEOS, options.FetchPool)];
 info.data.items = [info.data.items, localFetchPoolMonths(options.DataPool, options.PoolMonths, L1B_BASE, L1B_MONTH_PRODUCTS, ...
     SWARM_HAPI, SWARM_SATS, EOP_URL, SW_URL, options.FetchPool)];
 if ~isempty(options.SwarmMonths) && strlength(options.DataPool) > 0
     info.data.items = [info.data.items, localFetchTargets(struct('name', {}, 'action', {}, 'file', {}, 'source', {}), ...
         localSwarmTargets(options.DataPool, datetime(options.SwarmMonths, 'InputFormat', 'yyyy-MM'), SWARM_HAPI, SWARM_SATS), options.FetchPool)];
+end
+if ~isempty(options.DensityMonths) && strlength(options.DataPool) > 0
+    info.data.items = [info.data.items, localFetchTargets(struct('name', {}, 'action', {}, 'file', {}, 'source', {}), ...
+        localToleosTargets(options.DataPool, datetime(options.DensityMonths, 'InputFormat', 'yyyy-MM'), SWARM_HAPI, TOLEOS), options.FetchPool)];
 end
 info.mex = NonGravForces.buildMex('Check', true);      % 1xT: one element per target
 if options.Verbose
@@ -437,8 +458,8 @@ for k = 1:numel(files)
 end
 end
 
-function items = localFetchPool(pool, days, dstBase, f30Base, f30Files, itsgBase, itsgProducts, swarmHapi, swarmSats, mode)
-%LOCALFETCHPOOL Observations of the reference days into DATAPOOL: Dst, F30, TU Graz's products, Swarm densities.
+function items = localFetchPool(pool, days, dstBase, f30Base, f30Files, itsgBase, itsgProducts, swarmHapi, swarmSats, toleos, mode)
+%LOCALFETCHPOOL Observations of the reference days into DATAPOOL: Dst, F30, TU Graz's products, Swarm and TOLEOS densities.
 %   The pool is named, never guessed (localFetchGroops says why). Every reply is checked by its first
 %   lines before it replaces anything -- for a .gz, those of what it decompresses to -- and a failure
 %   is REPORTED per file, never raised. Kyoto keeps FINAL Dst only for months a few years old; a
@@ -481,7 +502,25 @@ for k = 1:numel(d)
 end
 % Swarm DNSxPOD: the month of each day, from 2014 (Swarm was launched in November 2013)
 targets = [targets, localSwarmTargets(pool, unique(first(year(first) >= 2014)), swarmHapi, swarmSats)];
+% TOLEOS: the month of each day, for every mission flying in it
+targets = [targets, localToleosTargets(pool, unique(first), swarmHapi, toleos)];
 items = localFetchTargets(items, targets, mode);
+end
+
+function t = localToleosTargets(pool, months, hapi, toleos)
+%LOCALTOLEOSTARGETS One HAPI CSV per TOLEOS dataset and month, for the datasets whose mission covers the month.
+t = struct('name', {}, 'url', {}, 'dst', {}, 'check', {});
+for m = months
+    ym = string(m, 'yyyy-MM');
+    span = "&start=" + string(m, 'yyyy-MM-dd') + "T00:00:00Z&stop=" + string(m + calmonths(1), 'yyyy-MM-dd') + "T00:00:00Z";
+    for k = 1:numel(toleos)
+        if ym < toleos(k).first || ym > toleos(k).last, continue, end
+        ds = toleos(k).dataset;
+        t(end+1) = struct('name', "toleos " + ds + " " + ym, ...
+            'url', hapi + "?dataset=" + ds + span + "&format=csv&include=header", ...
+            'dst', string(fullfile(pool, "TOLEOS", ds, string(year(m)), ds + ym + ".csv")), 'check', "^#\s*\{"); %#ok<AGROW>
+    end
+end
 end
 
 function t = localSwarmTargets(pool, months, swarmHapi, swarmSats)
