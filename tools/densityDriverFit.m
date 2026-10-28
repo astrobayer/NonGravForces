@@ -33,7 +33,8 @@ function R = densityDriverFit(options)
 %     height  (h - 470 km) / 100 km
 %     trend   years since 2020-01-01
 %   with the proxy F10.7 (CelesTrak) or F30 (CLS, adjusted), nested from 3 to 11 drivers.
-%   NONLINEAR SOLAR TERMS (2026-10-28): log Fbar instead of Fbar, a centred square ((Fbar - 120)/100)^2,
+%   NONLINEAR SOLAR TERMS (2026-10-28): log Fbar instead of Fbar, a centred square ((Fbar - c)/100)^2 with c
+%   each proxy's mean over the data set (it was 120 sfu for both until PR #118, which made F30's collinear),
 %   and the cycle's PHASE, Fbar now minus Fbar a year earlier (/100; > 0 rising, < 0 declining) -- the
 %   linear cycle-24 relation failed forward into cycle 25, and f is not monotonic in Fbar at high
 %   activity (0.95 in 2015, 0.77 in 2024 at higher flux), which a saturation or a hysteresis explains.
@@ -76,7 +77,8 @@ function R = densityDriverFit(options)
 %      .satellites (the labels of the satellite numbers),
 %      .drivers (names), .sets.pass, .passTrimmed, .day, .dayTrimmed (each: .cv table of model, cvRms, cvMae,
 %      forwardRms, forwardMae, backwardRms, backwardMae; .cvSe; .fit, the regressDrivers result of each proxy's
-%      largest model; .nRows), .missingFiles, .emptyFiles, .seconds
+%      largest model, with .satelliteResidual (rows, median, mean, RMS of log f per satellite); .nRows;
+%      .squareCentre [F10.7 F30] in sfu), .missingFiles, .emptyFiles, .seconds
 %
 %   DATA SETS (2026-10-28, after the first run found std(log f) 0.65 per pass while the yearly medians
 %   moved only between 0.5 and 1.07): per pass and per day (both nodes, the ratio of the summed sums),
@@ -206,7 +208,7 @@ fprintf('\ndensityDriverFit %s..%s: %d passes (%s), missing files %d, empty file
     strjoin([src.label] + ":" + string(arrayfun(@(k) sum(rows(:, 2) == k), 1:numel(src))), ", "), numel(missingFiles), numel(emptyFiles));
 out = struct();
 for d = find(ismember([sets.name], options.Sets))
-    out.(matlab.lang.makeValidName(sets(d).name)) = localValidate(sets(d).rows, sets(d).name, sets(d).lt, names, sw, cls, options);
+    out.(matlab.lang.makeValidName(sets(d).name)) = localValidate(sets(d).rows, sets(d).name, sets(d).lt, names, [src.label], sw, cls, options);
 end
 fprintf('  %.0f s\n', toc(t0));
 
@@ -237,7 +239,7 @@ end
 rows = rows(keep, :);
 end
 
-function V = localValidate(rows, label, useLT, names, sw, cls, options)
+function V = localValidate(rows, label, useLT, names, satLabels, sw, cls, options)
 %LOCALVALIDATE Drivers, blocked CV, forward/backward prediction and the full fits of one data set; printed.
 mjd = rows(:, 1); y = rows(:, 4);
 Fbar = nan(size(mjd)); dF = Fbar; ap = Fbar; F30bar = Fbar; dF30 = Fbar; ph107 = Fbar; ph30 = Fbar;
@@ -263,8 +265,13 @@ if ~useLT, lt = zeros(size(mjd)); end               % columns present, never sel
 common = [sin(ph) cos(ph) sin(2 * ph) cos(2 * ph) sin(lt) cos(lt) (rows(:, 5) - 470e3) / 100e3 (mjd - 58849) / 365.25];
 % NONLINEAR SOLAR TERMS (2026-10-28): the cycle-24 linear relation failed forward into cycle 25, and f is
 % not monotonic in Fbar at high activity -- log Fbar, a centred square and the cycle's phase test why.
-nl = @(F, P) [log(F), ((F - 120) / 100) .^ 2, P / 100];
-X = [y, Fbar, dF, ap, common, nl(Fbar, ph107), F30bar, dF30, ap, common, nl(F30bar, ph30)];   % 2..15 F10.7, 16..29 F30
+% The square is centred at EACH proxy's own mean over the data set (2026-10-28, PR #118): centred at 120 sfu
+% for both, F30 -- which runs ~20 % lower than F10.7 -- made Fbar and its square collinear (VIF 9.5) and its
+% forward fit was refused. A fixed constant per data set, so training and test rows see the same column.
+ok107 = isfinite(Fbar) & isfinite(y); ok30 = isfinite(F30bar) & isfinite(y);
+c107 = mean(Fbar(ok107)); c30 = mean(F30bar(ok30));
+nl = @(F, P, c) [log(F), ((F - c) / 100) .^ 2, P / 100];
+X = [y, Fbar, dF, ap, common, nl(Fbar, ph107, c107), F30bar, dF30, ap, common, nl(F30bar, ph30, c30)];   % 2..15 F10.7, 16..29 F30
 keep = all(isfinite(X), 2);
 X = X(keep, :); rows = rows(keep, :); mjd = mjd(keep);
 if useLT
@@ -299,6 +306,7 @@ if any(before) && any(~before)
 end
 fprintf('\n== %s: %d rows, log f median %.3f (f %.3f), std %.3f, MAD %.3f\n', label, size(X, 1), localQuantile(X(:, 1), 0.5), ...
     exp(localQuantile(X(:, 1), 0.5)), std(X(:, 1)), localQuantile(abs(X(:, 1) - localQuantile(X(:, 1), 0.5)), 0.5));
+fprintf('  the squares are centred at the proxies' means: F10.7 %.1f sfu, F30 %.1f sfu\n', c107, c30);
 fprintf('  per year: f at the 5 / 50 / 95 %% quantile of log f, rows\n');
 for yy = unique(yr)'
     v = X(yr == yy, 1);
@@ -323,6 +331,21 @@ for proxy = ["F10.7" "F30"]
         for k = 1:numel(r.driverNames)
             fprintf('    %-14s %10.4g +- %.2g   VIF %.1f\n', r.driverNames(k), r.coef(k + 1), r.sigma(k + 1), r.vif(k));
         end
+        % MISSION OFFSETS (2026-10-28): the full fit's residual per satellite. A mission whose median residual
+        % stands apart from the others carries a calibration offset (POD-only Swarm against TU Delft's
+        % accelerometer densities) that the solar terms would otherwise absorb.
+        Z = X(:, spec(s).cols);
+        res = X(:, 1) - (r.coef(1) + (Z - mean(Z, 1)) * r.coef(2:end));
+        fprintf('    residual per satellite: rows, median, mean, RMS (log f)\n');
+        sat = rows(:, 2);
+        satRes = nan(numel(satLabels), 4);
+        for k = 1:numel(satLabels)
+            e = res(sat == k);
+            if isempty(e), continue, end
+            satRes(k, :) = [numel(e), localQuantile(e, 0.5), mean(e), sqrt(mean(e .^ 2))];
+            fprintf('      %-10s %6d %+8.4f %+8.4f %8.4f\n', satLabels(k), satRes(k, :));
+        end
+        r.satelliteResidual = array2table(satRes, 'VariableNames', ["rows" "median" "mean" "rms"], 'RowNames', cellstr(satLabels));
     catch err
         if err.identifier ~= "timeSeriesPreparation:regressDrivers:collinear", rethrow(err); end
         r = struct('collinear', string(err.message));
@@ -335,6 +358,7 @@ V.cv = table([spec.name]', cvL(1:S)', cvL(S + 1:end)', fwd(1:S)', fwd(S + 1:end)
 V.cvSe = cv.se;
 V.fit = fits;
 V.nRows = size(X, 1);
+V.squareCentre = [c107 c30];
 end
 
 function q = localQuantile(x, p)

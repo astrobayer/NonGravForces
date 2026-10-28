@@ -175,8 +175,13 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-28, PR #117)
+## 5. Current status (2026-10-28, PR #118)
 
+- **2026-10-28, PR #118 (driver fit: each proxy's square centred at its own mean, mission residuals):**
+  `tools/densityDriverFit.m` centres ((Fbar - c)/100)^2 at the data set's mean of each proxy (was 120 sfu for both,
+  which made F30's forward fit collinear) and prints, after each full fit, the residual of log f per satellite --
+  the test for a mission offset between Swarm's POD densities and TU Delft's accelerometer densities. Tool only:
+  gate stays 479.
 - **2026-10-28, PR #117 (the TOLEOS months, edge requests clipped):** fetch-data run 40637542696 (densities
   2000-07..2026-04, 29 min) fetched CHAMP, GRACE-A and GRACE-FO 1 into the runner's pool except the SIX partial months
   at the ends of the three spans: VirES answers 400 to a request reaching outside a dataset's startDate..stopDate (even
