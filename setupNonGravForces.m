@@ -253,8 +253,12 @@ SWARM_SATS = ["A" "B" "C"];
 % of fetch-data run 40632322798 (CHAMP 2000-07-29..2010-09-04, GRACE-A 2002-04-04..2017-10-31, GRACE-FO 1
 % 2018-05-29.., published to 2026-04-30 then). GRACE-B (GR_OPER_DNS2ACC_2_) is left out: it flies 220 km
 % behind GRACE-A through the same density and would only double cycle 23's weight.
+% A request reaching outside a dataset's startDate..stopDate is refused with 400 (run 40637542696: the six
+% partial months at the ends), so the first and last month are clipped to the span; GRACE-FO's stopDate
+% grows as TU Delft publishes, and a month past it is reported as failed until this pin is moved.
 TOLEOS = struct('dataset', {"CH_OPER_DNS_ACC_2_", "GR_OPER_DNS1ACC_2_", "GF_OPER_DNS1ACC_2_"}, ...
-    'first', {"2000-07", "2002-04", "2018-05"}, 'last', {"2010-09", "2017-10", "2100-01"});
+    'start', {"2000-07-29T00:00:00", "2002-04-04T00:00:00", "2018-05-29T00:00:00"}, ...
+    'stop', {"2010-09-04T23:59:50", "2017-10-31T23:59:50", "2026-04-30T23:59:50"});
 DE440_FILE = "de440s.bsp";
 DE440_SHA256 = "c1c7feeab882263fc493a9d5a5b2ddd71b54826cdf65d8d17a76126b260a49f2";
 root = fileparts(mfilename('fullpath'));
@@ -512,9 +516,11 @@ function t = localToleosTargets(pool, months, hapi, toleos)
 t = struct('name', {}, 'url', {}, 'dst', {}, 'check', {});
 for m = months
     ym = string(m, 'yyyy-MM');
-    span = "&start=" + string(m, 'yyyy-MM-dd') + "T00:00:00Z&stop=" + string(m + calmonths(1), 'yyyy-MM-dd') + "T00:00:00Z";
     for k = 1:numel(toleos)
-        if ym < toleos(k).first || ym > toleos(k).last, continue, end
+        t0 = max(m, datetime(toleos(k).start, 'InputFormat', 'yyyy-MM-dd''T''HH:mm:ss'));
+        t1 = min(m + calmonths(1), datetime(toleos(k).stop, 'InputFormat', 'yyyy-MM-dd''T''HH:mm:ss'));
+        if t1 <= t0, continue, end
+        span = "&start=" + string(t0, 'yyyy-MM-dd''T''HH:mm:ss') + "Z&stop=" + string(t1, 'yyyy-MM-dd''T''HH:mm:ss') + "Z";
         ds = toleos(k).dataset;
         t(end+1) = struct('name', "toleos " + ds + " " + ym, ...
             'url', hapi + "?dataset=" + ds + span + "&format=csv&include=header", ...
