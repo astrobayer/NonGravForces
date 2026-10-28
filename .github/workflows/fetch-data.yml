@@ -130,6 +130,7 @@ jobs:
             NonGravForcesFetch/data/spaceweather
             NonGravForcesFetch/data/samples/itsg
             NonGravForcesFetch/data/samples/swarm
+            NonGravForcesFetch/data/samples/toleos
           retention-days: 7
       - name: Remove the working copy from this machine
         if: always()
@@ -154,7 +155,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A data/spaceweather data/samples/itsg data/samples/swarm
+          git add -A data/spaceweather data/samples/itsg data/samples/swarm data/samples/toleos
           git status --short
           if git diff --cached --quiet; then
             echo "the excerpts cut from the pool equal the committed ones"

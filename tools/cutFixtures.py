@@ -16,6 +16,10 @@ pool and writes the excerpts the tests are allowed to see:
   data/samples/swarm/SW_OPER_DNS<x>POD_2_<first>_<last>.csv
                                                Swarm A/B/C POD densities (VirES HAPI CSV): the JSON
                                                header unchanged, the 30 s lines of the 2014+ days
+  data/samples/toleos/<dataset><day>_00-06.csv TU Delft's CHAMP, GRACE-A and GRACE-FO accelerometer
+                                               densities (ESA TOLEOS, VirES HAPI CSV): the JSON header
+                                               unchanged, the 10 s lines of the first six hours of the
+                                               first day the mission flew
 
 Every line it keeps is byte-identical to the source (decoded and re-encoded as latin-1). It
 prints the size and SHA-256 of every source it read, for the READMEs' digest tables. Standard
@@ -43,6 +47,11 @@ F30_SUFFIX = "_2007-09_2008-03_2019-09_2020-03.txt"
 ITSG_PRODUCTS = ["attitude", "nonConservativeForces", "reducedDynamicOrbit"]
 GROOPS_EXCERPT = 600
 SWARM_SATS = ["A", "B", "C"]
+# TOLEOS datasets and the span their HAPI headers state (fetch-data run 40632322798, 2026-10-28)
+TOLEOS = [("CH_OPER_DNS_ACC_2_", "2000-07-29", "2010-09-04"),
+          ("GR_OPER_DNS1ACC_2_", "2002-04-04", "2017-10-31"),
+          ("GF_OPER_DNS1ACC_2_", "2018-05-29", "2026-04-30")]
+TOLEOS_HOURS = 6
 
 _DATE_RES = [
     (re.compile(r"^\s*\"?(\d{4})-(\d{2})-(\d{2})"), "ymd"),
@@ -185,6 +194,23 @@ def main():
             head = [ln for ln in head if line_date(ln) is None]
             body = [ln for text, _ in parts for ln in text.splitlines(keepends=True) if line_date(ln) is not None]
             write(os.path.join("data", "samples", "swarm", f"{ds}{swarm_days[0]}_{swarm_days[-1]}.csv"), "".join(head + body))
+
+    for ds, lo, hi in TOLEOS:
+        day = next((d for d in a.days if lo <= d <= hi), None)
+        if day is None:
+            continue
+        b = read(os.path.join(a.pool, "TOLEOS", ds, day[:4], f"{ds}{day[:7]}.csv"))
+        if b is None:
+            continue
+        head, data = [], []
+        for ln in b.decode("latin-1").splitlines(keepends=True):
+            if ln.startswith("#"):
+                head.append(ln)
+            elif ln.startswith(day + "T") and int(ln[11:13]) < TOLEOS_HOURS:
+                data.append(ln)
+        if len(data) != TOLEOS_HOURS * 360:
+            missing.append(f"{ds}{day[:7]}.csv: {len(data)} 10 s lines in the first {TOLEOS_HOURS} h of {day}, not {TOLEOS_HOURS * 360}")
+        write(os.path.join("data", "samples", "toleos", f"{ds}{day}_00-{TOLEOS_HOURS:02d}.csv"), "".join(head + data))
 
     print("sources read (bytes, SHA-256, path below the pool):")
     print("\n".join(report))

@@ -179,8 +179,11 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 - **2026-10-28, PR #116 (step 3 of the driver fit: densities of other missions):** TU Delft's CHAMP, GRACE-A/B and
   GRACE-FO accelerometer densities (ESA TOLEOS v02, CC BY 4.0) via VirES HAPI: `setupNonGravForces('DensityMonths')`
-  into `<DataPool>/TOLEOS`, `fetch-data.yml` input `densities`, each dataset's header printed in the run log. Dataset
-  names are viresclient's, unverified until the run; reader and fit extension follow against the bytes. Gate stays 475.
+  into `<DataPool>/TOLEOS`, `fetch-data.yml` input `densities`, each dataset's header printed in the run log. Run
+  40632322798 VERIFIED the names and read the headers: same nine HAPI columns and units as Swarm DNSxPOD, 10 s, spans
+  CHAMP 2000-07-29..2010-09-04, GRACE-A 2002-04-04..2017-10-31, GRACE-FO 1 2018-05-29..2026-04-30; CHAMP's orbit mean
+  carries the fill 9.99e+32 with validity_flag_orbitmean 1. GRACE-B dropped (redundant with A). `tools/cutFixtures.py`
+  cuts six hours of each into `data/samples/toleos`; reader and fit extension follow against those bytes.
 - **2026-10-28, PR #115 (nonlinear solar terms in `tools/densityDriverFit.m`, owner's choice):** log Fbar, a centred
   square ((Fbar-120)/100)^2 and the cycle's phase. Run 40624842064 (trimmed days, CV / fwd / bwd RMS of log f): constant
   0.252 / 0.232 / 0.280, linear F30 0.217 / 0.287 / 0.220, **F10.7 + square 0.192 / 0.291 / 0.192**, F30 + square 0.179 /

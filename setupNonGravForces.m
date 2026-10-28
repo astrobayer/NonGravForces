@@ -53,8 +53,8 @@ function info = setupNonGravForces(options)
 %                           determination alone, 30 s) of Swarm A, B and C for the month of each
 %                           'PoolDays' day from 2014 on, through the VirES for Swarm HAPI server as
 %                           CSV with its JSON header, into <DataPool>/Swarm/DNSxPOD/<yyyy>
-%       TOLEOS densities    TU Delft's accelerometer densities of CHAMP (CH_OPER_DNS_ACC_2_), GRACE-A/B
-%                           (GR_OPER_DNS1ACC_2_, GR_OPER_DNS2ACC_2_) and GRACE-FO (GF_OPER_DNS1ACC_2_),
+%       TOLEOS densities    TU Delft's accelerometer densities of CHAMP (CH_OPER_DNS_ACC_2_), GRACE-A
+%                           (GR_OPER_DNS1ACC_2_) and GRACE-FO 1 (GF_OPER_DNS1ACC_2_), 10 s,
 %                           ESA TOLEOS version 02 (CC BY 4.0), for the month of each 'PoolDays' day the
 %                           mission flew in, through the same HAPI server, into
 %                           <DataPool>/TOLEOS/<dataset>/<yyyy>
@@ -249,10 +249,12 @@ SWARM_HAPI = "https://vires.services/hapi/data";
 SWARM_SATS = ["A" "B" "C"];
 % TU Delft's accelerometer densities of CHAMP, GRACE and GRACE-FO (ESA TOLEOS, version 02; CC BY 4.0),
 % served by the same HAPI server: densities of solar cycle 23 and of 24-25 from other spacecraft, for
-% the driver fit's extrapolation (O-19 step 3, 2026-10-28). Dataset names from viresclient's
-% catalogue of collections; the month ranges are the missions' and only bound the requests.
-TOLEOS = struct('dataset', {"CH_OPER_DNS_ACC_2_", "GR_OPER_DNS1ACC_2_", "GR_OPER_DNS2ACC_2_", "GF_OPER_DNS1ACC_2_"}, ...
-    'first', {"2000-08", "2002-04", "2002-04", "2018-06"}, 'last', {"2010-09", "2017-10", "2017-10", "2100-01"});
+% the driver fit's extrapolation (O-19 step 3, 2026-10-28). Names and spans read from the HAPI headers
+% of fetch-data run 40632322798 (CHAMP 2000-07-29..2010-09-04, GRACE-A 2002-04-04..2017-10-31, GRACE-FO 1
+% 2018-05-29.., published to 2026-04-30 then). GRACE-B (GR_OPER_DNS2ACC_2_) is left out: it flies 220 km
+% behind GRACE-A through the same density and would only double cycle 23's weight.
+TOLEOS = struct('dataset', {"CH_OPER_DNS_ACC_2_", "GR_OPER_DNS1ACC_2_", "GF_OPER_DNS1ACC_2_"}, ...
+    'first', {"2000-07", "2002-04", "2018-05"}, 'last', {"2010-09", "2017-10", "2100-01"});
 DE440_FILE = "de440s.bsp";
 DE440_SHA256 = "c1c7feeab882263fc493a9d5a5b2ddd71b54826cdf65d8d17a76126b260a49f2";
 root = fileparts(mfilename('fullpath'));
