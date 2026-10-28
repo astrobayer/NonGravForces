@@ -179,7 +179,14 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 - **2026-10-28, PR #120 (the driver scale judged by the month):** `tools/dragScaleMonth.m` runs two Model variants
   with `drag.densityScale = "driver"` (Offset 0 and GRACE-FO 1's -0.041) when the pool holds CLS's F30 -- no density
-  observation of the month needed. Tool only: gate stays 486. Months 2020-01 and 2024-01 C: pending.
+  observation of the month needed. Tool only: gate stays 486. **Measured, GRACE-C, joint k_drag / median daily rms_x
+  [nm/s^2] (drag ratio to the preset):** 2020-01 (run 40708768247) preset 0.443 / 6.36; **driver +0.000 0.740 / 2.81
+  (0.601), driver -0.041 0.771 / 2.63 (0.577)**; Swarm option 0.882 / 2.13 (0.493); dtm2020 0.961 / 1.79. 2024-01 (run
+  40708765369) preset 0.964 / 20.95; **driver +0.000 1.072 / 20.34 (0.903), driver -0.041 1.117 / 20.39 (0.867)**;
+  Swarm option 0.978 / 19.50 (0.981); dtm2020 1.337 / 28.70. The driver scale removes ~2/3 of the solar-minimum error
+  in log k (2020: 0.443 -> 0.77) and overshoots 7-12 % at high activity (2024: 0.964 -> 1.07-1.12); in both months it
+  sits within the fit's own per-day scatter (0.17-0.18 in log f) of the measured Swarm factor (0.60 vs 0.49; 0.90 vs
+  0.98). GRACE-FO's -0.041 helps in 2020 and hurts in 2024: one month cannot pin a mission offset.
 - **2026-10-28, PR #119 (the correction unit, `env.densityDriverScale`, owner's request):** f = rho_obs/rho_msis00 per UTC
   day PREDICTED from drivers that exist for every date -- F30's 81-day mean ending the day before, the day-before
   deviation, the day's Ap, annual and semiannual harmonics and ((Fbar - 75.712)/100)^2 -- with the F30 coefficient record
