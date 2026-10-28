@@ -37,6 +37,12 @@ function R = dragScaleMonth(options)
 %   gas force is linear in the species densities -- and the Model option drag.densityScale "swarm",
 %   which interpolates log f in height to GRACE-FO's geodetic height at every epoch.
 %
+%   DRIVER DENSITY SCALE (O-19, 2026-10-28): when the pool holds CLS's adjusted F30
+%   (<Pool>/SpaceWeather/F30/radio_flux_adjusted_observation.txt), two Model variants with
+%   drag.densityScale "driver" -- env.densityDriverScale's prediction from F30, Ap and season, at
+%   Swarm's level (Offset 0) and at GRACE-FO 1's (Offset -0.041). They need no density observation
+%   of the month, so they are the extrapolable correction judged against the same ACT1B.
+%
 %   SPACE WEATHER AND EOP: the complete files in the pool (<Pool>/SpaceWeather/SW-All.csv,
 %   <Pool>/EOP/finals2000A.all, fetched with the month by setupNonGravForces('PoolMonths')) when
 %   they are there, else the committed 2019-09..2020-03 excerpts, which serve 2020-01 only. A month
@@ -123,6 +129,22 @@ macro = NonGravForces.geom.graceFO(options.Satellite);
 models = cell(1, nM);
 for v = 1:nM
     models{v} = NonGravForces.Model(macro, vOpt{v}, 'Eop', eop, 'SpaceWeather', sw);
+end
+% The driver-predicted density scale (env.densityDriverScale, PR #119), when the pool holds CLS's F30:
+% Swarm's level (Offset 0) and GRACE-FO 1's (-0.041). It needs no density observation of the month.
+f30File = fullfile(options.Pool, "SpaceWeather", "F30", "radio_flux_adjusted_observation.txt");
+haveDriver = isfile(f30File);
+if haveDriver
+    cls = NonGravForces.io.spaceWeather(f30File);
+    oD = o.set("drag.densityScale", "driver");
+    for off = [0 -0.041]
+        D = NonGravForces.env.densityDriverScale(sw, cls, 'Offset', off);
+        vName = [vName sprintf("densityScale driver %+.3f", off)]; %#ok<AGROW>
+        models{end + 1} = NonGravForces.Model(macro, oD, 'Eop', eop, 'SpaceWeather', sw, 'DensityScale', D); %#ok<AGROW>
+    end
+    nM = numel(vName);
+else
+    fprintf('dragScaleMonth: no %s in the pool: the driver variants are not run\n', f30File);
 end
 % Swarm POD densities of the month, when the pool has them: the density-scale variants
 swFiles = string(fullfile(options.Pool, "Swarm", "DNSxPOD", extractBefore(options.Month, 5), ...

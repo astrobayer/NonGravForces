@@ -175,8 +175,11 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-28, PR #119)
+## 5. Current status (2026-10-28, PR #120)
 
+- **2026-10-28, PR #120 (the driver scale judged by the month):** `tools/dragScaleMonth.m` runs two Model variants
+  with `drag.densityScale = "driver"` (Offset 0 and GRACE-FO 1's -0.041) when the pool holds CLS's F30 -- no density
+  observation of the month needed. Tool only: gate stays 486. Months 2020-01 and 2024-01 C: pending.
 - **2026-10-28, PR #119 (the correction unit, `env.densityDriverScale`, owner's request):** f = rho_obs/rho_msis00 per UTC
   day PREDICTED from drivers that exist for every date -- F30's 81-day mean ending the day before, the day-before
   deviation, the day's Ap, annual and semiannual harmonics and ((Fbar - 75.712)/100)^2 -- with the F30 coefficient record
