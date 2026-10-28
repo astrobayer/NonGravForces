@@ -1563,8 +1563,8 @@ classdef tNgfEnv < NgfTestCase
             % pool (run 40676249479, F30 coefficient record). Independent code -- the tool builds Fbar with a
             % trailing movmean over the file's rows, the unit with a calendar window -- over the same bytes.
             S = tc.driverScale();
-            zRef = REFZ;
-            logfRef = REFLOGF;
+            zRef = [44.592592592592595 1.2074074074074019 2 0 1 0 1 0.096843864597306581];
+            logfRef = -0.54833027703885062;
             e = referenceSystem.mjdToEpoch(58849.5, "UTC");
             z = S.drivers(e);
             tc.verifyBoundAndRecord("densityDriverScale drivers vs densityDriverFit's on 2020-01-01, max rel", max(abs(z' - zRef) ./ max(abs(zRef), 1)), 1e-12, "-", "an 81-term mean summed in another order");

@@ -175,8 +175,15 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-28, PR #118)
+## 5. Current status (2026-10-28, PR #119)
 
+- **2026-10-28, PR #119 (the correction unit, `env.densityDriverScale`, owner's request):** f = rho_obs/rho_msis00 per UTC
+  day PREDICTED from drivers that exist for every date -- F30's 81-day mean ending the day before, the day-before
+  deviation, the day's Ap, annual and semiannual harmonics and ((Fbar - 75.712)/100)^2 -- with the F30 coefficient record
+  of run 40676249479 (trimmed days, 17 digits; CV / fwd / bwd 0.172 / 0.181 / 0.180 against the constant's 0.234 / 0.228 /
+  0.248). 'Offset' adds a satellite's level in log f (GRACE-FO 1 -0.041). `Options` `drag.densityScale = "driver"`,
+  `Model(..., 'DensityScale', S)` as for "swarm"; `S.kind` must match the option, both ways. 62 units. Written without
+  MATLAB, ◐, predicted gate 486 (479 + 7).
 - **2026-10-28, PR #118 (driver fit: each proxy's square centred at its own mean, mission residuals):**
   `tools/densityDriverFit.m` centres ((Fbar - c)/100)^2 at the data set's mean of each proxy (was 120 sfu for both,
   which made F30's forward fit collinear) and prints, after each full fit, the residual of log f per satellite --

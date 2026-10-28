@@ -23,7 +23,7 @@ function S = densityDriverScale(sw, cls, options)
 %   Fc     the centre of the square, the data set's mean Fbar
 %
 %   One factor per UTC day; it does not depend on height or local time (adding them did not
-%   lower the cross-validated error). log f peaks near Fbar ~ 100 sfu of F30 and falls on
+%   lower the cross-validated error). log f peaks near Fbar ~ 99 sfu of F30 and falls on
 %   both sides: NRLMSISE-00 overestimates most at solar minimum (f ~ 0.5) and least at medium
 %   activity (f ~ 0.9). The coefficients are the fit of run 40676249479 ("F30 + season +
 %   square", trimmed days); 'Offset' adds a satellite's own level in log f, -0.041 for
@@ -42,7 +42,7 @@ function S = densityDriverScale(sw, cls, options)
 %   Model   1x1   string  -      density backend the factor is for; only "msis00" (default), the
 %                                model the coefficients were fitted against
 %   Offset  1x1   double  log f  added to log f: a satellite's own level (default 0, Swarm's;
-%                                -0.041 for GRACE-FO 1, +0.036 CHAMP, +0.045 GRACE-A, run 40666688202)
+%                                -0.041 for GRACE-FO 1, +0.036 CHAMP, +0.045 GRACE-A, run 40676249479)
 %
 % OUTPUT ARGUMENTS
 %   Name  Size  Type    Units  Description
@@ -60,8 +60,8 @@ function S = densityDriverScale(sw, cls, options)
 %   forward across 2020 0.181, backward 0.180), against 0.23-0.25 for a constant factor: one
 %   day's predicted factor is good to about 18 %. Mission levels differ by 3-5 % ('Offset').
 %   The transcription is exact: log f equals the fit's own prediction at its reference day to
-%   rounding (tests). Outside the drivers the fit saw (F30 Fbar 64-190 sfu in 2000-2026) the
-%   square extrapolates and is not validated.
+%   rounding (tests). Outside the drivers the fit saw (2000-08..2026-08, F30 Fbar from ~45 sfu in the
+%   2008/2019 minima to the cycle-23 maximum) the square extrapolates and is not validated.
 %
 % ERRORS
 %   NonGravForces:densityDriverScale:inputModel   Model is not msis00
@@ -101,8 +101,11 @@ if ~isfield(sw, 'index') || ~isfield(sw.index, 'apDaily') || ~isfield(cls, 'inde
     NonGravForces.fail(unit, "inputFamily", "sw must be io.spaceWeather of SW-All (celestrak) and cls of CLS's adjusted radio flux (f30) -> read the two files with io.spaceWeather");
 end
 % THE COEFFICIENT RECORD, transcribed from tools/densityDriverFit.m's full fit (trimmed days, F30), every digit.
-c = struct('run', "40676249479", 'centre_sfu', NaN, 'a0', NaN, 'Fbar', NaN, 'dF', NaN, 'ap', NaN, ...
-    'sinAnnual', NaN, 'cosAnnual', NaN, 'sinSemiannual', NaN, 'cosSemiannual', NaN, 'FbarSq', NaN);
+c = struct('run', "40676249479", 'centre_sfu', 75.712339474163883, 'a0', -0.70150825262940808, ...
+    'Fbar', 0.0065937301051911179, 'dF', 0.0016375596570947545, 'ap', 0.0012805481671233857, ...
+    'sinAnnual', 0.03526596776917159, 'cosAnnual', 0.01288830194051793, ...
+    'sinSemiannual', 0.029905119164486137, 'cosSemiannual', -0.022318436087852906, ...
+    'FbarSq', -1.4039269195633037);
 beta = [c.Fbar; c.dF; c.ap; c.sinAnnual; c.cosAnnual; c.sinSemiannual; c.cosSemiannual; c.FbarSq];
 mjdF = double(cls.mjd(:)); f30 = double(cls.index.f30(:));
 mjdA = double(sw.mjd(:)); ap = double(sw.index.apDaily(:));
