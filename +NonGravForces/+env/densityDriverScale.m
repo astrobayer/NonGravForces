@@ -120,12 +120,12 @@ S.provenance = NonGravForces.provenance("env.densityDriverScale", 'Options', opt
 end
 
 function f = localAt(unit, mjdF, f30, mjdA, ap, c, beta, offset, epoch, h)
-%LOCALAT The factor of each epoch's UTC day: exp(a0 + drivers' * beta + offset).
+%LOCALAT The factor of each epoch's UTC day: exp(a0 + sum(beta .* drivers) + offset).
 z = localDrivers(unit, mjdF, f30, mjdA, ap, c.centre_sfu, epoch);
 if ~isequal(size(h), [1 size(z, 2)])
     NonGravForces.fail(unit, "inputRange", "h must be 1x%d, one height per epoch -> pass lla(3, :)", size(z, 2));
 end
-f = exp(c.a0 + beta' * z + offset);
+f = exp(c.a0 + sum(beta .* z, 1) + offset);        % column-wise: a BLAS product sums in a batch-size-dependent order
 end
 
 function z = localDrivers(unit, mjdF, f30, mjdA, ap, centre, epoch)
