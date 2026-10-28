@@ -175,8 +175,12 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-28, PR #115)
+## 5. Current status (2026-10-28, PR #116)
 
+- **2026-10-28, PR #116 (step 3 of the driver fit: densities of other missions):** TU Delft's CHAMP, GRACE-A/B and
+  GRACE-FO accelerometer densities (ESA TOLEOS v02, CC BY 4.0) via VirES HAPI: `setupNonGravForces('DensityMonths')`
+  into `<DataPool>/TOLEOS`, `fetch-data.yml` input `densities`, each dataset's header printed in the run log. Dataset
+  names are viresclient's, unverified until the run; reader and fit extension follow against the bytes. Gate stays 475.
 - **2026-10-28, PR #115 (nonlinear solar terms in `tools/densityDriverFit.m`, owner's choice):** log Fbar, a centred
   square ((Fbar-120)/100)^2 and the cycle's phase. Run 40624842064 (trimmed days, CV / fwd / bwd RMS of log f): constant
   0.252 / 0.232 / 0.280, linear F30 0.217 / 0.287 / 0.220, **F10.7 + square 0.192 / 0.291 / 0.192**, F30 + square 0.179 /
