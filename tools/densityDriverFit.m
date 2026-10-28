@@ -336,6 +336,21 @@ for proxy = ["F10.7" "F30"]
         % accelerometer densities) that the solar terms would otherwise absorb.
         Z = X(:, spec(s).cols);
         res = X(:, 1) - (r.coef(1) + (Z - mean(Z, 1)) * r.coef(2:end));
+        % THE COEFFICIENT RECORD (2026-10-28) that env.densityDriverScale transcribes: the absolute form
+        % log f = a0 + sum(c .* z), a0 = intercept - c . mean(z), every digit, and the fit's own prediction
+        % at two reference days -- an oracle the unit's tests compare with, built by THIS code's drivers.
+        zMean = mean(Z, 1);
+        a0 = r.coef(1) - zMean * r.coef(2:end);
+        fprintf('    coefficient record (%s, centre of the square %.17g sfu):\n', proxy, (proxy == "F10.7") * c107 + (proxy == "F30") * c30);
+        fprintf('      a0 = %.17g\n', a0);
+        for k = 1:numel(r.driverNames)
+            fprintf('      %-14s c = %.17g   mean = %.17g\n', r.driverNames(k), r.coef(k + 1), zMean(k));
+        end
+        for refDay = [54466 58849]
+            j = find(mjd == refDay, 1);
+            if isempty(j), continue, end
+            fprintf('      reference MJD %d: z = %s  log f = %.17g\n', refDay, mat2str(Z(j, :), 17), a0 + Z(j, :) * r.coef(2:end));
+        end
         fprintf('    residual per satellite: rows, median, mean, RMS (log f)\n');
         sat = rows(:, 2);
         satRes = nan(numel(satLabels), 4);

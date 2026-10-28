@@ -661,6 +661,17 @@ classdef tNgfModel < NgfTestCase
             tc.verifySize(info.densityScale, [1 3]); tc.verifyTrue(all(info.densityScale > 0.3 & info.densityScale < 0.8));
             [~, info0] = tc.M.accel(e, rr, vv);
             tc.verifyEqual(info0.densityScale, ones(1, 3));
+            % drag.densityScale "driver" (2026-10-28): the predicted factor of env.densityDriverScale, and a scale of
+            % the other kind is refused either way round
+            cls = NonGravForces.io.spaceWeather(fullfile(tc.root, 'data', 'spaceweather', 'radio_flux_adjusted_observation_2007-09_2008-03_2019-09_2020-03.txt'));
+            D = NonGravForces.env.densityDriverScale(tc.sw, cls);
+            oD = NonGravForces.Options("standard").set("drag.densityScale", "driver");
+            tc.verifyErrorId(@() NonGravForces.Model(tc.macro, oD, 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', S), 'NonGravForces:Model:inputOptions');
+            tc.verifyErrorId(@() NonGravForces.Model(tc.macro, oS, 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', D), 'NonGravForces:Model:inputOptions');
+            MD = NonGravForces.Model(tc.macro, oD, 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', D);
+            [~, infoD] = MD.accel(e, rr, vv);
+            tc.verifyEqual(infoD.densityScale, D.at(e, infoD.lla(3, :)));
+            tc.verifyEqual(infoD.rho, infoD.densityScale .* info0.rho, 'RelTol', 4 * eps);
         end
     end
     methods (Test, TestTags = {'metamorphic'})

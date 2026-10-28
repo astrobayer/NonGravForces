@@ -42,13 +42,13 @@ L4 kernel   gsiCoefficients, accommodation, dragPanelForce, radiationPanelForce,
             thermalRecoil, assemble, bodyTorques, partials, singleEpoch (C/MEX)
 L3 geom     MacroModel, graceFO, grace, boxWing, selfShadow, flowShadow, thermalState,
             AttitudeProvider, checkAttitudeSense
-L2 env      density, densityScale, wind, eclipseFactor, earthRadiance, magneticField, radiationSources
+L2 env      density, densityScale, densityDriverScale, wind, eclipseFactor, earthRadiance, magneticField, radiationSources
 L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
             importCERES, importGroopsGrid, igrfCoefficients, readSwarmDensity
 L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options, buildMex
 ```
 
-61 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
+62 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
 both directions against the files on disk, and this sentence's number against it
 — which it genuinely did not until 2026-09-16, when the sentence said 53 and the
 catalogue held 55; `auditPackage.py` check 5 now compares both this number and
@@ -175,8 +175,16 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-28, PR #118)
+## 5. Current status (2026-10-28, PR #119)
 
+- **2026-10-28, PR #119 (the correction unit, `env.densityDriverScale`, owner's request):** f = rho_obs/rho_msis00 per UTC
+  day PREDICTED from drivers that exist for every date -- F30's 81-day mean ending the day before, the day-before
+  deviation, the day's Ap, annual and semiannual harmonics and ((Fbar - 75.712)/100)^2 -- with the F30 coefficient record
+  of run 40676249479 (trimmed days, 17 digits; CV / fwd / bwd 0.172 / 0.181 / 0.180 against the constant's 0.234 / 0.228 /
+  0.248). 'Offset' adds a satellite's level in log f (GRACE-FO 1 -0.041). `Options` `drag.densityScale = "driver"`,
+  `Model(..., 'DensityScale', S)` as for "swarm"; `S.kind` must match the option, both ways. 62 units. Written without
+  MATLAB, ◐, predicted gate 486 (479 + 7). First CI run 40682547930: 485/486, `densityDriverScaleVectorization`
+  red -- `beta' * z` is a BLAS product, batch-size dependent (section 7); now a column-wise sum. ☑ CI 40685698661: 486/486, predicted 486.
 - **2026-10-28, PR #118 (driver fit: each proxy's square centred at its own mean, mission residuals):**
   `tools/densityDriverFit.m` centres ((Fbar - c)/100)^2 at the data set's mean of each proxy (was 120 sfu for both,
   which made F30's forward fit collinear) and prints, after each full fit, the residual of log f per satellite --

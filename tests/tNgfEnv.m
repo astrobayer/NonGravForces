@@ -1533,4 +1533,110 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyBoundAndRecord("densityScale / msis00 on as many points, time ratio", q, 20, "-", "first run");
         end
     end
+    methods
+        function [S, sw, cls] = driverScale(tc, varargin)
+            %DRIVERSCALE env.densityDriverScale over the committed space-weather excerpts (2019-09..2020-03).
+            sw = NonGravForces.io.spaceWeather(fullfile(tc.root, 'data', 'spaceweather', 'SW-All_2019-09_2020-03.csv'));
+            cls = NonGravForces.io.spaceWeather(fullfile(tc.root, 'data', 'spaceweather', 'radio_flux_adjusted_observation_2007-09_2008-03_2019-09_2020-03.txt'));
+            S = NonGravForces.env.densityDriverScale(sw, cls, varargin{:});
+        end
+    end
+    methods (Test, TestTags = {'contract'})
+        % densityDriverScale (O-19 step 4, 2026-10-28)
+        function densityDriverScaleContract(tc)
+            [S, sw, cls] = tc.driverScale();
+            tc.verifyEqual([S.kind S.model S.proxy], ["driver" "msis00" "F30"]); tc.verifyEqual(S.offset, 0);
+            e = referenceSystem.daySecondToEpoch([58849 0; 58850 43200; 58851 86399], "UTC");
+            f = S.at(e, [490e3 490e3 490e3]);
+            tc.verifySize(f, [1 3]); tc.verifyTrue(all(f > 0.2 & f < 2));
+            tc.verifySize(S.drivers(e), [8 3]);
+            tc.verifyErrorId(@() NonGravForces.env.densityDriverScale(sw, cls, 'Model', "msis21"), 'NonGravForces:densityDriverScale:inputModel');
+            tc.verifyErrorId(@() NonGravForces.env.densityDriverScale(cls, sw), 'NonGravForces:densityDriverScale:inputFamily');
+            % 2019-10-01 needs F30 from 2019-07-12; the excerpt starts 2019-09-01
+            tc.verifyErrorId(@() S.at(referenceSystem.mjdToEpoch(58757.5, "UTC"), 490e3), 'NonGravForces:densityDriverScale:dataDay');
+            tc.verifyErrorId(@() S.at(e, 490e3), 'NonGravForces:densityDriverScale:inputRange');
+        end
+    end
+    methods (Test, TestTags = {'reference'})
+        function densityDriverScaleReference(tc)
+            % Oracle: tools/densityDriverFit.m's own drivers and prediction for 2020-01-01 on the runner's full
+            % pool (run 40676249479, F30 coefficient record). Independent code -- the tool builds Fbar with a
+            % trailing movmean over the file's rows, the unit with a calendar window -- over the same bytes.
+            S = tc.driverScale();
+            zRef = [44.592592592592595 1.2074074074074019 2 0 1 0 1 0.096843864597306581];
+            logfRef = -0.54833027703885062;
+            e = referenceSystem.mjdToEpoch(58849.5, "UTC");
+            z = S.drivers(e);
+            tc.verifyBoundAndRecord("densityDriverScale drivers vs densityDriverFit's on 2020-01-01, max rel", max(abs(z' - zRef) ./ max(abs(zRef), 1)), 1e-12, "-", "an 81-term mean summed in another order");
+            tc.verifyBoundAndRecord("densityDriverScale log f vs densityDriverFit's on 2020-01-01", abs(log(S.at(e, 490e3)) - logfRef), 1e-12, "-", "transcribed to 17 digits");
+        end
+    end
+    methods (Test, TestTags = {'precision'})
+        function densityDriverScalePrecision(tc)
+            % 'Offset' adds to log f and nothing else: an identity up to exp/log rounding of a number near 0.3.
+            S = tc.driverScale(); So = tc.driverScale('Offset', -0.041);
+            e = referenceSystem.daySecondToEpoch([(58849:58851)' repmat(43200, 3, 1)], "UTC");
+            h = [490e3 490e3 490e3];
+            err = max(abs((log(So.at(e, h)) - log(S.at(e, h))) + 0.041));
+            tc.verifyBoundAndRecord("densityDriverScale Offset -0.041: log ratio + 0.041", err, 1e-14, "-", "exp then log of numbers below 2");
+        end
+    end
+    methods (Test, TestTags = {'vectorization'})
+        function densityDriverScaleVectorization(tc)
+            % S.at over 300 epochs on three days at once equals 300 single calls, bitwise.
+            S = tc.driverScale();
+            t = linspace(58849, 58851.999, 300);
+            e = referenceSystem.daySecondToEpoch([floor(t') round((t' - floor(t')) * 86400)], "UTC");
+            h = 470e3 + 30e3 * sin(1:300);
+            f = S.at(e, h);
+            g = zeros(1, 300);
+            for k = 1:300
+                g(k) = S.at(referenceSystem.daySecondToEpoch([e.day(k) e.sec(k)], "UTC"), h(k));
+            end
+            tc.verifyEqual(f, g);
+        end
+    end
+    methods (Test, TestTags = {'robustness'})
+        function densityDriverScaleRobustness(tc)
+            % A missing F30 day inside the 81-day window or a missing Ap is refused, not averaged over; an epoch
+            % in GPS time is put on its UTC day.
+            [S, sw, cls] = tc.driverScale();
+            c2 = cls; c2.index.f30(cls.mjd == 58800) = NaN;
+            S2 = NonGravForces.env.densityDriverScale(sw, c2);
+            tc.verifyErrorId(@() S2.at(referenceSystem.mjdToEpoch(58849.5, "UTC"), 490e3), 'NonGravForces:densityDriverScale:dataDay');
+            s2 = sw; s2.index.apDaily(sw.mjd == 58849) = NaN;
+            S3 = NonGravForces.env.densityDriverScale(s2, cls);
+            tc.verifyErrorId(@() S3.at(referenceSystem.mjdToEpoch(58849.5, "UTC"), 490e3), 'NonGravForces:densityDriverScale:dataDay');
+            tc.verifyEqual(S3.at(referenceSystem.mjdToEpoch(58850.5, "UTC"), 490e3), S.at(referenceSystem.mjdToEpoch(58850.5, "UTC"), 490e3));
+            eG = referenceSystem.daySecondToEpoch([58850 10], "GPS");
+            eU = referenceSystem.daySecondToEpoch([58849 86392], "UTC");
+            tc.verifyEqual(S.at(eG, 490e3), S.at(eU, 490e3));
+        end
+    end
+    methods (Test, TestTags = {'metamorphic'})
+        function densityDriverScaleMetamorphic(tc)
+            % The factor is the same at every height of a day, and raising the day's Ap by 10 multiplies it by
+            % exp(10 c_ap) exactly; the day before's Ap does not enter.
+            [S, sw, cls] = tc.driverScale();
+            e = referenceSystem.mjdToEpoch(58849.5, "UTC");
+            tc.verifyEqual(S.at(e, 300e3), S.at(e, 600e3));
+            s2 = sw; j = sw.mjd == 58849; s2.index.apDaily(j) = sw.index.apDaily(j) + 10;
+            S2 = NonGravForces.env.densityDriverScale(s2, cls);
+            tc.verifyEqual(S2.at(e, 490e3) / S.at(e, 490e3), exp(10 * S.coef.ap), 'RelTol', 1e-13);
+            s3 = sw; s3.index.apDaily(sw.mjd == 58848) = 400;
+            tc.verifyEqual(NonGravForces.env.densityDriverScale(s3, cls).at(e, 490e3), S.at(e, 490e3));
+        end
+    end
+    methods (Test, TestTags = {'speed'})
+        function densityDriverScaleSpeed(tc)
+            % A day of 10 s epochs: one driver evaluation per UTC day, then one exp per epoch. Against msis00 on
+            % as many points, which the factor multiplies anyway. Bound 1, first run.
+            S = tc.driverScale();
+            e = referenceSystem.daySecondToEpoch([repmat(58849, 8640, 1) (0:8639)' * 10], "UTC");
+            lla = [zeros(2, 8640); 490e3 * ones(1, 8640)];
+            [~, sw] = tc.driverScale();
+            q = tc.speedRatio(@() S.at(e, lla(3, :)), @() NonGravForces.env.density("msis00", e, lla, sw));
+            tc.verifyBoundAndRecord("densityDriverScale.at / msis00 on 8640 points, time ratio", q, 1, "-", "first run");
+        end
+    end
 end

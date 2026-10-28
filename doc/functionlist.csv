@@ -21,6 +21,7 @@ io,igrfCoefficients,function,L1,WP-23,done,IGRF-14 coefficient loader with the m
 io,readSwarmDensity,function,L1,O-19,done,Swarm POD-only thermosphere density (ESA SW_OPER_DNSxPOD_2_) from VirES HAPI CSV
 env,density,function,L2,WP-05,done,Thermosphere density and composition (exponential msis00 msis21 dtm2020)
 env,densityScale,function,L2,O-19,done,Observed daily scale on a model density from Swarm POD-only densities
+env,densityDriverScale,function,L2,O-19,done,Daily scale on NRLMSISE-00 predicted from F30 and Ap for any date
 env,wind,function,L2,WP-25,done,Relative-velocity builder: co-rotation from referenceSystem plus HWM14 or a given wind field
 env,eclipseFactor,function,L2,WP-07,done,Shadow function nu from 0 to 1: cylindrical conical solaarsCF plus lunar
 env,earthRadiance,function,L2,WP-08,done,Earth albedo and longwave emission on cap tiles (pointSource knocke ceres)

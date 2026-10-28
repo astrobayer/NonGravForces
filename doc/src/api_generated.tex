@@ -5,7 +5,7 @@
 %
 % \input-able from a report-class document; it opens no document and no chapter.
 
-\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 61 units, toolbox version 0.16.0.
+\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 62 units, toolbox version 0.16.0.
 
 \section{L0 \texttt{core} --- constants, options, provenance, uniform errors and the MEX build}
 
@@ -38,7 +38,7 @@ Configure once, evaluate many (principle P5). Every field is validated at constr
 FIDELITY LADDER
   field                   fast          standard        precise
   drag.density            exponential   msis00          msis21  (+dtm2020 opt-in)
-  drag.densityScale       none          none            none    (+swarm opt-in)
+  drag.densityScale       none          none            none    (+swarm, driver opt-in)
   drag.wind               corotation    corotation      corotation (+hwm14 opt-in)
   drag.gsi                constantCd    sentman         sentman
   drag.accommodation      fixed 0.85    fixed 0.85      fixed 0.85 (March et al. 2021)
@@ -67,9 +67,11 @@ drag        struct    .density  "exponential" | "msis00" | "msis21" | "dtm2020" 
                       .cdScale  estimated scale on the whole drag force
                       .cd       the coefficient constantCd uses (2.2 for a convex LEO body;
                                 Montenbruck & Gill 2005)
-                      .densityScale "none" | "swarm": the model density times an OBSERVED daily
-                                factor from Swarm's POD-only densities (env.densityScale, passed to
-                                Model as 'DensityScale'; HANDOVER O-19). Opt-in, in no preset
+                      .densityScale "none" | "swarm" | "driver": the model density times an
+                                OBSERVED daily factor from Swarm's POD-only densities ("swarm",
+                                env.densityScale) or a factor PREDICTED from F30 and Ap for any
+                                date ("driver", env.densityDriverScale), passed to Model as
+                                'DensityScale' (HANDOVER O-19). Opt-in, in no preset
 srp         struct    .tsi [W/m^2] .eclipse "cylindrical"|"conical"|"solaarsCF"
                       .lunarEclipse (logical) .crScale (estimated scale on the whole
                       radiation force; the optics are per panel, there is no lumped Cr)
@@ -1450,7 +1452,7 @@ MinRecords & 1x1 & double & - & Fewer used records in a day make that day's fact
 \endfoot
 \bottomrule
 \endlastfoot
-S & 1x1 & struct & - & .day (1xD UTC MJD of each day), .satellite (1xP "A"\textbar{}"B"\textbar{}"C"), .factor (PxD), .height\_m (PxD mean geodetic height of the used records), .nUsed (PxD), .low (1xD) and .high (1xD) bracket factors, .hLow\_m .hHigh\_m (1xD), .model, .stride, .files, .provenance, and .at (function handle: epoch struct (any scale), 1xK heights [m] -\textgreater{} 1xK factors) \\
+S & 1x1 & struct & - & .kind "swarm", .day (1xD UTC MJD of each day), .satellite (1xP "A"\textbar{}"B"\textbar{}"C"), .factor (PxD), .height\_m (PxD mean geodetic height of the used records), .nUsed (PxD), .low (1xD) and .high (1xD) bracket factors, .hLow\_m .hHigh\_m (1xD), .model, .stride, .files, .provenance, and .at (function handle: epoch struct (any scale), 1xK heights [m] -\textgreater{} 1xK factors) \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
@@ -1460,6 +1462,77 @@ S & 1x1 & struct & - & .day (1xD UTC MJD of each day), .satellite (1xP "A"\textb
 \item[\texttt{NonGravForces:\allowbreak{}densityScale:\allowbreak{}dataDay}] S.at at an epoch whose day has no factor (no file covers it, or fewer than MinRecords records)
 \item[\texttt{NonGravForces:\allowbreak{}densityScale:\allowbreak{}inputRange}] S.at at a height further outside the bracket than its width, or h not 1xK
 \item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}*, NonGravForces:\allowbreak{}density:\allowbreak{}*}] propagated unwrapped
+\end{description}
+
+\subsection{\texttt{NonGravForces.env.densityDriverScale}}
+\label{api:env.densityDriverScale}
+\noindent Daily scale on NRLMSISE-00 from solar and geomagnetic drivers alone, for any date.
+
+\begin{lstlisting}
+S = NonGravForces.env.densityDriverScale(sw, cls)
+S = NonGravForces.env.densityDriverScale(sw, cls, 'Offset', -0.041)   % GRACE-FO's own level
+f = S.at(epoch, h_m)                        % 1xK factor on the model density
+\end{lstlisting}
+
+\subsubsection*{INPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+sw & 1x1 & struct & - & io.spaceWeather result, celestrak family (SW-All): the daily Ap \\
+cls & 1x1 & struct & - & io.spaceWeather result, f30 family, of CLS's ADJUSTED file (radio\_flux\_adjusted\_observation.txt): the daily F30 \\
+\end{longtable}
+
+\subsubsection*{NAME-VALUE ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+Model & 1x1 & string & - & density backend the factor is for; only "msis00" (default), the model the coefficients were fitted against \\
+Offset & 1x1 & double & log f & added to log f: a satellite's own level (default 0, Swarm's; -0.041 for GRACE-FO 1, +0.036 CHAMP, +0.045 GRACE-A, run 40676249479) \\
+\end{longtable}
+
+\subsubsection*{OUTPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+S & 1x1 & struct & - & .kind "driver", .model "msis00", .proxy "F30", .coef (struct of the transcribed coefficients, .a0 .Fbar .dF .ap .sinAnnual .cosAnnual .sinSemiannual .cosSemiannual .FbarSq .centre\_sfu .run), .offset, .drivers (function handle: epoch -\textgreater{} 8xK drivers in the order above), .at (function handle: epoch struct (any scale), 1xK heights [m] -\textgreater{} 1xK factors; the heights are checked for size and otherwise unused), .provenance \\
+\end{longtable}
+
+\subsubsection*{ERRORS}
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
+\item[\texttt{NonGravForces:\allowbreak{}densityDriverScale:\allowbreak{}inputModel}] Model is not msis00
+\item[\texttt{NonGravForces:\allowbreak{}densityDriverScale:\allowbreak{}inputFamily}] sw is not the celestrak family or cls not f30
+\item[\texttt{NonGravForces:\allowbreak{}densityDriverScale:\allowbreak{}dataDay}] S.at at a UTC day whose 81 previous days of F30 or whose Ap are not all in the files
+\item[\texttt{NonGravForces:\allowbreak{}densityDriverScale:\allowbreak{}inputRange}] h not 1xK, one height per epoch
 \end{description}
 
 \subsection{\texttt{NonGravForces.env.wind}}
@@ -3283,7 +3356,8 @@ WHAT IT COMPOSES, in order, per epoch:
   1. the relative velocity            env.wind (co-rotation from referenceSystem)
   2. the geodetic height              referenceSystem.cartesianToGeodetic on the ITRS position
   3. density and composition          env.density with the space-weather drivers, times the observed
-                                      daily scale of env.densityScale when drag.densityScale is "swarm"
+                                      daily scale when drag.densityScale is "swarm" (env.densityScale,
+                                      observed) or "driver" (env.densityDriverScale, predicted)
   4. the radiation source list        env.radiationSources (Sun, Earth tiles, eclipse)
   5. occlusion                        geom.selfShadow per radiation source; geom.flowShadow for the gas
                                       (Method "table" when geom.flowShadow is "table", the standard preset)
@@ -3339,7 +3413,7 @@ Ephemeris & 1x1 & struct & - & referenceSystem.readEphemeris result, required wh
 Exponential & 1x1 & struct & - & .rho0\_kg\_m3 .h0\_m .H\_m, required when drag.density is "exponential". \\
 Ceres & 1x1 & struct & - & io.importCERES result, required when erp.backend is "ceres". \\
 Climatology & 1x1 & struct & - & .albedo and .longwave io.importGroopsGrid results, required when erp.backend is "ceresClimatology". \\
-DensityScale & 1x1 & struct & - & env.densityScale result, required when drag.densityScale is "swarm" and refused otherwise; it must have been formed for this Model's drag.density. Density and every species density are multiplied by S.at(epoch, geodetic height), so the gas force scales exactly (it is linear in them). \\
+DensityScale & 1x1 & struct & - & env.densityScale result (drag.densityScale "swarm") or env.densityDriverScale result ("driver"), required by those and refused otherwise; its kind must match the option and it must have been formed for this Model's drag.density. Density and every species density are multiplied by S.at(epoch, geodetic height), so the gas force scales exactly (it is linear in them). \\
 \end{longtable}
 
 \subsubsection*{OUTPUT (accel / torque / evaluate)}
@@ -3357,19 +3431,19 @@ DensityScale & 1x1 & struct & - & env.densityScale result, required when drag.de
 \bottomrule
 \endlastfoot
 a, tau & 3xK & double & acceleration [m/s\textasciicircum{}2] or torque [N m] \\
-info & 1x1 & struct & .frame, .drag .radiation .thermal (3xK each, the same frame), .bodyTorque (torque only), .rho (1xK), .nu (1xK shadow factor), .mass\_kg (1xK), .vrel\_body, .sources (M), .temperature\_K (NxK), .flowShadow, .accommodation, .lla, .densityScale (1xK, ones without drag.densityScale "swarm"), .backends, .provenance \\
+info & 1x1 & struct & .frame, .drag .radiation .thermal (3xK each, the same frame), .bodyTorque (torque only), .rho (1xK), .nu (1xK shadow factor), .mass\_kg (1xK), .vrel\_body, .sources (M), .temperature\_K (NxK), .flowShadow, .accommodation, .lla, .densityScale (1xK, ones with drag.densityScale "none"), .backends, .provenance \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}inputMacro}] macro is not a MacroModel
-\item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}inputOptions}] options is not an Options object, or its choices contradict each other (alpha beside a non-fixed accommodation, maxwell without a specular fraction, walker2014 without a surface mass, internal power without shares, geom.flowShadow table beside selfShadow raycast, a 'DensityScale' without drag.densityScale "swarm" or formed for another drag.density)
+\item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}inputOptions}] options is not an Options object, or its choices contradict each other (alpha beside a non-fixed accommodation, maxwell without a specular fraction, walker2014 without a surface mass, internal power without shares, geom.flowShadow table beside selfShadow raycast, a 'DensityScale' with drag.densityScale "none", of the other kind, or formed for another drag.density)
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}inputMass}] no 'Mass' and no mass on the macro model, or 'Mass' not a positive mass / massModel
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}inputState}] epoch, r, v or q disagree in size, or are not finite
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}inputAttitude}] no q was given and the Model has no attitude provider
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}dependEop}] evaluated without 'Eop'
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}dependWeather}] evaluated without 'SpaceWeather' or 'Exponential' for the density backend, or without 'SpaceWeather' for drag.wind hwm14
-\item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}dependDensityScale}] evaluated with drag.densityScale "swarm" and no 'DensityScale'
+\item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}dependDensityScale}] evaluated with drag.densityScale "swarm" or "driver" and no 'DensityScale'
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}dependCeres}] evaluated with erp.backend ceres and no 'Ceres', or ceresClimatology and no 'Climatology'
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}unsupported}] a method option this Model cannot honour (partials of alpha for a computed accommodation, transient thermal under parfor, unknown quantities)
 \item[\texttt{NonGravForces:\allowbreak{}\textless{}unit\textgreater{}:\allowbreak{}*}] propagated unwrapped from the unit that refused
