@@ -27,6 +27,10 @@ function R = densityDriverFit(options)
 %     height  (h - 470 km) / 100 km
 %     trend   years since 2020-01-01
 %   with the proxy F10.7 (CelesTrak) or F30 (CLS, adjusted), nested from 3 to 11 drivers.
+%   NONLINEAR SOLAR TERMS (2026-10-28): log Fbar instead of Fbar, a centred square ((Fbar - 120)/100)^2,
+%   and the cycle's PHASE, Fbar now minus Fbar a year earlier (/100; > 0 rising, < 0 declining) -- the
+%   linear cycle-24 relation failed forward into cycle 25, and f is not monotonic in Fbar at high
+%   activity (0.95 in 2015, 0.77 in 2024 at higher flux), which a saturation or a hysteresis explains.
 %   Each fit is timeSeriesPreparation.regressDrivers (CONCEPT 3.2: no estimator here); a
 %   prediction is the algebra coef(1) + (z - mean z_train) coef(2:end).
 %
@@ -53,6 +57,8 @@ function R = densityDriverFit(options)
 %   Split       1x1   string  -      "yyyy-mm-dd" of the forward/backward split; default 2020-01-01
 %   NBoot       1x1   double  -      bootstrap replicates of the full fits; default 200
 %   MaxVif      1x1   double  -      regressDrivers' VIF gate; default 10
+%   Sets        1xS   string  -      data sets validated: "pass", "pass trimmed", "day", "day trimmed"
+%                                    (default the two trimmed ones; the raw ones are noise-dominated)
 %   Cache       1x1   logical -      keep the passes in <Pool>/Swarm/densityDriverFit_<model>_<span>_s<Stride>_n<MinRecords>.mat
 %                                    and reuse them (default true); false recomputes and does not write
 %
@@ -90,6 +96,7 @@ arguments
     options.NBoot (1,1) double {mustBeInteger, mustBePositive} = 200
     options.MaxVif (1,1) double {mustBeGreaterThanOrEqual(options.MaxVif, 1)} = 10
     options.Cache (1,1) logical = true
+    options.Sets (1,:) string {mustBeMember(options.Sets, ["pass" "pass trimmed" "day" "day trimmed"])} = ["pass trimmed" "day trimmed"]
 end
 unit = "densityDriverFit";
 swFile = fullfile(options.Pool, "SpaceWeather", "SW-All.csv");
@@ -168,11 +175,11 @@ hDay = accumarray(gi, rows(:, 5) .* rows(:, 7)) ./ nDay;
 dayRows = [gd(:, 1), gd(:, 2), nan(size(gd, 1), 1), log(sumObs ./ sumMod), hDay, nan(size(gd, 1), 1), nDay, sumObs, sumMod];
 sets = struct('name', {"pass", "pass trimmed", "day", "day trimmed"}, 'rows', {rows, localTrim(rows), dayRows, localTrim(dayRows)}, ...
     'lt', {true, true, false, false});
-names = ["Fbar" "dF" "ap" "sinAnnual" "cosAnnual" "sinSemiannual" "cosSemiannual" "sinLT" "cosLT" "height" "trend"];
+names = ["Fbar" "dF" "ap" "sinAnnual" "cosAnnual" "sinSemiannual" "cosSemiannual" "sinLT" "cosLT" "height" "trend" "logFbar" "FbarSq" "phase"];
 fprintf('\ndensityDriverFit %s..%s: %d passes (%s), missing files %d, empty files %d\n', options.First, options.Last, size(rows, 1), ...
     strjoin(sats + ":" + string(arrayfun(@(k) sum(rows(:, 2) == k), 1:3)), " "), numel(missingFiles), numel(emptyFiles));
 out = struct();
-for d = 1:numel(sets)
+for d = find(ismember([sets.name], options.Sets))
     out.(matlab.lang.makeValidName(sets(d).name)) = localValidate(sets(d).rows, sets(d).name, sets(d).lt, names, sw, cls, options);
 end
 fprintf('  %.0f s\n', toc(t0));
@@ -200,10 +207,13 @@ end
 function V = localValidate(rows, label, useLT, names, sw, cls, options)
 %LOCALVALIDATE Drivers, blocked CV, forward/backward prediction and the full fits of one data set; printed.
 mjd = rows(:, 1); y = rows(:, 4);
-Fbar = nan(size(mjd)); dF = Fbar; ap = Fbar; F30bar = Fbar; dF30 = Fbar;
+Fbar = nan(size(mjd)); dF = Fbar; ap = Fbar; F30bar = Fbar; dF30 = Fbar; ph107 = Fbar; ph30 = Fbar;
 [ok, i] = ismember(mjd - 1, sw.mjd);
 Fbar(ok) = sw.index.f107ObservedLast81(i(ok));
 dF(ok) = sw.index.f107Observed(i(ok)) - Fbar(ok);
+% the cycle's phase: the 81-day mean now minus a year earlier (> 0 rising, < 0 declining), past data only
+[ok, i] = ismember(mjd - 366, sw.mjd);
+ph107(ok) = Fbar(ok) - sw.index.f107ObservedLast81(i(ok));
 [ok, i] = ismember(mjd, sw.mjd);
 ap(ok) = sw.index.apDaily(i(ok));
 f30 = cls.index.f30(:);
@@ -211,12 +221,17 @@ tr30 = movmean(f30, [80 0], 'omitnan');           % trailing: the reader's f30Me
 [ok, i] = ismember(mjd - 1, cls.mjd(:));
 F30bar(ok) = tr30(i(ok));
 dF30(ok) = f30(i(ok)) - F30bar(ok);
+[ok, i] = ismember(mjd - 366, cls.mjd(:));
+ph30(ok) = F30bar(ok) - tr30(i(ok));
 t = datetime(mjd + 2400000.5, 'ConvertFrom', 'juliandate');
 ph = 2 * pi * (day(t, 'dayofyear') - 1) / 365.25;
 lt = rows(:, 6) * pi / 12;
 if ~useLT, lt = zeros(size(mjd)); end               % columns present, never selected
 common = [sin(ph) cos(ph) sin(2 * ph) cos(2 * ph) sin(lt) cos(lt) (rows(:, 5) - 470e3) / 100e3 (mjd - 58849) / 365.25];
-X = [y, Fbar, dF, ap, common, F30bar, dF30, ap, common];   % columns 2..12 F10.7, 13..23 F30
+% NONLINEAR SOLAR TERMS (2026-10-28): the cycle-24 linear relation failed forward into cycle 25, and f is
+% not monotonic in Fbar at high activity -- log Fbar, a centred square and the cycle's phase test why.
+nl = @(F, P) [log(F), ((F - 120) / 100) .^ 2, P / 100];
+X = [y, Fbar, dF, ap, common, nl(Fbar, ph107), F30bar, dF30, ap, common, nl(F30bar, ph30)];   % 2..15 F10.7, 16..29 F30
 keep = all(isfinite(X), 2);
 X = X(keep, :); rows = rows(keep, :); mjd = mjd(keep);
 if useLT
@@ -224,11 +239,13 @@ if useLT
 else
     nested = {1:3, 1:7, [1:7 10], [1:7 10 11]}; nestName = ["solar+ap" "+season" "+height" "+trend"];
 end
-spec = struct('name', "constant", 'cols', zeros(1, 0));
+nested = [nested, {[12 2:7], [1:7 13], [1:7 14], [1:7 13 14], [12 2:7 14]}];
+nestName = [nestName, "+season logF" "+season F^2" "+season phase" "+season F^2+phase" "+season logF+phase"];
+spec = struct('name', "constant", 'cols', zeros(1, 0), 'n', 0);
 for proxy = ["F10.7" "F30"]
-    off = 1 + (proxy == "F30") * 11;
+    off = 1 + (proxy == "F30") * 14;
     for n = 1:numel(nested)
-        spec(end + 1) = struct('name', proxy + " " + nestName(n), 'cols', off + nested{n}); %#ok<AGROW>
+        spec(end + 1) = struct('name', proxy + " " + nestName(n), 'cols', off + nested{n}, 'n', n); %#ok<AGROW>
     end
 end
 S = numel(spec);
@@ -260,9 +277,13 @@ for s = 1:S
 end
 fits = struct();
 for proxy = ["F10.7" "F30"]
-    s = find([spec.name] == proxy + " " + nestName(end));
+    % the full fit of the proxy's model with the smallest yearly-CV RMS
+    own = find(startsWith([spec.name], proxy + " "));
+    [~, b] = min(cvL(own));
+    s = own(b);
+    fprintf('  %s: smallest CV RMS is "%s"\n', proxy, spec(s).name);
     try
-        r = timeSeriesPreparation.regressDrivers(X(:, 1), X(:, spec(s).cols), DriverNames = names(nested{end}), ...
+        r = timeSeriesPreparation.regressDrivers(X(:, 1), X(:, spec(s).cols), DriverNames = names(nested{spec(s).n}), ...
             MaxVif = options.MaxVif, NBoot = options.NBoot, Stage = "densityDriverFit." + label + "." + proxy);
         fprintf('  %s full fit: r2 %.3f; coefficient +- block-bootstrap sigma (log f per unit), VIF\n', proxy, r.r2);
         fprintf('    %-14s %10.4f +- %.4f\n', "intercept", r.coef(1), r.sigma(1));
