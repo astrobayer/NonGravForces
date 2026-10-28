@@ -77,7 +77,7 @@ function R = densityDriverFit(options)
 %      .satellites (the labels of the satellite numbers),
 %      .drivers (names), .sets.pass, .passTrimmed, .day, .dayTrimmed (each: .cv table of model, cvRms, cvMae,
 %      forwardRms, forwardMae, backwardRms, backwardMae; .cvSe; .fit, the regressDrivers result of each proxy's
-%      largest model, with .satelliteResidual (rows, median, mean, RMS of log f per satellite); .nRows;
+%      largest model; .satelliteResidual (per proxy: rows, median, mean, RMS of log f per satellite); .nRows;
 %      .squareCentre [F10.7 F30] in sfu), .missingFiles, .emptyFiles, .seconds
 %
 %   DATA SETS (2026-10-28, after the first run found std(log f) 0.65 per pass while the yearly medians
@@ -306,7 +306,7 @@ if any(before) && any(~before)
 end
 fprintf('\n== %s: %d rows, log f median %.3f (f %.3f), std %.3f, MAD %.3f\n', label, size(X, 1), localQuantile(X(:, 1), 0.5), ...
     exp(localQuantile(X(:, 1), 0.5)), std(X(:, 1)), localQuantile(abs(X(:, 1) - localQuantile(X(:, 1), 0.5)), 0.5));
-fprintf('  the squares are centred at the proxies' means: F10.7 %.1f sfu, F30 %.1f sfu\n', c107, c30);
+fprintf('  the squares are centred at each proxy''s mean: F10.7 %.1f sfu, F30 %.1f sfu\n', c107, c30);
 fprintf('  per year: f at the 5 / 50 / 95 %% quantile of log f, rows\n');
 for yy = unique(yr)'
     v = X(yr == yy, 1);
@@ -316,7 +316,7 @@ fprintf('  %-20s %8s %8s %8s %8s %8s %8s   (held-out log f; RMS and median |erro
 for s = 1:S
     fprintf('  %-20s %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f\n', spec(s).name, cvL(s), cvL(S + s), fwd(s), fwd(S + s), bwd(s), bwd(S + s));
 end
-fits = struct();
+fits = struct(); satTables = struct();
 for proxy = ["F10.7" "F30"]
     % the full fit of the proxy's model with the smallest yearly-CV RMS
     own = find(startsWith([spec.name], proxy + " "));
@@ -345,7 +345,7 @@ for proxy = ["F10.7" "F30"]
             satRes(k, :) = [numel(e), localQuantile(e, 0.5), mean(e), sqrt(mean(e .^ 2))];
             fprintf('      %-10s %6d %+8.4f %+8.4f %8.4f\n', satLabels(k), satRes(k, :));
         end
-        r.satelliteResidual = array2table(satRes, 'VariableNames', ["rows" "median" "mean" "rms"], 'RowNames', cellstr(satLabels));
+        satTables.(matlab.lang.makeValidName(proxy)) = array2table(satRes, 'VariableNames', ["rows" "median" "mean" "rms"], 'RowNames', cellstr(satLabels));
     catch err
         if err.identifier ~= "timeSeriesPreparation:regressDrivers:collinear", rethrow(err); end
         r = struct('collinear', string(err.message));
@@ -359,6 +359,7 @@ V.cvSe = cv.se;
 V.fit = fits;
 V.nRows = size(X, 1);
 V.squareCentre = [c107 c30];
+V.satelliteResidual = satTables;
 end
 
 function q = localQuantile(x, p)
