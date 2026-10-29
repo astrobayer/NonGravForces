@@ -190,7 +190,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   measurements on the runner and prints the written file into the log. Predicted gate 493 (no new test methods).
   First CI run 40884016269: 492/493, `tNgfIntegration/DynamicsSourceMetamorphic` errored with `densityScale:inputRange`
   (585 km): its propagated arc has no gravity, flies straight and leaves the Swarm bracket -- the arc now runs on the
-  driver scale (no height dependence).
+  driver scale (no height dependence). ☑ CI 40896217330: 493/493, predicted 493, Code Analyzer clean.
   The baseline (`tools/baseline_reference.json`) MOVES with the preset: it is re-frozen at 0.17.0.
 - **2026-10-29, PR #122 (the density scale on the native path, owner: standard takes "combined" and stays
   integrable):** `app.DynamicsSource` serves `drag.densityScale`: `prepare` builds one row per UTC day of the driver
