@@ -1,4 +1,4 @@
-# HANDOVER — NonGravForces 0.16.0 (concept 3)
+# HANDOVER — NonGravForces 0.17.0 (concept 3)
 
 **Single source of truth** for the design, the audit that motivated it, the work plan, the rules, and the decisions of `NonGravForces`, a MATLAB toolbox computing non-gravitational forces, torques and partial derivatives for LEO satellites, with GRACE-FO accelerometer processing as the reference application and a sensor layer that admits future instruments (electrostatic, cold-atom, optomechanical, drag-free).
 
