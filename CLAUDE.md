@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-10-18 (release 0.16.0) and 2026-10-26 (PR #107, observation data) by Claude Opus 5.5. Toolbox version 0.16.0.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-10-18 (release 0.16.0), 2026-10-26 (PR #107, observation data) and 2026-10-29 (release 0.17.0) by Claude Opus 5.5. Toolbox version 0.17.0.
 
 ---
 
@@ -175,8 +175,13 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-29, PR #122)
+## 5. Current status (2026-10-29, release 0.17.0)
 
+- **2026-10-29, release 0.17.0 (PR #123):** the observed density scale in the standard preset, DTM2020, the Swarm/TOLEOS
+  readers, the scale on the native path. Release measurements on the CI runner (`release-checks.yml`): baseline
+  RE-FROZEN (run 40911119628, 75 min) -- S_xx C **0.966**, D **0.972** (0.16.0: 0.762, 0.769; the old 0.76 was the MSIS
+  density error), S_zz C 0.820, D 0.793; benchmark (run 40914918235) standard 20.0 / 0.650 ms at K = 1 / 100, but on
+  the runner, not the owner's host (fast moved 0.119 -> 0.241 at K = 100 with no code change, standard only x1.5). Predicted gate 493.
 - **2026-10-29, PR #122, part 2 (THE STANDARD PRESET TAKES drag.densityScale = "combined", owner):** `Options`
   standard sets it (fast and precise stay "none": exponential, and msis21 has no fitted driver record). STRICT: a
   standard Model without 'DensityScale' raises `Model:dependDensityScale` at evaluation, never runs unscaled. Tests about
@@ -999,9 +1004,10 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   differ by 4.0x — which is the real cost of a bad measurement: not the wrong digit, the conclusion
   drawn from it and written somewhere else.
 - **A per-epoch cost is mostly a property of the BATCH, not of the toolbox**, so never quote one
-  without K. `Model.accel` in the standard preset costs 11.9 ms at K=1 and 0.440 ms at K=100
-  (0.16.0, 2026-10-18, with the flow-shadow table), because one call pays ~11.6 ms of setup before any
-  per-epoch work (fast: 5.6 ms and 0.063). A day at 1 Hz through `Model.series` was 1 min 16 s on 2026-09-18 -- a figure
+  without K. `Model.accel` in the standard preset costs 20.0 ms at K=1 and 0.650 ms at K=100
+  (0.17.0, 2026-10-29, ON THE CI RUNNER -- 0.16.0's 11.9 / 0.440 were the owner's host, so the two releases
+  differ by host as well as by code), because one call pays most of its cost as setup before any
+  per-epoch work (fast: 13.3 ms and 0.241). A day at 1 Hz through `Model.series` was 1 min 16 s on 2026-09-18 -- a figure
   `tools/benchmark.m` does NOT produce, so nothing regenerates it. The authority is `tools/benchmark_reference.csv`,
   which `tools/benchmark.m` writes and `auditPackage.py` check 13 compares every quoted figure
   against; `tools/benchmark_last.txt` is the gitignored host log and is NOT the authority, because a

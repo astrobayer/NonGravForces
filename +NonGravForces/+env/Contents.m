@@ -1,5 +1,5 @@
 % ENV  NonGravForces.env - L2 layer.
-% Version 0.16.0  18-Oct-2026
+% Version 0.17.0  29-Oct-2026
 %
 %   density              - Thermosphere density and composition (exponential msis00 msis21 dtm2020)
 %   densityScale         - Observed daily scale on a model density from Swarm POD-only densities
