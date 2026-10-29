@@ -178,8 +178,12 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 ## 5. Current status (2026-10-29, PR #121)
 
 - **2026-10-29, PR #121 (the combined scale in the month tool):** `tools/dragScaleMonth.m` runs
-  `drag.densityScale = "combined"` as a variant and counts the epochs it took from the driver fallback. GRACE-D
-  2020-01 dispatched. Tool only: gate stays 490.
+  `drag.densityScale = "combined"` as a variant and counts the epochs it took from the driver fallback. Tool only: gate stays 490.
+  **GRACE-D 2020-01 (run 40849007121, 27 days, 120670 epochs; joint k_drag / median rms_x [nm/s^2] / drag ratio):**
+  combined 0.937 / 2.11 / 0.501, **0 of 120670 epochs from the driver** -- Swarm covers every day, so combined is the
+  Swarm option bitwise to the printed digits; driver +0.000 0.802 / 2.59 / 0.600, driver -0.041 0.836 / 2.45 / 0.576,
+  flux driver 0.875 / 2.30 / 0.584, dtm2020 1.024 / 1.80, preset 0.479 / 6.21. D repeats C's ordering, ~6-8 % higher
+  in k_drag throughout; the fallback is exercised only on days without Swarm (before 2013-11 or in data gaps).
 - **2026-10-28, PR #120 (the driver scale judged by the month):** `tools/dragScaleMonth.m` runs two Model variants
   with `drag.densityScale = "driver"` (Offset 0 and GRACE-FO 1's -0.041) when the pool holds CLS's F30 -- no density
   observation of the month needed. Tool only: gate stays 486. **Measured, GRACE-C, joint k_drag / median daily rms_x
