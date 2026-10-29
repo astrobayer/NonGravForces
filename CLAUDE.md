@@ -182,8 +182,8 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   bins (Swarm's bracket, or the day's single factor from `S.at`), `mex/ngfRhs.c` scales rho and every species after
   the density, switching at the aligned bin edge of UTC midnight (already a breakpoint); a Swarm-only day without a
   factor is refused when reached. Diagnostics gain `.densityScale` (NGF_RHS_DIAG 37). Three tests in
-  `tNgfIntegration`. Written without MATLAB (C syntax-checked with gcc), ◐, predicted gate 493 (490 + 3). Next: the
-  preset itself (PR B), then release 0.17.0.
+  `tNgfIntegration`. Written without MATLAB (C syntax-checked with gcc), predicted gate 493 (490 + 3); ☑ CI 40880333732: 493/493,
+  Code Analyzer clean.
 - **2026-10-29, PR #121 (the combined scale in the month tool):** `tools/dragScaleMonth.m` runs
   `drag.densityScale = "combined"` as a variant and counts the epochs it took from the driver fallback. Tool only: gate stays 490.
   **GRACE-D 2020-01 (run 40849007121, 27 days, 120670 epochs; joint k_drag / median rms_x [nm/s^2] / drag ratio):**
