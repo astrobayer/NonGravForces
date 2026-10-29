@@ -791,22 +791,23 @@ the \SI{4.22}{} that Hładczuk et al.\ leave when they omit the term and the \SI
 \section{Cost}
 \textbf{The cost per epoch depends on how many epochs you ask for in one call, far more than on which
 preset you choose}, and that is the most useful thing to know about this toolbox's performance.
-Measured by \texttt{tools/benchmark.m} on 2026-10-18 (v0.16.0, R2026a, median of five after five
-warm-up calls; v0.16.0 reads the \texttt{standard} preset's gas-stream shadow from a table, which roughly
-halved its per-epoch work against v0.15.0's \SI{0.836}{\milli\second} at $K=100$); the table it writes is committed at \texttt{tools/benchmark\_reference.csv}, and the
-audit checks every figure below against it.
+Measured by \texttt{tools/benchmark.m} on 2026-10-29 (v0.17.0, R2026a, median of three after five
+warm-up calls) on the CI runner, NOT on the host that measured v0.16.0 (\SI{0.440}{\milli\second} for
+\texttt{standard} at $K=100$): the two tables differ by host as well as by code, and v0.17.0's
+\texttt{standard} preset also evaluates the daily density scale. The table it writes is committed at
+\texttt{tools/benchmark\_reference.csv}, and the audit checks every figure below against it.
 
 \begin{table}[h]\centering\footnotesize
 \begin{tabular}{@{}lrrr@{}}\toprule
  & \multicolumn{3}{c}{ms per epoch, for a call of $K$ epochs}\\\cmidrule(l){2-4}
 path & $K=1$ & $K=10$ & $K=100$\\\midrule
-\texttt{Model.accel}, \texttt{standard} & 11.9 & 2.47 & 0.440\\
-\texttt{Model.accel}, \texttt{fast} & 5.64 & 1.07 & 0.119\\
-\texttt{Model.budget}, \texttt{fast} & 6.46 & 1.19 & 0.121\\
-\texttt{app.forceBudget}, \texttt{fast} & 6.37 & 0.937 & 0.144\\\midrule
+\texttt{Model.accel}, \texttt{standard} & 20.0 & 3.17 & 0.650\\
+\texttt{Model.accel}, \texttt{fast} & 13.3 & 1.94 & 0.241\\
+\texttt{Model.budget}, \texttt{fast} & 14.2 & 2.23 & 0.236\\
+\texttt{app.forceBudget}, \texttt{fast} & 13.2 & 2.52 & 0.267\\\midrule
 \multicolumn{4}{@{}l}{\emph{pointwise by construction --- these take one state and do not batch:}}\\
-\texttt{kernel.singleEpoch} (compiled) & \multicolumn{3}{r}{0.487}\\
-\texttt{app.DynamicsSource.accel} (native) & \multicolumn{3}{r}{0.596}\\
+\texttt{kernel.singleEpoch} (compiled) & \multicolumn{3}{r}{0.895}\\
+\texttt{app.DynamicsSource.accel} (native) & \multicolumn{3}{r}{0.996}\\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -829,7 +830,7 @@ model actually show up.
 
 \textbf{So: pass many epochs at once, or use \texttt{Model.series}.} For the one caller that cannot
 batch by nature --- an integrator's right-hand side, which asks for one state at a time --- the
-native evaluator of Chapter~\ref{ch:integrator} answers in \SI{0.596}{\milli\second}, which is
+native evaluator of Chapter~\ref{ch:integrator} answers in \SI{0.996}{\milli\second}, which is
 \num{20} times cheaper than \texttt{Model.accel} at $K=1$ and is the whole reason that path exists.
 
 \begin{quote}\footnotesize
