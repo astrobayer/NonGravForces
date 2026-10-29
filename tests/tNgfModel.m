@@ -672,6 +672,16 @@ classdef tNgfModel < NgfTestCase
             [~, infoD] = MD.accel(e, rr, vv);
             tc.verifyEqual(infoD.densityScale, D.at(e, infoD.lla(3, :)));
             tc.verifyEqual(infoD.rho, infoD.densityScale .* info0.rho, 'RelTol', 4 * eps);
+            % drag.densityScale "combined" (2026-10-28): env.densityScale with the driver scale as 'Fallback'; the plain
+            % Swarm scale is refused by it, and on a Swarm day it gives the Swarm factor
+            files = string(fullfile(tc.root, 'data', 'samples', 'swarm', "SW_OPER_DNS" + ["A" "B" "C"] + "POD_2_2020-01-01_2020-01-03.csv"));
+            C = NonGravForces.env.densityScale(files, tc.sw, 'Fallback', D);
+            oC = NonGravForces.Options("standard").set("drag.densityScale", "combined");
+            tc.verifyErrorId(@() NonGravForces.Model(tc.macro, oC, 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', S), 'NonGravForces:Model:inputOptions');
+            tc.verifyErrorId(@() NonGravForces.Model(tc.macro, oS, 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', C), 'NonGravForces:Model:inputOptions');
+            MC = NonGravForces.Model(tc.macro, oC, 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', C);
+            [~, infoC] = MC.accel(e, rr, vv);
+            tc.verifyEqual(infoC.densityScale, info.densityScale);
         end
     end
     methods (Test, TestTags = {'metamorphic'})

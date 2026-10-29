@@ -37,6 +37,17 @@ function R = dragScaleMonth(options)
 %   gas force is linear in the species densities -- and the Model option drag.densityScale "swarm",
 %   which interpolates log f in height to GRACE-FO's geodetic height at every epoch.
 %
+%   FLUX CORRECTION (O-19 step 2, 2026-10-28): with the driver variants, when 'FluxRecord' exists, the
+%   variant "flux driver" -- the preset's Model on a space-weather struct whose F10.7 and F10.7A are
+%   shifted per UTC day by delta = a0 + c . z, the F30 + season + square record densityDriverFit wrote
+%   for its "day trimmed flux" set: an exospheric temperature correction whose height profile is MSIS's own.
+%
+%   DRIVER DENSITY SCALE (O-19, 2026-10-28): when the pool holds CLS's adjusted F30
+%   (<Pool>/SpaceWeather/F30/radio_flux_adjusted_observation.txt), two Model variants with
+%   drag.densityScale "driver" -- env.densityDriverScale's prediction from F30, Ap and season, at
+%   Swarm's level (Offset 0) and at GRACE-FO 1's (Offset -0.041). They need no density observation
+%   of the month, so they are the extrapolable correction judged against the same ACT1B.
+%
 %   SPACE WEATHER AND EOP: the complete files in the pool (<Pool>/SpaceWeather/SW-All.csv,
 %   <Pool>/EOP/finals2000A.all, fetched with the month by setupNonGravForces('PoolMonths')) when
 %   they are there, else the committed 2019-09..2020-03 excerpts, which serve 2020-01 only. A month
@@ -55,6 +66,8 @@ function R = dragScaleMonth(options)
 %   Days        1xD   double  -      Days of the month; default [] = every day folder present
 %   Step_s      1x1   double  s      Evaluation grid on the ACT1B epochs; default 10
 %   Preset      1x1   string  -      The reference preset; default "standard"
+%   FluxRecord  1x1   string  -      densityDriverFit's coefficient record for the flux variant; default the
+%                                    2000-08..2026-08 all-mission record in <Pool>/Swarm
 %
 % OUTPUT ARGUMENTS
 %   Name  Size  Type    Units  Description
@@ -84,6 +97,7 @@ arguments
     options.Days double = []
     options.Step_s (1,1) double {mustBePositive, mustBeInteger} = 10
     options.Preset (1,1) string = "standard"
+    options.FluxRecord (1,1) string = fullfile(string(getenv("READING_DATA_POOL")), "Swarm", "densityDriverFit_record_msis00_2000-08_2026-08_champ+grace+gracefo+swarm.mat")
 end
 unit = "dragScaleMonth";
 root = fileparts(fileparts(mfilename('fullpath')));
@@ -123,6 +137,44 @@ macro = NonGravForces.geom.graceFO(options.Satellite);
 models = cell(1, nM);
 for v = 1:nM
     models{v} = NonGravForces.Model(macro, vOpt{v}, 'Eop', eop, 'SpaceWeather', sw);
+end
+% The driver-predicted density scale (env.densityDriverScale, PR #119), when the pool holds CLS's F30:
+% Swarm's level (Offset 0) and GRACE-FO 1's (-0.041). It needs no density observation of the month.
+f30File = fullfile(options.Pool, "SpaceWeather", "F30", "radio_flux_adjusted_observation.txt");
+haveDriver = isfile(f30File);
+if haveDriver
+    cls = NonGravForces.io.spaceWeather(f30File);
+    oD = o.set("drag.densityScale", "driver");
+    for off = [0 -0.041]
+        D = NonGravForces.env.densityDriverScale(sw, cls, 'Offset', off);
+        vName = [vName sprintf("densityScale driver %+.3f", off)]; %#ok<AGROW>
+        models{end + 1} = NonGravForces.Model(macro, oD, 'Eop', eop, 'SpaceWeather', sw, 'DensityScale', D); %#ok<AGROW>
+    end
+    nM = numel(vName);
+    % The FLUX correction (step 2): the same drivers predict a shift delta of NRLMSISE-00's F10.7 and
+    % F10.7A instead of a factor, so the height profile of the correction is MSIS's own. Its coefficients
+    % are the record densityDriverFit wrote for the flux set; the Model sees a space-weather struct whose
+    % query returns the shifted fluxes.
+    if isfile(options.FluxRecord)
+        rec = load(options.FluxRecord, 'records');
+        fr = rec.records.dayTrimmedFlux;              % matlab.lang.makeValidName("day trimmed flux")
+        if isfield(fr, 'coef')
+            Dz = NonGravForces.env.densityDriverScale(sw, cls);
+            deltaAt = @(e) localFluxShift(Dz.drivers(e), fr);
+            swF = sw;
+            swF.query = @(e) localShiftedQuery(sw.query(e), deltaAt(e));
+            vName = [vName "flux driver"];
+            models{end + 1} = NonGravForces.Model(macro, o, 'Eop', eop, 'SpaceWeather', swF);
+            nM = numel(vName);
+            fprintf('dragScaleMonth: flux record %s (%d rows): a0 %.4f sfu, centre %.3f sfu\n', options.FluxRecord, fr.rows, fr.a0, fr.centre_sfu);
+        else
+            fprintf('dragScaleMonth: the flux record in %s was refused by its fit: the flux variant is not run\n', options.FluxRecord);
+        end
+    else
+        fprintf('dragScaleMonth: no %s: the flux variant is not run\n', options.FluxRecord);
+    end
+else
+    fprintf('dragScaleMonth: no %s in the pool: the driver variants are not run\n', f30File);
 end
 % Swarm POD densities of the month, when the pool has them: the density-scale variants
 swFiles = string(fullfile(options.Pool, "Swarm", "DNSxPOD", extractBefore(options.Month, 5), ...
@@ -254,4 +306,17 @@ else
     fprintf('  no Swarm densities of %s in the pool: the density-scale variants were not run\n', options.Month);
 end
 R = struct('days', T, 'month', M, 'swarm', SW, 'densityScale', S, 'noDataDays', noData, 'seconds', toc(t0));
+end
+
+function delta = localFluxShift(z, fr)
+%LOCALFLUXSHIFT The predicted shift (sfu) per epoch from env.densityDriverScale's 8xK drivers, with the
+% square recentred at the flux record's own centre (the drivers carry the factor fit's).
+z(8, :) = ((z(1, :) - fr.centre_sfu) / 100) .^ 2;
+delta = fr.a0 + sum(fr.coef(:) .* z, 1);
+end
+
+function q = localShiftedQuery(q, delta)
+%LOCALSHIFTEDQUERY The space-weather query with F10.7 and F10.7A shifted by delta (floored at 1 sfu, as in the fit).
+q.f107 = max(reshape(q.f107, 1, []) + delta, 1);
+q.f107a = max(reshape(q.f107a, 1, []) + delta, 1);
 end

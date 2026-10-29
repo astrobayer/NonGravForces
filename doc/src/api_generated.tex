@@ -38,7 +38,7 @@ Configure once, evaluate many (principle P5). Every field is validated at constr
 FIDELITY LADDER
   field                   fast          standard        precise
   drag.density            exponential   msis00          msis21  (+dtm2020 opt-in)
-  drag.densityScale       none          none            none    (+swarm, driver opt-in)
+  drag.densityScale       none          none            none    (+swarm, driver, combined opt-in)
   drag.wind               corotation    corotation      corotation (+hwm14 opt-in)
   drag.gsi                constantCd    sentman         sentman
   drag.accommodation      fixed 0.85    fixed 0.85      fixed 0.85 (March et al. 2021)
@@ -67,11 +67,13 @@ drag        struct    .density  "exponential" | "msis00" | "msis21" | "dtm2020" 
                       .cdScale  estimated scale on the whole drag force
                       .cd       the coefficient constantCd uses (2.2 for a convex LEO body;
                                 Montenbruck & Gill 2005)
-                      .densityScale "none" | "swarm" | "driver": the model density times an
+                      .densityScale "none" | "swarm" | "driver" | "combined": the model density times an
                                 OBSERVED daily factor from Swarm's POD-only densities ("swarm",
                                 env.densityScale) or a factor PREDICTED from F30 and Ap for any
-                                date ("driver", env.densityDriverScale), passed to Model as
-                                'DensityScale' (HANDOVER O-19). Opt-in, in no preset
+                                date ("driver", env.densityDriverScale), or Swarm's where it has a
+                                day and the predicted one elsewhere ("combined", env.densityScale
+                                with 'Fallback'), passed to Model as 'DensityScale' (HANDOVER O-19).
+                                Opt-in, in no preset
 srp         struct    .tsi [W/m^2] .eclipse "cylindrical"|"conical"|"solaarsCF"
                       .lunarEclipse (logical) .crScale (estimated scale on the whole
                       radiation force; the optics are per panel, there is no lumped Cr)
@@ -1436,6 +1438,7 @@ sw & 1x1 & struct & - & io.spaceWeather result (celestrak family), the drivers o
 Model & 1x1 & string & - & env.density backend the factor is FOR: "msis00" (default), "msis21" or "dtm2020". A Model refuses a scale formed for another density model than its drag.density. \\
 Stride & 1x1 & double & - & Every Stride-th valid 30 s record enters the sums (default 10, i.e. 5 min; the product's own resolution is \textasciitilde{}20 min). \\
 MinRecords & 1x1 & double & - & Fewer used records in a day make that day's factor NaN, which S.at refuses (default 100, about a third of a day at Stride 10). \\
+Fallback & 1x1 & struct & - & an env.densityDriverScale result for the same Model (default none). Given, S is of kind "combined" (Options drag.densityScale "combined"): Swarm's factor on every day that has one, the fallback's predicted factor on every other day -- never mixed within a day. S.source(epoch) says which per epoch. \\
 \end{longtable}
 
 \subsubsection*{OUTPUT ARGUMENTS}
@@ -1452,14 +1455,16 @@ MinRecords & 1x1 & double & - & Fewer used records in a day make that day's fact
 \endfoot
 \bottomrule
 \endlastfoot
-S & 1x1 & struct & - & .kind "swarm", .day (1xD UTC MJD of each day), .satellite (1xP "A"\textbar{}"B"\textbar{}"C"), .factor (PxD), .height\_m (PxD mean geodetic height of the used records), .nUsed (PxD), .low (1xD) and .high (1xD) bracket factors, .hLow\_m .hHigh\_m (1xD), .model, .stride, .files, .provenance, and .at (function handle: epoch struct (any scale), 1xK heights [m] -\textgreater{} 1xK factors) \\
+S & 1x1 & struct & - & .kind "swarm" ("combined" with 'Fallback'), .fallback, .day (1xD UTC MJD of each day), .satellite (1xP "A"\textbar{}"B"\textbar{}"C"), .factor (PxD), .height\_m (PxD mean geodetic height of the used records), .nUsed (PxD), .low (1xD) and .high (1xD) bracket factors, .hLow\_m .hHigh\_m (1xD), .model, .stride, .files, .provenance, and .at (function handle: epoch struct (any scale), 1xK heights [m] -\textgreater{} 1xK factors), .source (function handle: epoch -\textgreater{} 1xK "swarm" \textbar{} "driver" \textbar{} "none", the factor .at takes) \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}densityScale:\allowbreak{}inputSatellites}] no B, or neither A nor C, among the files
 \item[\texttt{NonGravForces:\allowbreak{}densityScale:\allowbreak{}inputModel}] Model is not a density backend with drivers
-\item[\texttt{NonGravForces:\allowbreak{}densityScale:\allowbreak{}dataDay}] S.at at an epoch whose day has no factor (no file covers it, or fewer than MinRecords records)
+\item[\texttt{NonGravForces:\allowbreak{}densityScale:\allowbreak{}dataDay}] S.at at an epoch whose day has no factor (no file covers it, or fewer than MinRecords records) and no 'Fallback' was given
+\item[\texttt{NonGravForces:\allowbreak{}densityScale:\allowbreak{}inputFallback}] 'Fallback' is not an env.densityDriverScale result, or was formed for another density model
+\item[\texttt{NonGravForces:\allowbreak{}densityDriverScale:\allowbreak{}*}] propagated from the fallback on a day without Swarm
 \item[\texttt{NonGravForces:\allowbreak{}densityScale:\allowbreak{}inputRange}] S.at at a height further outside the bracket than its width, or h not 1xK
 \item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}*, NonGravForces:\allowbreak{}density:\allowbreak{}*}] propagated unwrapped
 \end{description}
@@ -3413,7 +3418,7 @@ Ephemeris & 1x1 & struct & - & referenceSystem.readEphemeris result, required wh
 Exponential & 1x1 & struct & - & .rho0\_kg\_m3 .h0\_m .H\_m, required when drag.density is "exponential". \\
 Ceres & 1x1 & struct & - & io.importCERES result, required when erp.backend is "ceres". \\
 Climatology & 1x1 & struct & - & .albedo and .longwave io.importGroopsGrid results, required when erp.backend is "ceresClimatology". \\
-DensityScale & 1x1 & struct & - & env.densityScale result (drag.densityScale "swarm") or env.densityDriverScale result ("driver"), required by those and refused otherwise; its kind must match the option and it must have been formed for this Model's drag.density. Density and every species density are multiplied by S.at(epoch, geodetic height), so the gas force scales exactly (it is linear in them). \\
+DensityScale & 1x1 & struct & - & env.densityScale result (drag.densityScale "swarm"; with 'Fallback' "combined") or env.densityDriverScale result ("driver"), required by those and refused otherwise; its kind must match the option and it must have been formed for this Model's drag.density. Density and every species density are multiplied by S.at(epoch, geodetic height), so the gas force scales exactly (it is linear in them). \\
 \end{longtable}
 
 \subsubsection*{OUTPUT (accel / torque / evaluate)}
@@ -3443,7 +3448,7 @@ info & 1x1 & struct & .frame, .drag .radiation .thermal (3xK each, the same fram
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}inputAttitude}] no q was given and the Model has no attitude provider
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}dependEop}] evaluated without 'Eop'
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}dependWeather}] evaluated without 'SpaceWeather' or 'Exponential' for the density backend, or without 'SpaceWeather' for drag.wind hwm14
-\item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}dependDensityScale}] evaluated with drag.densityScale "swarm" or "driver" and no 'DensityScale'
+\item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}dependDensityScale}] evaluated with drag.densityScale "swarm", "driver" or "combined" and no 'DensityScale'
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}dependCeres}] evaluated with erp.backend ceres and no 'Ceres', or ceresClimatology and no 'Climatology'
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}unsupported}] a method option this Model cannot honour (partials of alpha for a computed accommodation, transient thermal under parfor, unknown quantities)
 \item[\texttt{NonGravForces:\allowbreak{}\textless{}unit\textgreater{}:\allowbreak{}*}] propagated unwrapped from the unit that refused

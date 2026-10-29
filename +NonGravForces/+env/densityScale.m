@@ -30,6 +30,11 @@ function S = densityScale(files, sw, options)
 %   times of a day. On 2020-01 GRACE-C that left k_drag 0.90 where an independent model
 %   (DTM2020) reached 0.96 (HANDOVER O-19).
 %
+%   COMBINED (2026-10-28, owner's choice after the flux correction did worse): with 'Fallback', an
+%   env.densityDriverScale result, every day without a Swarm factor takes the predicted one. The
+%   measurement where it exists (2013-12 on), the prediction from F30 and Ap everywhere else -- the
+%   switch is per UTC day and stated by S.source, so no day mixes the two.
+%
 % INPUT ARGUMENTS
 %   Name     Size  Type    Units  Description
 %   ----     ----  ----    -----  -----------
@@ -49,16 +54,22 @@ function S = densityScale(files, sw, options)
 %                                 10, i.e. 5 min; the product's own resolution is ~20 min).
 %   MinRecords 1x1 double  -      Fewer used records in a day make that day's factor NaN, which
 %                                 S.at refuses (default 100, about a third of a day at Stride 10).
+%   Fallback 1x1   struct  -      an env.densityDriverScale result for the same Model (default
+%                                 none). Given, S is of kind "combined" (Options drag.densityScale
+%                                 "combined"): Swarm's factor on every day that has one, the
+%                                 fallback's predicted factor on every other day -- never mixed
+%                                 within a day. S.source(epoch) says which per epoch.
 %
 % OUTPUT ARGUMENTS
 %   Name  Size  Type    Units  Description
 %   ----  ----  ----    -----  -----------
-%   S     1x1   struct  -      .kind "swarm", .day (1xD UTC MJD of each day), .satellite (1xP "A"|"B"|"C"),
+%   S     1x1   struct  -      .kind "swarm" ("combined" with 'Fallback'), .fallback, .day (1xD UTC MJD of each day), .satellite (1xP "A"|"B"|"C"),
 %                              .factor (PxD), .height_m (PxD mean geodetic height of the used
 %                              records), .nUsed (PxD), .low (1xD) and .high (1xD) bracket factors,
 %                              .hLow_m .hHigh_m (1xD), .model, .stride, .files, .provenance, and
 %                              .at (function handle: epoch struct (any scale), 1xK heights [m]
-%                              -> 1xK factors)
+%                              -> 1xK factors), .source (function handle: epoch -> 1xK "swarm" |
+%                              "driver" | "none", the factor .at takes)
 %
 % ACCURACY
 %   The factor carries Swarm's density error (stated as 30 % of the model variance by the
@@ -71,7 +82,11 @@ function S = densityScale(files, sw, options)
 %   NonGravForces:densityScale:inputSatellites  no B, or neither A nor C, among the files
 %   NonGravForces:densityScale:inputModel       Model is not a density backend with drivers
 %   NonGravForces:densityScale:dataDay          S.at at an epoch whose day has no factor (no file
-%                                               covers it, or fewer than MinRecords records)
+%                                               covers it, or fewer than MinRecords records) and no
+%                                               'Fallback' was given
+%   NonGravForces:densityScale:inputFallback    'Fallback' is not an env.densityDriverScale result,
+%                                               or was formed for another density model
+%   NonGravForces:densityDriverScale:*          propagated from the fallback on a day without Swarm
 %   NonGravForces:densityScale:inputRange       S.at at a height further outside the bracket than
 %                                               its width, or h not 1xK
 %   NonGravForces:readSwarmDensity:*, NonGravForces:density:*   propagated unwrapped
@@ -98,11 +113,22 @@ arguments
     options.Model (1,1) string = "msis00"
     options.Stride (1,1) double {mustBeInteger, mustBePositive} = 10
     options.MinRecords (1,1) double {mustBeInteger, mustBePositive} = 100
+    options.Fallback = []
 end
 unit = "densityScale";
 if ~any(options.Model == ["msis00" "msis21" "dtm2020"])
     NonGravForces.fail(unit, "inputModel", "Model %s is not a density backend driven by space weather -> msis00, msis21 or dtm2020", options.Model);
 end
+F = options.Fallback;
+if ~isempty(F)
+    if ~(isstruct(F) && isscalar(F) && isfield(F, 'kind') && isfield(F, 'at') && isfield(F, 'model') && F.kind == "driver")
+        NonGravForces.fail(unit, "inputFallback", "'Fallback' must be an env.densityDriverScale result -> build it with NonGravForces.env.densityDriverScale(sw, cls)");
+    end
+    if F.model ~= options.Model
+        NonGravForces.fail(unit, "inputFallback", "the fallback was formed for %s and the Swarm factor for %s -> form both for the same density model", F.model, options.Model);
+    end
+end
+options = rmfield(options, 'Fallback');
 % read every file once, group by satellite
 sat = strings(1, numel(files)); data = cell(1, numel(files));
 for k = 1:numel(files)
@@ -145,6 +171,8 @@ low = exp(mean(log(factor(isLow, :)), 1, 'omitnan'));   % geometric mean of A an
 hLow = mean(height(isLow, :), 1, 'omitnan');
 high = factor(P == "B", :); hHigh = height(P == "B", :);
 S.kind = "swarm";
+if ~isempty(F), S.kind = "combined"; end
+S.fallback = F;
 S.day = days;
 S.satellite = P;
 S.factor = factor;
@@ -154,28 +182,48 @@ S.low = low; S.high = high; S.hLow_m = hLow; S.hHigh_m = hHigh;
 S.model = options.Model;
 S.stride = options.Stride;
 S.files = files;
-S.at = @(epoch, h) localAt(unit, days, low, high, hLow, hHigh, epoch, h);
+S.at = @(epoch, h) localAt(unit, days, low, high, hLow, hHigh, F, epoch, h);
+S.source = @(epoch) localSource(days, low, high, F, epoch);
 S.provenance = NonGravForces.provenance("env.densityScale", 'Files', files, 'Options', options);
 end
 
-function f = localAt(unit, days, low, high, hLow, hHigh, epoch, h)
-%LOCALAT The factor at each epoch's UTC day and height: log-linear in height between the bracket.
+function f = localAt(unit, days, low, high, hLow, hHigh, F, epoch, h)
+%LOCALAT The factor at each epoch's UTC day and height: log-linear in height between the bracket on a day
+% with a Swarm factor, the fallback's (when given) on every other day.
 utc = referenceSystem.convertTimeScale(epoch, "UTC");
 day = reshape(utc.day, 1, []);
 if ~isequal(size(h), size(day))
     NonGravForces.fail(unit, "inputRange", "h must be 1x%d, one height per epoch -> pass lla(3, :)", numel(day));
 end
 [ok, d] = ismember(day, days);
-d(~ok) = 1;                                          % a placeholder index; those epochs are refused below
+d(~ok) = 1;                                          % a placeholder index; those epochs are refused or handed on below
 bad = ~ok | isnan(low(d)) | isnan(high(d));
-if any(bad)
+if any(bad) && isempty(F)
     bad = unique(day(bad));
-    NonGravForces.fail(unit, "dataDay", "no Swarm density factor for UTC day(s) MJD %s -> fetch the Swarm DNSxPOD files of those days (setupNonGravForces('FetchPool'))", mat2str(bad));
+    NonGravForces.fail(unit, "dataDay", "no Swarm density factor for UTC day(s) MJD %s -> fetch the Swarm DNSxPOD files of those days (setupNonGravForces('FetchPool')), or pass 'Fallback'", mat2str(bad));
 end
-w = (h - hLow(d)) ./ (hHigh(d) - hLow(d));
+f = nan(size(day));
+g = ~bad; dg = d(g); hg = h(g);
+w = (hg - hLow(dg)) ./ (hHigh(dg) - hLow(dg));
 if any(w < -1 | w > 2)
     NonGravForces.fail(unit, "inputRange", "height %.0f km is further outside the Swarm bracket [%.0f %.0f] km than the bracket is wide -> the scale is not defined there", ...
-        h(find(w < -1 | w > 2, 1)) / 1e3, hLow(d(1)) / 1e3, hHigh(d(1)) / 1e3);
+        hg(find(w < -1 | w > 2, 1)) / 1e3, hLow(dg(1)) / 1e3, hHigh(dg(1)) / 1e3);
 end
-f = exp((1 - w) .* log(low(d)) + w .* log(high(d)));
+f(g) = exp((1 - w) .* log(low(dg)) + w .* log(high(dg)));
+if any(bad)
+    sec = reshape(utc.sec, 1, []);
+    f(bad) = F.at(referenceSystem.daySecondToEpoch([day(bad)' sec(bad)'], "UTC"), h(bad));
+end
+end
+
+function src = localSource(days, low, high, F, epoch)
+%LOCALSOURCE "swarm" or "driver" per epoch: which factor S.at takes ("none" where neither has one).
+utc = referenceSystem.convertTimeScale(epoch, "UTC");
+day = reshape(utc.day, 1, []);
+[ok, d] = ismember(day, days);
+d(~ok) = 1;
+src = repmat("swarm", size(day));
+bad = ~ok | isnan(low(d)) | isnan(high(d));
+src(bad) = "none";
+if ~isempty(F), src(bad) = "driver"; end
 end

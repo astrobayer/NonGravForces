@@ -27,7 +27,7 @@ classdef Options
 %   FIDELITY LADDER
 %     field                   fast          standard        precise
 %     drag.density            exponential   msis00          msis21  (+dtm2020 opt-in)
-%     drag.densityScale       none          none            none    (+swarm, driver opt-in)
+%     drag.densityScale       none          none            none    (+swarm, driver, combined opt-in)
 %     drag.wind               corotation    corotation      corotation (+hwm14 opt-in)
 %     drag.gsi                constantCd    sentman         sentman
 %     drag.accommodation      fixed 0.85    fixed 0.85      fixed 0.85 (March et al. 2021)
@@ -54,11 +54,13 @@ classdef Options
 %                         .cdScale  estimated scale on the whole drag force
 %                         .cd       the coefficient constantCd uses (2.2 for a convex LEO body;
 %                                   Montenbruck & Gill 2005)
-%                         .densityScale "none" | "swarm" | "driver": the model density times an
+%                         .densityScale "none" | "swarm" | "driver" | "combined": the model density times an
 %                                   OBSERVED daily factor from Swarm's POD-only densities ("swarm",
 %                                   env.densityScale) or a factor PREDICTED from F30 and Ap for any
-%                                   date ("driver", env.densityDriverScale), passed to Model as
-%                                   'DensityScale' (HANDOVER O-19). Opt-in, in no preset
+%                                   date ("driver", env.densityDriverScale), or Swarm's where it has a
+%                                   day and the predicted one elsewhere ("combined", env.densityScale
+%                                   with 'Fallback'), passed to Model as 'DensityScale' (HANDOVER O-19).
+%                                   Opt-in, in no preset
 %   srp         struct    .tsi [W/m^2] .eclipse "cylindrical"|"conical"|"solaarsCF"
 %                         .lunarEclipse (logical) .crScale (estimated scale on the whole
 %                         radiation force; the optics are per panel, there is no lumped Cr)
@@ -198,7 +200,7 @@ classdef Options
         function validateValue(field, value)
             sets = struct( ...
                 'drag_density',       ["exponential","msis00","msis21","dtm2020"], ...
-                'drag_densityScale',  ["none","swarm","driver"], ...
+                'drag_densityScale',  ["none","swarm","driver","combined"], ...
                 'drag_wind',          ["none","corotation","hwm14"], ...
                 'drag_gsi',           ["constantCd","sentman","maxwell"], ...
                 'drag_accommodation', ["fixed","pilinski2010","pilinski2011","walker2014","sesam"], ...
