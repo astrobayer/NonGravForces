@@ -3862,7 +3862,7 @@ release()          Free the native context (called under onCleanup by gjToolbox.
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}inputModel}] model is not a NonGravForces.Model, or its options cannot be served (transient thermal, raycast, squad)
-\item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}unsupportedOption}] erp.backend ceresClimatology, drag.density dtm2020 or drag.densityScale swarm, which have no native evaluator; use Model.accel or series instead
+\item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}unsupportedOption}] erp.backend ceresClimatology or drag.density dtm2020, which have no native evaluator; use Model.accel or series instead
 \item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}inputEpoch}] no 'Epoch', or a context Epoch that disagrees
 \item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}inputGravity}] 'Gravity' is not a gjToolbox.DynamicsSource
 \item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}depMissing}] the rhs MEX is not built (Native), or gjToolbox is absent

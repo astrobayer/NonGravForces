@@ -81,6 +81,27 @@ classdef tNgfIntegration < NgfTestCase
                     o = NonGravForces.Options(name);
             end
         end
+        function M = scaledModel(tc, kind, varargin)
+            %SCALEDMODEL The standard preset with drag.densityScale of the given kind, from the committed Swarm and
+            % CLS excerpts; extra arguments go to env.densityScale (e.g. 'MinRecords' to force the fallback).
+            f = @(varargin) fullfile(tc.root, varargin{:});
+            files = string(f('data', 'samples', 'swarm', "SW_OPER_DNS" + ["A" "B" "C"] + "POD_2_2020-01-01_2020-01-03.csv"));
+            cls = NonGravForces.io.spaceWeather(f('data', 'spaceweather', 'radio_flux_adjusted_observation_2007-09_2008-03_2019-09_2020-03.txt'));
+            switch kind
+                case "swarm"
+                    S = NonGravForces.env.densityScale(files, tc.sw, varargin{:});
+                case "driver"
+                    S = NonGravForces.env.densityDriverScale(tc.sw, cls, varargin{:});
+                case "combined"
+                    S = NonGravForces.env.densityScale(files, tc.sw, varargin{:}, 'Fallback', NonGravForces.env.densityDriverScale(tc.sw, cls));
+            end
+            M = NonGravForces.Model(tc.macro, NonGravForces.Options("standard").set("drag.densityScale", kind), 'Attitude', tc.att, ...
+                'Eop', tc.eop, 'SpaceWeather', tc.sw, 'Ceres', tc.cer, 'Ephemeris', tc.eph, 'DensityScale', S);
+        end
+        function src = preparedFor(tc, M)
+            src = NonGravForces.app.DynamicsSource(M, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60);
+            src = src.prepare(struct('Span', [120 420], 'StencilSpan', [120 420], 'MaxColumns', 1));
+        end
         function [src, M] = sourceFor(tc, name, varargin)
             M = tc.modelFor(tc.optionsFor(name));
             src = NonGravForces.app.DynamicsSource(M, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60, varargin{:});
@@ -119,10 +140,15 @@ classdef tNgfIntegration < NgfTestCase
             Md = tc.modelFor(NonGravForces.Options("standard").set("drag.density", "dtm2020"));
             tc.verifyErrorId(@() NonGravForces.app.DynamicsSource(Md, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60), ...
                 'NonGravForces:DynamicsSource:unsupportedOption');
-            % and for the observed density scale (2026-10-27, O-19): a daily table the C evaluator does not carry
-            Ms = tc.modelFor(NonGravForces.Options("standard").set("drag.densityScale", "swarm"));
-            tc.verifyErrorId(@() NonGravForces.app.DynamicsSource(Ms, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60), ...
-                'NonGravForces:DynamicsSource:unsupportedOption');
+            % The observed density scale was refused here from 2026-10-27 to 2026-10-29; the native path now
+            % carries it as a daily table (O-19), so every kind constructs and prepares.
+            for kind = ["swarm" "driver" "combined"]
+                Ms = tc.scaledModel(kind);
+                ss = NonGravForces.app.DynamicsSource(Ms, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60);
+                ss = ss.prepare(struct('Span', [120 420], 'StencilSpan', [120 420], 'MaxColumns', 1));
+                tc.verifyTrue(ss.IsPrepared, kind);
+                ss.release();
+            end
             ctx = struct('Span', [120 420], 'StencilSpan', [120 420], 'MaxColumns', 7, 'Epoch', tc.tai);
             src = src.prepare(ctx);
             tc.verifyTrue(src.IsPrepared);
@@ -186,6 +212,37 @@ classdef tNgfIntegration < NgfTestCase
                 "accumulated rounding of two implementations of one expression set, written in the same association order where it decides the digits; measured 2.504e-14 on 2026-09-16");
             tc.verifyBoundAndRecord("native evaluator vs Model.accel between the table nodes (60 s tables)", worstBetween, 1e-9, "-", ...
                 "the cubic tables' interpolation error, not the model's: measured 8.124e-11 at 60 s spacing, and it falls as the fourth power of the step");
+        end
+    end
+
+    methods (Test, TestTags = {'reference'})
+        function DynamicsSourceDensityScaleReference(tc)
+            % drag.densityScale on the native path (2026-10-29, O-19): the daily table against Model.accel at the
+            % table nodes, for Swarm's bracket (interpolated in height in C), the driver scale (one factor per
+            % day) and a combined scale forced onto its fallback (MinRecords above any day's count). The factor
+            % itself is compared through the diagnostics, so a parity that holds only because the drag is small
+            % against the radiation cannot pass for one that holds on the scale.
+            cases = {{"swarm"}, {"driver"}, {"combined", 'MinRecords', 2000}};
+            worst = 0; worstF = 0;
+            for c = 1:numel(cases)
+                M = tc.scaledModel(cases{c}{:});
+                src = tc.preparedFor(M);
+                for k = [121 181 241 301 361 421]
+                    t = double(tc.ep.sec(k) - tc.ep.sec(1));
+                    a1 = src.accel(t, tc.r(:, k), tc.v(:, k));
+                    a0 = tc.modelAccel(M, k);
+                    worst = max(worst, norm(a1 - a0) / norm(a0));
+                    d = src.diagnostics(t, tc.r(:, k), tc.v(:, k));
+                    epk = referenceSystem.daySecondToEpoch([tc.ep.day(k) tc.ep.sec(k)], tc.ep.scale);
+                    [~, info] = M.accel(epk, tc.r(:, k), tc.v(:, k), [], 'Frame', "body");
+                    worstF = max(worstF, abs(d.densityScale / info.densityScale - 1));
+                end
+                src.release();
+            end
+            tc.verifyBoundAndRecord("native evaluator vs Model.accel at the table nodes, drag.densityScale swarm / driver / combined", worst, 1e-13, "-", ...
+                "the same parity as the seven configurations: the scale is one multiplication after the density");
+            tc.verifyBoundAndRecord("native density scale vs Model's", worstF, 1e-14, "rel", ...
+                "Swarm's bracket: the same log-linear expression in the same order; driver days: the factor itself, computed by S.at");
         end
     end
 
@@ -308,6 +365,41 @@ classdef tNgfIntegration < NgfTestCase
             drift = norm(solN.Y(1:3, end) - solV.Y(1:3, end));
             tc.verifyBoundAndRecord("propagated arc: native binding vs vectorized binding over 300 s", drift, 1e-6, "m", ...
                 "one model through two stepping kernels; the acceleration differs by 1e-14 relative and the arc is 300 s (measured 0 m)");
+        end
+    end
+
+    methods (Test, TestTags = {'metamorphic'})
+        function DynamicsSourceDensityScaleMetamorphic(tc)
+            % The gas force is linear in the densities, so the native drag with the driver scale is the unscaled
+            % native drag times the day's factor, and radiation and thermal do not notice it.
+            M0 = tc.modelFor(NonGravForces.Options("standard"));
+            M1 = tc.scaledModel("driver");
+            s0 = tc.preparedFor(M0); s1 = tc.preparedFor(M1);
+            d0 = s0.diagnostics(180, tc.r(:, 181), tc.v(:, 181));
+            d1 = s1.diagnostics(180, tc.r(:, 181), tc.v(:, 181));
+            tc.verifyEqual(d0.densityScale, 1, 'without drag.densityScale the factor is exactly 1');
+            tc.verifyBoundAndRecord("native drag with the driver scale / (factor x unscaled native drag)", norm(d1.drag - d1.densityScale * d0.drag) / norm(d1.drag), 1e-14, "-", ...
+                "a linear factor through the per-species force sums; fixed accommodation does not read the density");
+            tc.verifyEqual(d1.radiation, d0.radiation, 'the radiation must not notice the density scale');
+            tc.verifyEqual(d1.thermal, d0.thermal, 'the thermal recoil must not notice the density scale');
+            s0.release(); s1.release();
+        end
+    end
+
+    methods (Test, TestTags = {'robustness'})
+        function DynamicsSourceDensityScaleRobustness(tc)
+            % A Swarm-only scale on days without a factor prepares (the table marks them missing) and is REFUSED
+            % when a step reaches one, as Model.accel refuses it; the combined scale's fallback serves the same day.
+            Ms = tc.scaledModel("swarm", 'MinRecords', 2000);
+            src = tc.preparedFor(Ms);
+            tc.verifyErrorId(@() src.accel(180, tc.r(:, 181), tc.v(:, 181)), 'NonGravForces:rhsGateway:dataRange');
+            src.release();
+            epk = referenceSystem.daySecondToEpoch([tc.ep.day(181) tc.ep.sec(181)], tc.ep.scale);
+            tc.verifyErrorId(@() Ms.accel(epk, tc.r(:, 181), tc.v(:, 181), [], 'Frame', "gcrs"), 'NonGravForces:densityScale:dataDay');
+            Mc = tc.scaledModel("combined", 'MinRecords', 2000);
+            src = tc.preparedFor(Mc);
+            tc.verifyTrue(all(isfinite(src.accel(180, tc.r(:, 181), tc.v(:, 181)))), 'the fallback serves the day Swarm cannot');
+            src.release();
         end
     end
 

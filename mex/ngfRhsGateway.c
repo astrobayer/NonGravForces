@@ -6,7 +6,7 @@
  * CALLS
  *   [handle, entry] = rhsGateway('create', setup)   setup: the struct DynamicsSource.prepare builds
  *   A    = rhsGateway('accel', handle, t, R, V)        R, V, A: 3 x m
- *   diag = rhsGateway('diagnose', handle, t, r, v)     36 x 1 (see ngfRhs.h)
+ *   diag = rhsGateway('diagnose', handle, t, r, v)     37 x 1 (see ngfRhs.h)
  *   rhsGateway('base', handle, baseEntry)              uint64 address of a gj_native_entry, or 0
  *   rhsGateway('destroy', handle)
  *   abi  = rhsGateway('abi')                           GJ_NATIVE_ABI_VERSION this was built against
@@ -176,6 +176,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         S.latC = array(st, "latC", -1); S.lonC = array(st, "lonC", -1); S.tMonth = array(st, "tMonth", -1);
         S.rsut = array(st, "rsut", -1); S.rlut = array(st, "rlut", -1); S.rsdt = array(st, "rsdt", -1);
         S.ceresHeight = scalar(st, "ceresHeight");
+        S.nScaleDay = (int)scalar(st, "nScaleDay"); S.scaleDay0 = scalar(st, "scaleDay0");
+        S.scale = array(st, "scale", S.nScaleDay > 0 ? 6L * S.nScaleDay : -1);
+        if (S.nScaleDay > 0 && S.scale == NULL) {
+            mexErrMsgIdAndTxt(GW_ID "inputSetup", "setup.scale is empty while nScaleDay is %d", S.nScaleDay);
+        }
         text(st, "msis21Dir", msis21, sizeof msis21); S.msis21Dir = msis21;
         text(st, "hwm14Dir", hwm14, sizeof hwm14); S.hwm14Dir = hwm14;
         S.maxColumns = (int)scalar(st, "maxColumns");

@@ -175,8 +175,15 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-29, PR #121)
+## 5. Current status (2026-10-29, PR #122)
 
+- **2026-10-29, PR #122 (the density scale on the native path, owner: standard takes "combined" and stays
+  integrable):** `app.DynamicsSource` serves `drag.densityScale`: `prepare` builds one row per UTC day of the driver
+  bins (Swarm's bracket, or the day's single factor from `S.at`), `mex/ngfRhs.c` scales rho and every species after
+  the density, switching at the aligned bin edge of UTC midnight (already a breakpoint); a Swarm-only day without a
+  factor is refused when reached. Diagnostics gain `.densityScale` (NGF_RHS_DIAG 37). Three tests in
+  `tNgfIntegration`. Written without MATLAB (C syntax-checked with gcc), ◐, predicted gate 493 (490 + 3). Next: the
+  preset itself (PR B), then release 0.17.0.
 - **2026-10-29, PR #121 (the combined scale in the month tool):** `tools/dragScaleMonth.m` runs
   `drag.densityScale = "combined"` as a variant and counts the epochs it took from the driver fallback. Tool only: gate stays 490.
   **GRACE-D 2020-01 (run 40849007121, 27 days, 120670 epochs; joint k_drag / median rms_x [nm/s^2] / drag ratio):**
@@ -285,7 +292,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   f = sum(rho_Swarm)/sum(rho_model) for Swarm A, B, C; `S.at(epoch, h)` interpolates log f linearly in height
   between A+C and B, at GRACE-FO's GEODETIC height per epoch. `Model(..., 'DensityScale', S)` scales density and
   every species density (the gas force is linear in them); refused without the option, or formed for another
-  drag.density; `app.DynamicsSource` refuses the option. `tools/dragScaleMonth.m` runs it as a Model variant.
+  drag.density; `app.DynamicsSource` refused the option until PR #122. `tools/dragScaleMonth.m` runs it as a Model variant.
   Written without MATLAB, predicted gate 475 (466 + 9); ☑ CI 40528955139: 475/475.
   **BOTH SATELLITES WITH THE OPTION** (month runs 40514608768 C, 40514618274 D, 2020-01): k_drag / median rms_x
   C 0.882 / 2.13, D 0.937 / 2.11 nm/s^2 (DTM2020: 0.961 / 1.79, 1.024 / 1.80; preset 0.443 / 6.36, 0.479 / 6.21).
