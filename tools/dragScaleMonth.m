@@ -131,7 +131,10 @@ dd = dir(fullfile(monthDir, options.Month + "-*"));
 days = string({dd([dd.isdir]).name});
 if ~isempty(options.Days), days = days(ismember(str2double(extractAfter(days, 8)), options.Days)); end
 
-o = NonGravForces.Options(options.Preset);
+% The reference row is the preset UNSCALED (the standard preset takes drag.densityScale "combined" since 0.17.0):
+% every density-scale variant below is measured against the model density itself; the preset as shipped is
+% the "drag.densityScale combined" row.
+o = NonGravForces.Options(options.Preset).set("drag.densityScale", "none");
 vName = ["preset" "msis21" "constantCd 2.4" "msis21 + Cd 2.4" "dtm2020" "dtm2020 + Cd 2.4"];
 vOpt = {o, o.set("drag.density", "msis21"), o.set("drag.gsi", "constantCd").set("drag.cd", 2.4), ...
     o.set("drag.density", "msis21").set("drag.gsi", "constantCd").set("drag.cd", 2.4), ...

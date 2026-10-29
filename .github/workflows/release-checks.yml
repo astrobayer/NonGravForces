@@ -1,0 +1,122 @@
+# The two release measurements (CLAUDE.md section 5, N-10a; HANDOVER O-48) on the CI runner, on demand:
+# the regression baseline over the reference month 2020-01 C and D from the runner's DATAPOOL
+# (tools/regressionBaseline.m, ~3-4 h) and the per-epoch benchmark (tools/benchmark.m, minutes).
+#
+# Neither is a gate. They exist as a workflow because a release needs both at the version being
+# released (audit check 14 refuses a version the baseline was not verified at; check 13 compares every
+# quoted cost with tools/benchmark_reference.csv), and the owner's host is not the only machine with
+# MATLAB and the pool. Nothing is committed from here: the job PRINTS the file it wrote
+# (baseline_reference.json, benchmark_reference.csv) between BEGIN/END markers, and the commit is made
+# from that log in the pull request that needs it.
+#
+# Dependencies as ci.yml checks them out (REFERENCE_READ_TOKEN, persist-credentials false, ref main
+# where ci.yml gives it): referenceSystem, gracefoReading, odeSuite (the benchmark times the native
+# entry), timeSeriesPreparation and lsqvce (app.calibrate).
+name: Release checks
+
+on:
+  workflow_dispatch:
+    inputs:
+      what:
+        description: "baseline-freeze | baseline-compare | benchmark"
+        default: "baseline-compare"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.inputs.what }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 360
+    env:
+      READING_DATA_POOL: ${{ vars.READING_DATA_POOL }}
+      RELEASE_WHAT: ${{ github.event.inputs.what }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with: { path: NonGravForces, persist-credentials: false }
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: astrobayer/referenceSystem
+          path: referenceSystem
+          token: ${{ secrets.REFERENCE_READ_TOKEN }}
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: astrobayer/gracefoReading
+          path: gracefoReading
+          token: ${{ secrets.REFERENCE_READ_TOKEN }}
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: astrobayer/odeSuite
+          ref: main
+          path: odeSuite
+          token: ${{ secrets.REFERENCE_READ_TOKEN }}
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: astrobayer/timeSeriesPreparation
+          ref: main
+          path: timeSeriesPreparation
+          token: ${{ secrets.REFERENCE_READ_TOKEN }}
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: astrobayer/lsqvce
+          ref: main
+          path: lsqvce
+          token: ${{ secrets.REFERENCE_READ_TOKEN }}
+          persist-credentials: false
+      - uses: astrobayer/ci-actions/matlab-probe@v1.2.0
+        timeout-minutes: 2
+      - uses: matlab-actions/run-command@bfa857648f4895aa98a446fe41c85e0788421ed5 # v3
+        with:
+          command: |
+            ws = pwd;
+            % The dependency setups call savepath; the machine keeps the path it had (O-43, as ciGate does).
+            pd = which("pathdef"); before = ""; if ~isempty(pd), before = fileread(pd); end
+            for s = ["referenceSystem/setupReferenceSystem.m" "gracefoReading/setupGraceFOReading.m" "odeSuite/gjToolboxSetup.m" ...
+                    "timeSeriesPreparation/setupTimeSeriesPreparation.m" "lsqvce/lsqvce_setup.m"]
+                run(fullfile(ws, s));
+            end
+            if strlength(before) > 0 && ~isequal(fileread(pd), char(before))
+                fid = fopen(pd, "w"); fwrite(fid, before, "char"); fclose(fid);
+            end
+            cd(fullfile(ws, "NonGravForces"));
+            setupNonGravForces('Verbose', false, 'FetchData', "never", 'FetchKernels', "never", 'FetchGroops', "never", 'FetchPool', "never");
+            what = string(getenv("RELEASE_WHAT"));
+            switch what
+                case "baseline-freeze"
+                    rep = NonGravForces.buildMex('Target', "msis"); assert(rep.upToDate, "releaseChecks:mex", "MEX target msis did not build");
+                    R = regressionBaseline('Mode', "freeze");
+                    out = fullfile(pwd, "tools", "baseline_reference.json");
+                case "baseline-compare"
+                    rep = NonGravForces.buildMex('Target', "msis"); assert(rep.upToDate, "releaseChecks:mex", "MEX target msis did not build");
+                    R = regressionBaseline();
+                    disp(R.compare);
+                    assert(R.pass, "releaseChecks:baseline", "the regression baseline did not pass");
+                    out = "";
+                case "benchmark"
+                    if ~gjToolbox.nativeStepper("available")
+                        back = pwd; cd(fullfile(ws, "odeSuite")); buildtool("mex"); cd(back);
+                    end
+                    for target = ["msis" "rhs"]
+                        rep = NonGravForces.buildMex('Target', target); assert(rep.upToDate, "releaseChecks:mex", "MEX target %s did not build", target);
+                    end
+                    T = benchmark();
+                    disp(T);
+                    out = fullfile(pwd, "tools", "benchmark_reference.csv");
+                otherwise
+                    error("releaseChecks:what", "unknown input what = %s -> baseline-freeze, baseline-compare or benchmark", what);
+            end
+            if strlength(out) > 0
+                fprintf("----- BEGIN %s -----\n%s\n----- END %s -----\n", out, fileread(out), out);
+            end
+      - name: Remove the working copies from this machine
+        if: always()
+        shell: powershell
+        run: Remove-Item -Recurse -Force NonGravForces, referenceSystem, gracefoReading, odeSuite, timeSeriesPreparation, lsqvce -ErrorAction SilentlyContinue

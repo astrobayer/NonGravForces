@@ -53,6 +53,9 @@ enum { NGF_ERP_NONE = 0, NGF_ERP_POINT = 1, NGF_ERP_KNOCKE = 2, NGF_ERP_CERES = 
 enum { NGF_THERMAL_NONE = 0, NGF_THERMAL_STEADY = 1 };
 enum { NGF_SHADOW_NONE = 0, NGF_SHADOW_LUT = 1 };
 enum { NGF_ATT_PROVIDER = 0, NGF_ATT_NOMINAL = 1 };
+/* one UTC day of drag.densityScale: no factor (refused when reached), Swarm's bracket (log-linear in height,
+   env.densityScale), or one factor for the whole day (env.densityDriverScale, also a "combined" fallback day) */
+enum { NGF_SCALE_MISSING = 0, NGF_SCALE_BRACKET = 1, NGF_SCALE_DAY = 2 };
 
 /* status codes beyond ngfKernel.h's */
 #define NGF_DOMAIN        20   /* t outside the tables, or a state the models do not serve */
@@ -103,6 +106,10 @@ typedef struct {
     int nLat, nLon, nMonth; const double *latC, *lonC, *tMonth;   /* tMonth: the month nodes as MJD UTC (io.importCERES .mjd) */
     const double *rsut, *rlut, *rsdt;                 /* nLat x nLon x nMonth */
     double ceresHeight;
+    /* drag.densityScale: nScaleDay = 0 is "none". Otherwise one column per UTC day from MJD scaleDay0 on,
+       6 x nScaleDay: [kind, factor (NGF_SCALE_DAY), low, high (factors), hLow, hHigh (m, geodetic)] (NGF_SCALE_BRACKET).
+       The day is that of the ALIGNED driver bin, so the scale and the drivers switch at the same declared breakpoint. */
+    int nScaleDay; double scaleDay0; const double *scale;
     /* model data folders (msis21: with its trailing separator; hwm14: without) */
     const char *msis21Dir, *hwm14Dir;
     /* the widest n-by-m block the entry accepts */
@@ -123,9 +130,10 @@ int ngfRhsAccel(ngfRhsContext *ctx, double t, const double *R, const double *V, 
  * The same for one state, with the intermediate quantities Model.accel reports,
  * for parity diagnostics: diag must hold NGF_RHS_DIAG doubles, laid out as
  *   [0..2] a_drag body, [3..5] a_rad body, [6..8] a_thermal body, [9] rho, [10..17] species,
- *   [18] T gas, [19..21] vrel body, [22..24] lat lon h, [25] nu, [26] mass, [27..35] R body->GCRS.
+ *   [18] T gas, [19..21] vrel body, [22..24] lat lon h, [25] nu, [26] mass, [27..35] R body->GCRS,
+ *   [36] the density scale (1 with drag.densityScale none; rho and species above are already scaled).
  */
-#define NGF_RHS_DIAG 36
+#define NGF_RHS_DIAG 37
 int ngfRhsDiagnose(ngfRhsContext *ctx, double t, const double *r, const double *v, double *diag);
 
 /* The published entry (a gj_native_entry *), valid until ngfRhsDestroy. */

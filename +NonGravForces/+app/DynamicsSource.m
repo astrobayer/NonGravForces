@@ -36,7 +36,12 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
 %   geom.selfShadow "raycast" (use "lut"), thermal.model "transient" (a stateful
 %   model breaks the integrator's non-monotonic call rule and is refused on both
 %   paths) and an attitude provider built with "squad". prepare() refuses the
-%   rest by name rather than degrading to something else.
+%   rest by name rather than degrading to something else. drag.densityScale
+%   (swarm, driver, combined) is served since 2026-10-29: prepare() turns the
+%   Model's scale into one row per UTC day -- Swarm's bracket, interpolated in
+%   height in C as env.densityScale does, or the day's single factor -- and it
+%   switches at the aligned driver-bin edge of UTC midnight, which is already a
+%   declared breakpoint.
 %
 %   THE TABLES ARE EXACT AT THEIR NODES. The rotation is a cubic Hermite of R with
 %   Rdot, everything else a cubic Lagrange, on a 'TableStep_s' grid (default 60 s,
@@ -86,7 +91,8 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
 %   d  = diagnostics(obj, t, r, v)  What the NATIVE evaluator computed on the way to one
 %                                   acceleration: .drag .radiation .thermal (3x1 each, m/s^2),
 %                                   .rho, .species (8x1), .Tgas_K, .vrel_body (3x1), .lla (3x1),
-%                                   .nu, .mass_kg, .rotationBodyToGcrs (3x3). It exists to pin
+%                                   .nu, .mass_kg, .rotationBodyToGcrs (3x3), .densityScale (1
+%                                   without drag.densityScale; .rho and .species are scaled). It exists to pin
 %                                   WHERE the native path and Model.accel differ rather than only
 %                                   that they do, which is what the parity tests need when a bound
 %                                   moves. Requires 'Native', true and a prepared source; raises
@@ -99,7 +105,7 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
 % ERRORS
 %   NonGravForces:DynamicsSource:inputModel     model is not a NonGravForces.Model, or its options
 %                                               cannot be served (transient thermal, raycast, squad)
-%   NonGravForces:DynamicsSource:unsupportedOption  erp.backend ceresClimatology, drag.density dtm2020 or drag.densityScale swarm,
+%   NonGravForces:DynamicsSource:unsupportedOption  erp.backend ceresClimatology or drag.density dtm2020,
 %                                               which have no native evaluator; use Model.accel or series instead
 %   NonGravForces:DynamicsSource:inputEpoch     no 'Epoch', or a context Epoch that disagrees
 %   NonGravForces:DynamicsSource:inputGravity   'Gravity' is not a gjToolbox.DynamicsSource
@@ -183,11 +189,6 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
             % ceresClimatology above: find() below would return empty and pack 0, "exponential".
             if o.drag.density == "dtm2020"
                 NonGravForces.fail(unit, "unsupportedOption", "drag.density dtm2020 has no native evaluator (HANDOVER O-52) -> use msis00 or msis21 for an integrated arc, or dtm2020 through Model.accel or series");
-            end
-            % The observed density scale (2026-10-27, O-19) is a daily table the C evaluator does not carry;
-            % refused rather than integrated without it.
-            if o.drag.densityScale ~= "none"
-                NonGravForces.fail(unit, "unsupportedOption", "drag.densityScale %s has no native evaluator -> integrate with drag.densityScale none, or use it through Model.accel or series", o.drag.densityScale);
             end
             if any(~ismember(nv.Parameters, ["cdScale", "crScale"]))
                 NonGravForces.fail(unit, "inputModel", "'Parameters' may name cdScale and crScale -> got %s", strjoin(nv.Parameters, ", "));
@@ -325,7 +326,7 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
             x = rhsGateway('diagnose', obj.tables.handle, t, r(:), v(:));
             d = struct('drag', x(1:3), 'radiation', x(4:6), 'thermal', x(7:9), 'rho', x(10), ...
                 'species', x(11:18), 'Tgas_K', x(19), 'vrel_body', x(20:22), 'lla', x(23:25), ...
-                'nu', x(26), 'mass_kg', x(27), 'rotationBodyToGcrs', reshape(x(28:36), 3, 3));
+                'nu', x(26), 'mass_kg', x(27), 'rotationBodyToGcrs', reshape(x(28:36), 3, 3), 'densityScale', x(37));
         end
 
         function ep = epochAt(obj, t, m)
@@ -419,6 +420,7 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
                     'latC', c.lat_deg(:)', 'lonC', c.lon_deg(:)', 'tMonth', c.mjd(:)', ...
                     'rsut', double(c.rsut), 'rlut', double(c.rlut), 'rsdt', double(c.rsdt), 'height', c.referenceHeight_m);
             end
+            t = obj.scaleDays(t);
             t.maxColumns = maxCols;
             t.handle = [];
             t.entry = [];
@@ -500,6 +502,40 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
                 t.ap7 = q.apHistory;
                 t.ap3 = q.apHistory(2, :);
             end
+        end
+
+        function t = scaleDays(obj, t)
+            %SCALEDAYS drag.densityScale as one row per UTC day of the driver bins (2026-10-29, O-19): Swarm's
+            % bracket where the scale has one (the C interpolates it as env.densityScale does), else ONE factor
+            % for the day, taken from the scale's own .at -- the driver scale's factor depends on the day alone,
+            % so the table holds exactly what Model.accel evaluates. A day with neither stays "missing" and is
+            % refused by the evaluator when a step reaches it, as Model.accel refuses it.
+            t.nScaleDay = 0; t.scaleDay0 = 0; t.scale = [];
+            M = obj.model;
+            if M.options.drag.densityScale == "none"
+                return
+            end
+            S = M.densityScale;
+            if isempty(S)
+                NonGravForces.fail("DynamicsSource", "inputModel", "drag.densityScale %s needs the Model's 'DensityScale' -> pass env.densityScale or env.densityDriverScale at construction", M.options.drag.densityScale);
+            end
+            days = min(t.utcDay):max(t.utcDay);
+            tab = zeros(6, numel(days));                    % kinds of mex/ngfRhs.h: 0 missing, 1 Swarm's bracket, 2 one factor
+            for k = 1:numel(days)
+                noon = referenceSystem.daySecondToEpoch([days(k) 43200], "UTC");
+                if any(S.kind == ["swarm" "combined"])
+                    j = find(S.day == days(k), 1);
+                    if ~isempty(j) && ~isnan(S.low(j)) && ~isnan(S.high(j))
+                        tab(:, k) = [1; 0; S.low(j); S.high(j); S.hLow_m(j); S.hHigh_m(j)];
+                        continue
+                    end
+                    if S.kind == "swarm", continue, end   % kind 0, missing
+                    tab(:, k) = [2; S.fallback.at(noon, 0); 0; 0; 0; 0];
+                else
+                    tab(:, k) = [2; S.at(noon, 0); 0; 0; 0; 0];
+                end
+            end
+            t.nScaleDay = numel(days); t.scaleDay0 = days(1); t.scale = tab;
         end
 
         function t = createNative(obj, t)
@@ -590,6 +626,7 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
             s.nLat = t.ceres.nLat; s.nLon = t.ceres.nLon; s.nMonth = t.ceres.nMonth;
             s.latC = t.ceres.latC; s.lonC = t.ceres.lonC; s.tMonth = t.ceres.tMonth;
             s.rsut = t.ceres.rsut; s.rlut = t.ceres.rlut; s.rsdt = t.ceres.rsdt; s.ceresHeight = t.ceres.height;
+            s.nScaleDay = t.nScaleDay; s.scaleDay0 = t.scaleDay0; s.scale = t.scale;
             s.msis21Dir = char(string(envDir) + filesep);
             s.hwm14Dir = char(envDir);
             s.maxColumns = t.maxColumns;
@@ -623,3 +660,4 @@ b = (1:n-1) ./ sqrt(4 * (1:n-1).^2 - 1);
 x = x';
 w = 2 * V(1, i).^2;
 end
+

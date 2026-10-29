@@ -175,8 +175,30 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-29, PR #121)
+## 5. Current status (2026-10-29, PR #122)
 
+- **2026-10-29, PR #122, part 2 (THE STANDARD PRESET TAKES drag.densityScale = "combined", owner):** `Options`
+  standard sets it (fast and precise stay "none": exponential, and msis21 has no fitted driver record). STRICT: a
+  standard Model without 'DensityScale' raises `Model:dependDensityScale` at evaluation, never runs unscaled. Tests about
+  something else say so through `NgfTestCase.standardUnscaled()` (the preset with "none"); `tNgfIntegration` runs
+  standard AS SHIPPED, with the combined scale from the committed Swarm/CLS excerpts; `modelDensityScaleContract`
+  asserts the refusal and that the shipped preset equals the combined Model bitwise. `demoForceBudget`,
+  `tools/benchmark.m` build the scale from the excerpts, `tools/regressionBaseline.m` from the pool's Swarm month and
+  F30 (refused without them); `tools/dragScaleMonth.m`'s reference row stays UNSCALED (the shipped preset is its
+  "combined" row). Help examples (Model, calibrate, forceBudget) and the user guide pass 'DensityScale'.
+  `.github/workflows/release-checks.yml` (dispatch: baseline-freeze, baseline-compare, benchmark) runs the two release
+  measurements on the runner and prints the written file into the log. Predicted gate 493 (no new test methods).
+  First CI run 40884016269: 492/493, `tNgfIntegration/DynamicsSourceMetamorphic` errored with `densityScale:inputRange`
+  (585 km): its propagated arc has no gravity, flies straight and leaves the Swarm bracket -- the arc now runs on the
+  driver scale (no height dependence). ☑ CI 40896217330: 493/493, predicted 493, Code Analyzer clean.
+  The baseline (`tools/baseline_reference.json`) MOVES with the preset: it is re-frozen at 0.17.0.
+- **2026-10-29, PR #122 (the density scale on the native path, owner: standard takes "combined" and stays
+  integrable):** `app.DynamicsSource` serves `drag.densityScale`: `prepare` builds one row per UTC day of the driver
+  bins (Swarm's bracket, or the day's single factor from `S.at`), `mex/ngfRhs.c` scales rho and every species after
+  the density, switching at the aligned bin edge of UTC midnight (already a breakpoint); a Swarm-only day without a
+  factor is refused when reached. Diagnostics gain `.densityScale` (NGF_RHS_DIAG 37). Three tests in
+  `tNgfIntegration`. Written without MATLAB (C syntax-checked with gcc), predicted gate 493 (490 + 3); ☑ CI 40880333732: 493/493,
+  Code Analyzer clean.
 - **2026-10-29, PR #121 (the combined scale in the month tool):** `tools/dragScaleMonth.m` runs
   `drag.densityScale = "combined"` as a variant and counts the epochs it took from the driver fallback. Tool only: gate stays 490.
   **GRACE-D 2020-01 (run 40849007121, 27 days, 120670 epochs; joint k_drag / median rms_x [nm/s^2] / drag ratio):**
@@ -285,7 +307,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   f = sum(rho_Swarm)/sum(rho_model) for Swarm A, B, C; `S.at(epoch, h)` interpolates log f linearly in height
   between A+C and B, at GRACE-FO's GEODETIC height per epoch. `Model(..., 'DensityScale', S)` scales density and
   every species density (the gas force is linear in them); refused without the option, or formed for another
-  drag.density; `app.DynamicsSource` refuses the option. `tools/dragScaleMonth.m` runs it as a Model variant.
+  drag.density; `app.DynamicsSource` refused the option until PR #122. `tools/dragScaleMonth.m` runs it as a Model variant.
   Written without MATLAB, predicted gate 475 (466 + 9); ☑ CI 40528955139: 475/475.
   **BOTH SATELLITES WITH THE OPTION** (month runs 40514608768 C, 40514618274 D, 2020-01): k_drag / median rms_x
   C 0.882 / 2.13, D 0.937 / 2.11 nm/s^2 (DTM2020: 0.961 / 1.79, 1.024 / 1.80; preset 0.443 / 6.36, 0.479 / 6.21).
@@ -891,6 +913,10 @@ Every one of these was an actual defect found in a predecessor or a dependency.
 - **A test's category is the `TestTags` of its `methods` block, not its name.** `readSwarmDensity`'s seven tests
   were appended to the file's last block, tagged 'metamorphic': 466/466 passed and the gate was RED on a category
   shortfall (PR #112). Give every new unit's tests their own tagged blocks.
+- **The standard preset's density scale has a height DOMAIN** (0.17.0): Swarm's bracket (A+C ~446 km, B ~513 km) is
+  extrapolated at most one bracket-width, so a state ~70 km above B is refused (`densityScale:inputRange`, native:
+  `rhsGateway:dataRange`). Real GRACE-FO states sit inside it; a test arc integrated WITHOUT gravity flies straight and
+  climbs out in ~2 minutes (PR #122, CI 40884016269). Such arcs take the driver scale or "none".
 - **A status code is not a file.** `https://www.ngdc.noaa.gov/IAGA/vmod/igrf14.f` answers `200`
   with an HTML error page. Check the content, not the response code — met twice in two days.
 - **Never claim bitwise across a change in BATCH SIZE.** Vectorised products and norms associate

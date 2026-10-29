@@ -27,8 +27,13 @@ macro = NonGravForces.geom.graceFO("C");
 expo = struct('rho0_kg_m3', 3e-12, 'h0_m', 450e3, 'H_m', 60e3);
 fastModel = NonGravForces.Model(macro, NonGravForces.Options("fast"), ...
     'Attitude', att, 'Eop', eop, 'SpaceWeather', sw, 'Exponential', expo);
+% The standard preset takes the combined observed density scale (since 0.17.0): Swarm's daily factor
+% where it has one, the F30 driver fit elsewhere. Both come from the committed excerpts of 2020-01.
+swarm = string(f('data', 'samples', 'swarm', "SW_OPER_DNS" + ["A" "B" "C"] + "POD_2_2020-01-01_2020-01-03.csv"));
+cls = NonGravForces.io.spaceWeather(f('data', 'spaceweather', 'radio_flux_adjusted_observation_2007-09_2008-03_2019-09_2020-03.txt'));
+scale = NonGravForces.env.densityScale(swarm, sw, 'Fallback', NonGravForces.env.densityDriverScale(sw, cls));
 standardModel = NonGravForces.Model(macro, NonGravForces.Options("standard"), ...
-    'Attitude', att, 'Eop', eop, 'SpaceWeather', sw);
+    'Attitude', att, 'Eop', eop, 'SpaceWeather', sw, 'DensityScale', scale);
 
 % Ten epochs, because a budget is a statement about SHARES and ten of them make the point. (The
 % reason this comment gave until 2026-09-18 -- "the standard preset costs 88 ms each" -- was stale

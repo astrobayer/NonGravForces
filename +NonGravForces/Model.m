@@ -162,8 +162,9 @@ classdef Model
 %   sw  = NonGravForces.io.spaceWeather(swFile);
 %   [ep, r, v] = NonGravForces.io.readGNV1B(gnv, 'Eop', eop);
 %   [~, q]     = NonGravForces.io.readSCA1B(sca);
+%   S = NonGravForces.env.densityScale(swarmFiles, sw, 'Fallback', NonGravForces.env.densityDriverScale(sw, cls));   % the standard preset's density scale
 %   M = NonGravForces.Model(NonGravForces.geom.graceFO("C"), NonGravForces.Options("standard"), ...
-%                           'Eop', eop, 'SpaceWeather', sw);
+%                           'Eop', eop, 'SpaceWeather', sw, 'DensityScale', S);
 %   [a, info] = M.accel(ep, r, v, q);
 %   vecnorm(info.drag)          % ~1e-8 m/s^2 at solar minimum
 %

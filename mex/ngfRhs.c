@@ -860,7 +860,7 @@ static int ngfTiles(ngfRhsContext *c, const double *r, const double *Ritrs, doub
 
 /* ========================================================================= one state */
 typedef struct {
-    double aD[3], aR[3], aT[3], rho, species[NGF_SPECIES], Tgas, vB[3], lla[3], nu, mass, Rb[9];
+    double aD[3], aR[3], aT[3], rho, species[NGF_SPECIES], Tgas, vB[3], lla[3], nu, mass, Rb[9], fScale;
 } ngfParts;
 
 static int ngfEvalOne(ngfRhsContext *c, double t, const double *r, const double *v, double *aG, ngfParts *pt)
@@ -868,7 +868,7 @@ static int ngfEvalOne(ngfRhsContext *c, double t, const double *r, const double 
     const ngfRhsSetup *S = &c->s;
     int status, i, j, k, m, it = 0, bT, bA, M, N = S->n;
     double sT = 0.0, Ri[9], Rd[9], Rb[9], rI[3], vrel[3], vB[3], lla[3], sun[3], moon[3], ecl[3], mass;
-    double rho = 0.0, sp[NGF_SPECIES], Tg = 0.0, utcSec, nu, FdSum[3], FrSum[3], FtSum[3], tau[3], aB[3];
+    double rho = 0.0, sp[NGF_SPECIES], Tg = 0.0, utcSec, nu, FdSum[3], FrSum[3], FtSum[3], tau[3], aB[3], fScale = 1.0;
 
     status = ngfTableIndex(c, t, &it, &sT);
     bT = ngfBin(c, t, 0);
@@ -967,6 +967,29 @@ static int ngfEvalOne(ngfRhsContext *c, double t, const double *r, const double 
         sp[0] = dn[4]; sp[1] = dn[3]; sp[2] = dn[1]; sp[3] = dn[2];
         sp[4] = dn[6]; sp[5] = dn[5]; sp[6] = dn[7]; sp[7] = dn[8];
         Tg = tn;
+    }
+    /* 3b. the daily density scale (Model.callDensity: rho and every species times f; composition and T the model's) */
+    if (S->nScaleDay > 0) {
+        int d = (int)(S->utcDay[bA] - S->scaleDay0);
+        const double *row;
+        if (d < 0 || d >= S->nScaleDay) {
+            return ngfFail(c, NGF_DOMAIN, "the density scale table does not cover the UTC day of t");
+        }
+        row = S->scale + 6 * d;
+        if (row[0] == NGF_SCALE_DAY) {
+            fScale = row[1];
+        } else if (row[0] == NGF_SCALE_BRACKET) {
+            /* env.densityScale localAt, in its association order */
+            double w = (lla[2] - row[4]) / (row[5] - row[4]);
+            if (w < -1.0 || w > 2.0) {
+                return ngfFail(c, NGF_DOMAIN, "the height is further outside the Swarm bracket than the bracket is wide");
+            }
+            fScale = exp((1.0 - w) * log(row[2]) + w * log(row[3]));
+        } else {
+            return ngfFail(c, NGF_DOMAIN, "no density scale for the UTC day of t (no Swarm factor and no fallback)");
+        }
+        rho = rho * fScale;
+        for (j = 0; j < NGF_SPECIES; j++) { sp[j] = sp[j] * fScale; }
     }
     /* 4. radiation sources (env.radiationSources), GCRS */
     {
@@ -1095,7 +1118,7 @@ static int ngfEvalOne(ngfRhsContext *c, double t, const double *r, const double 
             pt->aD[i] = FdSum[i] / mass; pt->aR[i] = FrSum[i] / mass; pt->aT[i] = FtSum[i] / mass;
             pt->vB[i] = vB[i]; pt->lla[i] = lla[i];
         }
-        pt->rho = rho; pt->Tgas = Tg; pt->nu = nu; pt->mass = mass;
+        pt->rho = rho; pt->Tgas = Tg; pt->nu = nu; pt->mass = mass; pt->fScale = fScale;
         for (j = 0; j < NGF_SPECIES; j++) { pt->species[j] = sp[j]; }
         for (i = 0; i < 9; i++) { pt->Rb[i] = Rb[i]; }
     }
@@ -1183,6 +1206,7 @@ int ngfRhsCreate(const ngfRhsSetup *setup, ngfRhsContext **out)
     st |= ngfOwnCopy(c, &S->rsut, grid, S->erp == NGF_ERP_CERES);
     st |= ngfOwnCopy(c, &S->rlut, grid, S->erp == NGF_ERP_CERES);
     st |= ngfOwnCopy(c, &S->rsdt, grid, S->erp == NGF_ERP_CERES);
+    st |= ngfOwnCopy(c, &S->scale, 6 * (size_t)(S->nScaleDay > 0 ? S->nScaleDay : 0), S->nScaleDay > 0);
     if (st != NGF_OK) {
         ngfRhsDestroy(c);
         return NGF_NULL_ARGUMENT;
@@ -1302,6 +1326,7 @@ int ngfRhsDiagnose(ngfRhsContext *c, double t, const double *r, const double *v,
     diag[25] = p.nu;
     diag[26] = p.mass;
     for (i = 0; i < 9; i++) { diag[27 + i] = p.Rb[i]; }
+    diag[36] = p.fScale;
     return NGF_OK;
 }
 

@@ -81,7 +81,8 @@ function [B, info] = forceBudget(models, epoch, r, v, q, options)
 %   shape this reproduces); Siemes C. et al. (2023) Adv. Space Res.
 %
 % EXAMPLE
-%   M = NonGravForces.Model(macro, NonGravForces.Options("standard"), 'Attitude', att, 'Eop', eop, 'SpaceWeather', sw);
+%   S = NonGravForces.env.densityScale(swarmFiles, sw, 'Fallback', NonGravForces.env.densityDriverScale(sw, cls));   % the standard preset's density scale
+%   M = NonGravForces.Model(macro, NonGravForces.Options("standard"), 'Attitude', att, 'Eop', eop, 'SpaceWeather', sw, 'DensityScale', S);
 %   B = NonGravForces.app.forceBudget(M, ep, r, v, []);
 %   B(B.effect ~= "total", {'effect', 'rms_norm', 'share'})
 %

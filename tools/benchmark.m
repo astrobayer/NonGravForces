@@ -133,8 +133,14 @@ macro = NonGravForces.geom.graceFO("C");
 expo = struct('rho0_kg_m3', 3e-12, 'h0_m', 450e3, 'H_m', 60e3);
 fastModel = NonGravForces.Model(macro, NonGravForces.Options("fast"), ...
     'Attitude', att, 'Eop', eop, 'SpaceWeather', sw, 'Exponential', expo);
+% The standard preset takes the combined observed density scale (since 0.17.0): Swarm's daily factor
+% where it has one, the F30 driver fit elsewhere. Both come from the committed excerpts of 2020-01.
+f = @(varargin) fullfile(root, varargin{:});
+swarm = string(f('data', 'samples', 'swarm', "SW_OPER_DNS" + ["A" "B" "C"] + "POD_2_2020-01-01_2020-01-03.csv"));
+cls = NonGravForces.io.spaceWeather(f('data', 'spaceweather', 'radio_flux_adjusted_observation_2007-09_2008-03_2019-09_2020-03.txt'));
+scale = NonGravForces.env.densityScale(swarm, sw, 'Fallback', NonGravForces.env.densityDriverScale(sw, cls));
 stdModel = NonGravForces.Model(macro, NonGravForces.Options("standard"), ...
-    'Attitude', att, 'Eop', eop, 'SpaceWeather', sw);
+    'Attitude', att, 'Eop', eop, 'SpaceWeather', sw, 'DensityScale', scale);
 % The compiled single-epoch path needs its inputs composed once, outside the timing: what is
 % being measured is the kernel, not env.radiationSources. Built from epoch 1 and independent of
 % 'Epochs' -- this path and the native one below take ONE state by construction.

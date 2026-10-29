@@ -96,6 +96,13 @@ classdef NgfTestCase < matlab.unittest.TestCase
                 case 'reset', store = struct('name',{},'measured',{},'bound',{},'units',{},'note',{},'class',{}); out = [];
             end
         end
+        function o = standardUnscaled(varargin)
+            %STANDARDUNSCALED The standard preset with drag.densityScale "none": what "standard" was until 2026-10-29.
+            % Since then the preset takes the combined observed density scale, which a Model evaluates only with
+            % 'DensityScale' (Swarm files and CLS F30 of the day). A test about something else -- geometry,
+            % radiation, the calibration, a refusal -- states that it runs unscaled instead of carrying the data.
+            o = NonGravForces.Options("standard", "drag.densityScale", "none", varargin{:});
+        end
         function T = recordTable()
             s = NgfTestCase.recordStore('get');
             if isempty(s), T = table(); else, T = struct2table(s, 'AsArray', true); end
