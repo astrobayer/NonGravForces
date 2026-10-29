@@ -63,7 +63,7 @@ function info = setupNonGravForces(options)
 %                           here yet: GFZ's ISDC, its only anonymous source, is down (2026-10-26)
 %                           and no archive name has been read from it.
 %     whole months ('PoolMonths', into DATAPOOL, with FetchPool's setting; O-19)
-%       GRACE-FO Level-1B   ACT1B, GNV1B, SCA1B and THR1B of GRACE-C and GRACE-D for every day of
+%       GRACE-FO Level-1B   ACT1B, GNV1B, SCA1B, THR1B and IMU1B of GRACE-C and GRACE-D for every day of
 %                           each month, members only, from ISDC's daily archives into
 %                           <DataPool>/GRACEFO/L1B/RL04/<yyyy>/<yyyy-mm-dd> (tools/dragScaleMonth.m)
 %       Swarm densities     as above, for each month
@@ -208,7 +208,7 @@ L1B_BASE = "https://isdc-data.gfz.de/grace-fo/Level-1B/JPL/INSTRUMENT/RL04";
 L1B_DAY = "2020-01-01";
 L1B_MEMBERS = ["GNV1B_2020-01-01_C_04.txt", "SCA1B_2020-01-01_C_04.txt", "MAG1B_2020-01-01_C_04.txt"];
 % What tools/dragScaleMonth.m reads of a month day, for both satellites (FetchPool 'PoolMonths').
-L1B_MONTH_PRODUCTS = ["ACT1B" "GNV1B" "SCA1B" "THR1B"];
+L1B_MONTH_PRODUCTS = ["ACT1B" "GNV1B" "SCA1B" "THR1B" "IMU1B"];   % IMU1B: the gyro rates of N-12 (2026-10-29)
 % CERES EBAF 4.2.1 on ESGF (obs4MIPs, dataset version v20260220), anonymous; the SHA-256 are ESGF's own
 % (esgf-1-5-bridge search, 2026-09-15), and each download was checked against them the same day.
 CERES_BASE = "https://esgf-node.ornl.gov/thredds/fileServer/user_pub_work/obs4MIPs/NASA-LaRC/CERES-EBAF-4-2-1/mon";
