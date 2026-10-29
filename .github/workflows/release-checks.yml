@@ -104,7 +104,7 @@ jobs:
                     if ~gjToolbox.nativeStepper("available")
                         back = pwd; cd(fullfile(ws, "odeSuite")); buildtool("mex"); cd(back);
                     end
-                    for target = ["msis" "rhs"]
+                    for target = ["msis" "rhs" "kernel"]
                         rep = NonGravForces.buildMex('Target', target); assert(rep.upToDate, "releaseChecks:mex", "MEX target %s did not build", target);
                     end
                     T = benchmark();
