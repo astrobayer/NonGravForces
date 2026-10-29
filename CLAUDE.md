@@ -188,6 +188,9 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   "combined" row). Help examples (Model, calibrate, forceBudget) and the user guide pass 'DensityScale'.
   `.github/workflows/release-checks.yml` (dispatch: baseline-freeze, baseline-compare, benchmark) runs the two release
   measurements on the runner and prints the written file into the log. Predicted gate 493 (no new test methods).
+  First CI run 40884016269: 492/493, `tNgfIntegration/DynamicsSourceMetamorphic` errored with `densityScale:inputRange`
+  (585 km): its propagated arc has no gravity, flies straight and leaves the Swarm bracket -- the arc now runs on the
+  driver scale (no height dependence).
   The baseline (`tools/baseline_reference.json`) MOVES with the preset: it is re-frozen at 0.17.0.
 - **2026-10-29, PR #122 (the density scale on the native path, owner: standard takes "combined" and stays
   integrable):** `app.DynamicsSource` serves `drag.densityScale`: `prepare` builds one row per UTC day of the driver
@@ -910,6 +913,10 @@ Every one of these was an actual defect found in a predecessor or a dependency.
 - **A test's category is the `TestTags` of its `methods` block, not its name.** `readSwarmDensity`'s seven tests
   were appended to the file's last block, tagged 'metamorphic': 466/466 passed and the gate was RED on a category
   shortfall (PR #112). Give every new unit's tests their own tagged blocks.
+- **The standard preset's density scale has a height DOMAIN** (0.17.0): Swarm's bracket (A+C ~446 km, B ~513 km) is
+  extrapolated at most one bracket-width, so a state ~70 km above B is refused (`densityScale:inputRange`, native:
+  `rhsGateway:dataRange`). Real GRACE-FO states sit inside it; a test arc integrated WITHOUT gravity flies straight and
+  climbs out in ~2 minutes (PR #122, CI 40884016269). Such arcs take the driver scale or "none".
 - **A status code is not a file.** `https://www.ngdc.noaa.gov/IAGA/vmod/igrf14.f` answers `200`
   with an HTML error page. Check the content, not the response code — met twice in two days.
 - **Never claim bitwise across a change in BATCH SIZE.** Vectorised products and norms associate

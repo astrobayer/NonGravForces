@@ -364,8 +364,13 @@ classdef tNgfIntegration < NgfTestCase
             warnState = warning('off', 'gjToolbox:dynamics:fdGradient');
             restore = onCleanup(@() warning(warnState));
             opt = gjToolbox.Options('Epoch', tc.tai, 'Step', 5, 'Order', 8, 'Startup', "onesided");
-            srcV = NonGravForces.app.DynamicsSource(M, 'Epoch', tc.tai, 'Margin_s', 30, 'Native', false);
-            srcN = NonGravForces.app.DynamicsSource(M, 'Epoch', tc.tai, 'Margin_s', 30);
+            % The arc has NO gravity (this toolbox has none to give), so the state flies a straight line and
+            % climbs ~80 km in 300 s -- out of the standard preset's Swarm bracket (446-513 km on the day),
+            % where env.densityScale rightly refuses (CI 40884016269). The driver scale, one factor per day
+            % and no height dependence, keeps a density scale on both bindings without that domain limit.
+            Ma = tc.scaledModel("driver");
+            srcV = NonGravForces.app.DynamicsSource(Ma, 'Epoch', tc.tai, 'Margin_s', 30, 'Native', false);
+            srcN = NonGravForces.app.DynamicsSource(Ma, 'Epoch', tc.tai, 'Margin_s', 30);
             dynV = gjToolbox.Dynamics(srcV, 'Binding', "vectorized", 'ValidateGradient', false, 'FiniteDifferenceFallback', false);
             dynN = gjToolbox.Dynamics(srcN, 'Binding', "native", 'ValidateGradient', false, 'FiniteDifferenceFallback', false);
             r0 = tc.r(:, 121); v0 = tc.v(:, 121);
