@@ -113,6 +113,24 @@ days = dir(fullfile(monthDir, options.Month + "-*"));
 days = string({days([days.isdir]).name});
 if ~isempty(options.Days), days = days(ismember(str2double(extractAfter(days, 8)), options.Days)); end
 
+% The standard preset's combined density scale (0.17.0, O-19): Swarm's factor of the month from the pool, the
+% F30 driver fit on any day without one. A preset that asks for it is never run unscaled.
+o = NonGravForces.Options(options.Preset);
+scaleArgs = {};
+if o.drag.densityScale ~= "none"
+    swarm = string(fullfile(options.Pool, "Swarm", "DNSxPOD", extractBefore(options.Month, 5), "SW_OPER_DNS" + ["A" "B" "C"] + "POD_2_" + options.Month + ".csv"));
+    f30 = fullfile(options.Pool, "SpaceWeather", "F30", "radio_flux_adjusted_observation.txt");
+    if ~all(isfile(swarm)) || ~isfile(f30)
+        NonGravForces.fail(unit, "dataMissing", "preset %s takes drag.densityScale %s and the pool lacks %s -> fetch them with setupNonGravForces('FetchPool')", ...
+            options.Preset, o.drag.densityScale, strjoin([swarm(~isfile(swarm)) string(f30(~isfile(f30)))], ", "));
+    end
+    D = NonGravForces.env.densityDriverScale(sw, NonGravForces.io.spaceWeather(f30));
+    switch o.drag.densityScale
+        case "driver",   scaleArgs = {'DensityScale', D};
+        case "swarm",    scaleArgs = {'DensityScale', NonGravForces.env.densityScale(swarm, sw, 'Model', o.drag.density)};
+        case "combined", scaleArgs = {'DensityScale', NonGravForces.env.densityScale(swarm, sw, 'Model', o.drag.density, 'Fallback', D)};
+    end
+end
 t0 = tic;
 result = struct();
 meta = struct('toolbox', string(NonGravForces.toolboxVersion("string")), 'generated', string(datetime('now', 'TimeZone', 'UTC', 'Format', 'yyyy-MM-dd HH:mm')) + " UTC", ...
@@ -122,7 +140,7 @@ for sat = options.Satellites
     ts = tic;
     [acc, orb, att, used, noData] = localReadMonth(monthDir, days, sat, eop, options.Product);
     fprintf('regressionBaseline %s: read %d days (%d without records) in %.0f s\n', sat, numel(used), numel(noData), toc(ts));
-    M = NonGravForces.Model(NonGravForces.geom.graceFO(sat), NonGravForces.Options(options.Preset), 'Attitude', att, 'Eop', eop, 'SpaceWeather', sw);
+    M = NonGravForces.Model(NonGravForces.geom.graceFO(sat), o, 'Attitude', att, 'Eop', eop, 'SpaceWeather', sw, scaleArgs{:});
     tc = tic;
     res = NonGravForces.app.calibrate(acc, M, 'Orbit', orb, 'Attitude', att, 'Fit', {'NBoot', options.NBoot, 'BiasBasis', "linear"});
     fprintf('regressionBaseline %s: calibrate (run, model, joint fit, %d replicates) in %.0f s\n', sat, options.NBoot, toc(tc));

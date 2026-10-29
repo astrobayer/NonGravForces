@@ -13,6 +13,7 @@ classdef tNgfIntegration < NgfTestCase
 % Created 2026-09-16 by Claude Opus 5 (Anthropic).
     properties
         root, eop, sw, ep, r, v, att, macro, tai, cer, eph
+        combinedScale                  % the standard preset's density scale, built once per class (scaleOf)
     end
     methods (TestClassSetup)
         function setup(tc)
@@ -42,9 +43,15 @@ classdef tNgfIntegration < NgfTestCase
     end
     methods
         function M = modelFor(tc, o)
-            %MODELFOR A Model of the sample day with everything the presets can ask for.
+            %MODELFOR A Model of the sample day with everything the presets can ask for -- since 2026-10-29 that
+            % includes the standard preset's combined density scale, from the committed Swarm and CLS excerpts.
+            extra = {};
+            if o.drag.densityScale == "combined"
+                if isempty(tc.combinedScale), tc.combinedScale = tc.scaleOf("combined"); end
+                extra = {'DensityScale', tc.combinedScale};
+            end
             M = NonGravForces.Model(tc.macro, o, 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw, ...
-                'Ceres', tc.cer, 'Ephemeris', tc.eph, 'Exponential', struct('rho0_kg_m3', 3e-12, 'h0_m', 450e3, 'H_m', 60e3));
+                'Ceres', tc.cer, 'Ephemeris', tc.eph, 'Exponential', struct('rho0_kg_m3', 3e-12, 'h0_m', 450e3, 'H_m', 60e3), extra{:});
         end
         function o = optionsFor(~, name)
             %OPTIONSFOR The seven configurations the parity is claimed over, INCLUDING the precise preset
@@ -84,6 +91,11 @@ classdef tNgfIntegration < NgfTestCase
         function M = scaledModel(tc, kind, varargin)
             %SCALEDMODEL The standard preset with drag.densityScale of the given kind, from the committed Swarm and
             % CLS excerpts; extra arguments go to env.densityScale (e.g. 'MinRecords' to force the fallback).
+            S = tc.scaleOf(kind, varargin{:});
+            M = NonGravForces.Model(tc.macro, NonGravForces.Options("standard").set("drag.densityScale", kind), 'Attitude', tc.att, ...
+                'Eop', tc.eop, 'SpaceWeather', tc.sw, 'Ceres', tc.cer, 'Ephemeris', tc.eph, 'DensityScale', S);
+        end
+        function S = scaleOf(tc, kind, varargin)
             f = @(varargin) fullfile(tc.root, varargin{:});
             files = string(f('data', 'samples', 'swarm', "SW_OPER_DNS" + ["A" "B" "C"] + "POD_2_2020-01-01_2020-01-03.csv"));
             cls = NonGravForces.io.spaceWeather(f('data', 'spaceweather', 'radio_flux_adjusted_observation_2007-09_2008-03_2019-09_2020-03.txt'));
@@ -95,8 +107,6 @@ classdef tNgfIntegration < NgfTestCase
                 case "combined"
                     S = NonGravForces.env.densityScale(files, tc.sw, varargin{:}, 'Fallback', NonGravForces.env.densityDriverScale(tc.sw, cls));
             end
-            M = NonGravForces.Model(tc.macro, NonGravForces.Options("standard").set("drag.densityScale", kind), 'Attitude', tc.att, ...
-                'Eop', tc.eop, 'SpaceWeather', tc.sw, 'Ceres', tc.cer, 'Ephemeris', tc.eph, 'DensityScale', S);
         end
         function src = preparedFor(tc, M)
             src = NonGravForces.app.DynamicsSource(M, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60);
@@ -133,11 +143,11 @@ classdef tNgfIntegration < NgfTestCase
             % which is "none" -- a Model that computes Earth radiation silently becoming one that
             % does not, on this path only. The parity test cannot catch what it cannot construct,
             % so the refusal is the check (HANDOVER O-44).
-            Mc = tc.modelFor(NonGravForces.Options("standard").set("erp.backend", "ceresClimatology"));
+            Mc = tc.modelFor(NgfTestCase.standardUnscaled().set("erp.backend", "ceresClimatology"));
             tc.verifyErrorId(@() NonGravForces.app.DynamicsSource(Mc, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60), ...
                 'NonGravForces:DynamicsSource:unsupportedOption');
             % The same rule for drag.density dtm2020 (2026-10-27, O-52): the C evaluator links no DTM2020.
-            Md = tc.modelFor(NonGravForces.Options("standard").set("drag.density", "dtm2020"));
+            Md = tc.modelFor(NgfTestCase.standardUnscaled().set("drag.density", "dtm2020"));
             tc.verifyErrorId(@() NonGravForces.app.DynamicsSource(Md, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60), ...
                 'NonGravForces:DynamicsSource:unsupportedOption');
             % The observed density scale was refused here from 2026-10-27 to 2026-10-29; the native path now
@@ -372,7 +382,7 @@ classdef tNgfIntegration < NgfTestCase
         function DynamicsSourceDensityScaleMetamorphic(tc)
             % The gas force is linear in the densities, so the native drag with the driver scale is the unscaled
             % native drag times the day's factor, and radiation and thermal do not notice it.
-            M0 = tc.modelFor(NonGravForces.Options("standard"));
+            M0 = tc.modelFor(NgfTestCase.standardUnscaled());
             M1 = tc.scaledModel("driver");
             s0 = tc.preparedFor(M0); s1 = tc.preparedFor(M1);
             d0 = s0.diagnostics(180, tc.r(:, 181), tc.v(:, 181));

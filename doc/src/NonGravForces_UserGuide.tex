@@ -374,7 +374,7 @@ chain in C against them.
 \section{Using it}
 \begin{lstlisting}
 M   = NonGravForces.Model(macro, NonGravForces.Options("standard"), ...
-          'Attitude', att, 'Eop', eop, 'SpaceWeather', sw);
+          'Attitude', att, 'Eop', eop, 'SpaceWeather', sw, 'DensityScale', S);
 
 src = NonGravForces.app.DynamicsSource(M, 'Epoch', t0_tai, ...
           'Margin_s', 30, 'TableStep_s', 60);
@@ -485,7 +485,10 @@ pass it to \texttt{Model} as \texttt{'Mass'} (HANDOVER O-46).
 \section{Step 4: the options and the model}
 \begin{lstlisting}
 opt = NonGravForces.Options("standard");
-M   = NonGravForces.Model(macro, opt, 'Attitude', att, 'Eop', eop, 'SpaceWeather', sw);
+% the standard preset's drag.densityScale "combined" (0.17.0): Swarm's daily factor, the F30 driver fit elsewhere
+S   = NonGravForces.env.densityScale(swarmFiles, sw, ...
+          'Fallback', NonGravForces.env.densityDriverScale(sw, cls));
+M   = NonGravForces.Model(macro, opt, 'Attitude', att, 'Eop', eop, 'SpaceWeather', sw, 'DensityScale', S);
 \end{lstlisting}
 
 \section{Step 5: evaluate, and look at the environment it saw}

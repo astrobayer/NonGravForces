@@ -217,7 +217,7 @@ classdef tNgfCalibrate < NgfTestCase
             ep1 = referenceSystem.daySecondToEpoch([repmat(day, numel(t1), 1), sec0 + t1(:)], "GPS");
             ep10 = referenceSystem.daySecondToEpoch([repmat(day, numel(t10), 1), sec0 + t10(:)], "GPS");
             attP = NonGravForces.geom.AttitudeProvider(ep10, NonGravForces.geom.AttitudeProvider.nominal(r(t10), v(t10), true));
-            M = NonGravForces.Model(NonGravForces.geom.graceFO("C"), NonGravForces.Options("standard"), ...
+            M = NonGravForces.Model(NonGravForces.geom.graceFO("C"), NgfTestCase.standardUnscaled(), ...
                 'Attitude', attP, 'Eop', tc.eop, 'SpaceWeather', tc.sw);
             [a10, i10] = M.accel(ep10, r(t10), v(t10), attP.at(ep10));
             rad = vecnorm(i10.radiation);

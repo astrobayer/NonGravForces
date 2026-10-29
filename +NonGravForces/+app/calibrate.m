@@ -129,7 +129,8 @@ function res = calibrate(acc, reference, options)
 %   eop = referenceSystem.readEop(eopFile);  sw = NonGravForces.io.spaceWeather(swFile);
 %   [ep, r, v] = NonGravForces.io.readGNV1B(gnvFile, 'Eop', eop);
 %   [epA, q] = NonGravForces.io.readSCA1B(scaFile);  att = NonGravForces.geom.AttitudeProvider(epA, q);
-%   M = NonGravForces.Model(NonGravForces.geom.graceFO("C"), NonGravForces.Options("standard"), 'Eop', eop, 'SpaceWeather', sw);
+%   S = NonGravForces.env.densityScale(swarmFiles, sw, 'Fallback', NonGravForces.env.densityDriverScale(sw, cls));   % the standard preset's density scale
+%   M = NonGravForces.Model(NonGravForces.geom.graceFO("C"), NonGravForces.Options("standard"), 'Eop', eop, 'SpaceWeather', sw, 'DensityScale', S);
 %   res = NonGravForces.app.calibrate(actArc, M, 'Orbit', struct('epoch', ep, 'r', r, 'v', v), 'Attitude', att);
 %   res.calibration.summaryTable()
 %

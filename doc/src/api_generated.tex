@@ -32,13 +32,13 @@ s   = toStruct(obj)                The same option set as a plain struct, with o
                                    not a second way to configure anything, and nothing reads
                                    it back.
 \end{lstlisting}
-Configure once, evaluate many (principle P5). Every field is validated at construction; an unknown field name errors, and EVERY ADMISSIBLE VALUE EVALUATES: a value this toolbox cannot compute is not offered (rule R4, HANDOVER LP-C finding F5). Presets fix the DEFAULT tier of every model family; extended models (HWM14 winds, transient thermal, body torques) are opt-ins no preset enables, so preset results never move when one lands.
+Configure once, evaluate many (principle P5). Every field is validated at construction; an unknown field name errors, and EVERY ADMISSIBLE VALUE EVALUATES: a value this toolbox cannot compute is not offered (rule R4, HANDOVER LP-C finding F5). Presets fix the DEFAULT tier of every model family; extended models (HWM14 winds, transient thermal, body torques) are opt-ins no preset enables, so preset results never move when one lands. The one deliberate move: 0.17.0's standard preset takes the combined observed density scale (owner ruling 2026-10-29, HANDOVER O-19).
 
 \begin{lstlisting}
 FIDELITY LADDER
   field                   fast          standard        precise
   drag.density            exponential   msis00          msis21  (+dtm2020 opt-in)
-  drag.densityScale       none          none            none    (+swarm, driver, combined opt-in)
+  drag.densityScale       none          combined        none    (+swarm, driver opt-in)
   drag.wind               corotation    corotation      corotation (+hwm14 opt-in)
   drag.gsi                constantCd    sentman         sentman
   drag.accommodation      fixed 0.85    fixed 0.85      fixed 0.85 (March et al. 2021)
@@ -73,7 +73,9 @@ drag        struct    .density  "exponential" | "msis00" | "msis21" | "dtm2020" 
                                 date ("driver", env.densityDriverScale), or Swarm's where it has a
                                 day and the predicted one elsewhere ("combined", env.densityScale
                                 with 'Fallback'), passed to Model as 'DensityScale' (HANDOVER O-19).
-                                Opt-in, in no preset
+                                "combined" in the standard preset since 2026-10-29 (owner): a
+                                standard Model evaluates only with 'DensityScale', never
+                                silently unscaled; set "none" for the unscaled model
 srp         struct    .tsi [W/m^2] .eclipse "cylindrical"|"conical"|"solaarsCF"
                       .lunarEclipse (logical) .crScale (estimated scale on the whole
                       radiation force; the optics are per panel, there is no lumped Cr)

@@ -169,7 +169,7 @@ classdef tNgfEnv < NgfTestCase
             K = tc.knocke;
             ep = referenceSystem.datetimeToEpoch(datetime(1981, 12, 22) + days(K.days_since_t0(k)), "UTC");
             r = [K.rx(k); K.ry(k); K.rz(k)]; sun = tc.au * [K.sunx(k); K.suny(k); K.sunz(k)];
-            opt = NonGravForces.Options("standard", "erp.backend", backend, "srp.eclipse", "cylindrical");
+            opt = NgfTestCase.standardUnscaled("erp.backend", backend, "srp.eclipse", "cylindrical");
             if ~isempty(grid), opt = opt.set("erp.grid", grid); end
             src = NonGravForces.env.radiationSources(ep, r, [1; 0; 0; 0], opt, 'Sun', sun);
             Mt = (src.M - 1) / 2;
@@ -342,7 +342,7 @@ classdef tNgfEnv < NgfTestCase
             [ep, r, q] = tc.sampleState();
             ep5 = referenceSystem.daySecondToEpoch([ep.day(1:5) ep.sec(1:5)], "GPS"); r5 = r(:, 1:5); q5 = q(:, 1:5);
             [srcD, infoD] = NonGravForces.env.radiationSources(ep5, r5, q5, ...
-                NonGravForces.Options("standard", "sun.source", "rs.de440"), 'Ephemeris', eph);
+                NgfTestCase.standardUnscaled("sun.source", "rs.de440"), 'Ephemeris', eph);
             [srcA, infoA] = NonGravForces.env.radiationSources(ep5, r5, q5, NonGravForces.Options("standard"));
             tc.verifyEqual(infoD.sunSource, "rs.de440", 'the source list must report which ephemeris produced it');
             tc.verifyEqual(infoA.sunSource, "rs.analytic");
@@ -374,7 +374,7 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyErrorId(@() NonGravForces.env.radiationSources(ep5, r5, q5, NonGravForces.Options("standard"), 'Sun', [tc.au; 0; 0]), 'NonGravForces:radiationSources:inputShape');
             tc.verifyError(@() NonGravForces.env.radiationSources(ep5, r5, q5, struct()), 'MATLAB:validation:UnableToConvert');
             % ceres: 1 + 2 x tiles sources as for knocke; the CERES inputs are refused where nothing reads them
-            oC = NonGravForces.Options("standard", "erp.backend", "ceres");
+            oC = NgfTestCase.standardUnscaled("erp.backend", "ceres");
             sC = NonGravForces.env.radiationSources(ep5, r5, q5, oC, 'Ceres', tc.cer, 'RotationItrsToGcrs', tc.eyes(5));
             tc.verifyEqual(sC.M, 1 + 2 * 288); tc.verifyTrue(all(sC.P(:) >= 0)); tc.verifyEqual(sC.meta.erpBackend, "ceres");
             tc.verifyErrorId(@() NonGravForces.env.radiationSources(ep5, r5, q5, oC), 'NonGravForces:earthRadiance:inputCeres');
@@ -558,7 +558,7 @@ classdef tNgfEnv < NgfTestCase
             err = zeros(height(T), 4, 2);                        % case x [albSum lwSum albVec lwVec] x grid
             for g = 1:2
                 grid = [24 48] * g;
-                o = NonGravForces.Options("standard", "erp.backend", "ceres", "erp.grid", grid, "srp.eclipse", "cylindrical");
+                o = NgfTestCase.standardUnscaled("erp.backend", "ceres", "erp.grid", grid, "srp.eclipse", "cylindrical");
                 for i = 1:height(T)
                     ep = referenceSystem.datetimeToEpoch(datetime(T.epoch_utc(i), 'InputFormat', 'yyyy-MM-dd''T''HH:mm:ss''Z'''), "UTC");
                     r = [T.rx_m(i); T.ry_m(i); T.rz_m(i)];
@@ -1417,7 +1417,7 @@ classdef tNgfEnv < NgfTestCase
         end
         function radiationSourcesSpeed(tc)
             % The full source list over the bare tiling for the 600-epoch sample: pressures, visibility, rotation. Bound 6.
-            [ep, r, q] = tc.sampleState(); opt = NonGravForces.Options("standard");
+            [ep, r, q] = tc.sampleState(); opt = NgfTestCase.standardUnscaled();
             ratio = tc.speedRatio(@() NonGravForces.env.radiationSources(ep, r, q, opt), @() NonGravForces.env.earthRadiance("knocke", ep, [12 24], r));
             tc.verifyBoundAndRecord("radiationSources / earthRadiance time ratio (600 epochs)", ratio, 6, "-", "");
         end

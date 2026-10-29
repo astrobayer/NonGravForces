@@ -23,11 +23,13 @@ classdef Options
 %   HANDOVER LP-C finding F5). Presets fix the DEFAULT tier of every model
 %   family; extended models (HWM14 winds, transient thermal, body torques) are
 %   opt-ins no preset enables, so preset results never move when one lands.
+%   The one deliberate move: 0.17.0's standard preset takes the combined observed
+%   density scale (owner ruling 2026-10-29, HANDOVER O-19).
 %
 %   FIDELITY LADDER
 %     field                   fast          standard        precise
 %     drag.density            exponential   msis00          msis21  (+dtm2020 opt-in)
-%     drag.densityScale       none          none            none    (+swarm, driver, combined opt-in)
+%     drag.densityScale       none          combined        none    (+swarm, driver opt-in)
 %     drag.wind               corotation    corotation      corotation (+hwm14 opt-in)
 %     drag.gsi                constantCd    sentman         sentman
 %     drag.accommodation      fixed 0.85    fixed 0.85      fixed 0.85 (March et al. 2021)
@@ -60,7 +62,9 @@ classdef Options
 %                                   date ("driver", env.densityDriverScale), or Swarm's where it has a
 %                                   day and the predicted one elsewhere ("combined", env.densityScale
 %                                   with 'Fallback'), passed to Model as 'DensityScale' (HANDOVER O-19).
-%                                   Opt-in, in no preset
+%                                   "combined" in the standard preset since 2026-10-29 (owner): a
+%                                   standard Model evaluates only with 'DensityScale', never
+%                                   silently unscaled; set "none" for the unscaled model
 %   srp         struct    .tsi [W/m^2] .eclipse "cylindrical"|"conical"|"solaarsCF"
 %                         .lunarEclipse (logical) .crScale (estimated scale on the whole
 %                         radiation force; the optics are per panel, there is no lumped Cr)
@@ -166,9 +170,14 @@ classdef Options
         function obj = applyPreset(obj, preset)
             switch preset
                 case "fast"
+                    dscale = "none";
                     dens = "exponential"; gsi = "constantCd"; acc = "fixed"; alpha = 0.85; ms = [];
                     ecl = "conical"; erpB = "none"; grid = [0 0]; th = "none"; ss = "none"; lutN = 16; sunS = "rs.analytic"; fs = "exact";
                 case "standard"
+                    % drag.densityScale "combined" by owner ruling of 2026-10-29 (HANDOVER O-19): NRLMSISE-00 is
+                    % ~2x high in solar minimum at GRACE-FO's height, and Swarm's observed factor with the F30
+                    % driver fit as fallback takes ACT1B's joint k_drag from 0.44 to 0.88-0.94 (2020-01).
+                    dscale = "combined";
                     dens = "msis00"; gsi = "sentman"; acc = "fixed"; alpha = 0.85; ms = [];
                     ecl = "conical"; erpB = "knocke"; grid = [12 24]; th = "steadyState"; ss = "lut"; lutN = 16; sunS = "rs.analytic"; fs = "table";
                 case "precise"
@@ -179,13 +188,14 @@ classdef Options
                     % and supersedes Doornbos (2011)'s 0.93. The adsorption models remain available by
                     % name -- and disagree with this by 17.5 % of the drag at 520 km in solar minimum,
                     % which is measured, not feared (HANDOVER Part G, LP-E).
+                    dscale = "none";             % the driver record was fitted against msis00, not msis21
                     dens = "msis21"; gsi = "sentman"; acc = "fixed"; alpha = 0.85; ms = [];
                     ecl = "solaarsCF"; erpB = "ceres"; grid = [24 48]; th = "steadyState"; ss = "lut"; lutN = 32; sunS = "rs.de440"; fs = "exact";
             end
             obj.drag     = struct('density', dens, 'wind', "corotation", 'gsi', gsi, ...
                                   'accommodation', acc, 'alpha', alpha, 'surfaceMass_amu', ms, ...
                                   'specularFraction', [], 'Tw_K', 300, 'cdScale', 1.0, 'cd', 2.2, ...
-                                  'densityScale', "none");
+                                  'densityScale', dscale);
             obj.srp      = struct('tsi', NonGravForces.const().S0, 'eclipse', ecl, 'lunarEclipse', false, 'crScale', 1.0);
             obj.erp      = struct('backend', erpB, 'grid', grid);
             obj.thermal  = struct('model', th, 'internalPower_W', 0);

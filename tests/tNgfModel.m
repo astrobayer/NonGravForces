@@ -31,7 +31,7 @@ classdef tNgfModel < NgfTestCase
             [eps2, qq] = NonGravForces.io.readSCA1B(f('data', 'samples', 'SCA1B_2020-01-01_C_04.txt'));
             tc.att = NonGravForces.geom.AttitudeProvider(eps2, qq);
             tc.macro = NonGravForces.geom.graceFO("C");
-            tc.M = NonGravForces.Model(tc.macro, NonGravForces.Options("standard"), ...
+            tc.M = NonGravForces.Model(tc.macro, NgfTestCase.standardUnscaled(), ...
                 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw);
             tc.Mfast = NonGravForces.Model(tc.macro, NonGravForces.Options("fast"), ...
                 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw, ...
@@ -128,11 +128,11 @@ classdef tNgfModel < NgfTestCase
             tc.verifyErrorId(@() tc.M.accel(e, rr, vv, ones(4, 2)), 'NonGravForces:Model:inputState');
             bad = rr; bad(1) = NaN;
             tc.verifyErrorId(@() tc.M.accel(e, bad, vv), 'NonGravForces:Model:inputState');
-            noAtt = NonGravForces.Model(mm, NonGravForces.Options("standard"), 'Eop', tc.eop, 'SpaceWeather', tc.sw);
+            noAtt = NonGravForces.Model(mm, NgfTestCase.standardUnscaled(), 'Eop', tc.eop, 'SpaceWeather', tc.sw);
             tc.verifyErrorId(@() noAtt.accel(e, rr, vv), 'NonGravForces:Model:inputAttitude');
-            noEop = NonGravForces.Model(mm, NonGravForces.Options("standard"), 'Attitude', tc.att, 'SpaceWeather', tc.sw);
+            noEop = NonGravForces.Model(mm, NgfTestCase.standardUnscaled(), 'Attitude', tc.att, 'SpaceWeather', tc.sw);
             tc.verifyErrorId(@() noEop.accel(e, rr, vv), 'NonGravForces:Model:dependEop');
-            noSw = NonGravForces.Model(mm, NonGravForces.Options("standard"), 'Attitude', tc.att, 'Eop', tc.eop);
+            noSw = NonGravForces.Model(mm, NgfTestCase.standardUnscaled(), 'Attitude', tc.att, 'Eop', tc.eop);
             tc.verifyErrorId(@() noSw.accel(e, rr, vv), 'NonGravForces:Model:dependWeather');
             tc.verifyErrorId(@() tc.M.partials(e, rr, vv, 'WithRespectTo', "mass"), 'NonGravForces:Model:unsupported');
             tc.verifyErrorId(@() tc.M.partials(e, rr, vv, 'Method', "complexStep"), 'NonGravForces:Model:unsupported');
@@ -642,13 +642,13 @@ classdef tNgfModel < NgfTestCase
         % drag.densityScale "swarm" (O-19, 2026-10-27)
         function modelDensityScaleContract(tc)
             S = tc.swarmScale();
-            oS = NonGravForces.Options("standard").set("drag.densityScale", "swarm");
+            oS = NgfTestCase.standardUnscaled().set("drag.densityScale", "swarm");
             idx = 101:103;                                % past 00:00:18 GPS: the first 18 s of the GPS day are 2019-12-31 in UTC
             e = tc.slice(idx); rr = tc.r(:, idx); vv = tc.v(:, idx);
             % the option without the scale is refused at evaluation, the scale without the option at construction
             M1 = NonGravForces.Model(tc.macro, oS, 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw);
             tc.verifyErrorId(@() M1.accel(e, rr, vv), 'NonGravForces:Model:dependDensityScale');
-            tc.verifyErrorId(@() NonGravForces.Model(tc.macro, NonGravForces.Options("standard"), 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', S), ...
+            tc.verifyErrorId(@() NonGravForces.Model(tc.macro, NgfTestCase.standardUnscaled(), 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', S), ...
                 'NonGravForces:Model:inputOptions');
             % a scale formed for msis00 is refused by a Model on msis21
             tc.verifyErrorId(@() NonGravForces.Model(tc.macro, oS.set("drag.density", "msis21"), 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', S), ...
@@ -665,7 +665,7 @@ classdef tNgfModel < NgfTestCase
             % the other kind is refused either way round
             cls = NonGravForces.io.spaceWeather(fullfile(tc.root, 'data', 'spaceweather', 'radio_flux_adjusted_observation_2007-09_2008-03_2019-09_2020-03.txt'));
             D = NonGravForces.env.densityDriverScale(tc.sw, cls);
-            oD = NonGravForces.Options("standard").set("drag.densityScale", "driver");
+            oD = NgfTestCase.standardUnscaled().set("drag.densityScale", "driver");
             tc.verifyErrorId(@() NonGravForces.Model(tc.macro, oD, 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', S), 'NonGravForces:Model:inputOptions');
             tc.verifyErrorId(@() NonGravForces.Model(tc.macro, oS, 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', D), 'NonGravForces:Model:inputOptions');
             MD = NonGravForces.Model(tc.macro, oD, 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', D);
@@ -676,12 +676,20 @@ classdef tNgfModel < NgfTestCase
             % Swarm scale is refused by it, and on a Swarm day it gives the Swarm factor
             files = string(fullfile(tc.root, 'data', 'samples', 'swarm', "SW_OPER_DNS" + ["A" "B" "C"] + "POD_2_2020-01-01_2020-01-03.csv"));
             C = NonGravForces.env.densityScale(files, tc.sw, 'Fallback', D);
-            oC = NonGravForces.Options("standard").set("drag.densityScale", "combined");
+            oC = NgfTestCase.standardUnscaled().set("drag.densityScale", "combined");
             tc.verifyErrorId(@() NonGravForces.Model(tc.macro, oC, 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', S), 'NonGravForces:Model:inputOptions');
             tc.verifyErrorId(@() NonGravForces.Model(tc.macro, oS, 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', C), 'NonGravForces:Model:inputOptions');
             MC = NonGravForces.Model(tc.macro, oC, 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', C);
             [~, infoC] = MC.accel(e, rr, vv);
             tc.verifyEqual(infoC.densityScale, info.densityScale);
+            % THE STANDARD PRESET AS SHIPPED (0.17.0, owner 2026-10-29) is the combined scale: without
+            % 'DensityScale' it refuses to evaluate rather than run unscaled, and with it it is MC bitwise
+            oP = NonGravForces.Options("standard");
+            tc.verifyEqual(oP.drag.densityScale, "combined");
+            MP0 = NonGravForces.Model(tc.macro, oP, 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw);
+            tc.verifyErrorId(@() MP0.accel(e, rr, vv), 'NonGravForces:Model:dependDensityScale');
+            MP = NonGravForces.Model(tc.macro, oP, 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', C);
+            tc.verifyEqual(MP.accel(e, rr, vv), MC.accel(e, rr, vv));
         end
     end
     methods (Test, TestTags = {'metamorphic'})
@@ -690,7 +698,7 @@ classdef tNgfModel < NgfTestCase
             % drag times the factor at each epoch, and nothing else moves (radiation, thermal, the factor itself is
             % S.at at the Model's own geodetic height). Bound from the rounding of one product per term.
             S = tc.swarmScale();
-            oS = NonGravForces.Options("standard").set("drag.densityScale", "swarm");
+            oS = NgfTestCase.standardUnscaled().set("drag.densityScale", "swarm");
             M = NonGravForces.Model(tc.macro, oS, 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', S);
             idx = 101:120;                                % UTC 2020-01-01: Swarm has a factor for it
             e = tc.slice(idx); rr = tc.r(:, idx); vv = tc.v(:, idx);

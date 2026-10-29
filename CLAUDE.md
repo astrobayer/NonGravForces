@@ -177,6 +177,18 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-10-29, PR #122)
 
+- **2026-10-29, PR #122, part 2 (THE STANDARD PRESET TAKES drag.densityScale = "combined", owner):** `Options`
+  standard sets it (fast and precise stay "none": exponential, and msis21 has no fitted driver record). STRICT: a
+  standard Model without 'DensityScale' raises `Model:dependDensityScale` at evaluation, never runs unscaled. Tests about
+  something else say so through `NgfTestCase.standardUnscaled()` (the preset with "none"); `tNgfIntegration` runs
+  standard AS SHIPPED, with the combined scale from the committed Swarm/CLS excerpts; `modelDensityScaleContract`
+  asserts the refusal and that the shipped preset equals the combined Model bitwise. `demoForceBudget`,
+  `tools/benchmark.m` build the scale from the excerpts, `tools/regressionBaseline.m` from the pool's Swarm month and
+  F30 (refused without them); `tools/dragScaleMonth.m`'s reference row stays UNSCALED (the shipped preset is its
+  "combined" row). Help examples (Model, calibrate, forceBudget) and the user guide pass 'DensityScale'.
+  `.github/workflows/release-checks.yml` (dispatch: baseline-freeze, baseline-compare, benchmark) runs the two release
+  measurements on the runner and prints the written file into the log. Predicted gate 493 (no new test methods).
+  The baseline (`tools/baseline_reference.json`) MOVES with the preset: it is re-frozen at 0.17.0.
 - **2026-10-29, PR #122 (the density scale on the native path, owner: standard takes "combined" and stays
   integrable):** `app.DynamicsSource` serves `drag.densityScale`: `prepare` builds one row per UTC day of the driver
   bins (Swarm's bracket, or the day's single factor from `S.at`), `mex/ngfRhs.c` scales rho and every species after

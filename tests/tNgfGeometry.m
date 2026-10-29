@@ -634,8 +634,8 @@ classdef tNgfGeometry < NgfTestCase
             sw = NonGravForces.io.spaceWeather(fullfile(tc.root, 'data', 'spaceweather', 'SW-All_2019-09_2020-03.csv'));
             k = 1:20:numel(ep.sec);
             e = referenceSystem.daySecondToEpoch([ep.day(k) ep.sec(k)], ep.scale);
-            Mt = NonGravForces.Model(tc.mm, NonGravForces.Options("standard"), 'Eop', eop, 'SpaceWeather', sw);
-            Me = NonGravForces.Model(tc.mm, NonGravForces.Options("standard").set("geom.flowShadow", "exact"), 'Eop', eop, 'SpaceWeather', sw);
+            Mt = NonGravForces.Model(tc.mm, NgfTestCase.standardUnscaled(), 'Eop', eop, 'SpaceWeather', sw);
+            Me = NonGravForces.Model(tc.mm, NgfTestCase.standardUnscaled().set("geom.flowShadow", "exact"), 'Eop', eop, 'SpaceWeather', sw);
             [~, it] = Mt.accel(e, r(:, k), v(:, k), q(:, k)); [~, ie] = Me.accel(e, r(:, k), v(:, k), q(:, k));
             tc.verifyEqual(it.radiation, ie.radiation); tc.verifyEqual(it.thermal, ie.thermal);
             tc.verifyFalse(any(it.flowShadow.tableFallback)); tc.verifyEmpty(ie.flowShadow.tableFallback);
