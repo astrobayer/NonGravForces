@@ -175,8 +175,11 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-28, PR #120)
+## 5. Current status (2026-10-29, PR #121)
 
+- **2026-10-29, PR #121 (the combined scale in the month tool):** `tools/dragScaleMonth.m` runs
+  `drag.densityScale = "combined"` as a variant and counts the epochs it took from the driver fallback. GRACE-D
+  2020-01 dispatched. Tool only: gate stays 490.
 - **2026-10-28, PR #120 (the driver scale judged by the month):** `tools/dragScaleMonth.m` runs two Model variants
   with `drag.densityScale = "driver"` (Offset 0 and GRACE-FO 1's -0.041) when the pool holds CLS's F30 -- no density
   observation of the month needed. Tool only: gate stays 486. **Measured, GRACE-C, joint k_drag / median daily rms_x

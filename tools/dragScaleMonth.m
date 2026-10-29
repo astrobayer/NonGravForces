@@ -42,6 +42,10 @@ function R = dragScaleMonth(options)
 %   shifted per UTC day by delta = a0 + c . z, the F30 + season + square record densityDriverFit wrote
 %   for its "day trimmed flux" set: an exospheric temperature correction whose height profile is MSIS's own.
 %
+%   COMBINED SCALE (2026-10-29): with Swarm and F30 both in the pool, the variant
+%   "drag.densityScale combined" -- env.densityScale with the driver scale as 'Fallback' -- and the count of
+%   epochs it took from the fallback (none when Swarm covers every day of the month).
+%
 %   DRIVER DENSITY SCALE (O-19, 2026-10-28): when the pool holds CLS's adjusted F30
 %   (<Pool>/SpaceWeather/F30/radio_flux_adjusted_observation.txt), two Model variants with
 %   drag.densityScale "driver" -- env.densityDriverScale's prediction from F30, Ap and season, at
@@ -183,6 +187,12 @@ haveSwarm = all(isfile(swFiles));
 S = [];
 if haveSwarm
     S = NonGravForces.env.densityScale(swFiles, sw, 'Model', o.drag.density);
+    % drag.densityScale "combined" (PR #120): Swarm's factor on its days, the driver scale (Offset 0) on the rest
+    if haveDriver
+        C = NonGravForces.env.densityScale(swFiles, sw, 'Model', o.drag.density, 'Fallback', NonGravForces.env.densityDriverScale(sw, cls));
+        vName = [vName "drag.densityScale combined"];
+        models{end + 1} = NonGravForces.Model(macro, o.set("drag.densityScale", "combined"), 'Eop', eop, 'SpaceWeather', sw, 'DensityScale', C);
+    end
     vName = [vName "drag.densityScale swarm"];
     models{end + 1} = NonGravForces.Model(macro, o.set("drag.densityScale", "swarm"), 'Eop', eop, 'SpaceWeather', sw, 'DensityScale', S);
     nM = numel(vName);
@@ -190,6 +200,7 @@ if haveSwarm
 end
 nV = numel(vName);
 swRows = cell(0, 5);
+nDriverEpochs = 0;                              % epochs the combined scale took from the driver fallback
 halfCrn = (1407 - 1) / 2 * 0.1;                % s, half span of timeSeriesPreparation.crnKernel("ACC")
 
 t0 = tic;
@@ -261,6 +272,7 @@ for d = days
             variants{nM + j} = {aP + (fac(j) - 1) * iP.drag, iS};
         end
         iM = variants{nM}{2};
+        if haveDriver, nDriverEpochs = nDriverEpochs + nnz(C.source(e) == "driver"); end
         swRows(end + 1, :) = {d, S.high(jd), S.low(jd), mean(iM.densityScale(keep)), mean(iM.lla(3, keep))}; %#ok<AGROW>
     end
     for vv = 1:nV
@@ -302,6 +314,9 @@ if haveSwarm
         o.drag.density, median(SW.fB), median(SW.fAC), median(SW.fModelMean), min(SW.fModelMean), max(SW.fModelMean));
     fprintf('  mean heights A / B / C over the month: %.1f / %.1f / %.1f km, GRACE-FO (geodetic) %.1f km\n', ...
         mean(S.height_m(1, :), 'omitnan') / 1e3, mean(S.height_m(2, :), 'omitnan') / 1e3, mean(S.height_m(3, :), 'omitnan') / 1e3, mean(SW.hGraceFO_m) / 1e3);
+    if haveDriver
+        fprintf('  combined scale: %d of %d epochs from the driver fallback (the rest from Swarm)\n', nDriverEpochs, nAll);
+    end
 else
     fprintf('  no Swarm densities of %s in the pool: the density-scale variants were not run\n', options.Month);
 end
