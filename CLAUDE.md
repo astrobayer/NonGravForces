@@ -190,7 +190,10 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   oracle `tools/pyxcheck/attitude_quality_check.py`: on an Earth-pointing arc omega ~ (0, 1.10e-3, 0) rad/s is nearly
   constant, so axis, scale and bias are NOT separable (minimum-norm parameters plus the condition number are
   reported); the residual is the result: 3.6-4.3e-7 rad/s RMS per gyro on 2020-01-01..03 against 9.0e-4 rad/s of rate.**
-  64 units. 16 tests in the new `tests/tNgfAttitude.m`. Written without MATLAB, predicted gate 509 (493 + 16).
+  64 units. 16 tests in the new `tests/tNgfAttitude.m`. Written without MATLAB, predicted gate 509 (493 + 16). First CI run 40978582699: 507/509 -- the oracle had not normalised
+  the SCA1B quaternions (file norms off by up to 1e-9: 5.4e-8 in omega, 1.4e-5 in rms, reproduced exactly), and the
+  IMU1B first epoch was asserted to 1e-9 s against the product's 1 us. ☑ CI 40980858655: 509/509, predicted 509,
+  Code Analyzer clean.
 - **2026-10-29, release 0.17.0 (PR #123):** the observed density scale in the standard preset, DTM2020, the Swarm/TOLEOS
   readers, the scale on the native path. Release measurements on the CI runner (`release-checks.yml`): baseline
   RE-FROZEN (run 40911119628, 75 min) -- S_xx C **0.966**, D **0.972** (0.16.0: 0.762, 0.769; the old 0.76 was the MSIS
