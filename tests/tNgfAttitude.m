@@ -93,7 +93,9 @@ classdef tNgfAttitude < NgfTestCase
                 tc.verifyEqual(a(k), deg2rad(str2double(tok(6))), 'RelTol', 4 * eps, sprintf('angle of record %d', k));
             end
             % the first record of 2020-01-01: 631108800 s + 116294 us after 2000-01-01 12:00 GPS
-            tc.verifyEqual([double(ep.day(1)) double(ep.sec(1))], [58849 0.116294], 'AbsTol', 1e-9);
+            tc.verifyEqual(double(ep.day(1)), 58849);
+            tc.verifyBoundAndRecord("readIMU1B first epoch vs 2020-01-01 00:00:00.116294 GPS", abs(double(ep.sec(1)) - 0.116294), 1e-6, "s", ...
+                "the tag's resolution is 1 us; CI 40978582699 found it off by more than 1e-9 s (value not printed)");
         end
     end
     methods (Test, TestTags = {'precision'})
@@ -188,10 +190,12 @@ classdef tNgfAttitude < NgfTestCase
             % tools/pyxcheck/attitude_quality_check.py 2020-01-01 (standard library, raw text, the definitions):
             % omega over the 101st interval and each gyro's residual RMS after the projection.
             Q = tc.dayOne();
-            oracleOmega = [-6.101243367220442e-07; 1.103522978380200e-03; -1.305435218938545e-06];
+            % (the oracle normalises the file quaternions as referenceSystem.invertQuaternion does; before it did,
+            % CI 40978582699 measured 5.4e-8 here and 1.43e-5 on the RMS below -- exactly the normalisation)
+            oracleOmega = [-6.101346676364544e-07; 1.103522926664514e-03; -1.305407912748501e-06];
             tc.verifyBoundAndRecord("attitudeQuality omega(101) vs the stdlib oracle", norm(Q.omega_rad_s(:, 101) - oracleOmega) / norm(oracleOmega), 1e-9, "-", ...
                 "the same rotation vector of R_k' R_k+1 in two languages; the oracle's convention (R^T of the active matrix) is the one the gyros fit");
-            oracleRms = [3.570150612615e-07 3.750840600478e-07 3.657131063371e-07];
+            oracleRms = [3.570157778623e-07 3.750847719329e-07 3.657078907429e-07];
             oracleRate = [9.027399493282e-04 2.062160169000e-06 9.027578625462e-04];
             tc.verifyBoundAndRecord("attitudeQuality gyro residual RMS vs the stdlib oracle (3 gyros)", max(abs([Q.gyro.rms_rad_s] ./ oracleRms - 1)), 1e-5, "rel", ...
                 "both are exact projections; the epochs differ by referenceSystem's rounding of the GPS seconds");

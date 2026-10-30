@@ -133,7 +133,13 @@ def main():
     t0 = float(sca[0][0])
     ts = [float(r[0]) - t0 for r in sca]
     # file quaternion inertial -> SRF; conjugate once
-    q = [(float(r[3]), -float(r[4]), -float(r[5]), -float(r[6])) for r in sca]
+    # normalised first, as referenceSystem.invertQuaternion does (the file's norms deviate by up to 1e-9, which
+    # moves a 1 s rotation vector of 1.1e-3 rad by ~5e-8 relative: CI 40978582699 measured exactly that)
+    q = []
+    for r in sca:
+        w, x, y, z = float(r[3]), -float(r[4]), -float(r[5]), -float(r[6])
+        n = math.sqrt(w * w + x * x + y * y + z * z)
+        q.append((w / n, x / n, y / n, z / n))
     gy = {}
     for r in imu:
         t = float(r[0]) + float(r[1]) * 1e-6 - t0
