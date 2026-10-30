@@ -117,6 +117,11 @@ classdef tNgfIntegration < NgfTestCase
             src = NonGravForces.app.DynamicsSource(M, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60, varargin{:});
             src = src.prepare(struct('Span', [120 420], 'StencilSpan', [120 420], 'MaxColumns', 1));
         end
+        function orb = orbitOf(tc, idx)
+            %ORBITOF The sample day's GNV1B (GCRS) over the given records, as 'ThermalOrbit' takes it.
+            orb = struct('epoch', referenceSystem.daySecondToEpoch([reshape(tc.ep.day(idx), [], 1) reshape(tc.ep.sec(idx), [], 1)], tc.ep.scale), ...
+                'r', tc.r(:, idx), 'v', tc.v(:, idx));
+        end
         function a = modelAccel(tc, M, k)
             epk = referenceSystem.daySecondToEpoch([tc.ep.day(k) tc.ep.sec(k)], tc.ep.scale);
             a = M.accel(epk, tc.r(:, k), tc.v(:, k), [], 'Frame', "gcrs");
@@ -180,8 +185,19 @@ classdef tNgfIntegration < NgfTestCase
             tc.verifyErrorId(@() D(M, 'Epoch', datetime(2020, 1, 1, 'TimeZone', 'UTC')), 'NonGravForces:DynamicsSource:inputEpoch');
             tc.verifyErrorId(@() D(M, 'Epoch', tc.tai, 'Parameters', "alpha"), 'NonGravForces:DynamicsSource:inputModel');
             tc.verifyErrorId(@() D(M, 'Epoch', tc.tai, 'Gravity', struct()), 'NonGravForces:DynamicsSource:inputGravity');
-            tc.verifyErrorId(@() D(tc.modelFor(NonGravForces.Options("standard").set("thermal.model", "transient")), 'Epoch', tc.tai), ...
-                'NonGravForces:DynamicsSource:inputModel');
+            % thermal.model transient (2026-10-30): served by a temperature table integrated along 'ThermalOrbit',
+            % so it is refused without that orbit, refused off the native path, and refused at prepare when the
+            % orbit does not cover the tables -- each beside the construction that must succeed.
+            Mt = tc.modelFor(NonGravForces.Options("standard").set("thermal.model", "transient"));
+            orbAll = tc.orbitOf(1:numel(tc.ep.sec));
+            tc.verifyErrorId(@() D(Mt, 'Epoch', tc.tai), 'NonGravForces:DynamicsSource:inputModel');
+            tc.verifyErrorId(@() D(Mt, 'Epoch', tc.tai, 'Native', false, 'ThermalOrbit', orbAll), 'NonGravForces:DynamicsSource:inputModel');
+            sShort = D(Mt, 'Epoch', tc.tai, 'Margin_s', 30, 'ThermalOrbit', tc.orbitOf(1:200));
+            tc.verifyErrorId(@() sShort.prepare(struct('Span', [120 420], 'StencilSpan', [120 420])), 'NonGravForces:DynamicsSource:dataRange');
+            sFull = D(Mt, 'Epoch', tc.tai, 'Margin_s', 30, 'ThermalOrbit', orbAll);
+            sFull = sFull.prepare(struct('Span', [120 420], 'StencilSpan', [120 420]));
+            tc.verifyTrue(sFull.IsPrepared);
+            sFull.release();
             % a context epoch that disagrees, and a native path the options cannot serve
             s2 = D(M, 'Epoch', tc.tai);
             tc.verifyErrorId(@() s2.prepare(struct('Span', [0 60], 'StencilSpan', [0 60], 'Epoch', tc.tai + seconds(1))), 'NonGravForces:DynamicsSource:inputEpoch');
@@ -222,6 +238,43 @@ classdef tNgfIntegration < NgfTestCase
                 "accumulated rounding of two implementations of one expression set, written in the same association order where it decides the digits; measured 2.504e-14 on 2026-09-16");
             tc.verifyBoundAndRecord("native evaluator vs Model.accel between the table nodes (60 s tables)", worstBetween, 1e-9, "-", ...
                 "the cubic tables' interpolation error, not the model's: measured 8.124e-11 at 60 s spacing, and it falls as the fourth power of the step");
+        end
+    end
+
+    methods (Test, TestTags = {'reference'})
+        function DynamicsSourceThermalTableReference(tc)
+            % thermal.model transient on the native path (2026-10-30, the owner's ruling that standard goes
+            % transient and stays integrable): prepare integrates the walls ONCE along 'ThermalOrbit' with
+            % Model.accel, and the C reads the temperatures by time. On that orbit and at a table node (an orbit
+            % epoch) the native path and Model.accel of the SAME orbit evaluate the same temperatures, so they
+            % are again two implementations of one expression set; the thermal recoil is compared on its own
+            % through the diagnostics, so a parity carried by the drag cannot pass for one of the walls.
+            M = tc.modelFor(NonGravForces.Options("standard").set("thermal.model", "transient"));
+            orb = tc.orbitOf(1:numel(tc.ep.sec));
+            src = NonGravForces.app.DynamicsSource(M, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60, 'ThermalOrbit', orb);
+            src = src.prepare(struct('Span', [120 420], 'StencilSpan', [120 420], 'MaxColumns', 1));
+            aG = M.accel(orb.epoch, orb.r, orb.v, [], 'Frame', "gcrs");
+            [~, infoB] = M.accel(orb.epoch, orb.r, orb.v, [], 'Frame', "body");
+            worstNode = 0; worstThermal = 0; worstBetween = 0;
+            for k = [121 151 181 241 301 361 391 421]
+                t = double(tc.ep.sec(k) - tc.ep.sec(1));
+                a1 = src.accel(t, tc.r(:, k), tc.v(:, k));
+                rel = norm(a1 - aG(:, k)) / norm(aG(:, k));
+                if mod(t, 60) == 0
+                    worstNode = max(worstNode, rel);
+                    d = src.diagnostics(t, tc.r(:, k), tc.v(:, k));
+                    worstThermal = max(worstThermal, norm(d.thermal - infoB.thermal(:, k)) / norm(infoB.thermal(:, k)));
+                else
+                    worstBetween = max(worstBetween, rel);
+                end
+            end
+            src.release();
+            tc.verifyBoundAndRecord("native transient table vs Model.accel at the table nodes, on the reference orbit", worstNode, 1e-13, "-", ...
+                "the same parity as the seven configurations: the temperatures are the same numbers, the recoil the same expression");
+            tc.verifyBoundAndRecord("native transient thermal recoil vs Model's at the table nodes", worstThermal, 1e-13, "rel", ...
+                "kernel.thermalRecoil and its C port on identical temperatures");
+            tc.verifyBoundAndRecord("native transient table vs Model.accel between the nodes (60 s tables)", worstBetween, 1e-2, "-", ...
+                "the cubic reads the wall temperatures as smooth between nodes; recorded, not claimed (shrink TableStep_s where it matters)");
         end
     end
 

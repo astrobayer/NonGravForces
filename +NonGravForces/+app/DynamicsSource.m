@@ -33,10 +33,17 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
 %   that entry itself.
 %
 %   WHAT THE NATIVE PATH SERVES. Every option Model evaluates except
-%   geom.selfShadow "raycast" (use "lut"), thermal.model "transient" (a stateful
-%   model breaks the integrator's non-monotonic call rule and is refused on both
-%   paths) and an attitude provider built with "squad". prepare() refuses the
-%   rest by name rather than degrading to something else. drag.densityScale
+%   geom.selfShadow "raycast" (use "lut") and an attitude provider built with
+%   "squad". prepare() refuses the rest by name rather than degrading to
+%   something else. thermal.model "transient" (2026-10-30, the owner's ruling
+%   that the standard preset goes transient and stays integrable) is served by
+%   a TABLE: the walls' temperatures depend on their history, and the integrator
+%   calls accel non-monotonically and repeatedly at one t, so prepare()
+%   integrates them ONCE, with Model.accel along a reference orbit
+%   ('ThermalOrbit', e.g. the arc's GNV1B), and the C evaluator reads them by
+%   time like every other table and forms the recoil from them. Only the native
+%   path can do that: with 'Native' false Model.accel would restart the walls
+%   from the steady state at every call, so that combination is refused. drag.densityScale
 %   (swarm, driver, combined) is served since 2026-10-29: prepare() turns the
 %   Model's scale into one row per UTC day -- Swarm's bracket, interpolated in
 %   height in C as env.densityScale does, or the day's single factor -- and it
@@ -68,6 +75,11 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
 %   Gravity       1x1   object    -      Another gjToolbox.DynamicsSource added before this one; default []
 %   Margin_s      1x1   double    s      Table margin beyond the stencil span (default 3600)
 %   TableStep_s   1x1   double    s      Table spacing (default 60)
+%   ThermalOrbit  1x1   struct    -      thermal.model transient only, and required by it: the reference
+%                                        orbit (.epoch, .r and .v in GCRS, e.g. io.readGNV1B) along which
+%                                        prepare() integrates the wall temperatures; it must cover the
+%                                        tables' span and should start well before it (the walls start
+%                                        from the steady state at its first epoch). Default struct()
 %
 % PROPERTIES (beyond the interface's)
 %   model, epoch, parameters, native, gravity, margin_s, tableStep_s, tables (the prepared
@@ -86,6 +98,13 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
 %   error between nodes; both are measured per run in tests/tNgfIntegration.m
 %   (2.5e-14 and 8.1e-11 relative at a 60 s table step, measured 2026-09-16).
 %   The time tables are exact at their nodes by construction.
+%   thermal.model transient: the temperatures are those of the REFERENCE orbit, not
+%   of the integrated state, so the thermal recoil ignores the state's departure from
+%   it (a few km of along-track error moves the eclipse edges by under a second); at a
+%   node and on the reference orbit the native path equals Model.accel of the same orbit
+%   (tNgfIntegration/DynamicsSourceThermalTableReference). Between nodes the cubic
+%   reads the temperatures as smooth, which they are not at an eclipse edge (the
+%   radiator's time constant is ~44 s): shrink 'TableStep_s' for an arc that needs it.
 %
 % METHODS BEYOND THE gjToolbox INTERFACE
 %   d  = diagnostics(obj, t, r, v)  What the NATIVE evaluator computed on the way to one
@@ -104,14 +123,15 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
 %
 % ERRORS
 %   NonGravForces:DynamicsSource:inputModel     model is not a NonGravForces.Model, or its options
-%                                               cannot be served (transient thermal, raycast, squad)
+%                                               cannot be served (raycast, squad; transient thermal without
+%                                               'ThermalOrbit' or with 'Native' false)
 %   NonGravForces:DynamicsSource:unsupportedOption  erp.backend ceresClimatology or drag.density dtm2020,
 %                                               which have no native evaluator; use Model.accel or series instead
 %   NonGravForces:DynamicsSource:inputEpoch     no 'Epoch', or a context Epoch that disagrees
 %   NonGravForces:DynamicsSource:inputGravity   'Gravity' is not a gjToolbox.DynamicsSource
 %   NonGravForces:DynamicsSource:depMissing     the rhs MEX is not built (Native), or gjToolbox is absent
-%   NonGravForces:DynamicsSource:dataRange      the attitude, the space weather or CERES does not cover
-%                                               the span plus the margin
+%   NonGravForces:DynamicsSource:dataRange      the attitude, the space weather, CERES or 'ThermalOrbit'
+%                                               does not cover the span plus the margin
 %   gjToolbox:dynamics:notPrepared              accel() before prepare()
 %
 % REFERENCES
@@ -141,6 +161,7 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
         gravity = []
         margin_s (1,1) double = 3600
         tableStep_s (1,1) double = 60
+        thermalOrbit struct = struct()
         Vectorized (1,1) logical = true
         tables struct = struct('prepared', false)
     end
@@ -156,6 +177,7 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
                 nv.Gravity = []
                 nv.Margin_s (1,1) double = 3600
                 nv.TableStep_s (1,1) double = 60
+                nv.ThermalOrbit struct = struct()
             end
             unit = "DynamicsSource";
             if ~isa(model, 'NonGravForces.Model') || ~isscalar(model)
@@ -163,7 +185,15 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
             end
             o = model.options;
             if o.thermal.model == "transient"
-                NonGravForces.fail(unit, "inputModel", "thermal.model transient carries temperatures from epoch to epoch, and the integrator calls accel non-monotonically and repeatedly at one t -> use steadyState (or none) for an integrated arc");
+                % The walls carry their temperatures from epoch to epoch, and the integrator calls accel
+                % non-monotonically and repeatedly at one t: only a table integrated once along a reference
+                % orbit can serve that, and only the native path reads one.
+                if ~nv.Native
+                    NonGravForces.fail(unit, "inputModel", "thermal.model transient is served by the native evaluator's temperature table only (Model.accel would restart the walls from the steady state at every call) -> construct with 'Native', true and 'ThermalOrbit'");
+                end
+                if ~(isscalar(nv.ThermalOrbit) && all(isfield(nv.ThermalOrbit, {'epoch', 'r', 'v'})))
+                    NonGravForces.fail(unit, "inputModel", "thermal.model transient needs 'ThermalOrbit' (.epoch, .r, .v in GCRS, e.g. io.readGNV1B), along which prepare integrates the wall temperatures once -> pass the arc's reference orbit, starting well before it, or use thermal.model steadyState");
+                end
             end
             % REFUSED AT CONSTRUCTION, not when the tables are packed: an option this evaluator
             % cannot serve should cost the caller nothing to discover. It was first written into
@@ -211,6 +241,7 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
             obj.gravity = nv.Gravity;
             obj.margin_s = nv.Margin_s;
             obj.tableStep_s = nv.TableStep_s;
+            obj.thermalOrbit = nv.ThermalOrbit;
             obj.ParameterRule = strjoin(["fixed", obj.parameters], " ");
         end
 
@@ -395,6 +426,10 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
                 t.eclipticNormal = n ./ vecnorm(n);
             end
             t.mass = M.mass.at(epTab);
+            t.tPanel = [];
+            if o.thermal.model == "transient"
+                t.tPanel = obj.thermalTable(e0, tTab);
+            end
             % attitude
             t.attitude = obj.attitudeSource;
             t.tq = []; t.q = [];
@@ -427,6 +462,29 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
             if obj.native
                 t = obj.createNative(t);
             end
+        end
+
+        function T = thermalTable(obj, e0, tTab)
+            %THERMALTABLE The wall temperatures of thermal.model transient at the table nodes: Model.accel along
+            % 'ThermalOrbit', whose transient integration runs once from the steady state at the orbit's first
+            % epoch, pchip'd onto the nodes (exact where a node is an orbit epoch). The C reads them by time.
+            unit = "DynamicsSource";
+            orb = obj.thermalOrbit;
+            ep = orb.epoch;
+            if string(ep.scale) ~= "TAI", ep = referenceSystem.convertTimeScale(ep, "TAI"); end
+            ts = referenceSystem.secondsBetween(e0, ep);
+            ts = ts(:)';
+            if isempty(ts), ts = NaN; end
+            if isnan(ts(1)) || ts(1) > tTab(1) || ts(end) < tTab(end) || any(diff(ts) <= 0) || ~isequal(size(orb.r), [3 numel(ts)]) || ~isequal(size(orb.v), size(orb.r))
+                NonGravForces.fail(unit, "dataRange", "'ThermalOrbit' runs from %.1f to %.1f s and the tables need %.1f to %.1f s (span plus 'Margin_s') -> supply the reference orbit (3xK r and v, increasing epochs) over the whole stencil", ...
+                    ts(1), ts(end), tTab(1), tTab(end));
+            end
+            q = [];
+            if obj.attitudeSource == "nominal"
+                q = NonGravForces.geom.AttitudeProvider.nominal(orb.r, orb.v, obj.alongVelocity);
+            end
+            [~, info] = obj.model.accel(orb.epoch, orb.r, orb.v, q);
+            T = pchip(ts, info.temperature_K, tTab);
         end
 
         function [tq, q] = attitudeNodes(obj, e0, window)
@@ -590,8 +648,9 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
             if any(o.erp.backend == ["knocke", "ceres"])
                 s.nRings = o.erp.grid(1); s.nSectors = o.erp.grid(2);
             end
-            s.thermal = double(o.thermal.model ~= "none");
+            s.thermal = double(find(["none","steadyState","transient"] == o.thermal.model) - 1);   % transient is the table (mex/ngfRhs.h)
             s.internalPower = o.thermal.internalPower_W;
+            s.tPanel = t.tPanel;
             s.shadow = double(o.geom.selfShadow == "lut");
             s.lutResolution = o.geom.lutResolution;
             s.lut = [];

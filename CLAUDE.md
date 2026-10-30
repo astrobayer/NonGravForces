@@ -177,6 +177,14 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-10-30, PR #124, N-12)
 
+- **2026-10-31, PR #126 (owner: standard goes transient and stays integrable; capacities fitted first):** the native path
+  serves thermal.model "transient" by a TABLE: `app.DynamicsSource(..., 'ThermalOrbit', orb)` integrates the wall
+  temperatures once along a reference orbit with Model.accel at prepare (pchip onto the table nodes), `mex/ngfRhs.c`
+  reads them by time (`NGF_THERMAL_TABLE`, cubic like every table) and forms the recoil. Refused without 'ThermalOrbit',
+  with 'Native' false, and at prepare when the orbit does not cover the tables. `tools/heatCapacityFit.m` (release-checks
+  `what: heatcapacity`) fits one factor per wall group (array, kapton, radiator) on Woeske's capacities. New test
+  `tNgfIntegration/DynamicsSourceThermalTableReference`; written without MATLAB (C syntax-checked with gcc), ◐,
+  predicted gate 510 (509 + 1). Next: the fitted capacities into geom.graceFO, standard -> transient, re-freeze.
 - **2026-10-30, PR #126 (the lag separated): THERMAL INERTIA.** `tools/alignmentMonth.m` with three models per day (run
   41042736099): with `thermal.model = "transient"` the y/z lags fall from 17.3 / 10.5 s (C) and 8.2 / 18.5 s (D) to
   1.8 / 2.0 and 3.6 / 3.4 s, peaks up to 0.98; the standard preset's steadyState recoil leads the real one. **The

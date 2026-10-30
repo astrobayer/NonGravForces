@@ -3999,6 +3999,7 @@ Native & 1x1 & logical & - & Publish the compiled entry (default true) \\
 Gravity & 1x1 & object & - & Another gjToolbox.DynamicsSource added before this one; default [] \\
 Margin\_\allowbreak{}s & 1x1 & double & s & Table margin beyond the stencil span (default 3600) \\
 TableStep\_\allowbreak{}s & 1x1 & double & s & Table spacing (default 60) \\
+ThermalOrbit & 1x1 & struct & - & thermal.model transient only, and required by it: the reference orbit (.epoch, .r and .v in GCRS, e.g. io.readGNV1B) along which prepare() integrates the wall temperatures; it must cover the tables' span and should start well before it (the walls start from the steady state at its first epoch). Default struct() \\
 \end{longtable}
 
 \subsubsection*{PROPERTIES (beyond the interface's)}
@@ -4018,12 +4019,12 @@ release()          Free the native context (called under onCleanup by gjToolbox.
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}inputModel}] model is not a NonGravForces.Model, or its options cannot be served (transient thermal, raycast, squad)
+\item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}inputModel}] model is not a NonGravForces.Model, or its options cannot be served (raycast, squad; transient thermal without 'ThermalOrbit' or with 'Native' false)
 \item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}unsupportedOption}] erp.backend ceresClimatology or drag.density dtm2020, which have no native evaluator; use Model.accel or series instead
 \item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}inputEpoch}] no 'Epoch', or a context Epoch that disagrees
 \item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}inputGravity}] 'Gravity' is not a gjToolbox.DynamicsSource
 \item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}depMissing}] the rhs MEX is not built (Native), or gjToolbox is absent
-\item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}dataRange}] the attitude, the space weather or CERES does not cover the span plus the margin
+\item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}dataRange}] the attitude, the space weather, CERES or 'ThermalOrbit' does not cover the span plus the margin
 \item[\texttt{gjToolbox:\allowbreak{}dynamics:\allowbreak{}notPrepared}] accel() before prepare()
 \end{description}
 

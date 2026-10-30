@@ -1070,7 +1070,7 @@ static int ngfEvalOne(ngfRhsContext *c, double t, const double *r, const double 
             for (m = 0; m < N * M; m++) { c->fRad[m] = 1.0; }
         }
     }
-    /* 6. panel temperatures (geom.thermalState, steady state) */
+    /* 6. panel temperatures (geom.thermalState: steady state here, transient from the table) */
     if (S->thermal == NGF_THERMAL_STEADY) {
         for (k = 0; k < N; k++) {
             const double *nk = S->normal + 3 * k;
@@ -1085,6 +1085,10 @@ static int ngfEvalOne(ngfRhsContext *c, double t, const double *r, const double 
             }
             c->tPanel[k] = pow(q / (S->optIR[3 * k] * S->sigmaSB), 0.25);
         }
+    } else if (S->thermal == NGF_THERMAL_TABLE) {
+        /* thermal.model transient: the walls' temperatures were integrated once along the reference orbit
+           (DynamicsSource 'ThermalOrbit') and are read by time, like every other table */
+        ngfLagrange(c, S->tPanel, N, it, sT, c->tPanel);
     }
     /* 7-8. per-panel forces and their reduction (Model.environment, reduceAccel) */
     {
@@ -1100,7 +1104,7 @@ static int ngfEvalOne(ngfRhsContext *c, double t, const double *r, const double 
         for (i = 0; i < 3 * N; i++) { c->Fk[i] = S->crScale * c->Fk[i]; }
         status = ngfAssemble(&c->macro, c->Fk, S->rcm, FrSum, tau);
         if (status != NGF_OK) { return ngfFail(c, status, "assemble (radiation)"); }
-        if (S->thermal == NGF_THERMAL_STEADY) {
+        if (S->thermal != NGF_THERMAL_NONE) {
             status = ngfThermalRecoil(&c->macro, &c->con, c->tPanel, c->Fk, NULL);
             if (status != NGF_OK) { return ngfFail(c, status, "the thermal kernel refused its inputs"); }
             status = ngfAssemble(&c->macro, c->Fk, S->rcm, FtSum, tau);
@@ -1188,6 +1192,7 @@ int ngfRhsCreate(const ngfRhsSetup *setup, ngfRhsContext **out)
     st |= ngfOwnCopy(c, &S->moon, S->lunar ? 3 * nT : 0, S->lunar);
     st |= ngfOwnCopy(c, &S->eclipticNormal, (S->eclipse == NGF_ECL_SOLAARS) ? 3 * nT : 0, S->eclipse == NGF_ECL_SOLAARS);
     st |= ngfOwnCopy(c, &S->mass, nT, 1);
+    st |= ngfOwnCopy(c, &S->tPanel, (S->thermal == NGF_THERMAL_TABLE) ? (size_t)N * nT : 0, S->thermal == NGF_THERMAL_TABLE);
     st |= ngfOwnCopy(c, &S->tq, (S->attitude == NGF_ATT_PROVIDER) ? (size_t)S->nq : 0, S->attitude == NGF_ATT_PROVIDER);
     st |= ngfOwnCopy(c, &S->q, (S->attitude == NGF_ATT_PROVIDER) ? 4 * (size_t)S->nq : 0, S->attitude == NGF_ATT_PROVIDER);
     st |= ngfOwnCopy(c, &S->alignedEdges, nb + 1, 1);
