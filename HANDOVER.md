@@ -1502,6 +1502,31 @@ Option (a) of the occlusion work package, ordered by the owner on 2026-10-16 wit
 **Delivered 2026-10-17 on Tier A**: gate **435 passed, 0 failed, 0 incomplete, GATE TRUE**, predicted 435; `codeIssues` empty; `auditPackage.py`
 clean.
 
+### The checkAlignment lags of the 0.17.0 baseline (PR #125, 2026-10-30)
+
+The 0.17.0 baseline run raised 80 `timeSeriesPreparation:checkAlignment` warnings (ACT1B against the
+CRN-filtered model inside `app.calibrate`, nothing shifted). `tools/alignmentMonth.m` (release-checks
+`what: alignment`, run 41029605595, C 31 days in 2116 s, D 28 days in 1854 s) measured them per day and axis
+for five variants. **Result:**
+
+- **Not the estimator.** Removing a linear or quadratic bias per day (fitted jointly with a scale) moves no lag
+  by more than 0.6 s (C) / 1.4 s (D), and the peak correlations are high: median 0.99 along-track, 0.95-0.97
+  cross-track and radial. The lags are well defined; ACT1B's bias and its drift do not make them.
+- **Not a time tag.** A time error is common to the axes; the measured lags are not. Along-track (drag) the
+  median |lag| is 4.2 s (C) / 2.6 s (D), drifting from -12 s on 01-01 to +2..+6 s at the month's end;
+  cross-track and radial they grow almost monotonically over the month, y from 3-4 s to the 60 s edge of the
+  search (C from 01-26, D from 01-22), z from 4-7 s to 45 s (C) and the edge (D from 01-24).
+- **In the radiation/thermal part of the model.** Against radiation + thermal alone (drag removed with the
+  fitted scale), the y and z lags stay where they were (median C 17.5 / 10.5 s, D 7.6 / 17.4 s, peaks 0.95-0.97);
+  the drag-only reference carries nothing on y (peak 0.06). The model's radiation + thermal signal on y and z
+  is out of phase with ACT1B by seconds to more than a minute, growing over 2020-01 on both satellites.
+- The fitted scales of the variants reproduce the baseline (S_xx 0.966 / 0.972, S_zz 0.820 / 0.790), and the
+  warnings stay as they are: they report a real phase difference, not a defect of checkAlignment.
+
+**Open, not yet separated:** whether the phase is solar radiation (shadow transitions, penumbra) or thermal
+re-emission (the heat capacities of `geom.thermalState`), and how much of S_zz ~ 0.8 it explains. The next
+step is the same tool with radiation and thermal as separate references, against the month's beta angle.
+
 ### Release 0.17.0 (2026-10-29)
 
 MINOR (added functionality, VERSIONING.md) with one deliberate preset change, by owner ruling: the `standard` preset

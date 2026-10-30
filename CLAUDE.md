@@ -177,6 +177,12 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-10-30, PR #124, N-12)
 
+- **2026-10-30, PR #125 (the checkAlignment lags of the 0.17.0 baseline):** `tools/alignmentMonth.m` (release-checks
+  `what: alignment`, run 41029605595) measured ACT1B against the filtered model per day and axis, raw, with a
+  linear/quadratic bias removed, and per effect. **Not the estimator** (bias removal moves no lag by more than 1.4 s;
+  peaks 0.95-0.99) and **not a time tag** (the axes differ: x median 4.2 / 2.6 s for C / D, y and z growing over
+  2020-01 to the 60 s edge). The lag lives in the RADIATION + THERMAL part of the model on y and z (it stays with
+  drag removed). Radiation vs thermal not yet separated (HANDOVER). Tool only: gate stays 509.
 - **2026-10-30, PR #124, N-12 (#69; owner's scope: alternative attitude sources plus the IMU1B gyro check):** TU Graz's
   operational GRACE-FO attitude is SCA1B's (PR #108) and ACT1B's angular accelerations are 0, so the independent
   attitude-change sensor is the IMU. Stage 1: IMU1B into the pool months, 30 min excerpts of 2020-01-01..03 C
