@@ -41,14 +41,14 @@ L5 Model    accel | torque | series | partials | budget   <- single point of acc
 L4 kernel   gsiCoefficients, accommodation, dragPanelForce, radiationPanelForce,
             thermalRecoil, assemble, bodyTorques, partials, singleEpoch (C/MEX)
 L3 geom     MacroModel, graceFO, grace, boxWing, selfShadow, flowShadow, thermalState,
-            AttitudeProvider, checkAttitudeSense
+            AttitudeProvider, checkAttitudeSense, attitudeQuality
 L2 env      density, densityScale, densityDriverScale, wind, eclipseFactor, earthRadiance, magneticField, radiationSources
 L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
-            importCERES, importGroopsGrid, igrfCoefficients, readSwarmDensity
+            importCERES, importGroopsGrid, igrfCoefficients, readSwarmDensity, readIMU1B
 L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options, buildMex
 ```
 
-62 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
+64 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
 both directions against the files on disk, and this sentence's number against it
 — which it genuinely did not until 2026-09-16, when the sentence said 53 and the
 catalogue held 55; `auditPackage.py` check 5 now compares both this number and
@@ -175,8 +175,25 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-29, release 0.17.0)
+## 5. Current status (2026-10-30, PR #124, N-12)
 
+- **2026-10-30, PR #124, N-12 (#69; owner's scope: alternative attitude sources plus the IMU1B gyro check):** TU Graz's
+  operational GRACE-FO attitude is SCA1B's (PR #108) and ACT1B's angular accelerations are 0, so the independent
+  attitude-change sensor is the IMU. Stage 1: IMU1B into the pool months, 30 min excerpts of 2020-01-01..03 C
+  (`data/samples/multiday`, bot commit 66cb228). Read from the bytes: **IMU1B is the filtered ACCUMULATED angle of each
+  gyro (FiltAng, deg), three gyros sampled in turn at 8 Hz, GPS time, axes skewed to the SRF**. Stage 2: `io.readIMU1B`
+  (one record per gyro sample, radians, gyro ids kept apart), `geom.AttitudeProvider.fromItsg` (TU Graz's attitude,
+  conjugated once; for GRACE-FO a second carrier of SCA1B, for classic GRACE their own product) and
+  `geom.attitudeQuality` (SCA1B mean body rate over each 1 s interval from the rotation vector of R_k' R_k+1, each gyro's
+  angle interpolated to the same epochs and differenced, rate_g = a.omega + b fitted, the residual as an exact
+  projection; with 'Orbit' the attitude against the nominal frame; 1 and 2 cpr amplitudes). **Measured by the stdlib
+  oracle `tools/pyxcheck/attitude_quality_check.py`: on an Earth-pointing arc omega ~ (0, 1.10e-3, 0) rad/s is nearly
+  constant, so axis, scale and bias are NOT separable (minimum-norm parameters plus the condition number are
+  reported); the residual is the result: 3.6-4.3e-7 rad/s RMS per gyro on 2020-01-01..03 against 9.0e-4 rad/s of rate.**
+  64 units. 16 tests in the new `tests/tNgfAttitude.m`. Written without MATLAB, predicted gate 509 (493 + 16). First CI run 40978582699: 507/509 -- the oracle had not normalised
+  the SCA1B quaternions (file norms off by up to 1e-9: 5.4e-8 in omega, 1.4e-5 in rms, reproduced exactly), and the
+  IMU1B first epoch was asserted to 1e-9 s against the product's 1 us. ☑ CI 40980858655: 509/509, predicted 509,
+  Code Analyzer clean.
 - **2026-10-29, release 0.17.0 (PR #123):** the observed density scale in the standard preset, DTM2020, the Swarm/TOLEOS
   readers, the scale on the native path. Release measurements on the CI runner (`release-checks.yml`): baseline
   RE-FROZEN (run 40911119628, 75 min) -- S_xx C **0.966**, D **0.972** (0.16.0: 0.762, 0.769; the old 0.76 was the MSIS

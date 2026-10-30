@@ -5,7 +5,7 @@
 %
 % \input-able from a report-class document; it opens no document and no chapter.
 
-\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 62 units, toolbox version 0.17.0.
+\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 64 units, toolbox version 0.17.0.
 
 \section{L0 \texttt{core} --- constants, options, provenance, uniform errors and the MEX build}
 
@@ -1306,6 +1306,79 @@ aux & 1x1 & struct & - & .rhoOrbitMean (1xK kg/m\textasciicircum{}3, the product
 \item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}dataEmpty}] no record survives TimeRange
 \end{description}
 
+\subsection{\texttt{NonGravForces.io.readIMU1B}}
+\label{api:io.readIMU1B}
+\noindent IMU1B reader: the filtered, accumulated angle of each GRACE-FO gyro, in radians, one record per sample.
+
+\begin{lstlisting}
+[epoch, angle_rad, aux] = NonGravForces.io.readIMU1B(file)
+[epoch, angle_rad, aux] = NonGravForces.io.readIMU1B(files, 'TimeRange', tr, 'QualityBitMask', bits)
+\end{lstlisting}
+
+\subsubsection*{INPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+files & 1xF & string & - & One or more IMU1B files of ONE satellite, chronological; .gz accepted. \\
+\end{longtable}
+
+\subsubsection*{NAME-VALUE ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+TimeRange & 1x2 & double\textbar{}\allowbreak{}datetime & - & Forwarded to readL1b: decimal MJD or GPS datetime. Default []. \\
+QualityBitMask & 1xQ & double & - & qualflg bits removing a record; forwarded. Default []. \\
+\end{longtable}
+
+\subsubsection*{OUTPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+epoch & 1x1 & struct & - & referenceSystem epoch struct, K entries, "GPS" (each record's own time) \\
+angle\_\allowbreak{}rad & 1xK & double & rad & FiltAng of the record's gyro, deg2rad of the published value \\
+aux & 1x1 & struct & - & .gyroId (1xK), .gyros (sorted ids present), .timeRef (1xK string, "G" = GPS), .angleRange\_rad ([-1 1]*deg2rad(5758), the header's valid range), .product, .satellite, .files, .numRecords, .sampling\_s (median spacing of ALL records, i.e. the gyro interleave, not one gyro's 0.125 s), .obsNames, .units, .qualflgBits, .provenance \\
+\end{longtable}
+
+\subsubsection*{ERRORS}
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
+\item[\texttt{NonGravForces:\allowbreak{}readIMU1B:\allowbreak{}dataProduct}] a file is not an IMU1B product
+\item[\texttt{NonGravForces:\allowbreak{}readIMU1B:\allowbreak{}dataSatellite}] the files mix GRACE-C and GRACE-D
+\item[\texttt{NonGravForces:\allowbreak{}readIMU1B:\allowbreak{}dataEmpty}] no record survives the filters
+\item[\texttt{NonGravForces:\allowbreak{}readIMU1B:\allowbreak{}dataColumn}] FiltAng or gyro\_id is missing
+\item[\texttt{NonGravForces:\allowbreak{}readIMU1B:\allowbreak{}dataTimeRef}] a record is not tagged in GPS time (time\_ref \textasciitilde{}= "G")
+\item[\texttt{gracefoReading:\allowbreak{}*, referenceSystem:\allowbreak{}*}] propagated unwrapped
+\end{description}
+
 \section{L2 \texttt{env} --- the environment: density, wind, shadow, Earth radiance, magnetic field}
 
 \subsection{\texttt{NonGravForces.env.density}}
@@ -2486,6 +2559,7 @@ ap = NonGravForces.geom.AttitudeProvider(epochNodes, qNodes)                 % f
 ap = NonGravForces.geom.AttitudeProvider(epochNodes, qNodes, 'Method', "squad")
 q  = ap.at(epoch)                                                            % 4xK BODY->GCRS
 q  = NonGravForces.geom.AttitudeProvider.nominal(r, v, xAlongVelocity)       % 4xK from the state
+ap = NonGravForces.geom.AttitudeProvider.fromItsg(files)                     % TU Graz's attitude product
 \end{lstlisting}
 
 \subsubsection*{CONSTRUCTOR INPUTS}
@@ -2525,7 +2599,7 @@ Method & 1x1 & string & - & "slerp" (default) \textbar{} "squad" \\
 
 \subsubsection*{PROPERTIES (read-only)}
 \begin{lstlisting}
-source       string   "nodes"
+source       string   "nodes", or "itsg" from fromItsg
 method       string
 epochNodes   struct
 qNodes       4xM double, as given (sign continuity is the interpolator's)
@@ -2541,6 +2615,8 @@ provenance   struct
 q = at(epoch)              4xK unit quaternions BODY->GCRS at the query epochs
 [q, info] = at(epoch)      info from interpolateQuaternions plus .converted (logical)
 q = nominal(r, v, xAlongVelocity)   static, 4xK from a 3xK state and a logical
+ap = fromItsg(files, 'Method', m)   static, a provider over TU Graz's attitude files (chronological,
+                                    one satellite), conjugated once; source "itsg"
 \end{lstlisting}
 
 \subsubsection*{ERRORS}
@@ -2548,6 +2624,8 @@ q = nominal(r, v, xAlongVelocity)   static, 4xK from a 3xK state and a logical
 \item[\texttt{NonGravForces:\allowbreak{}AttitudeProvider:\allowbreak{}inputNodes}] qNodes not 4xM, epochNodes not an epoch struct with M entries, M \textless{} 2
 \item[\texttt{NonGravForces:\allowbreak{}AttitudeProvider:\allowbreak{}inputEpoch}] at(): not an epoch struct
 \item[\texttt{NonGravForces:\allowbreak{}AttitudeProvider:\allowbreak{}inputShape}] nominal(): r or v not 3xK, or degenerate (r x v = 0)
+\item[\texttt{NonGravForces:\allowbreak{}AttitudeProvider:\allowbreak{}dataItsg}] fromItsg(): a file is not a 4-column quaternion product
+\item[\texttt{gracefoReading:\allowbreak{}*}] fromItsg(): propagated unwrapped
 \item[\texttt{referenceSystem:\allowbreak{}interpolateQuaternions:\allowbreak{}*}] propagated unwrapped (queryOutOfRange in particular)
 \item[\texttt{referenceSystem:\allowbreak{}*}] propagated unwrapped
 \end{description}
@@ -2619,6 +2697,83 @@ report & 1x1 & struct & - & .nadirAngle\_deg (1xK, body +Z vs -r/\textbar{}r\tex
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}checkAttitudeSense:\allowbreak{}inputShape}] q not 4xK, r or v not 3xK, or NaN/Inf
 \item[\texttt{referenceSystem:\allowbreak{}*}] propagated unwrapped
+\end{description}
+
+\subsection{\texttt{NonGravForces.geom.attitudeQuality}}
+\label{api:geom.attitudeQuality}
+\noindent Attitude-quality diagnostic: star-camera rates against the IMU gyros, attitude against the nominal frame, 1 and 2 cpr.
+
+\begin{lstlisting}
+Q = NonGravForces.geom.attitudeQuality(epochSca, qSca, epochImu, angleImu, gyroId)
+Q = NonGravForces.geom.attitudeQuality(..., 'Orbit', struct('r', r, 'v', v), 'AlongVelocity', false)
+Q = NonGravForces.geom.attitudeQuality(..., 'Period_s', 5640)
+\end{lstlisting}
+
+\subsubsection*{INPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+epochSca & 1x1 & struct & - & referenceSystem epoch struct, K entries (io.readSCA1B), strictly increasing \\
+qSca & 4xK & double & - & BODY-\textgreater{}GCRS quaternions at epochSca \\
+epochImu & 1x1 & struct & - & referenceSystem epoch struct, N entries (io.readIMU1B), any scale \\
+angleImu & 1xN & double & rad & accumulated gyro angle of each record \\
+gyroId & 1xN & double & - & gyro of each record \\
+\end{longtable}
+
+\subsubsection*{NAME-VALUE ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+Orbit & 1x1 & struct & m,m/\allowbreak{}s & .r .v, 3xK GCRS at epochSca; default [] (no nominal comparison) \\
+AlongVelocity & 1x1 & logical & - & body +X along the velocity for the nominal frame; default false (GRACE-C on 2020-01-01; GRACE-D flies true) \\
+Period\_\allowbreak{}s & 1x1 & double & s & orbital period for the cpr fits; default NaN (from Orbit, else none) \\
+MaxGap\_\allowbreak{}s & 1x1 & double & s & longest SCA1B interval and gyro sample spacing used; default 2 \\
+JumpThreshold\_\allowbreak{}rad & 1x1 & double & rad & a gyro step larger than this is a reset or wrap: the gyro series is split there and no interval spans it; default deg2rad(1) \\
+\end{longtable}
+
+\subsubsection*{OUTPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+Q & 1x1 & struct & - & .t\_s (1xM mid-interval times, s from the first SCA1B epoch), .omega\_rad\_s (3xM SCA1B mean body rates), .gyros (1xG ids), and per gyro in the struct array .gyro(g): .id, .rate\_rad\_s (1xM, NaN where not covered), .axis (3x1 unit, SRF), .scale, .bias\_rad\_s (the minimum-norm fit; see .condition), .condition (2-norm condition number of the column-normalised design), .residual\_rad\_s (1xM), .rms\_rad\_s, .rmsRate\_rad\_s, .n, .cpr (1x2 amplitudes at 1 and 2 cpr, rad/s; NaN without a period); .period\_s; with Orbit: .nominal.t\_s (1xK), .nominal.angles\_rad (3xK roll pitch yaw), .nominal.mean\_rad, .nominal.rms\_rad, .nominal.cpr (3x2 rad) \\
+\end{longtable}
+
+\subsubsection*{ERRORS}
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
+\item[\texttt{NonGravForces:\allowbreak{}attitudeQuality:\allowbreak{}inputShape}] sizes disagree, fewer than 2 SCA1B epochs, or an epoch is not a referenceSystem epoch struct
+\item[\texttt{NonGravForces:\allowbreak{}attitudeQuality:\allowbreak{}inputOrbit}] Orbit is not .r/.v 3xK at the SCA1B epochs
+\item[\texttt{NonGravForces:\allowbreak{}attitudeQuality:\allowbreak{}dataOverlap}] no SCA1B interval is covered by a gyro, or a gyro has fewer than 10 covered intervals (the fit needs them)
+\item[\texttt{NonGravForces:\allowbreak{}AttitudeProvider:\allowbreak{}*, referenceSystem:\allowbreak{}*}] propagated unwrapped
 \end{description}
 
 \section{L4 \texttt{kernel} --- per-panel forces, their derivatives and their reductions}

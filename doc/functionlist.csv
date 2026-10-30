@@ -19,6 +19,7 @@ io,importCERES,function,L1,WP-C8,done,CERES EBAF TOA monthly fluxes (obs4MIPs ne
 io,importGroopsGrid,function,L1,WP-E1,done,GROOPS binary gridded data: a global grid with solid angles and values (CERES albedo and longwave)
 io,igrfCoefficients,function,L1,WP-23,done,IGRF-14 coefficient loader with the model's own interpolation and SV rule
 io,readSwarmDensity,function,L1,O-19,done,Swarm POD-only thermosphere density (ESA SW_OPER_DNSxPOD_2_) from VirES HAPI CSV
+io,readIMU1B,function,L1,N-12,done,IMU1B reader: each gyro's filtered accumulated angle (rad) per record
 env,density,function,L2,WP-05,done,Thermosphere density and composition (exponential msis00 msis21 dtm2020)
 env,densityScale,function,L2,O-19,done,Observed daily scale on a model density from Swarm POD-only densities
 env,densityDriverScale,function,L2,O-19,done,Daily scale on NRLMSISE-00 predicted from F30 and Ap for any date
@@ -36,6 +37,7 @@ geom,flowShadow,function,L3,WP-C1,done,Self-shadowing of a free-molecular gas st
 geom,thermalState,function,L3,WP-28,done,Per-panel temperatures: steady state or transient (Wöske)
 geom,AttitudeProvider,class,L3,WP-11,done,BODY->GCRS quaternions at query epochs (SCA1B or nominal) via referenceSystem.interpolateQuaternions
 geom,checkAttitudeSense,function,L3,WP-11,done,Physics test of quaternion sense (nadir and line-of-sight)
+geom,attitudeQuality,function,L3,N-12,done,Attitude-quality diagnostic: SCA1B rates against the IMU gyros and the nominal frame with 1 and 2 cpr
 kernel,gsiCoefficients,function,L4,WP-13,done,Normal and tangential plate coefficients: sentman maxwell constantCd (cll/schamberg refuse)
 kernel,accommodation,function,L4,WP-C7,done,Energy accommodation per epoch: fixed or Pilinski 2010 or the Walker/Mehta adsorbate mixture
 kernel,dragPanelForce,function,L4,WP-13,done,Per-panel gas-momentum force in body frame

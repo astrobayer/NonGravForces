@@ -16,6 +16,9 @@ pool and writes the excerpts the tests are allowed to see:
   data/samples/swarm/SW_OPER_DNS<x>POD_2_<first>_<last>.csv
                                                Swarm A/B/C POD densities (VirES HAPI CSV): the JSON
                                                header unchanged, the 30 s lines of the 2014+ days
+  data/samples/multiday/IMU1B_<day>_C_04.txt   GRACE-FO Level-1B gyro rates (N-12): the YAML header with
+                                               num_records rewritten, the records of the first 30 min of
+                                               the day (the window of the multiday SCA1B excerpts)
   data/samples/toleos/<dataset><day>_00-06.csv TU Delft's CHAMP, GRACE-A and GRACE-FO accelerometer
                                                densities (ESA TOLEOS, VirES HAPI CSV): the JSON header
                                                unchanged, the 10 s lines of the first six hours of the
@@ -52,6 +55,9 @@ TOLEOS = [("CH_OPER_DNS_ACC_2_", "2000-07-29", "2010-09-04"),
           ("GR_OPER_DNS1ACC_2_", "2002-04-04", "2017-10-31"),
           ("GF_OPER_DNS1ACC_2_", "2018-05-29", "2026-04-30")]
 TOLEOS_HOURS = 6
+# GRACE-FO Level-1B products cut by time (N-12): product, satellite, seconds from the day's start
+L1B_CUTS = [("IMU1B", "C", 1800)]
+L1B_DAYS = ["2020-01-01", "2020-01-02", "2020-01-03"]
 
 _DATE_RES = [
     (re.compile(r"^\s*\"?(\d{4})-(\d{2})-(\d{2})"), "ymd"),
@@ -110,6 +116,25 @@ def cut_groops(body, keep):
     else:
         kept = data[:keep]
     return "".join(head + kept), len(kept), len(data)
+
+
+def cut_l1b(body, day, seconds):
+    """A GRACE-FO Level-1B RL04 ASCII product: the YAML header through '# End of YAML header' with its
+    num_records rewritten, then every record whose first column (GPS seconds since 2000-01-01 12:00, the
+    integer part of a split time tag) lies in the first `seconds` of the UTC-free GPS day. Records unchanged.
+    Returns (text, kept) or None when the file is not one."""
+    lines = body.decode("latin-1").splitlines(keepends=True)
+    end = next((i for i, ln in enumerate(lines) if ln.startswith("# End of YAML header")), None)
+    if end is None or not lines[0].startswith("header:"):
+        return None
+    t0 = (dt.date.fromisoformat(day) - dt.date(2000, 1, 1)).days * 86400 - 43200
+    kept = []
+    for ln in lines[end + 1:]:
+        tok = ln.split(None, 1)
+        if tok and tok[0].lstrip("-").isdigit() and 0 <= int(tok[0]) - t0 < seconds:
+            kept.append(ln)
+    head = [re.sub(r"(num_records:\s*)\d+", lambda m: m.group(1) + str(len(kept)), ln) for ln in lines[:end + 1]]
+    return "".join(head + kept), len(kept)
 
 
 def satellites(day):
@@ -173,6 +198,18 @@ def main():
                     missing.append(f"{base}.gz: not a GROOPS instrument file")
                     continue
                 write(os.path.join("data", "samples", "itsg", base), cut[0])
+
+    for day in L1B_DAYS:
+        for product, sat, seconds in L1B_CUTS:
+            base = f"{product}_{day}_{sat}_04.txt"
+            b = read(os.path.join(a.pool, "GRACEFO", "L1B", "RL04", day[:4], day, base))
+            if b is None:
+                continue
+            cut = cut_l1b(b, day, seconds)
+            if cut is None or cut[1] == 0:
+                missing.append(f"{base}: not a Level-1B RL04 ASCII product, or no record in the first {seconds} s")
+                continue
+            write(os.path.join("data", "samples", "multiday", base), cut[0])
 
     swarm_days = sorted(d for d in a.days if d >= "2014")
     for sat in SWARM_SATS:
