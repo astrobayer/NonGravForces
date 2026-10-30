@@ -74,3 +74,4 @@ tools/baseline_last.txt
 # DTM2020 (CNES; academic, non-commercial use only, no redistribution). setupNonGravForces fetches it by SHA-256.
 mex/dtm2020/
 tools/alignment_month.csv
+tools/heat_capacity_fit.csv
