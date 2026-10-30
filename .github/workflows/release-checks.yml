@@ -1,6 +1,8 @@
 # The two release measurements (CLAUDE.md section 5, N-10a; HANDOVER O-48) on the CI runner, on demand:
 # the regression baseline over the reference month 2020-01 C and D from the runner's DATAPOOL
 # (tools/regressionBaseline.m, ~3-4 h) and the per-epoch benchmark (tools/benchmark.m, minutes).
+# Also one diagnostic on the same month: "alignment" runs tools/alignmentMonth.m (the lag between
+# ACT1B and the model per day and axis, raw and with the bias removed, per effect; ~1 h).
 #
 # Neither is a gate. They exist as a workflow because a release needs both at the version being
 # released (audit check 14 refuses a version the baseline was not verified at; check 13 compares every
@@ -18,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       what:
-        description: "baseline-freeze | baseline-compare | benchmark"
+        description: "baseline-freeze | baseline-compare | benchmark | alignment"
         default: "baseline-compare"
 
 concurrency:
@@ -110,8 +112,12 @@ jobs:
                     T = benchmark();
                     disp(T);
                     out = fullfile(pwd, "tools", "benchmark_reference.csv");
+                case "alignment"
+                    rep = NonGravForces.buildMex('Target', "msis"); assert(rep.upToDate, "releaseChecks:mex", "MEX target msis did not build");
+                    alignmentMonth();
+                    out = fullfile(pwd, "tools", "alignment_month.csv");
                 otherwise
-                    error("releaseChecks:what", "unknown input what = %s -> baseline-freeze, baseline-compare or benchmark", what);
+                    error("releaseChecks:what", "unknown input what = %s -> baseline-freeze, baseline-compare, benchmark or alignment", what);
             end
             if strlength(out) > 0
                 fprintf("----- BEGIN %s -----\n%s\n----- END %s -----\n", out, fileread(out), out);
