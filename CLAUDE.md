@@ -177,6 +177,12 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-10-30, PR #124, N-12)
 
+- **2026-10-30, PR #126 (the lag separated): THERMAL INERTIA.** `tools/alignmentMonth.m` with three models per day (run
+  41042736099): with `thermal.model = "transient"` the y/z lags fall from 17.3 / 10.5 s (C) and 8.2 / 18.5 s (D) to
+  1.8 / 2.0 and 3.6 / 3.4 s, peaks up to 0.98; the standard preset's steadyState recoil leads the real one. **The
+  per-day calibration scale moves with it: z 0.820 / 0.790 -> 1.092 / 1.065, x 0.966 / 0.972 -> 0.998 / 1.005** --
+  S_zz ~ 0.8 is largely the thermal model. x lag grows (-4 -> -7.6 s C); heat capacities are guesses. Owner's call:
+  transient in standard (re-freeze) and/or fitted heat capacities. Tool only: gate stays 509.
 - **2026-10-30, PR #125 (the checkAlignment lags of the 0.17.0 baseline):** `tools/alignmentMonth.m` (release-checks
   `what: alignment`, run 41029605595) measured ACT1B against the filtered model per day and axis, raw, with a
   linear/quadratic bias removed, and per effect. **Not the estimator** (bias removal moves no lag by more than 1.4 s;

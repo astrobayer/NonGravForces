@@ -1523,9 +1523,34 @@ for five variants. **Result:**
 - The fitted scales of the variants reproduce the baseline (S_xx 0.966 / 0.972, S_zz 0.820 / 0.790), and the
   warnings stay as they are: they report a real phase difference, not a defect of checkAlignment.
 
-**Open, not yet separated:** whether the phase is solar radiation (shadow transitions, penumbra) or thermal
-re-emission (the heat capacities of `geom.thermalState`), and how much of S_zz ~ 0.8 it explains. The next
-step is the same tool with radiation and thermal as separate references, against the month's beta angle.
+**Separated (PR #126, run 41042736099, C 31 days in 3888 s, D 28 in 3364 s): THE PHASE IS THERMAL INERTIA.** The
+tool evaluated three models per day: the standard preset, the preset with `erp.backend = "none"` (the Sun alone)
+and the preset with `thermal.model = "transient"` (Woeske's lumped walls, graceFO's heat capacities; the standard
+preset's recoil is `steadyState`, without thermal inertia).
+
+| median \|lag\| s (peak), C / D | x | y | z |
+|---|---|---|---|
+| standard (steadyState), bias removed | 4.2 / 2.7 (0.99) | 17.3 / 8.2 (0.97 / 0.95) | 10.5 / 18.5 (0.96 / 0.95) |
+| **transient thermal, bias removed** | 7.6 / 5.0 (0.99) | **1.8 / 3.6** (0.98 / 0.96) | **2.0 / 3.4** (0.98 / 0.98) |
+
+- With thermal inertia the y and z lags fall to 2-4 s and the correlation peaks rise; C's largest lag over
+  the month drops from 60 to 10 s (y) and from 45 to 4.6 s (z). The month-long growth of the lag was the steady-
+  state recoil leading the real one. A residual growth remains on D's z (0 -> 11 s over the month).
+- **The calibration scale moves with it.** The per-day, per-axis scale of ACT1B on the model (one scale, linear
+  bias) goes from x 0.966 / 0.972, y 0.870 / 0.903, z **0.820 / 0.790** (steadyState) to x 0.998 / 1.005,
+  y 1.004 / 1.033, z **1.092 / 1.065** (transient). The S_zz ~ 0.8 of every calibration so far is, in good part,
+  the steady-state thermal model, not the accelerometer.
+- The along-track lag grows (-4 -> -7.6 s on C): the transient walls change x as well, and the heat capacities are
+  educated guesses (graceFO's help); the x lead is the next thing to read.
+- The isolated single effects were not informative for erp and thermal (peaks 0.01-0.85, lags at the edge): they
+  are small and collinear with the Sun, so subtracting the others at one common scale leaves mostly the others'
+  errors. srp alone carries the same lag as the whole model (it dominates y and z).
+- Caveat: each day's transient model starts from the steady state at its first epoch (spin-up of the order of the
+  walls' time constants is inside the day).
+
+**Next, the owner's call:** whether `standard` should take `thermal.model = "transient"` (it changes the baseline's
+S_zz from ~0.8 to ~1.08 and needs a re-freeze), and whether the heat capacities are to be fitted (the lag per
+panel group is the observable).
 
 ### Release 0.17.0 (2026-10-29)
 
