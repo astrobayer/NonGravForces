@@ -45,6 +45,13 @@ them; and `MAG1B_2020-01-01_C_04.txt`, the first **3600 records (30 min at 0.5 s
 rewritten and every data line as published. They are the oracle of `tNgfCalibrate/calibrateRegressorsRealDay`.
 On that day the sensor-unit temperatures TSU span only 0.022 C and TICUR reads -273.2 C (a dead channel).
 
+Added for N-12 (2026-10-30), cut by `tools/cutFixtures.py` on the CI runner (fetch-data run 40968633678, bot commit
+66cb228) from the pool's daily archives: `IMU1B_2020-01-0{1,2,3}_C_04.txt`, the first **30 min** of each day (the
+window of the SCA1B excerpts above, 43200 records: three gyros at 8 Hz), `num_records` rewritten, every data line as
+published. IMU1B is NOT a rate: each record is one gyro's filtered, ACCUMULATED angle about its own axis in degrees
+(`FiltAng`), the gyros sampled in turn about 1 ms apart, time GPS. They are the oracle of `tests/tNgfAttitude.m`, and
+`tools/pyxcheck/attitude_quality_check.py` recomputes from them and the SCA1B excerpts what `geom.attitudeQuality` does.
+
 ## itsg/ — TU Graz operational orbit products (N-12 attitude; an external force series for O-19)
 
 Excerpts of the Institute of Geodesy's operational products, `https://ftp.tugraz.at/pub/ITSG/satelliteOrbitProducts/operational/<satellite>/<product>/<year>/`,

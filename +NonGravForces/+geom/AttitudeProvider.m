@@ -5,6 +5,7 @@ classdef AttitudeProvider
 %   ap = NonGravForces.geom.AttitudeProvider(epochNodes, qNodes, 'Method', "squad")
 %   q  = ap.at(epoch)                                                            % 4xK BODY->GCRS
 %   q  = NonGravForces.geom.AttitudeProvider.nominal(r, v, xAlongVelocity)       % 4xK from the state
+%   ap = NonGravForces.geom.AttitudeProvider.fromItsg(files)                     % TU Graz's attitude product
 %
 %   The attitude source of NonGravForces.Model (HANDOVER D.4: attitude is
 %   stored BODY->GCRS, scalar first, and referenceSystem operates on it).
@@ -24,6 +25,16 @@ classdef AttitudeProvider
 %   matrix whose columns are the body axes in the GCRS, the same convention
 %   io.readSCA1B delivers (checked by the round trip in the tests).
 %
+%   TU GRAZ'S ATTITUDE (N-12, 2026-10-30). fromItsg(files) reads the ITSG
+%   operational attitude (GROOPS instrument files, GPS time as MJD, 10 s) through
+%   gracefoReading.readGroopsInstrument and conjugates it EXACTLY ONCE: TU Graz's
+%   "SRF -> CRF" quaternion is this toolbox's "ICRF -> SRF" in the other
+%   quaternion convention, and for GRACE-FO it is BIT-IDENTICAL to SCA1B's on the
+%   same epochs (PR #108; CLAUDE.md section 7). For GRACE-FO it is therefore not a
+%   second attitude source, only a second carrier of the first; for classic GRACE
+%   (GRACE-1/-2) it is TU Graz's own product. The independent sensor of the
+%   GRACE-FO attitude change is the IMU (io.readIMU1B, geom.attitudeQuality).
+%
 % CONSTRUCTOR INPUTS
 %   Name         Size  Type    Units  Description
 %   ----         ----  ----    -----  -----------
@@ -34,7 +45,7 @@ classdef AttitudeProvider
 %   Method       1x1   string  -      "slerp" (default) | "squad"
 %
 % PROPERTIES (read-only)
-%   source       string   "nodes"
+%   source       string   "nodes", or "itsg" from fromItsg
 %   method       string
 %   epochNodes   struct
 %   qNodes       4xM double, as given (sign continuity is the interpolator's)
@@ -48,6 +59,8 @@ classdef AttitudeProvider
 %   q = at(epoch)              4xK unit quaternions BODY->GCRS at the query epochs
 %   [q, info] = at(epoch)      info from interpolateQuaternions plus .converted (logical)
 %   q = nominal(r, v, xAlongVelocity)   static, 4xK from a 3xK state and a logical
+%   ap = fromItsg(files, 'Method', m)   static, a provider over TU Graz's attitude files (chronological,
+%                                       one satellite), conjugated once; source "itsg"
 %
 % ACCURACY
 %   Interpolation: at the nodes the result reproduces the input to 1e-16;
@@ -62,6 +75,8 @@ classdef AttitudeProvider
 %   NonGravForces:AttitudeProvider:inputNodes      qNodes not 4xM, epochNodes not an epoch struct with M entries, M < 2
 %   NonGravForces:AttitudeProvider:inputEpoch      at(): not an epoch struct
 %   NonGravForces:AttitudeProvider:inputShape      nominal(): r or v not 3xK, or degenerate (r x v = 0)
+%   NonGravForces:AttitudeProvider:dataItsg        fromItsg(): a file is not a 4-column quaternion product
+%   gracefoReading:*                               fromItsg(): propagated unwrapped
 %   referenceSystem:interpolateQuaternions:*       propagated unwrapped (queryOutOfRange in particular)
 %   referenceSystem:*                              propagated unwrapped
 %
@@ -127,6 +142,25 @@ classdef AttitudeProvider
         end
     end
     methods (Static)
+        function obj = fromItsg(files, options)
+            %FROMITSG A provider over TU Graz's operational attitude files, the quaternion conjugated exactly once.
+            arguments
+                files (1,:) string {mustBeNonempty}
+                options.Method (1,1) string {mustBeMember(options.Method, ["slerp","squad"])} = "slerp"
+            end
+            t = zeros(0, 2); qf = zeros(0, 4);
+            for k = 1:numel(files)
+                [tk, qk] = gracefoReading.readGroopsInstrument(files(k));
+                if size(qk, 2) ~= 4
+                    NonGravForces.fail("AttitudeProvider", "dataItsg", "%s carries %d data columns, not the 4 of a quaternion -> pass TU Graz's attitude product", files(k), size(qk, 2));
+                end
+                t = [t; tk]; qf = [qf; qk]; %#ok<AGROW>
+            end
+            ep = referenceSystem.daySecondToEpoch(t, "GPS");
+            obj = NonGravForces.geom.AttitudeProvider(ep, referenceSystem.invertQuaternion(qf'), 'Method', options.Method);
+            obj.source = "itsg";
+            obj.provenance = NonGravForces.provenance("geom.AttitudeProvider.fromItsg", 'Files', files, 'Options', options);
+        end
         function q = nominal(r, v, xAlongVelocity)
             %NOMINAL Ideal Earth-pointing attitude: +Z nadir, +X along (true) or against (false) the velocity.
             arguments
