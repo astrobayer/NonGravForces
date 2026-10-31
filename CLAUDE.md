@@ -188,6 +188,9 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   hashes change); `geom.selfShadow` reports a reused table's own sample count; `geom.flowShadow` Method "table" fills
   `info` on every path; `AttitudeProvider.fromItsg` sorts and keeps a twice-held epoch once (refuses differing copies);
   `io.readMAG1B` records its files in the provenance. One assertion each inside existing test methods: gate stays 511.
+  **Corrected solaarsCF against ACT1B** (alignment run 41213058839): both shadow edges within ~1 s on x and y (entry x
+  +1.1 / +1.3 s C / D against conical's -3.9 / -4.4; exit +0.5 / +0.6 against +1.0 / +1.2); z keeps +3 s at exit under
+  every model (thermal). Owner's call: standard on solaarsCF (re-freeze).
 - **2026-10-31, PR #128 (documentation, owner: all four points):** (1) a help-vs-code audit of all 64 units by four
   agents, comment lines only (stale errors lists, missing info fields, wrong defaults, examples a standard Model would
   refuse; Options gained the template sections it lacked); (2) the theory document brought to 0.17+: the observed density

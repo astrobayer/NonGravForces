@@ -1638,6 +1638,24 @@ the geometry and on the measured asymmetry. Affects only srp.eclipse "solaarsCF"
 Predicted gate unchanged at 511 (a new bound inside an existing method). Next: re-run alignment for standard
 (altEclipse = solaarsCF) and precise (1:3:15) to read the corrected edges, then decide precise's thermal model.
 
+**The corrected solaarsCF against ACT1B (run 41213058839, standard + altEclipse solaarsCF with the PR #129 mapping;
+C 31 days, D 28).** Median signed lag at the shadow edges, s (C / D):
+
+| | x entry | x exit | y entry | y exit | z entry | z exit |
+|---|---|---|---|---|---|---|
+| conical (the preset) | -3.85 / -4.38 | +1.00 / +1.24 | -4.70 / -6.67 | +0.81 / +0.60 | -3.93 / -3.68 | +3.23 / +3.72 |
+| solaarsCF, inverted (run 41187770368) | +1.13 / +0.39 | -8.67 / -8.68 | +0.86 / -1.93 | -9.44 / -10.30 | +0.80 / +1.04 | -7.02 / -6.75 |
+| **solaarsCF, corrected** | **+1.09 / +1.31** | **+0.49 / +0.64** | **+0.37 / -0.26** | **+0.83 / +0.67** | **+0.96 / +1.32** | +2.98 / +3.63 |
+
+- The corrected SOLAARS-CF puts both edges within ~1 s of ACT1B on x and y (largest |lag| at entry 1.9 / 2.0 s on x
+  against conical's 11.8 / 11.6; days aligned within 1 s 13 and 22 of 31 on x for C against 3 and 16). z keeps +3 s at
+  EXIT under every eclipse model and both thermal models' windows -- that is the radial thermal response after sunrise,
+  not the shadow. **The atmosphere's widening of the shadow is real and SOLAARS-CF, correctly mapped, carries it.**
+- Whole-day lags move little and not uniformly (C y -0.7 -> +2.2, z +0.8 -> +2.8; D y -3.5 -> -0.1, z +3.4 -> +6.6; x
+  -7.6 -> -7.0 / -5.0 -> -4.2): over a whole day the thermal response, not the edge timing, sets the phase.
+- **Owner's call:** whether `standard` takes `srp.eclipse = "solaarsCF"` (a preset change: native path supports it,
+  baseline re-freeze) -- the edges argue for it, the whole-day lags neither for nor against.
+
 **Next, the owner's call:** whether `standard` should take `thermal.model = "transient"` (it changes the baseline's
 S_zz from ~0.8 to ~1.08 and needs a re-freeze), and whether the heat capacities are to be fitted (the lag per
 panel group is the observable).
