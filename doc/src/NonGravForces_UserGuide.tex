@@ -273,7 +273,7 @@ of every model family:
 \texttt{srp.eclipse} & conical & conical & SOLAARS-CF\\
 \texttt{erp.backend} & none & Knocke & CERES\\
 \texttt{erp.grid} & --- & $12\times24$ & $24\times48$\\
-\texttt{thermal.model} & none & steady state & steady state (transient opt-in)\\
+\texttt{thermal.model} & none & transient & steady state (transient opt-in)\\
 \texttt{geom.selfShadow} & none & LUT 16 & LUT 32\\
 \texttt{sun.source} & analytic & analytic & DE440\\
 \bottomrule
@@ -288,8 +288,10 @@ opt = opt.set("srp.tsi", 1367);        % a COPY: Options is a value class
 
 \noindent Two rules make this safe to rely on. \textbf{Every admissible value evaluates}: a value
 the toolbox cannot compute is not offered, so an option that validates will not fail three layers
-down. And \textbf{extended models are opt-ins that no preset enables} --- HWM14 winds, the transient
-thermal model, body torques --- so preset results never move when a new model lands.
+down. And \textbf{extended models are opt-ins that no preset enables} --- HWM14 winds, body torques
+--- so preset results never move when a new model lands. The two deliberate exceptions are rulings
+of the owner, each measured against ACT1B before it was made: the observed density scale (0.17.0)
+and the transient thermal model of the \texttt{standard} preset (2026-10-31, Section~\ref{sec:trp}).
 
 An option a model does not read is not silently ignored when it contradicts the choice:
 \texttt{Model} refuses a non-empty \texttt{drag.alpha} beside a computed accommodation, a
@@ -406,9 +408,12 @@ is how you find \emph{where} two implementations differ rather than only that th
 
 \section{What it refuses, and why that is a feature}
 \begin{itemize}[leftmargin=1.4em]
-\item \texttt{thermal.model = "transient"} --- it carries temperatures from epoch to epoch, and an
- integrator calls the right-hand side non-monotonically and repeatedly at one $t$. There is no
- correct answer, so there is no answer.
+\item \texttt{thermal.model = "transient"} \emph{without} \texttt{'ThermalOrbit'}, or with
+ \texttt{'Native', false} --- the walls carry their temperatures from epoch to epoch, and an
+ integrator calls the right-hand side non-monotonically and repeatedly at one $t$. Since 2026-10-31
+ \texttt{prepare} integrates them ONCE along a reference orbit (\texttt{'ThermalOrbit'}, e.g.\ the
+ arc's GNV1B) and the C evaluator reads them by time; without that orbit there is no correct answer,
+ so there is no answer.
 \item \texttt{geom.selfShadow = "raycast"} --- a ray cast per direction is not an inner loop.
 \item \texttt{erp.backend = "ceresClimatology"} --- not for want of memory: the native path already
  carries three EBAF grids of that size for \texttt{erp.backend = "ceres"}. It is refused because it
@@ -538,6 +543,10 @@ the observation. The result is the run's struct plus \texttt{calibration} (an
 (\texttt{calibrate(yMeas, aModel, epoch)}) is gone.
 
 \section{What this chain actually prints}
+\noindent \textbf{This transcript was printed at 0.12.0}, before the observed density scale (0.17.0)
+and the transient walls (2026-10-31) entered the \texttt{standard} preset; it shows the shape of
+the output, and its numbers are the old preset's. The current ones are bounded by the tests of the
+units it calls.
 \begin{lstlisting}
 --- Step 1: the auxiliary data -------------------------------------------
 EOP rows 213, space weather family celestrak
@@ -766,8 +775,16 @@ grid, which is not table material for an integrator, and \texttt{app.DynamicsSou
 construction.
 
 \section{Thermal re-radiation: the literature disagrees with itself}
-The presets model thermal re-radiation instantaneously (\texttt{thermal.model = "steadyState"}).
-Two peer-reviewed results disagree about whether that helps:
+\label{sec:trp}
+\textbf{Since 2026-10-31 the \texttt{standard} preset models it with thermal inertia}
+(\texttt{thermal.model = "transient"}, Woeske's lumped walls); \texttt{precise} still models it
+instantaneously (\texttt{"steadyState"}). The reason is this toolbox's own measurement on 2020-01,
+GRACE-C and -D: the instantaneous recoil LED ACT1B by 8--18\,s on the cross-track and radial axes,
+the walls take that to 2--4\,s and the radial residual from 3.25 to \SI{2.28}{\nano\metre\per\second\squared},
+and the radial scale of the calibration moves from 0.8 to 1.07--1.09 (\texttt{tools/alignmentMonth.m},
+\texttt{tools/heatCapacityFit.m}). The wall heat capacities are Woeske's estimates: ACT1B does not
+determine them, and the radiator's trades against the radial scale. Before that measurement, two
+peer-reviewed results disagreed about whether instantaneous re-radiation helps at all:
 
 \begin{itemize}[leftmargin=1.4em]
 \item Hładczuk et al.\ (2024), GRACE-FO: adding instantaneous re-radiation to a panel model takes
@@ -777,7 +794,8 @@ Two peer-reviewed results disagree about whether that helps:
  worse'' to calibrated cross-track accelerations, and ``did not lead to improvements''. It hurts.
 \end{itemize}
 
-\noindent The presets follow the first: it is the right satellite, four years later, and its
+\noindent The presets followed the first, and the month of ACT1B goes one step further, as Hładczuk et al.\
+do, to thermal inertia: it is the right satellite, four years later, and its
 Section~3 repairs the cross-track calibration that the second names as a possible cause of its own
 result --- it also names neglected horizontal winds, which this toolbox models and that study did
 not. \textbf{It is an open question in the field.} Set \texttt{thermal.model = "none"} to take the
@@ -794,7 +812,11 @@ preset you choose}, and that is the most useful thing to know about this toolbox
 Measured by \texttt{tools/benchmark.m} on 2026-10-29 (v0.17.0, R2026a, median of three after five
 warm-up calls) on the CI runner, NOT on the host that measured v0.16.0 (\SI{0.440}{\milli\second} for
 \texttt{standard} at $K=100$): the two tables differ by host as well as by code, and v0.17.0's
-\texttt{standard} preset also evaluates the daily density scale. The table it writes is committed at
+\texttt{standard} preset also evaluates the daily density scale. \textbf{The table predates the
+transient walls} (Section~\ref{sec:trp}): \texttt{standard} has integrated the wall temperatures
+since 2026-10-31, which adds the sub-steps of that integration to every call and, on the native path,
+one integration along the reference orbit at \texttt{prepare}; the figures are re-measured at the next
+release. The table it writes is committed at
 \texttt{tools/benchmark\_reference.csv}, and the audit checks every figure below against it.
 
 \begin{table}[h]\centering\footnotesize
