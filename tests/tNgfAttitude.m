@@ -303,8 +303,8 @@ classdef tNgfAttitude < NgfTestCase
             tc.verifyEqual(ap.source, "itsg");
             tc.verifyEqual(ap.nodeCount, 600, 'the committed excerpt: 600 epochs at 10 s');
             tc.verifyEqual(ap.scale, "GPS");
-            % the same file twice is one set of nodes, not a refusal downstream (2026-10-31: joined as given)
-            ap2 = NonGravForces.geom.AttitudeProvider.fromItsg([tc.f.itsg tc.f.itsg]);
+            % the same file twice is one set of nodes, not a refusal downstream (until 2026-10-31 the files were joined as given)
+            ap2 = NonGravForces.geom.AttitudeProvider.fromItsg([string(tc.f.itsg) string(tc.f.itsg)]);
             tc.verifyEqual(ap2.nodeCount, 600);
             tc.verifyErrorId(@() NonGravForces.geom.AttitudeProvider.fromItsg(strrep(tc.f.itsg, 'attitude', 'reducedDynamicOrbit')), ...
                 'NonGravForces:AttitudeProvider:dataItsg');
