@@ -11,7 +11,10 @@ agree on every value; the sigmoid centres they give at rR = 2000 km (6.371, 6.41
     nu = [1 + a1 + a2 + a1 tanh(a3 (rE - a4)) + a2 tanh(a5 (rE - a6)) + tanh(a7 (rE - a8))]
          / (2 + 2 a1 + 2 a2)                                                          (3.86)
     rR = -r . R_hat (distance behind the terminator plane, R_hat Earth -> Sun),
-    rE = |r - (r . R_hat) R_hat| with the ecliptic-parallel part scaled by sO = R_e / R_p   (3.80-3.85)
+    rE = |r - (r . R_hat) R_hat| with the component ALONG THE ECLIPTIC NORMAL (the projected spin axis,
+         where the silhouette's semi-axis is the polar radius) stretched by sO = R_e / R_p onto the fit's
+         sphere of radius R_e   (3.80-3.85; corrected 2026-10-31 -- the in-ecliptic part had been scaled,
+         an Earth flattened at the equator. The oracle grid below is in (rR, rE) and is unaffected.)
     a1, a3, a5, a7, a8 = b1 exp(b2 rR) + b3 exp(b4 rR);  a2, a6 = b1 rR + b2;  a4 = b1 rR^b2 + b3
     all distances in units of 1e6 m; the fit covers rR from 2000 km to 45000 km.
 

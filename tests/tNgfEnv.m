@@ -625,11 +625,11 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyEqual(nuY, E.nu_cylindrical', 'cylindrical is a pure geometric test: bitwise');
             tc.verifyGreaterThan(nnz(nuC > 0 & nuC < 1), 3, 'the oracle must exercise the penumbra');
             % SOLAARS-CF: Table 3.2 against the independent restatement, and the formula against the pure-Python
-            % evaluation on a (rR, rE) grid; the satellite is displaced along the ecliptic normal, where the
-            % oblateness scaling does not act, so rE is exactly the grid value.
+            % evaluation on a (rR, rE) grid; the satellite is displaced in the ecliptic plane, where the
+            % oblateness scaling does not act (it stretches the normal component), so rE is exactly the grid value.
             C = readtable(fullfile(tc.root, 'tools', 'pyxcheck', 'solaars_cf_coefficients.csv'), 'TextType', 'string');
             O = readtable(fullfile(tc.root, 'tools', 'pyxcheck', 'solaars_oracle.csv'));
-            rS = [-O.rR_Mm' * 1e6; zeros(1, height(O)); O.rE_Mm' * 1e6];
+            rS = [-O.rR_Mm' * 1e6; O.rE_Mm' * 1e6; zeros(1, height(O))];
             [nuS, infoS] = NonGravForces.env.eclipseFactor(rS, [tc.au; 0; 0], 'Model', "solaarsCF", 'EclipticNormal', [0; 0; 1]);
             tc.verifyEqual(infoS.solaars.rE_Mm, O.rE_Mm', 'AbsTol', 1e-12); tc.verifyEqual(infoS.solaars.rR_Mm, O.rR_Mm', 'AbsTol', 1e-12);
             tc.verifyBoundAndRecord("SOLAARS-CF vs Python restatement of eq. 3.86", max(abs(nuS - O.nu')), 1e-14, "-", "same coefficients, tanh/exp rounding");
@@ -1251,10 +1251,13 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyBoundAndRecord("eclipse rotation invariance", max(abs(NonGravForces.env.eclipseFactor(Rm * r, Rm * s) - nu)), 1e-12, "-", "HANDOVER accuracy figure; measured see last_run");
             sweep = nu(1:30);                                        % oracle cases 0..29 sweep psi from 0 to 180 deg
             tc.verifyTrue(all(diff(sweep) >= 0), 'nu is non-decreasing from the anti-Sun point outwards');
-            % SOLAARS-CF: monotone and smooth through the penumbra; oblateness acts on the ecliptic-parallel component
-            % only, so a displacement rE along the normal equals a displacement rE / sO in the ecliptic plane.
+            % SOLAARS-CF: monotone and smooth through the penumbra; oblateness stretches the component along the
+            % ecliptic normal (the projected spin axis, where the limb is the polar radius) by sO = a/b, so a
+            % displacement rE in the ecliptic plane equals a displacement rE / sO along the normal. Until
+            % 2026-10-31 the relation was asserted the other way round -- the inverted flattening it tested
+            % widened the modelled shadow by ~8 s per edge on GRACE-FO (alignment run 41187770368).
             sAu = [tc.au; 0; 0];
-            rE = linspace(6.30e6, 6.50e6, 2001); rSw = [-2.56e6 * ones(1, 2001); zeros(1, 2001); rE];
+            rE = linspace(6.30e6, 6.50e6, 2001); rSw = [-2.56e6 * ones(1, 2001); rE; zeros(1, 2001)];
             nuS = NonGravForces.env.eclipseFactor(rSw, sAu, 'Model', "solaarsCF", 'EclipticNormal', [0; 0; 1]);
             tc.verifyTrue(all(diff(nuS) >= 0), 'SOLAARS-CF monotone in rE');
             % tails of the tanh sum 100 km inside / outside the geometric limb (fit tails, not physics): measured 2026-09-07
@@ -1263,12 +1266,20 @@ classdef tNgfEnv < NgfTestCase
             d1 = diff(nuS) / 100;
             tc.verifyBoundAndRecord("SOLAARS-CF derivative jump (C1 proxy, 100 m steps)", max(abs(diff(d1))) / max(abs(d1)), 1e-2, "-", "smooth tanh sum: second difference small against the slope");
             ell = referenceSystem.ellipsoidParameters("WGS84"); sO = ell.a / ell.b;
-            rPar = [-2.56e6 * ones(1, 2001); rE / sO; zeros(1, 2001)];
+            rPar = [-2.56e6 * ones(1, 2001); zeros(1, 2001); rE / sO];
             nuP = NonGravForces.env.eclipseFactor(rPar, sAu, 'Model', "solaarsCF", 'EclipticNormal', [0; 0; 1]);
             tc.verifyBoundAndRecord("SOLAARS-CF oblateness scaling relation", max(abs(nuP - nuS)), 1e-9, "-", "rE/sO*sO rounding through steep sigmoids (slope ~1e-4 per m)");
             nuCn = NonGravForces.env.eclipseFactor(rSw, sAu);
             [~, iS] = min(abs(nuS - 0.5)); [~, iC] = min(abs(nuCn - 0.5));
             tc.verifyBoundAndRecord("SOLAARS-CF vs conical half-shadow radius shift", abs(rE(iS) - rE(iC)), 5e4, "m", "refraction and oblateness; measured see last_run");
+            % The physical anchor of the oblateness mapping: the atmosphere raises the half-shadow limb by the SAME height
+            % above the equatorial radius in the ecliptic plane and above the polar radius along the normal (the
+            % projected spin axis). The inverted mapping of 2026-09-07..10-31 put the polar limb 21 km too high.
+            rN = [-2.56e6 * ones(1, 2001); zeros(1, 2001); rE];
+            nuN = NonGravForces.env.eclipseFactor(rN, sAu, 'Model', "solaarsCF", 'EclipticNormal', [0; 0; 1]);
+            [~, iN] = min(abs(nuN - 0.5));
+            tc.verifyBoundAndRecord("SOLAARS-CF limb height above b (normal) vs above a (ecliptic)", abs((rE(iN) - ell.b) - (rE(iS) - ell.a)), 500, "m", ...
+                "same atmosphere both ways; 100 m grid plus the height scaled by b/a (~0.1 km); the inverted mapping gave 42.5 km");
         end
         function earthRadianceClimatologyMetamorphic(tc)
             % PIECEWISE CONSTANT IN TIME is the property that separates this backend from ceres, and

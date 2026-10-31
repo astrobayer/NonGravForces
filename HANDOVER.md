@@ -1623,6 +1623,20 @@ exit (nu crossing 0.5, ~30 edges per day) and with the other thermal and eclipse
   -0.2/+0.6, +5.7/+5.0, +10.6/+7.9 s steady against -8.9/-9.0, -5.4/-5.6, -2.6/-3.3 s transient. With solaarsCF's exit
   error in the same signal the thermal choice for precise cannot be read cleanly: **solaarsCF first, then precise.**
 
+**solaarsCF's oblateness mapping was INVERTED (PR #129, 2026-10-31).** `env.eclipseFactor`, `mex/ngfRhs.c` and the
+oracle's docstring stretched the IN-ECLIPTIC component of rE by sO = a/b, i.e. modelled an Earth flattened at the
+equator. The silhouette's short semi-axis lies along the ecliptic normal (at the January solstice exactly the projected
+spin axis), so the component ALONG the normal is the one to stretch onto the fit's sphere of radius a. A stdlib
+simulation (circular 490 km orbit, i = 89 deg, January pole) gives solaarsCF minus conical at the 50 % crossing: inverted
+mapping entry -8.0 / exit +8.0 s at beta 0, -8.3 / +8.6 s at beta 20, -10.9 / +5.4 s at beta 40 -- the size and the
+asymmetry ACT1B measured (+5.0 / -9.7 s against conical); corrected mapping -0.4 / +0.4 s, -0.8 / +0.4 s, -0.7 / +6.2 s.
+The physical anchor, now a test (`tNgfEnv/eclipseFactorMetamorphic`): the half-shadow limb sits the same 22.5 km above
+the equatorial radius in the ecliptic plane and above the polar radius along the normal (the inverted mapping put the
+polar limb 42.5 km above b). The thesis itself (VTechWorks) was not reachable from the session; the decision rests on
+the geometry and on the measured asymmetry. Affects only srp.eclipse "solaarsCF" (precise; standard is conical).
+Predicted gate unchanged at 511 (a new bound inside an existing method). Next: re-run alignment for standard
+(altEclipse = solaarsCF) and precise (1:3:15) to read the corrected edges, then decide precise's thermal model.
+
 **Next, the owner's call:** whether `standard` should take `thermal.model = "transient"` (it changes the baseline's
 S_zz from ~0.8 to ~1.08 and needs a re-freeze), and whether the heat capacities are to be fitted (the lag per
 panel group is the observable).

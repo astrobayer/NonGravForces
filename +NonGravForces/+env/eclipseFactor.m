@@ -31,8 +31,11 @@ function [nu, info] = eclipseFactor(r, r_sun, options)
 %                  satellite from the Sun-Earth line, with coefficients that
 %                  depend on the distance rR behind the terminator plane
 %                  (Table 3.2), fitted to a full ray-tracing model of the
-%                  penumbra WITH Earth oblateness (rE's ecliptic-parallel part
-%                  scaled by a/b), atmospheric refraction, absorption and
+%                  penumbra WITH Earth oblateness (rE's component along the
+%                  ecliptic normal, the projected spin axis, stretched by a/b
+%                  onto the fit's sphere of radius a; until 2026-10-31 the
+%                  in-ecliptic part was, an inverted flattening that widened
+%                  the shadow ~8 s per edge), atmospheric refraction, absorption and
 %                  scattering. Smooth (C^inf). Needs 'EclipticNormal'. The day
 %                  side (rR <= 0) is full light; rR is clamped to the fit
 %                  domain 2-45 Mm and the clamp count is reported.
@@ -206,9 +209,14 @@ Rhat = rs ./ vecnorm(rs);                          % Earth -> Sun unit vector, 3
 rR = -sum(r .* Rhat, 1);                           % eq. 3.80: distance behind the terminator plane [m]
 rEvec = r + rR .* Rhat;                            % eq. 3.81: r - (r.R)R
 rEperp = sum(e .* rEvec, 1);                       % eq. 3.82: component along the ecliptic normal
-rEpar2 = max(0, sum(rEvec.^2, 1) - rEperp.^2);     % eq. 3.83 (squared)
+rEpar2 = max(0, sum(rEvec.^2, 1) - rEperp.^2);     % eq. 3.83 (squared): the part in the ecliptic plane
 sO = aE / bE;                                      % eq. 3.84
-rE = sqrt(rEperp.^2 + sO^2 * rEpar2) / 1e6;        % eq. 3.85, in Mm
+% eq. 3.85: the oblate silhouette (semi-axes a in the ecliptic, ~b along the normal, the projected spin axis) is
+% mapped onto the fit's sphere of radius a by stretching the NORMAL component by a/b. Until 2026-10-31 the
+% in-ecliptic part was stretched instead -- an Earth flattened at the equator -- which widened the shadow by
+% ~8 s per edge on a polar orbit at small beta and shifted the edges asymmetrically at larger beta (HANDOVER,
+% "the x lead read at the shadow edges"; the 50 % point at the polar limb now coincides with conical's).
+rE = sqrt(sO^2 * rEperp.^2 + rEpar2) / 1e6;        % eq. 3.85, in Mm
 rRm = rR / 1e6;
 lo = 2.0; hi = 45.0;                               % the fit domain of the thesis (2000-45000 km)
 clamped = rRm > 0 & (rRm < lo | rRm > hi);
