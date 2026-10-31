@@ -37,7 +37,8 @@ function [f, files] = plotAttribution(T, A, info, options)
 %   Name   Size  Type    Units  Description
 %   ----   ----  ----    -----  -----------
 %   f      1x1   figure  -      The figure
-%   files  1xF   string  -      Files written
+%   files  1xF   string  -      Files written: attribution.png in 'ExportTo', or a 1x0
+%                               string without it
 %
 % ACCURACY
 %   Not applicable: the figure draws regressDrivers' coefficients and sigmas

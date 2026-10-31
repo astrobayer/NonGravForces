@@ -180,7 +180,8 @@ classdef Calibration
 %
 % ERRORS
 %   NonGravForces:Calibration:inputFit       the fit struct lacks a field, or one has the wrong size
-%   NonGravForces:Calibration:inputBasis     unknown basis, knots or jumps not increasing, too few knots
+%   NonGravForces:Calibration:inputBasis     unknown basis, knots or jumps not increasing, too few knots,
+%                                            or epochs that are not int64 GPS ns
 %   NonGravForces:Calibration:inputArc       apply: not a 3-column arc in m/s2
 %   NonGravForces:Calibration:unsupportedQuadratic  apply with a non-zero K2
 %   NonGravForces:Calibration:dataSchema     load: not a calibration file, or no schemaVersion
@@ -212,7 +213,7 @@ classdef Calibration
 %   bias = struct('basis', "linear", 't0', obs.t(1), 'knots', int64([]), ...
 %                 'coef', [truth.bias0, truth.biasDrift_per_day]);
 %   cal = NonGravForces.app.Calibration(struct('scale', truth.scale, 'bias', bias));
-%   a = cal.apply(obs);                  % the CRN-filtered model, to rounding
+%   a = cal.apply(obs);                  % the CRN-filtered model, to the planted noise
 %
 % See also NonGravForces.app.calibrate, NonGravForces.app.syntheticPair, NonGravForces.sensor.Electrostatic.
 %

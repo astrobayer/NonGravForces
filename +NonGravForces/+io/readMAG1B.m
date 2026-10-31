@@ -54,8 +54,10 @@ function [epoch, field, aux] = readMAG1B(files, options)
 %                                 .torquerBranch_A (6xK, ampere, rows 1A 2A 3A 1B 2B 3B,
 %                                  as read)
 %                                 .magnitude_T (1xK, |B|)
-%   aux      1x1   struct  -      .calibration (.magField 3xK, .torquer 1xK, unapplied),
-%                                 .qualityBits (8xK logical, bit 0 first),
+%   aux      1x1   struct  -      .epoch (the epoch struct again), .calibration
+%                                 (.magField 3xK, .torquer 1xK, unapplied; NaN when the
+%                                 columns are absent), .qualityBits (8xK logical, bit 0
+%                                 first), .qualflgBits (Kx8, as the other readers),
 %                                 .torquerBranchNames (1x6 string), .product, .satellite,
 %                                 .files, .numRecords, .sampling_s, .obsNames, .units,
 %                                 .provenance.

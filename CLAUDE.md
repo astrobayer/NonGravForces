@@ -177,6 +177,18 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-10-30, PR #124, N-12)
 
+- **2026-10-31, PR #128 (documentation, owner: all four points):** (1) a help-vs-code audit of all 64 units by four
+  agents, comment lines only (stale errors lists, missing info fields, wrong defaults, examples a standard Model would
+  refuse; Options gained the template sections it lacked); (2) the theory document brought to 0.17+: the observed density
+  scale (new section), DTM2020 as delivered, transient walls, the IMU attitude check, the workflow listing, and the false
+  claim that the MEX links rsApiRotation removed; (3) a GENERATED test catalogue (`doc/src/tests_generated.tex`, appendix
+  of the theory PDF): every test method, its category and credited unit, its comment, each recorded bound with its reason
+  and the value of `tests/last_run.txt`; audit check 6 refuses a stale one; (4) `GettingStarted.html` rewritten, and
+  `tools/userGuideTranscript.m` (release-checks `what: transcript`) regenerates the guide's transcript. The audit found
+  ONE CODE DEFECT, mine from PR #126 and older in `Model.series`: transient walls carried across chunks HELD the interval
+  across every boundary; chunks after the first now start one epoch early and drop it (`forceBudget`,
+  `densityInversion`, `Model.series`); new test `tNgfApp/forceBudgetTransientChunks`. ◐, predicted gate 511 (510 + 1).
+  Both PDFs build locally (pdflatex, 73 / 126 pages, no undefined references).
 - **2026-10-31, PR #127 (user guide):** `doc/src/NonGravForces_UserGuide.tex` follows the transient standard preset
   (preset table, opt-in exceptions, native refusal, TRP paragraph; the Cost table is marked as predating the walls and is
   re-measured at the next release). PDF not rebuilt (O-38). Documentation only: gate stays 510.

@@ -43,10 +43,15 @@ function mm = boxWing(dims, optics, options)
 %
 % ERRORS
 %   NonGravForces:boxWing:inputDims     dims not three positive finite lengths
-%   NonGravForces:boxWing:inputOptics   optics lacks .bus (or .array when arrays are given)
-%                                       or a coefficient triple does not sum to 1 (via MacroModel)
-%   NonGravForces:boxWing:inputArray    an array entry lacks area_m2/normal/centroid_m or its normal is not unit
-%   NonGravForces:MacroModel:*          from the constructor
+%   NonGravForces:boxWing:inputOptics   optics lacks .bus.vis/.bus.ir (or .array.vis/.array.ir when arrays
+%                                       are given), or a vis/ir triple does not have three elements
+%   NonGravForces:boxWing:inputArray    an array entry lacks area_m2/normal/centroid_m, its area is not a
+%                                       positive scalar, or its normal is not 3-element unit (1e-5)
+%   NonGravForces:MacroModel:*          from the constructor: inputEnergy when a vis/ir triple does not
+%                                       sum to 1, inputPanels for a non-positive HeatCapacity_J_m2K or Mass_kg
+%
+% REFERENCES
+%   None beyond the caller's numbers: the geometry is a box and every coefficient is an input.
 %
 % EXAMPLE
 %   o = struct('bus', struct('vis', [0.34 0.40 0.26], 'ir', [0.62 0.23 0.15]));

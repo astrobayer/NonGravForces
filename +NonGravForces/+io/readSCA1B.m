@@ -65,9 +65,6 @@ function [epoch, q_body2gcrs, aux] = readSCA1B(files, options)
 %   NonGravForces:readSCA1B:dataColumn       a quaternion column is missing
 %   NonGravForces:readSCA1B:dataQuaternion   a file quaternion is not of unit norm
 %   gracefoReading:*, referenceSystem:*      propagated unwrapped
-%   MATLAB:badsubscript                     from gracefoReading.readL1bMulti when SEVERAL
-%                                           files are given and TimeRange excludes every
-%                                           record (dependency defect, HANDOVER O-12)
 %
 % REFERENCES
 %   JPL D-56935, SCA1B format ("rotation from the inertial frame to the SRF").

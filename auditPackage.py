@@ -169,6 +169,13 @@ try:
     cur = open(buildDocs.TEX_API, encoding="utf-8").read() if os.path.isfile(buildDocs.TEX_API) else ""
     if cur != api:
         note("doc/src/api_generated.tex is stale -> python tools/buildDocs.py")
+    # The test catalogue (2026-10-31): every test method, its category and unit, its comment and
+    # each recorded bound with the reason for its size, from the test classes, and the measured
+    # value from tests/last_run.txt. A new test, a moved bound or a new run makes it stale.
+    tst = buildDocs.render_tests_tex()
+    cur = open(buildDocs.TEX_TESTS, encoding="utf-8").read() if os.path.isfile(buildDocs.TEX_TESTS) else ""
+    if cur != tst:
+        note("doc/src/tests_generated.tex is stale -> python tools/buildDocs.py")
 except Exception as exc:                      # a broken generator must be a finding, not a crash
     note(f"tools/buildDocs.py could not render the documentation: {exc}")
 

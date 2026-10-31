@@ -51,6 +51,10 @@ function [ok, report] = checkAttitudeSense(q_body2gcrs, r, v, options)
 %   NonGravForces:checkAttitudeSense:inputShape   q not 4xK, r or v not 3xK, or NaN/Inf
 %   referenceSystem:*                             propagated unwrapped
 %
+% REFERENCES
+%   HANDOVER C.1 (the sense defect of the predecessors) and D.4 (BODY->GCRS, scalar first);
+%   referenceSystem.attitudeConvention, .rotationFromQuaternion.
+%
 % EXAMPLE
 %   eop = referenceSystem.readEop(file); [ep, r, v] = NonGravForces.io.readGNV1B(gnv, 'Eop', eop);
 %   [~, q] = NonGravForces.io.readSCA1B(sca);

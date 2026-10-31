@@ -16,7 +16,9 @@ function [obs, ref, truth] = syntheticPair(options)
 %                 per axis (ASD NoiseAsd * sqrt(1 + (NoiseCorner/f)^2), the
 %                 sensor.Electrostatic form) from timeSeriesPreparation's
 %                 synthTimeSeries, spikes 1 s boxcars standing for thruster
-%                 firings, and one gap of NaN
+%                 firings, and one gap of NaN; with 'RegressorFcn' also
+%                 + z RegressorCoupling' and, with 'ScaleTemperature',
+%                 + (z1 - Tref) ScaleTemperature model
 %
 %   and passes raw through the REAL Level-1B chain: timeSeriesPreparation.
 %   crnKernel("ACC") applied by crnApply and evaluated at the whole seconds
@@ -46,7 +48,8 @@ function [obs, ref, truth] = syntheticPair(options)
 %   RegressorFcn    1x1   function_handle -    Measured series z(ts) (n x K, ts in s since Start) whose
 %                                              planted coupling raw += z * RegressorCoupling'; default
 %                                              none (N-11a)
-%   RegressorCoupling 3xK double  m/s^2/unit   The true coefficients; default empty
+%   RegressorCoupling 3xn double  m/s^2/unit   The true coefficients, one column per column of z;
+%                                              default zeros(3, 0)
 %   ScaleTemperature 3x3  double  1/unit       True temperature dependence of the scale (N-11b), driven by
 %                                              the FIRST column z1 of RegressorFcn: S(t) = Scale +
 %                                              ScaleTemperature * (z1(t) - Tref); default zeros
@@ -94,7 +97,10 @@ function [obs, ref, truth] = syntheticPair(options)
 % ERRORS
 %   NonGravForces:syntheticPair:depMissing    timeSeriesPreparation is not on the path
 %   NonGravForces:syntheticPair:inputShape    Scale, ScaleDrift, Bias, BiasDrift, Quadratic or NoiseAsd of
-%                                             the wrong size, or not finite
+%                                             the wrong size, or not finite; ScaleTemperature not a
+%                                             finite 3x3, or nonzero without RegressorFcn; RegressorFcn
+%                                             not returning one row per raw sample, or
+%                                             RegressorCoupling not 3x(its columns)
 %   NonGravForces:syntheticPair:inputRange    the arc is too short for the CRN window plus the
 %                                             spikes and the gap, or the spikes find no room
 %                                             clear of each other

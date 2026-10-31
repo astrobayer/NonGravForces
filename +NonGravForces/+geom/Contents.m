@@ -10,3 +10,4 @@
 %   thermalState         - Per-panel temperatures: steady state or transient (Wöske)
 %   AttitudeProvider     - BODY->GCRS quaternions at query epochs (SCA1B or nominal) via referenceSystem.interpolateQuaternions
 %   checkAttitudeSense   - Physics test of quaternion sense (nadir and line-of-sight)
+%   attitudeQuality      - Attitude-quality diagnostic: SCA1B rates against the IMU gyros and the nominal frame with 1 and 2 cpr

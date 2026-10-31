@@ -5,7 +5,8 @@
 # ACT1B and the model per day and axis, per effect, at the shadow edges, with the other thermal and
 # eclipse models; ~2 h; input preset "precise" runs every fifth day of that preset), and
 # "heatcapacity" runs tools/heatCapacityFit.m (the wall heat capacities per panel group fitted to ACT1B
-# through the transient thermal model; ~2 h).
+# through the transient thermal model; ~2 h). "transcript" runs tools/userGuideTranscript.m (the user
+# guide's Steps 1-8 on the committed excerpt, minutes) for the guide's transcript.
 #
 # Neither is a gate. They exist as a workflow because a release needs both at the version being
 # released (audit check 14 refuses a version the baseline was not verified at; check 13 compares every
@@ -23,7 +24,7 @@ on:
   workflow_dispatch:
     inputs:
       what:
-        description: "baseline-freeze | baseline-compare | benchmark | alignment | heatcapacity"
+        description: "baseline-freeze | baseline-compare | benchmark | alignment | heatcapacity | transcript"
         default: "baseline-compare"
       preset:
         description: "alignment only: the Model preset (standard | precise)"
@@ -133,12 +134,16 @@ jobs:
                     if preset == "precise", days = 1:5:31; end   % every fifth day: precise's exact flow shadow and 24x48 CERES tiles cost several times standard
                     alignmentMonth('Preset', preset, 'Days', days);
                     out = fullfile(pwd, "tools", "alignment_month.csv");
+                case "transcript"
+                    rep = NonGravForces.buildMex('Target', "msis"); assert(rep.upToDate, "releaseChecks:mex", "MEX target msis did not build");
+                    userGuideTranscript();   % prints the user guide's Steps 1-8 on the committed excerpt
+                    out = "";
                 case "heatcapacity"
                     rep = NonGravForces.buildMex('Target', "msis"); assert(rep.upToDate, "releaseChecks:mex", "MEX target msis did not build");
                     heatCapacityFit();
                     out = fullfile(pwd, "tools", "heat_capacity_fit.csv");
                 otherwise
-                    error("releaseChecks:what", "unknown input what = %s -> baseline-freeze, baseline-compare, benchmark, alignment or heatcapacity", what);
+                    error("releaseChecks:what", "unknown input what = %s -> baseline-freeze, baseline-compare, benchmark, alignment, heatcapacity or transcript", what);
             end
             if strlength(out) > 0
                 fprintf("----- BEGIN %s -----\n%s\n----- END %s -----\n", out, fileread(out), out);

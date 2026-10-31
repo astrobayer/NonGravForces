@@ -103,7 +103,8 @@ function [acc, info] = accommodation(model, species, T_K, options)
 %   Name              Size      Type    Units  Description
 %   ----              ----      ----    -----  -----------
 %   Alpha             1x1|1xK   double  -      Coefficient in [0, 1]; required by "fixed", refused by the others
-%   SurfaceMass_amu   1x1       double  amu    Surface lattice particle mass, > 0; required by "walker2014", refused by "sesam" (which fixes 65)
+%   SurfaceMass_amu   1x1       double  amu    Surface lattice particle mass, > 0; required by "walker2014", refused by "sesam" (which fixes 65),
+%                                              ignored by "fixed" and "pilinski20xx"
 %   RelativeSpeed_ms  1x1|1xK   double  m/s    Satellite speed relative to the gas, > 0; required by "sesam", refused by the others
 %
 % OUTPUT ARGUMENTS
@@ -152,9 +153,10 @@ function [acc, info] = accommodation(model, species, T_K, options)
 %       fitted in. Raised ONCE PER CALL, naming how many of the K epochs and which range; silence it
 %       with warning('off', 'NonGravForces:accommodation:outsideFit') when the extrapolation is
 %       intended. Owner ruling of 2026-09-17 (HANDOVER O-42): warn rather than refuse, because
-%       extrapolating a fitted model knowingly is legitimate and refusing would forbid it. THIS AND
-%       dependencyReport ARE THE ONLY UNITS THAT MAY WARN; a warning is not printing, since it
-%       carries an identifier and can be silenced.
+%       extrapolating a fitted model knowingly is legitimate and refusing would forbid it. This was
+%       the first unit after dependencyReport allowed to warn (app.fitCalibration and
+%       app.Calibration have since joined it); a warning is not printing, since it carries an
+%       identifier and can be silenced.
 %       IT WILL FIRE ON GRACE-FO. At 520 km in solar minimum P_O is ~1.4e-8 Pa, three orders below
 %       walker2014's fitted domain, and the adsorption models return 0.11-0.17 where the fitted
 %       literature reports 0.82-0.93 (measured 2026-09-17). That is the extrapolation this warning
@@ -165,8 +167,9 @@ function [acc, info] = accommodation(model, species, T_K, options)
 %   NonGravForces:accommodation:inputAlpha       fixed without 'Alpha', Alpha outside [0, 1] or not 1x1/1xK, or Alpha given to another model
 %   NonGravForces:accommodation:inputSurfaceMass walker2014 without a positive 'SurfaceMass_amu', or a mass given to sesam
 %   NonGravForces:accommodation:inputSpeed       sesam without a positive 'RelativeSpeed_ms', or a speed given to another model
-%   NonGravForces:accommodation:numericNaN       NaN/Inf in Alpha, species or T_K
-%   NonGravForces:accommodation:inputRange       a negative density or a non-positive temperature (models that read them)
+%   NonGravForces:accommodation:numericNaN       NaN/Inf in Alpha, species or T_K (species and T_K are screened for
+%                                                EVERY model, fixed included)
+%   NonGravForces:accommodation:inputRange       a negative density or a non-positive temperature (every model but fixed)
 %
 % REFERENCES
 %   Pilinski M.D., Argrow B.M., Palo S.E. (2010) J. Spacecraft Rockets 47(6) 951-956,
@@ -351,7 +354,7 @@ function localWarnOutsideFit(model, inside, domain)
 %   fit with nothing to say so -- a silent degradation under R4, with the instrument to end it
 %   already present.
 %
-%   THIS IS THE SECOND UNIT IN THE TOOLBOX ALLOWED TO WARN, after dependencyReport, and it is a
+%   THIS WAS THE SECOND UNIT IN THE TOOLBOX ALLOWED TO WARN, after dependencyReport, and it is a
 %   deliberate exception to "no printing from library code" (CLAUDE.md sect. 3): a warning is not
 %   printing -- it carries an identifier, the caller can silence it with warning('off', id), and it
 %   cannot be mistaken for a result. Refusing was the alternative and was rejected: extrapolating a

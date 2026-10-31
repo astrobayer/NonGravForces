@@ -1,5 +1,5 @@
 function deps = dependencyReport(options)
-%DEPENDENCYREPORT Presence and version of the five ecosystem toolboxes.
+%DEPENDENCYREPORT Presence and version of the five ecosystem toolboxes and MICE.
 %
 %   deps = NonGravForces.dependencyReport
 %   deps = NonGravForces.dependencyReport('Verbose', false)
@@ -13,7 +13,7 @@ function deps = dependencyReport(options)
 %   THE MINIMUM IS COMPARED, AND IT WAS NOT UNTIL 2026-09-17. For three weeks this
 %   column was printed and never read, which made it a guarantee the toolbox did not
 %   give (O-25, rule R4). It is compared over the components the MINIMUM states -- "2.1"
-%   asks nothing about a patch, "1.0.1" does -- and the outcome is reported in
+%   asks nothing about a patch, a minimum such as "1.0.1" would -- and the outcome is reported in
 %   .belowMinimum. ciGate refuses on it; this unit still only reports. A version that is
 %   not a dotted number cannot be ordered and is never called too old: MICE answers
 %   CSPICE_N0067, so its .comparable is false and its minimum is documentation.
@@ -24,7 +24,10 @@ function deps = dependencyReport(options)
 % OUTPUT ARGUMENTS
 %   Name     Size   Type   Units  Description
 %   ----     ----   ----   -----  -----------
-%   deps     1x6    struct -      .name .required (logical) .present (logical)
+%   deps     1x6    struct -      One element each for referenceSystem, gracefoReading
+%                                 (required), gjToolbox, timeSeriesPreparation, lsqvce
+%                                 and mice (optional), in that order:
+%                                 .name .required (logical) .present (logical)
 %                                 .version (string, "" if absent) .minimum
 %                                 (string) .comparable (logical: the two are dotted
 %                                 numbers and can be ordered) .belowMinimum (logical:
@@ -33,7 +36,14 @@ function deps = dependencyReport(options)
 %
 % ERRORS
 %   None. Warning NonGravForces:dependencyReport:depMissing per absent
-%   REQUIRED dependency.
+%   REQUIRED dependency (an absent optional one is only reported).
+%
+% ACCURACY
+%   Not applicable: versions are read, not computed. A version that is not a dotted
+%   number (MICE's CSPICE_N0067) is reported with .comparable false.
+%
+% REFERENCES
+%   astrobayer/ci-actions VERSIONING.md (MAJOR.MINOR minimums); HANDOVER O-25.
 %
 % EXAMPLE
 %   d = NonGravForces.dependencyReport('Verbose', false); [d.present]
@@ -140,8 +150,8 @@ end
 function [comparable, below] = localBelowMinimum(version, minimum)
 %LOCALBELOWMINIMUM Order two dotted versions over the components the MINIMUM states.
 %   The minimum is the shorter statement and decides the precision of the question: "2.1" asks
-%   about major and minor and says nothing about the patch, so 2.1.216 satisfies it; gracefoReading
-%   states "1.0.1" and therefore does ask about the patch (O-12). A version that is not a dotted
+%   about major and minor and says nothing about the patch, so 2.1.216 satisfies it; a minimum of
+%   "1.0.1" (gracefoReading's until 2026-10-26, O-12) does ask about the patch. A version that is not a dotted
 %   number at all -- MICE's CSPICE_N0067 -- is not comparable, and this says so rather than
 %   inventing an order: R3, and the honest answer to a question nobody can ask.
 comparable = false;

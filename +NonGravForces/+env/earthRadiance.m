@@ -98,15 +98,18 @@ function tiles = earthRadiance(backend, epoch, grid, r, nv)
 %                                 pointSource), .n (3xMxK unit normals of the
 %                                 tile centres, GCRS), .area_m2 (MxK), .lat_rad
 %                                 (MxK geocentric latitude of the centres, GCRS;
-%                                 for ceres the ITRS geodetic latitude the grid was read at),
+%                                 for ceres the ITRS geodetic latitude the grid was read at,
+%                                 for ceresClimatology the ITRS geocentric one),
 %                                 .capAngle_rad (1xK), .albedo (MxK; 1xK for
-%                                 pointSource), .emissivity (same; [] for ceres),
-%                                 .exitanceLw_W_m2 (MxK, ceres; [] otherwise),
+%                                 pointSource), .emissivity (same; [] for ceres and
+%                                 ceresClimatology), .exitanceLw_W_m2 (MxK, ceres and
+%                                 ceresClimatology; [] otherwise),
 %                                 .ceres (ceres: .product .version .months (the two
 %                                 bracketing nodes per epoch, 2xK datetime) .timeWeight (1xK)),
 %                                 .climatology (ceresClimatology: .referenceHeight_m measured from
 %                                 the file, .gridIndex (1xK, into the grids PASSED), .month (1xK
-%                                 datetime of each grid's opening node), .nodes, .gridCount),
+%                                 datetime of each grid's opening node), .nodes (1x2, first and
+%                                 last node of the grids passed), .gridCount),
 %                                 .daysSinceT0 (1xK), .coefficients, .provenance.
 %
 % ACCURACY
@@ -141,15 +144,20 @@ function tiles = earthRadiance(backend, epoch, grid, r, nv)
 % ERRORS
 %   NonGravForces:earthRadiance:inputClimatology the Climatology grids are missing, mismatched, not a
 %                                                time series, not uniform in longitude, not decreasing in
-%                                                latitude, not one constant height above the ellipsoid, or
-%                                                given to a backend that does not read them
-%   NonGravForces:earthRadiance:inputGrid        grid not two positive integers (knocke)
+%                                                latitude, not one constant height above the ellipsoid,
+%                                                given to a backend that does not read them, or
+%                                                ceresClimatology without a usable 'RotationItrsToGcrs'
+%   NonGravForces:earthRadiance:inputGrid        grid not two positive integers (every backend but
+%                                                pointSource)
 %   NonGravForces:earthRadiance:inputShape       r not 3xK or epoch not an epoch struct
 %   NonGravForces:earthRadiance:numericNaN       NaN/Inf in r
-%   NonGravForces:earthRadiance:inputRange       |r| <= R (inside the Earth, or below the ceres reference level)
+%   NonGravForces:earthRadiance:inputRange       |r| <= R (inside the Earth, or below the reference level
+%                                                of ceres or ceresClimatology)
 %   NonGravForces:earthRadiance:inputCeres       ceres without a usable 'Ceres' or 'RotationItrsToGcrs',
-%                                                or either given to another backend
-%   NonGravForces:earthRadiance:dataRange        an epoch outside the months the 'Ceres' struct holds
+%                                                'Ceres' given to another backend, or
+%                                                'RotationItrsToGcrs' given to knocke or pointSource
+%   NonGravForces:earthRadiance:dataRange        an epoch outside the months the 'Ceres' struct holds,
+%                                                or outside the nodes of the 'Climatology' grids
 %   referenceSystem:*                            propagated unwrapped
 %
 % REFERENCES

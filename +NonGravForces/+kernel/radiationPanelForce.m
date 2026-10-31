@@ -36,8 +36,9 @@ function [F, info] = radiationPanelForce(macro, src, options)
 %   Name     Size    Type    Units  Description
 %   ----     ----    ----    -----  -----------
 %   F        3xNxK   double  N      Force on each plate, body frame, summed over the sources
-%   info     1x1     struct  -      .absorbed_W_m2 (NxK, a P c gamma summed over sources: the flux
-%                                   thermalState needs), .litCount (NxK, sources with gamma > 0),
+%   info     1x1     struct  -      .absorbed_W_m2 (NxK, a P c gamma f summed over sources, f the Shadow
+%                                   fraction: the flux thermalState needs), .litCount (NxK, sources with
+%                                   gamma > 0, counted before the Shadow),
 %                                   .M, .K, .bands, .provenance
 %
 % ACCURACY

@@ -5,10 +5,12 @@ classdef (Abstract) Sensor
 %   a_ng (3xK, body frame), tau (3xK), and - from the attitude provider via
 %   referenceSystem - omega and omegaDot (3xK). A Sensor maps these to what a
 %   particular instrument reads, and provides the partials of that reading
-%   with respect to its own calibration parameters. Calibration (app.calibrate)
-%   and quality control (timeSeriesPreparation.qc.screen) are written against THIS interface, so a
-%   new instrument (optical, MEMS, cold-atom, drag-free residual) is one new
-%   subclass and zero changes elsewhere.
+%   with respect to its own calibration parameters. A caller that simulates
+%   a reading writes against THIS interface, so a new instrument (optical,
+%   MEMS, cold-atom, drag-free residual) is one new subclass and zero changes
+%   elsewhere. (app.calibrate and app.fitCalibration do not go through it:
+%   since N-02 they fit timeSeriesPreparation Arcs with the CRN kernel of
+%   timeSeriesPreparation.crnKernel, the same kernel sensor.Electrostatic uses.)
 %
 % ABSTRACT METHODS (every subclass implements)
 %   y          = observe(obj, dyn)           dyn: struct .a .tau .omega .omegaDot
@@ -29,7 +31,7 @@ classdef (Abstract) Sensor
 % REFERENCES
 %   HANDOVER.md Rev 2.0, WP-29; Zahzam et al. 2022 (hybrid CAI/electrostatic).
 %
-% See also NonGravForces.sensor.Electrostatic, NonGravForces.sensor.AtomInterferometer.
+% See also NonGravForces.sensor.Electrostatic, NonGravForces.sensor.AtomInterferometer, NonGravForces.sensor.DragFree.
 %
 % KEYWORDS sensor measurement model interface quantum accelerometer
 % Created 2026-08-27 by Claude Fable 5 (Anthropic).

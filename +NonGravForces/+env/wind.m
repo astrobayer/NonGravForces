@@ -87,10 +87,12 @@ function [vrel, info] = wind(model, epoch, r_gcrs, v_gcrs, options)
 %   it by an amount this toolbox has not measured.
 %
 % ERRORS
-%   NonGravForces:wind:inputShape      r or v not 3xK with K matching the epoch
+%   NonGravForces:wind:inputShape      r, v or Wind_m_s not 3xK with K matching the epoch
 %   NonGravForces:wind:inputEop        "corotation" or "hwm14" without 'Eop'
-%   NonGravForces:wind:inputAp         "hwm14" disturbed without an ap source, both sources, a
-%                                      negative or malformed Ap, or an ap input to another model
+%   NonGravForces:wind:inputAp         "hwm14" disturbed without an ap source (or with a
+%                                      SpaceWeather not of the celestrak family), both sources,
+%                                      a negative or malformed Ap, an ap source with 'Disturbed'
+%                                      false, or an ap input to another model
 %   NonGravForces:wind:depMissing      "hwm14" MEX not built
 %   NonGravForces:wind:inputRange      "hwm14" at a position below the ellipsoid (the model does not return there)
 %   NonGravForces:hwm14Gateway:*       the gateway's refusals, unwrapped

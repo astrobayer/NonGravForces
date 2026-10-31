@@ -52,7 +52,7 @@ function [coeff, aux] = igrfCoefficients(file, options)
 %                                  .g, .h ((nMax+1)x(nMax+1) at 'Epoch', else [])
 %                                  .year (decimal year used, else NaN)
 %   aux     1x1   struct  -        .file, .generation, .numCoefficients, .validFrom, .validTo,
-%                                  .header (the two comment lines), .provenance
+%                                  .header (the file's comment lines), .provenance
 %
 % ACCURACY
 %   Exact: the parsed values are the file's, and the interpolation is one linear
@@ -60,12 +60,14 @@ function [coeff, aux] = igrfCoefficients(file, options)
 %
 % ERRORS
 %   NonGravForces:igrfCoefficients:dataMissing   the file does not exist
-%   NonGravForces:igrfCoefficients:dataFormat    no "g/h n m ..." header line, or a row whose
-%                                                field count disagrees with that header
+%   NonGravForces:igrfCoefficients:dataFormat    no "g/h n m ..." header line, its epoch columns
+%                                                do not parse as years, or a row whose field
+%                                                count disagrees with that header
 %   NonGravForces:igrfCoefficients:dataColumn    a row is neither g nor h, or n and m are not
 %                                                a valid Schmidt pair (m <= n, n >= 1)
 %   NonGravForces:igrfCoefficients:inputRange    'Epoch' before the first epoch or more than
-%                                                five years past the last
+%                                                five years past the last, or a numeric 'Epoch'
+%                                                that is not one finite decimal year
 %   NonGravForces:igrfCoefficients:numericNaN    a coefficient does not parse as a number
 %
 % REFERENCES

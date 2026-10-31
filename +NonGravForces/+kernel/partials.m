@@ -85,6 +85,9 @@ function [dF, info] = partials(what, wrt, macro, options)
 %   NonGravForces:partials:inputMissing   a name-value this combination needs was not given
 %   NonGravForces:partials:inputShape     an input has the wrong shape
 %   NonGravForces:gsiCoefficients:*       propagated from the coefficient model
+%   NonGravForces:dragPanelForce:*, :radiationPanelForce:*, :thermalRecoil:*, :accommodation:*
+%                                         propagated: the force each derivative is formed from is
+%                                         evaluated (and its inputs validated) by that unit
 %
 % REFERENCES
 %   Sentman (1961); Doornbos (2011) Ch. 3; HANDOVER WP-16 and the Part I decision

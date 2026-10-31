@@ -52,15 +52,13 @@ function [epoch, tank, aux] = readMAS1B(files, options)
 %   NonGravForces:readMAS1B:dataProduct     a file is not a MAS1B product
 %   NonGravForces:readMAS1B:dataSatellite   the files mix satellites
 %   NonGravForces:readMAS1B:dataEmpty       no record survives TimeRange
-%   NonGravForces:readMAS1B:dataColumn      gas_mass_tnk1/2 or mass_tnk missing
+%   NonGravForces:readMAS1B:dataColumn      gas_mass_tnk1 or gas_mass_tnk2 missing
+%                                           from the header
 %   NonGravForces:readMAS1B:dataMissing     no record has a usable total (both
 %                                           tank columns and mass_tnk absent)
 %   NonGravForces:readMAS1B:dataRange       a total is >= 100 kg or <= 0 kg
 %   NonGravForces:readMAS1B:dataTimeRef     time_ref is not 'G' for every record
 %   gracefoReading:*                        propagated unwrapped
-%   MATLAB:badsubscript                     from gracefoReading.readL1bMulti when SEVERAL
-%                                           files are given and TimeRange excludes every
-%                                           record (dependency defect, HANDOVER O-12)
 %
 % REFERENCES
 %   JPL D-56935, MAS1B format; HANDOVER C.1 (v1 defect: MAS1B as mass).

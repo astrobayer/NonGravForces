@@ -27,11 +27,15 @@ classdef Model
 %                                                     m x B, so BOTH of these are needed or neither
 %                                                     is: one alone leaves the term out silently.
 %                                                     torques.magnetic must also be true.
-%   accel,      T0_K           Nx1    double  K       Initial panel temperatures for a TRANSIENT
-%                                                     thermal model, one per panel; default [] and
-%                                                     the steady state is used as the start. Ignored
-%                                                     by thermal.model "none" and "steadyState".
-%   series      Quantities     1x2    string  -       "accel" (default), "torque", or both. Selects
+%   accel       T0_K           Nx1    double  K       Initial panel temperatures for a TRANSIENT
+%   evaluate                                          thermal model (the standard preset), one per
+%                                                     panel; default [] and the steady state at the
+%                                                     call's FIRST epoch is the start, so pass the
+%                                                     last column of info.temperature_K to carry
+%                                                     the walls from one call into the next (series
+%                                                     does this between its chunks). Ignored by
+%                                                     thermal.model "none" and "steadyState".
+%   series      Quantities     1xQ    string  -       "accel" (default), "torque", or both. Selects
 %                                                     which columns the timetable carries; a torque
 %                                                     column costs the torque reduction, which accel
 %                                                     alone does not pay for.
@@ -46,8 +50,10 @@ classdef Model
 %                                                     2026-09-08).
 %   partials    WithRespectTo  1xP    string  -       Any of "r", "v" (default ["r" "v"]),
 %                                                     "cdScale", "crScale", "alpha". alpha is
-%                                                     refused for a two-state surface, which
-%                                                     computes its own coverage.
+%                                                     refused unless drag.accommodation is
+%                                                     "fixed" (every other model computes its own),
+%                                                     and under finiteDiff when it sits on the edge
+%                                                     of [0, 1].
 %
 %   The Model owns the packed macro model, the attitude provider, the mass, the
 %   Earth-orientation, space-weather, ephemeris and CERES sources, the resolved
@@ -66,12 +72,14 @@ classdef Model
 %     2. the geodetic height              referenceSystem.cartesianToGeodetic on the ITRS position
 %     3. density and composition          env.density with the space-weather drivers, times the observed
 %                                         daily scale when drag.densityScale is "swarm" (env.densityScale,
-%                                         observed) or "driver" (env.densityDriverScale, predicted)
+%                                         observed), "driver" (env.densityDriverScale, predicted) or
+%                                         "combined" (env.densityScale with 'Fallback', the standard preset)
 %     4. the radiation source list        env.radiationSources (Sun, Earth tiles, eclipse)
 %     5. occlusion                        geom.selfShadow per radiation source; geom.flowShadow for the gas
 %                                         (Method "table" when geom.flowShadow is "table", the standard preset)
-%     6. panel temperatures               geom.thermalState with the per-source occlusion
-%     7. accommodation                    kernel.accommodation (fixed, pilinski2010/2011, walker2014)
+%     6. panel temperatures               geom.thermalState with the per-source occlusion (steady state,
+%                                         or integrated over the call's epochs for "transient")
+%     7. accommodation                    kernel.accommodation (fixed, pilinski2010/2011, walker2014, sesam)
 %     8. per-panel forces                 kernel.dragPanelForce, radiationPanelForce, thermalRecoil
 %     9. reductions                       kernel.assemble, and kernel.bodyTorques for the torque
 %   Every step is the unit that owns that fact; the Model adds no physics. Until
@@ -87,7 +95,8 @@ classdef Model
 %   Name     Size  Type                            Units  Description
 %   ----     ----  ----                            -----  -----------
 %   macro    1x1   NonGravForces.geom.MacroModel   -      Packed panel geometry
-%   options  1x1   NonGravForces.Options           -      Resolved options (default "standard")
+%   options  1x1   NonGravForces.Options           -      Resolved options (default "standard", which
+%                                                          evaluates only with 'DensityScale')
 %
 % CONSTRUCTOR NAME-VALUE ARGUMENTS
 %   Name          Size  Type            Units  Description
@@ -101,7 +110,8 @@ classdef Model
 %   Eop           1x1   struct          -      referenceSystem.readEop result or a file path.
 %                                              REQUIRED to evaluate: the geodetic height needs
 %                                              the ITRS rotation and the co-rotation its rate.
-%   SpaceWeather  1x1   struct          -      io.spaceWeather result. Required by msis00, msis21 and dtm2020.
+%   SpaceWeather  1x1   struct          -      io.spaceWeather result. Required by msis00, msis21 and dtm2020,
+%                                              and by drag.wind "hwm14".
 %   Ephemeris     1x1   struct          -      referenceSystem.readEphemeris result, required
 %                                              when sun.source is "rs.de440".
 %   Exponential   1x1   struct          -      .rho0_kg_m3 .h0_m .H_m, required when
@@ -111,28 +121,40 @@ classdef Model
 %                                              required when erp.backend is "ceresClimatology".
 %   DensityScale  1x1   struct          -      env.densityScale result (drag.densityScale "swarm"; with
 %                                              'Fallback' "combined") or env.densityDriverScale result
-%                                              ("driver"), required by those
+%                                              ("driver"), required by those (so by the standard preset)
 %                                              and refused otherwise; its kind must match the option and it
 %                                              must have been formed for this Model's drag.density. Density and every species
 %                                              density are multiplied by S.at(epoch, geodetic height), so
 %                                              the gas force scales exactly (it is linear in them).
 %
-% OUTPUT (accel / torque / evaluate)
+% OUTPUT ARGUMENTS (accel / torque / evaluate)
 %   a, tau   3xK   double         acceleration [m/s^2] or torque [N m]
-%   info     1x1   struct         .frame, .drag .radiation .thermal (3xK each, the
-%                                 same frame), .bodyTorque (torque only), .rho (1xK),
-%                                 .nu (1xK shadow factor), .mass_kg (1xK), .vrel_body,
-%                                 .sources (M), .temperature_K (NxK), .flowShadow,
+%   info     1x1   struct         .frame, .K, .drag .radiation .thermal (3xK each, the
+%                                 same frame; torques from torque), .bodyTorque (torque
+%                                 and evaluate), .torque (evaluate only: .drag .radiation
+%                                 .thermal torques), .rho (1xK), .nu (1xK shadow factor),
+%                                 .mass_kg (1xK), .vrel_body, .sources (number M of
+%                                 radiation sources), .temperature_K (NxK), .flowShadow,
 %                                 .accommodation, .lla, .densityScale (1xK, ones with
 %                                 drag.densityScale "none"), .backends, .provenance
+%   OUTPUT (series / budget / partials)
+%   T        timetable            one row per epoch: ax ay az [m/s^2] and/or tx ty tz [N m]
+%   B        table                rows drag, radiation, thermal, total; rms_x..rms_z,
+%                                 max_x..max_z, rms_norm [m/s^2]
+%   J        3xPxK double         d a / d parameter, one column per entry of names
+%   names    1xP   string         "rx" "ry" "rz" "vx" "vy" "vz" and the scalar parameters
+%   info     1x1   struct         .method .frame .stateStep .analytic .K .provenance
 %
 % ACCURACY
 %   The Model adds no approximation: every number comes from the unit that owns
 %   it, and each of those states its own error. What the Model does own is the
 %   ORDER, which is fixed above, and the resolved options, which travel in
 %   info.provenance (rule R2). The dominant error is the thermospheric density,
-%   10-30 % (HANDOVER Part C.4), not anything here. Cost per epoch is recorded by
-%   tools/benchmark.m.
+%   10-30 % (HANDOVER Part C.4), not anything here. One choice is the Model's: a
+%   transient thermal model starts the walls from the steady state at the first epoch
+%   of each call unless 'T0_K' is given (series carries them across its chunks), so
+%   a short call carries a start-up error that geom.thermalState's time constants set.
+%   Cost per epoch is recorded by tools/benchmark.m.
 %
 % ERRORS
 %   NonGravForces:Model:inputMacro      macro is not a MacroModel
@@ -142,7 +164,8 @@ classdef Model
 %                                       geom.flowShadow table beside selfShadow raycast, a 'DensityScale' with
 %                                       drag.densityScale "none", of the other kind, or formed for another drag.density)
 %   NonGravForces:Model:inputMass       no 'Mass' and no mass on the macro model, or 'Mass' not a positive mass / massModel
-%   NonGravForces:Model:inputState      epoch, r, v or q disagree in size, or are not finite
+%   NonGravForces:Model:inputState      epoch, r, v or q disagree in size, or are not finite, or the attitude
+%                                       provider returned the wrong number of quaternions
 %   NonGravForces:Model:inputAttitude   no q was given and the Model has no attitude provider
 %   NonGravForces:Model:dependEop       evaluated without 'Eop'
 %   NonGravForces:Model:dependWeather   evaluated without 'SpaceWeather' or 'Exponential' for the density backend, or without 'SpaceWeather' for drag.wind hwm14
@@ -150,7 +173,9 @@ classdef Model
 %   NonGravForces:Model:dependCeres     evaluated with erp.backend ceres and no 'Ceres', or
 %                                       ceresClimatology and no 'Climatology'
 %   NonGravForces:Model:unsupported     a method option this Model cannot honour (partials of alpha for a
-%                                       computed accommodation, transient thermal under parfor, unknown quantities)
+%                                       computed accommodation or, by finiteDiff, at the edge of [0, 1]; an
+%                                       unknown 'WithRespectTo' entry or 'Method'; transient thermal under
+%                                       series.useParallel; unknown 'Quantities')
 %   NonGravForces:<unit>:*              propagated unwrapped from the unit that refused
 %
 % REFERENCES
@@ -162,6 +187,7 @@ classdef Model
 %   sw  = NonGravForces.io.spaceWeather(swFile);
 %   [ep, r, v] = NonGravForces.io.readGNV1B(gnv, 'Eop', eop);
 %   [~, q]     = NonGravForces.io.readSCA1B(sca);
+%   cls = NonGravForces.io.spaceWeather(f30File);                % CLS's F30, for the driver fallback
 %   S = NonGravForces.env.densityScale(swarmFiles, sw, 'Fallback', NonGravForces.env.densityDriverScale(sw, cls));   % the standard preset's density scale
 %   M = NonGravForces.Model(NonGravForces.geom.graceFO("C"), NonGravForces.Options("standard"), ...
 %                           'Eop', eop, 'SpaceWeather', sw, 'DensityScale', S);
@@ -675,13 +701,22 @@ classdef Model
 
         function [a, tq, Tlast] = chunkEval(obj, epoch, r, v, q, i0, i1, wantA, wantT, frame, T0)
             %CHUNKEVAL One chunk of series from ONE environment pass; the transient temperatures carry over.
-            idx = i0:i1;
+            % A transient chunk after the first starts ONE EPOCH EARLY, at the previous chunk's last epoch and its
+            % temperatures, so the interval across the boundary is integrated as in one call; that epoch is dropped.
+            transient = obj.options.thermal.model == "transient";
+            lead = transient && ~isempty(T0) && i0 > 1;
+            idx = i0 - lead:i1;
             ep = referenceSystem.daySecondToEpoch([epoch.day(idx) epoch.sec(idx)], epoch.scale);
             qc = []; if ~isempty(q), qc = q(:, idx); end
+            if ~transient, T0 = []; end
             st = obj.environment(ep, r(:, idx), v(:, idx), qc, T0);
             a = []; tq = [];
             if wantA, a = obj.reduceAccel(st, frame); end
             if wantT, tq = obj.reduceTorque(st, frame, [], []); end
+            if lead
+                if wantA, a = a(:, 2:end); end
+                if wantT, tq = tq(:, 2:end); end
+            end
             Tlast = st.Tpanel(:, end);
         end
 

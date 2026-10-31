@@ -95,9 +95,12 @@ function [S, info] = flowShadow(macro, vrel_body, T_K, options)
 %                                 "table" computed exactly because they lie outside the table; [] for
 %                                 the other methods). With vrel_body = [] and T_K = [] under Method
 %                                 "table": the table itself (.n .t0 .h .ns .s0 .hs .halfWidthTan
-%                                 .shaded .plus .minus, rows plate x species x {number normal tangential})
+%                                 .shaded .quadrature .plus .minus, rows plate x species x {number
+%                                 normal tangential}, only the plates .shaded that the Lut ever occludes)
 %   info     1x1   struct  -      .method, .quadrature, .directionsPerEpoch, .integrals (struct CN
-%                                 CpInc CtauInc NxKx8, with 'Integrals'), .provenance
+%                                 CpInc CtauInc NxKx8, with 'Integrals'), .provenance; under Method
+%                                 "table" also .table (the grid without its values) and
+%                                 .fallbackEpochs (count of epochs computed exactly)
 %
 % ACCURACY
 %   The speed moments are closed forms (erfc and erfcx). The directional

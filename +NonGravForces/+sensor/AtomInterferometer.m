@@ -74,18 +74,23 @@ classdef AtomInterferometer < NonGravForces.sensor.Sensor
 %   y          = observe(obj, dyn)     dyn: .a 3xK body [m/s^2]; when 'Rotation', .omega 3xK
 %                                      [rad/s] and .atomVelocity 3xK [m/s], the atom cloud
 %                                      relative to the instrument, body frame.
+%                                      dyn.velocity (retired 2026-09-15) is refused.
 %                                      y: .value 1xK full phase [rad], .mask 1xK,
-%                                      .frame "beam", .info (.wrapped .fringe .weighted
-%                                      .coriolis .cycleEpochs)
+%                                      .frame "beam", .epoch (dyn.epoch if given, else []),
+%                                      .info (.wrapped .fringe .weighted .coriolis
+%                                      .cycleEpochs .deadTime_s .provenance)
 %   [J, names] = partials(obj, dyn)    d(phase)/d([phaseBias; gainError]), Kx2
-%   asd        = noiseModel(obj, f_Hz) 1xN phase ASD [rad/sqrt(Hz)]; divide by k_eff T^2 for
-%                                      the equivalent acceleration ASD
+%   asd        = noiseModel(obj, f_Hz) 1xN phase ASD [rad/sqrt(Hz)], 'PhaseAsd' up to the
+%                                      Nyquist frequency of the cycle rate, 1/(2 cycle), and
+%                                      Inf above it (nothing is measured there); divide by
+%                                      k_eff T^2 for the equivalent acceleration ASD
 %   n          = numParameters(obj)    2
 %
 % ERRORS
-%   NonGravForces:AtomInterferometer:inputShape   an argument or a dyn field has the wrong size
+%   NonGravForces:AtomInterferometer:inputShape   axis or dyn.a has the wrong size, or noiseModel's
+%                                                 f_Hz is not positive and finite
 %   NonGravForces:AtomInterferometer:inputRange   kEff <= 0, T <= 0, cycle < 2T, SampleRate <= 0,
-%                                                 or the axis has zero length
+%                                                 PhaseAsd < 0, or the axis has zero length
 %   NonGravForces:AtomInterferometer:inputDyn     dyn lacks a, or lacks omega/atomVelocity when
 %                                                 'Rotation' is on, or their epoch counts differ, or
 %                                                 it carries the retired field velocity

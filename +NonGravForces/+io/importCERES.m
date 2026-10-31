@@ -62,8 +62,10 @@ function [cer, aux] = importCERES(files, options)
 %
 % ERRORS
 %   NonGravForces:importCERES:inputFiles    not three files, or not one each of rsut, rlut, rsdt
-%   NonGravForces:importCERES:dataMissing   a file does not exist, or a loaded value is a fill value or NaN
-%   NonGravForces:importCERES:dataFormat    not an obs4MIPs CERES EBAF file, units not W m-2, time units
+%   NonGravForces:importCERES:dataMissing   a file does not exist, or a loaded value is a fill value,
+%                                           NaN or negative
+%   NonGravForces:importCERES:dataFormat    not an obs4MIPs CERES EBAF file (a global attribute missing),
+%                                           units not W m-2, dimensions not lon/lat/time, time units
 %                                           not "days since", non-uniform grid, or the files disagree
 %   NonGravForces:importCERES:inputPeriod   Period malformed or not bracketed by the files' months
 %

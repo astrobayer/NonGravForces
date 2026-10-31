@@ -28,6 +28,12 @@ function [T, info] = thermalState(macro, src, options)
 %                chosen from the linearised time constant (dt <= tau/10); the
 %                sources are held constant over each epoch interval.
 %
+%   This unit defaults to steadyState; the standard preset's Model asks for
+%   "transient" since 2026-10-31 (Options thermal.model; Model.accel takes
+%   'T0_K', Model.series carries the walls across its chunks), the precise
+%   preset for steadyState, and the fast preset computes no temperatures at
+%   all (thermal.model "none").
+%
 % INPUT ARGUMENTS
 %   Name     Size  Type                          Units  Description
 %   ----     ----  ----                          -----  -----------
@@ -43,8 +49,9 @@ function [T, info] = thermalState(macro, src, options)
 %                                         N x K when the list has one source
 %   InternalPower_W  1x1   double  W      Total internal dissipation radiated through the
 %                                         panels (default 0)
-%   InternalShare    1xN   double  -      Share of the internal power per panel (sums to 1);
-%                                         REQUIRED when InternalPower_W > 0 (rule R5)
+%   InternalShare    1xN   double  -      Share of the internal power per panel (>= 0, sums to 1);
+%                                         REQUIRED when InternalPower_W > 0 (rule R5), ignored
+%                                         otherwise; macro.internalShare is NOT read here
 %   Epoch            1x1   struct  -      referenceSystem epoch struct, K entries (transient)
 %   T0_K             1xN   double  K      Initial temperatures (transient)
 %
@@ -65,12 +72,16 @@ function [T, info] = thermalState(macro, src, options)
 %   below 1e-5 per interval (tested against the linearised exponential
 %   relaxation to 1e-3 for a 1 K excursion and against the steady state for
 %   t >> tau); the heat capacities are educated guesses (graceFO help), which
-%   is the dominant uncertainty, not the integration.
+%   is the dominant uncertainty, not the integration. Against ACT1B (21 days of
+%   2020-01, C and D, run 41140282748) the transient walls lower the z residual
+%   rms from 3.25 to 2.28 nm/s^2 relative to steadyState; a fit of the capacities
+%   did not determine them (geom.graceFO help).
 %
 % ERRORS
-%   NonGravForces:thermalState:inputMacro      not a MacroModel; transient with NaN heat capacity
+%   NonGravForces:thermalState:inputMacro      not a MacroModel; transient with a NaN or non-positive heat capacity
 %   NonGravForces:thermalState:inputSources    src lacks dir/P/band or its sizes disagree
-%   NonGravForces:thermalState:inputShape      Exposed not NxKxM in [0,1], T0_K not 1xN, Epoch not K entries
+%   NonGravForces:thermalState:inputShape      Exposed not NxKxM in [0,1]; transient with T0_K not N finite values
+%                                              >= 0, or Epoch not an epoch struct of K strictly increasing entries
 %   NonGravForces:thermalState:inputInternal   InternalPower_W > 0 without a share summing to 1
 %   NonGravForces:thermalState:numericNaN      NaN/Inf in the sources or the result
 %
@@ -79,7 +90,8 @@ function [T, info] = thermalState(macro, src, options)
 %   Rievers B., Lämmerzahl C. (2011) Ann. Phys. 523:439 (thermal recoil modelling).
 %
 % EXAMPLE
-%   mm = NonGravForces.geom.graceFO("C"); [src] = NonGravForces.env.radiationSources(ep, r, q, NonGravForces.Options("standard"));
+%   % ep: epoch struct (K entries), r: 3xK GCRS position [m], q: 4xK BODY->GCRS quaternions
+%   mm = NonGravForces.geom.graceFO("C"); src = NonGravForces.env.radiationSources(ep, r, q, NonGravForces.Options("standard"));
 %   T = NonGravForces.geom.thermalState(mm, src);            % 8xK, ~250-330 K in sunlight
 %
 % See also NonGravForces.env.radiationSources, NonGravForces.geom.selfShadow, NonGravForces.kernel.thermalRecoil.

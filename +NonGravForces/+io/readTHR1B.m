@@ -59,9 +59,6 @@ function [events, aux] = readTHR1B(files, options)
 %   NonGravForces:readTHR1B:dataTimeRef     time_ref is not 'G' (GPS) for every record
 %   NonGravForces:readTHR1B:depMissing      timeSeriesPreparation (the event table's owner) not on the path
 %   gracefoReading:*, referenceSystem:*     propagated unwrapped
-%   MATLAB:badsubscript                     from gracefoReading.readL1bMulti when SEVERAL
-%                                           files are given and TimeRange excludes every
-%                                           record (dependency defect, HANDOVER O-12)
 %
 % REFERENCES
 %   JPL D-56935, THR1B format.

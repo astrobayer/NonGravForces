@@ -70,12 +70,13 @@ function res = calibrate(acc, reference, options)
 %   Name       Size  Type    Units  Description
 %   ----       ----  ----    -----  -----------
 %   Orbit      1xN   struct  -      .epoch (referenceSystem epoch, GPS), .r and .v (3xK, GCRS, m and
-%                                   m/s), e.g. from io.readGNV1B; required with a Model, covering the
-%                                   arc plus half a CRN window
-%   Attitude   1x1   struct  -      geom.AttitudeProvider for the orbit epochs; [] (default) uses the
-%                                   Model's own provider
-%   Config     1x1   struct  -      timeSeriesPreparation.Config; default Config(acc), with
-%                                   run.filterReference set true
+%                                   m/s), e.g. from io.readGNV1B; required with a Model. It should
+%                                   cover the arc plus half a CRN window; it is clipped to its
+%                                   overlap with that span and refused only without any overlap
+%   Attitude   1x1   object  -      geom.AttitudeProvider, evaluated at the orbit epochs; [] (default)
+%                                   uses the Model's own provider
+%   Config     1x1   object  -      timeSeriesPreparation.Config; default Config(acc) (of the first
+%                                   arc in a campaign); run.filterReference is set true either way
 %   QualFlags  1x1   struct  -      Passed to run's mask stage; default none
 %   Thrusters  1x1   struct  -      THR1B Arc, passed to run's mask stage; default none
 %   Jumps      1x1   logical -      Turn run's "jump" events into bias steps; default false
@@ -104,14 +105,21 @@ function res = calibrate(acc, reference, options)
 %   evaluated at 10 Hz; tNgfCalibrate/calibrateReferenceInterpolationPrecision):
 %   1.1e-10 m/s^2 on the raw grid at the shadow boundary, 9.3e-13 m/s^2 after
 %   the CRN filter, 3e-5 of the filtered signal -- far below the Model's own
-%   error (density, 10-30 %). The estimation accuracy is
+%   error (density, 10-30 %). The Model is evaluated in ONE call per arc
+%   (per day in a campaign), so a transient thermal model (thermal.model
+%   "transient", the standard preset's since PR #126) starts its walls from the
+%   steady state at the first orbit epoch used, half a CRN window before the
+%   arc; nothing carries them from one day to the next. The estimation accuracy is
 %   app.fitCalibration's; the stages' are timeSeriesPreparation's.
 %
 % ERRORS
 %   NonGravForces:calibrate:inputArc         acc is not a three-axis Arc in m/s2
-%   NonGravForces:calibrate:inputReference   reference is neither a Model nor such an Arc
-%   NonGravForces:calibrate:inputOrbit       a Model without 'Orbit', a malformed Orbit, or an orbit
-%                                            that does not cover the arc
+%   NonGravForces:calibrate:inputReference   reference is neither a Model nor such an Arc, one arc
+%                                            with several references, or a campaign's reference
+%                                            array whose length is neither 1 nor N
+%   NonGravForces:calibrate:inputOrbit       a Model without 'Orbit', a malformed Orbit (fields, 3xK
+%                                            shapes, increasing epochs; a campaign's not 1 or 1xN), or
+%                                            an orbit that does not overlap the arc
 %   NonGravForces:calibrate:inputConfig      the Config names no CRN preset
 %   NonGravForces:calibrate:dataEmpty        a campaign in which run refused every day
 %   NonGravForces:calibrate:unsupportedMultiArc  'Jumps' true in a campaign

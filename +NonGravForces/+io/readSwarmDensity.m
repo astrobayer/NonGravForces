@@ -70,8 +70,9 @@ function [epoch, lla, rho, aux] = readSwarmDensity(files, options)
 %   NonGravForces:readSwarmDensity:inputRange    TimeRange is not [mjd0 mjd1] with mjd0 <= mjd1
 %   NonGravForces:readSwarmDensity:dataFormat     no HAPI JSON header, an undecodable one, or a
 %                                                 status other than 1200 (OK)
-%   NonGravForces:readSwarmDensity:dataColumn     a required parameter is missing from the header,
-%                                                 or a data line does not have the header's columns
+%   NonGravForces:readSwarmDensity:dataColumn     the first parameter is not Timestamp, a required
+%                                                 parameter is missing from the header, or a data
+%                                                 line does not have the header's columns
 %   NonGravForces:readSwarmDensity:dataUnits      a parameter's units are not the ones converted here
 %   NonGravForces:readSwarmDensity:dataSatellite  the files are of different datasets, or of a
 %                                                 dataset this reader does not know

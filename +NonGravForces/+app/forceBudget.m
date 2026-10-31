@@ -27,6 +27,17 @@ function [B, info] = forceBudget(models, epoch, r, v, q, options)
 %   summing them chunk by chunk differ in association. The maxima are exact
 %   either way, and so are the shares formed from them.
 %
+%   A TRANSIENT THERMAL MODEL (thermal.model "transient", the standard preset's
+%   since PR #126) carries its wall temperatures from chunk to chunk: the last
+%   epoch's temperatures of one chunk are passed as 'T0_K' to Model.accel for
+%   the next, as Model.series does, so the walls are not re-started from the
+%   steady state at every chunk. The first chunk starts from the steady state of
+%   its first epoch, so one chunk is still bitwise Model.budget. Every later
+%   chunk is evaluated from ONE EPOCH EARLY - the previous chunk's last epoch,
+%   at its temperatures - and that epoch is dropped, so the interval across the
+%   boundary is integrated exactly as in one call (until 2026-10-31 it was held,
+%   a step lost per boundary).
+%
 % INPUT ARGUMENTS
 %   Name     Size    Type    Units  Description
 %   ----     ----    ----    -----  -----------
@@ -44,8 +55,9 @@ function [B, info] = forceBudget(models, epoch, r, v, q, options)
 %   ----     ----  ----    -----  -----------
 %   Frame    1x1   string  -      "body" (default) or "gcrs"
 %   Chunk    1x1   double  -      Epochs per evaluation, >= 1; default the first model's
-%                                 Options.series.chunk. The result does not depend on it
-%                                 beyond the rounding named under ACCURACY
+%                                 Options.series.chunk; rounded to an integer. For a
+%                                 The result does not depend on it beyond the rounding
+%                                 named under ACCURACY, transient walls included
 %   Labels   1xM   string  -      One label per model, default the model's preset name with
 %                                 an index appended when two share it
 %
@@ -64,7 +76,11 @@ function [B, info] = forceBudget(models, epoch, r, v, q, options)
 %   No arithmetic of its own beyond the reduction: every number comes from
 %   Model.accel. With one chunk the table is bitwise Model.budget's. With
 %   several chunks the RMS differs by the association of the sum alone, at the
-%   1e-16 level relative; the maxima and the shares are exact. Shares are formed
+%   1e-16 level relative; the maxima and the shares are exact. That holds for
+%   thermal.model "none" and "steadyState", and for "transient" up to the
+%   rounding of the overlap epoch evaluated twice (the boundary interval is
+%   integrated as in one call; tNgfApp asserts the chunked thermal row against
+%   one chunk). Shares are formed
 %   from the rms_norm column, so they sum to more than 1 whenever two effects
 %   partly cancel in the total - that is a property of the arc, not an error,
 %   and the total row is reported so the reader can see it.
@@ -144,11 +160,18 @@ mx = zeros(nE, 3, M);
 for m = 1:M
     T0 = [];                                            % a transient model's walls carry over from chunk to chunk
     for c = 1:nC
-        idx = first(c):last(c);
+        % A transient chunk after the first starts ONE EPOCH EARLY, at the previous chunk's last epoch and its
+        % temperatures, so the interval across the boundary is integrated as in one call; that epoch is dropped.
+        lead = ~isempty(T0);
+        idx = first(c) - lead:last(c);
         ep = referenceSystem.daySecondToEpoch([epoch.day(idx) epoch.sec(idx)], epoch.scale);
         qc = []; if ~isempty(q), qc = q(:, idx); end
         [a, ai] = mdl{m}.accel(ep, r(:, idx), v(:, idx), qc, 'Frame', options.Frame, 'T0_K', T0);
         if mdl{m}.options.thermal.model == "transient", T0 = ai.temperature_K(:, end); end
+        if lead
+            a = a(:, 2:end);
+            for f = ["drag" "radiation" "thermal"], ai.(f) = ai.(f)(:, 2:end); end
+        end
         vals = {ai.drag, ai.radiation, ai.thermal, a};
         for i = 1:nE
             sumsq(i, :, m) = sumsq(i, :, m) + sum(vals{i}.^2, 2)';

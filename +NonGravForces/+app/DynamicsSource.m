@@ -4,6 +4,7 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
 %   src = NonGravForces.app.DynamicsSource(model, 'Epoch', tai)
 %   src = NonGravForces.app.DynamicsSource(model, 'Epoch', tai, 'Gravity', gravitySource)
 %   src = NonGravForces.app.DynamicsSource(model, 'Epoch', tai, 'Parameters', ["cdScale" "crScale"])
+%   src = NonGravForces.app.DynamicsSource(model, 'Epoch', tai, 'ThermalOrbit', orb)   % thermal.model transient
 %   sol = gjToolbox.propagate(src, [0 5400], r0, v0, gjToolbox.Options('Epoch', tai, 'Step', 5, 'Binding', "native"))
 %
 %   WHAT IT IS. NonGravForces computes forces; gjToolbox integrates. This class is
@@ -23,7 +24,10 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
 %   in C. accel() then calls THAT entry, so the MATLAB side of such a run
 %   evaluates one model and not two. With 'Native' false accel() calls
 %   Model.accel, which stays normative: the parity of the two is asserted in
-%   tests/tNgfIntegration.m in every preset.
+%   tests/tNgfIntegration.m in every preset (for the standard preset, whose
+%   transient walls 'Native' false cannot serve, through its steady-state
+%   variant, and the transient table separately against Model.accel along the
+%   reference orbit).
 %
 %   GRAVITY IS NOT HERE and cannot be: this toolbox computes non-gravitational
 %   forces only (P9). A run needs the gravity field of another toolbox, and the
@@ -33,9 +37,11 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
 %   that entry itself.
 %
 %   WHAT THE NATIVE PATH SERVES. Every option Model evaluates except
-%   geom.selfShadow "raycast" (use "lut") and an attitude provider built with
-%   "squad". prepare() refuses the rest by name rather than degrading to
-%   something else. thermal.model "transient" (2026-10-30, the owner's ruling
+%   geom.selfShadow "raycast" (use "lut"), an attitude provider built with
+%   "squad" (prepare() refuses both), and erp.backend "ceresClimatology" and
+%   drag.density "dtm2020", which have no native evaluator and are refused at
+%   construction (HANDOVER O-44, O-52). Each is refused by name rather than
+%   degraded to something else. thermal.model "transient" (2026-10-30, the owner's ruling
 %   that the standard preset goes transient and stays integrable) is served by
 %   a TABLE: the walls' temperatures depend on their history, and the integrator
 %   calls accel non-monotonically and repeatedly at one t, so prepare()
@@ -48,7 +54,10 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
 %   Model's scale into one row per UTC day -- Swarm's bracket, interpolated in
 %   height in C as env.densityScale does, or the day's single factor -- and it
 %   switches at the aligned driver-bin edge of UTC midnight, which is already a
-%   declared breakpoint.
+%   declared breakpoint. A UTC day with no scale (drag.densityScale "swarm" on a
+%   day Swarm does not cover), or a height further outside Swarm's bracket than
+%   the bracket is wide, is refused by the native evaluator when it is reached
+%   (NonGravForces:rhsGateway:dataRange), not at prepare().
 %
 %   THE TABLES ARE EXACT AT THEIR NODES. The rotation is a cubic Hermite of R with
 %   Rdot, everything else a cubic Lagrange, on a 'TableStep_s' grid (default 60 s,
@@ -67,7 +76,7 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
 %   Name          Size  Type      Units  Description
 %   ----          ----  ----      -----  -----------
 %   Epoch         1x1   datetime  TAI    The run epoch, unzoned, as gjToolbox.Options carries it.
-%                                        Required; a context Epoch must equal it.
+%                                        Required (default NaT, refused); a context Epoch must equal it.
 %   Attitude      1x1   string    -      "provider" (default, the Model's) or "nominal"
 %   AlongVelocity 1x1   logical   -      Nominal attitude: +X along the velocity (default true)
 %   Parameters    1xP   string    -      Estimated parameters: any of "cdScale", "crScale"; default none
@@ -76,14 +85,17 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
 %   Margin_s      1x1   double    s      Table margin beyond the stencil span (default 3600)
 %   TableStep_s   1x1   double    s      Table spacing (default 60)
 %   ThermalOrbit  1x1   struct    -      thermal.model transient only, and required by it: the reference
-%                                        orbit (.epoch, .r and .v in GCRS, e.g. io.readGNV1B) along which
+%                                        orbit (.epoch, a referenceSystem epoch struct with K increasing
+%                                        entries; .r and .v, 3xK in GCRS, m and m/s; e.g. the three outputs
+%                                        of io.readGNV1B packed into a struct) along which
 %                                        prepare() integrates the wall temperatures; it must cover the
 %                                        tables' span and should start well before it (the walls start
 %                                        from the steady state at its first epoch). Default struct()
 %
 % PROPERTIES (beyond the interface's)
-%   model, epoch, parameters, native, gravity, margin_s, tableStep_s, tables (the prepared
-%   summary: .nT, .nb, .breakpoints, .handle), StateSize (3), ParameterRule, Vectorized (true)
+%   model, epoch, attitudeSource, alongVelocity, parameters, native, gravity, margin_s,
+%   tableStep_s, thermalOrbit, tables (the prepared tables: .nT, .nb, .breakpoints, .handle,
+%   .tPanel, .scale, ...), StateSize (3), ParameterRule, Vectorized (true)
 %
 % METHODS
 %   prepare(context)   Bind to one run: tables, the native entry, the breakpoints, the ParameterSpec
@@ -122,16 +134,29 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
 %                                   from the source's 'Epoch'.
 %
 % ERRORS
-%   NonGravForces:DynamicsSource:inputModel     model is not a NonGravForces.Model, or its options
-%                                               cannot be served (raycast, squad; transient thermal without
-%                                               'ThermalOrbit' or with 'Native' false)
+%   NonGravForces:DynamicsSource:inputModel     model is not a scalar NonGravForces.Model; its options
+%                                               cannot be served (raycast; a non-slerp attitude provider;
+%                                               transient thermal without 'ThermalOrbit' or with 'Native'
+%                                               false); the Model lacks what its options need (Eop, the
+%                                               attitude provider, SpaceWeather, Ceres, DensityScale,
+%                                               Exponential); 'Parameters' outside cdScale/crScale;
+%                                               'Margin_s' < 0 or 'TableStep_s' <= 0; accel() given a
+%                                               non-scalar t or mismatched R, V; diagnostics() without Native
 %   NonGravForces:DynamicsSource:unsupportedOption  erp.backend ceresClimatology or drag.density dtm2020,
 %                                               which have no native evaluator; use Model.accel or series instead
-%   NonGravForces:DynamicsSource:inputEpoch     no 'Epoch', or a context Epoch that disagrees
-%   NonGravForces:DynamicsSource:inputGravity   'Gravity' is not a gjToolbox.DynamicsSource
-%   NonGravForces:DynamicsSource:depMissing     the rhs MEX is not built (Native), or gjToolbox is absent
-%   NonGravForces:DynamicsSource:dataRange      the attitude, the space weather, CERES or 'ThermalOrbit'
-%                                               does not cover the span plus the margin
+%   NonGravForces:DynamicsSource:inputEpoch     no 'Epoch' (or a zoned one), or a context Epoch that disagrees
+%   NonGravForces:DynamicsSource:inputGravity   'Gravity' is not a gjToolbox.DynamicsSource, or (Native)
+%                                               publishes no NativeEntry
+%   NonGravForces:DynamicsSource:depMissing     the rhs MEX is not built (Native), or sun.source rs.de440
+%                                               without the Model's 'Ephemeris'. Without gjToolbox the
+%                                               class does not load at all (MATLAB's own error)
+%   NonGravForces:DynamicsSource:dataRange      the attitude nodes or 'ThermalOrbit' do not cover the
+%                                               tables' span (span plus the margin); a space-weather file
+%                                               that does not cover it raises io.spaceWeather's own error
+%   NonGravForces:rhsGateway:dataRange          native evaluation outside its domain: t outside the tables,
+%                                               a UTC day without a density scale, a height too far
+%                                               outside Swarm's bracket, hwm14 below the ellipsoid
+%   NonGravForces:rhsGateway:numericModel       native evaluation failed otherwise (e.g. the gravity entry)
 %   gjToolbox:dynamics:notPrepared              accel() before prepare()
 %
 % REFERENCES
@@ -139,9 +164,16 @@ classdef DynamicsSource < gjToolbox.DynamicsSource
 %   HANDOVER.md Part G LP-C, WP-C9.
 %
 % EXAMPLE
-%   src = NonGravForces.app.DynamicsSource(M, 'Epoch', datetime(2020, 1, 1, 0, 0, 37));
+%   % M: a standard-preset Model (thermal.model transient, so 'ThermalOrbit' is required;
+%   % built with 'DensityScale', as the preset requires) whose attitude and space weather
+%   % cover 2020-01-01; the day's GNV1B is the reference orbit. The run starts at 02:00 UTC
+%   % so that the tables' default 3600 s margin lies inside the day.
+%   [ep, r, v] = NonGravForces.io.readGNV1B(gnvFile, 'Eop', eop);
+%   orb = struct('epoch', ep, 'r', r, 'v', v);
+%   src = NonGravForces.app.DynamicsSource(M, 'Epoch', datetime(2020, 1, 1, 2, 0, 37), 'ThermalOrbit', orb);
 %   src = src.prepare(struct('Span', [0 600], 'StencilSpan', [0 600], 'MaxColumns', 1));
-%   a = src.accel(0, r0, v0);
+%   k = find(ep.sec >= 7218, 1);                    % 02:00 UTC is 02:00:18 GPS
+%   a = src.accel(0, r(:, k), v(:, k));
 %
 % See also NonGravForces.Model, gjToolbox.DynamicsSource, NonGravForces.buildMex.
 %

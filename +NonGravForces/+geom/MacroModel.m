@@ -2,15 +2,17 @@ classdef MacroModel
 %MACROMODEL Panel ("macro") geometry of a spacecraft, frozen and validated once.
 %
 %   mm = NonGravForces.geom.MacroModel(panels, 'Name', "GRACE-C", 'Inertia', I)
-%   s  = mm.silhouetteDefect()     % 3x1; zero for a closed convex body
+%   s  = mm.silhouetteDefect()     % 3x1; zero for any closed body
 %
 % METHODS
 %   s = silhouetteDefect(obj)  sum_k A_k n_k, the area-weighted sum of the outward normals, 3x1
-%                              in the body frame. It is ZERO for a closed convex body, so it is
-%                              the one-line check that a panel set closes: a non-zero value means
-%                              the panels do not enclose a volume, usually a missing face or a
-%                              normal pointing inward. It is a DIAGNOSTIC and no force reads it;
-%                              geom.graceFO's own tests assert it against the handbook geometry.
+%                              in the body frame. It is ZERO for ANY closed body, convex or not
+%                              (the divergence theorem), so it is the one-line check that a panel
+%                              set closes: a non-zero value means the areas do not enclose a
+%                              volume -- a missing face, a normal pointing inward, or printed
+%                              areas that do not close on each other (the GRACE/GRACE-FO tables:
+%                              0.14 m^2 along z). It is a DIAGNOSTIC and no force reads it;
+%                              geom.graceFO's and geom.grace's tests assert its exact value.
 %
 %   PANELS is a struct array, one element per surface element, with fields
 %     name        string     label
@@ -99,8 +101,18 @@ classdef MacroModel
 %   Mass_kg          1x1   double  kg         Spacecraft mass; default NaN (a Model then needs 'Mass').
 %                                             MAS1B is COLD-GAS TANK mass, not this: see io.massModel.
 %
+% ACCURACY
+%   Nothing is computed beyond packing and validation: the packed normals differ from the given
+%   ones by the renormalisation (at most 1e-5, the acceptance bound; 7.3e-7 on the handbook
+%   digits), and the tolerances of the checks are the ones stated above.
+%
+% REFERENCES
+%   HANDOVER O-2 (normals renormalised once), O-23 (per-panel alpha removed), rule R1 (centroid
+%   from the polygon); Wen et al. (2019) JPL D-56935 Tab. 4-5 for the GRACE-FO instance.
+%
 % ERRORS
-%   NonGravForces:MacroModel:inputPanels     missing field / wrong shape; internalShare or Mass_kg invalid
+%   NonGravForces:MacroModel:inputPanels     missing field; an area not finite and positive; a heatCapacity_J_m2K
+%                                            <= 0; internalShare or Mass_kg invalid
 %   NonGravForces:MacroModel:inputEnergy     a+s+d ~= 1 in a band
 %   NonGravForces:MacroModel:inputNormal     non-unit normal
 %   NonGravForces:MacroModel:inputVertices   vertices not 3xV, not planar, area
@@ -108,7 +120,7 @@ classdef MacroModel
 %                                            centroid_m > 5 cm from the polygon centroid
 %
 % EXAMPLE
-%   mm = NonGravForces.geom.graceFO("C"); sum(mm.A .* mm.N, 2)  % not zero: non-convex
+%   mm = NonGravForces.geom.graceFO("C"); mm.silhouetteDefect()  % [0; 0; 0.14]: the printed areas do not close
 %
 % See also NonGravForces.geom.graceFO, NonGravForces.geom.boxWing, NonGravForces.geom.selfShadow.
 %

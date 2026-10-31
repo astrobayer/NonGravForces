@@ -65,7 +65,7 @@ function mass = massModel(satellite, options)
 %   NonGravForces:massModel:inputMas1b    Mode "mas1b" without Epoch/GasMass_kg,
 %                                         mismatched lengths, non-finite gas
 %                                         mass, or non-increasing epochs
-%   NonGravForces:massModel:inputAnchor   Anchor_kg <= 500 kg
+%   NonGravForces:massModel:inputAnchor   Anchor_kg not finite or <= 500 kg
 %   NonGravForces:massModel:inputEpoch    (from .at) query epoch further than two
 %                                         sample intervals beyond the series, or
 %                                         not an epoch struct
