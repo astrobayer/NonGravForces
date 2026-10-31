@@ -273,7 +273,7 @@ of every model family:
 \texttt{srp.eclipse} & conical & conical & SOLAARS-CF\\
 \texttt{erp.backend} & none & Knocke & CERES\\
 \texttt{erp.grid} & --- & $12\times24$ & $24\times48$\\
-\texttt{thermal.model} & none & transient & steady state (transient opt-in)\\
+\texttt{thermal.model} & none & transient & transient (steady-state opt-in)\\
 \texttt{geom.selfShadow} & none & LUT 16 & LUT 32\\
 \texttt{sun.source} & analytic & analytic & DE440\\
 \bottomrule
@@ -796,9 +796,9 @@ construction.
 
 \section{Thermal re-radiation: the literature disagrees with itself}
 \label{sec:trp}
-\textbf{Since 2026-10-31 the \texttt{standard} preset models it with thermal inertia}
-(\texttt{thermal.model = "transient"}, Woeske's lumped walls); \texttt{precise} still models it
-instantaneously (\texttt{"steadyState"}). The reason is this toolbox's own measurement on 2020-01,
+\textbf{Since 2026-10-31 the \texttt{standard} and \texttt{precise} presets model it with thermal inertia}
+(\texttt{thermal.model = "transient"}, Woeske's lumped walls; \texttt{"steadyState"} is the
+instantaneous opt-in). The reason is this toolbox's own measurement on 2020-01,
 GRACE-C and -D: the instantaneous recoil LED ACT1B by 8--18\,s on the cross-track and radial axes,
 the walls take that to 2--4\,s and the radial residual from 3.25 to \SI{2.28}{\nano\metre\per\second\squared},
 and the radial scale of the calibration moves from 0.8 to 1.07--1.09 (\texttt{tools/alignmentMonth.m},

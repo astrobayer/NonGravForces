@@ -33,7 +33,9 @@ classdef Options
 %   from the steady state at its first epoch (Model.accel 'T0_K' carries them on;
 %   Model.series does so between its chunks). app.DynamicsSource serves it only on
 %   its native path, from a temperature table built with 'ThermalOrbit'.
-%   The precise preset stays steadyState until the same is measured for it.
+%   The precise preset follows since 2026-10-31 (owner ruling): its steady-state walls
+%   led ACT1B by 12-20 s on y and z over five days of 2020-01, the transient walls
+%   take that to 2-7 s (release-checks run 41213060789).
 %
 %   FIDELITY LADDER
 %     field                   fast          standard        precise
@@ -45,7 +47,7 @@ classdef Options
 %     srp.eclipse             conical       conical         solaarsCF
 %     erp.backend             none          knocke          ceres
 %     erp.grid                -             12x24           24x48
-%     thermal.model           none          transient       steadyState (+transient opt-in)
+%     thermal.model           none          transient       transient   (+steadyState opt-in)
 %     geom.selfShadow         none          lut 16          lut 32
 %     geom.flowShadow         exact         table           exact
 %     sun.source              rs.analytic   rs.analytic     rs.de440
@@ -228,9 +230,11 @@ classdef Options
                     % and supersedes Doornbos (2011)'s 0.93. The adsorption models remain available by
                     % name -- and disagree with this by 17.5 % of the drag at 520 km in solar minimum,
                     % which is measured, not feared (HANDOVER Part G, LP-E).
+                    % thermal.model "transient" since 2026-10-31 (owner ruling): the steady state led ACT1B by
+                    % 12-20 s on y/z over 2020-01 C and D, the transient walls by 2-7 s (run 41213060789).
                     dscale = "none";             % the driver record was fitted against msis00, not msis21
                     dens = "msis21"; gsi = "sentman"; acc = "fixed"; alpha = 0.85; ms = [];
-                    ecl = "solaarsCF"; erpB = "ceres"; grid = [24 48]; th = "steadyState"; ss = "lut"; lutN = 32; sunS = "rs.de440"; fs = "exact";
+                    ecl = "solaarsCF"; erpB = "ceres"; grid = [24 48]; th = "transient"; ss = "lut"; lutN = 32; sunS = "rs.de440"; fs = "exact";
             end
             obj.drag     = struct('density', dens, 'wind', "corotation", 'gsi', gsi, ...
                                   'accommodation', acc, 'alpha', alpha, 'surfaceMass_amu', ms, ...

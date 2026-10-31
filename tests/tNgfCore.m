@@ -60,6 +60,8 @@ classdef tNgfCore < NgfTestCase
             tc.verifyEqual(o.set("drag.densityScale", "swarm").drag.densityScale, "swarm");
             tc.verifyErrorId(@() NonGravForces.Options("standard", "drag.densityScale", "dtm"), 'NonGravForces:Options:inputValue');
             p = NonGravForces.Options("precise"); tc.verifyEqual(p.erp.backend, "ceres");
+            % the thermal ladder: precise follows standard into the transient walls (owner ruling 2026-10-31)
+            tc.verifyEqual([NonGravForces.Options("fast").thermal.model, o.thermal.model, p.thermal.model], ["none" "transient" "transient"]);
             f = NonGravForces.Options("fast");    tc.verifyEqual(f.erp.backend, "none");
             tc.verifyErrorId(@() NonGravForces.Options("best"), 'NonGravForces:Options:inputPreset');
             tc.verifyErrorId(@() NonGravForces.Options("fast", "drag.densty", "msis00"), 'NonGravForces:Options:inputField');

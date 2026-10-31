@@ -28,11 +28,10 @@ function [T, info] = thermalState(macro, src, options)
 %                chosen from the linearised time constant (dt <= tau/10); the
 %                sources are held constant over each epoch interval.
 %
-%   This unit defaults to steadyState; the standard preset's Model asks for
-%   "transient" since 2026-10-31 (Options thermal.model; Model.accel takes
-%   'T0_K', Model.series carries the walls across its chunks), the precise
-%   preset for steadyState, and the fast preset computes no temperatures at
-%   all (thermal.model "none").
+%   This unit defaults to steadyState; the standard and precise presets' Models
+%   ask for "transient" since 2026-10-31 (Options thermal.model; Model.accel takes
+%   'T0_K', Model.series carries the walls across its chunks), and the fast
+%   preset computes no temperatures at all (thermal.model "none").
 %
 % INPUT ARGUMENTS
 %   Name     Size  Type                          Units  Description

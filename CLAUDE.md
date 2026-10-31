@@ -177,6 +177,10 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-10-30, PR #124, N-12)
 
+- **2026-10-31, PR #129, owner rulings on the solaarsCF/precise runs: PRECISE IS TRANSIENT** (`Options` precise
+  thermal.model "transient"; steady state led ACT1B by 12-20 s on y/z, transient 2-7 s, run 41213060789; no precise
+  baseline to re-freeze; native path through 'ThermalOrbit'). **standard keeps srp.eclipse "conical"** (leave as is).
+  ◐, predicted gate 511 (one assertion in `tNgfCore/optionsContract`).
 - **2026-10-31, PR #129 (solaarsCF):** the oblateness mapping was INVERTED -- the in-ecliptic part of rE was stretched by
   a/b instead of the component along the ecliptic normal (the projected spin axis); on GRACE-FO's polar orbit that
   widened the modelled shadow by ~8 s per edge and skewed it at larger beta, the size and asymmetry ACT1B showed

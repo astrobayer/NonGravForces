@@ -230,7 +230,7 @@ classdef tNgfIntegration < NgfTestCase
             % are two implementations of the same expressions, and nothing else differs. Seven
             % configurations, chosen to reach every branch the native path serves: exponential density with
             % constantCd and no shadowing (fast); msis00, sentman, Knocke tiles, the cube-map shadow and the
-            % steady thermal model (standard); msis21, CERES, SOLAARS-CF and a 32-cell table (precise);
+            % transient walls (standard); msis21, CERES, SOLAARS-CF, a 32-cell table and transient walls (precise);
             % HWM14 winds, maxwell, the point source and the lunar shadow (hwm14). The last two exist
             % only to reach the accommodation enum: MATLAB and C number it independently, so a value no
             % configuration selects would let both paths run and quietly evaluate different models.
@@ -257,7 +257,7 @@ classdef tNgfIntegration < NgfTestCase
                 "accumulated rounding of two implementations of one expression set, written in the same association order where it decides the digits; measured 2.504e-14 on 2026-09-16");
             tc.verifyBoundAndRecord("native evaluator vs Model.accel between the table nodes (60 s tables)", worstBetween, 1e-9, "-", ...
                 "the cubic tables' interpolation error, not the model's: measured 8.124e-11 at 60 s spacing, and it falls as the fourth power of the step");
-            % Since 2026-10-31 standard, hwm14 and pilinski2011 carry transient walls, whose temperatures the native
+            % Since 2026-10-31 every configuration but fast carries transient walls (precise, walker2014 and sesam too), whose temperatures the native
             % path ALSO reads from a cubic table: between nodes that table's error comes on top, and it is the
             % temperatures' (an eclipse edge is not smooth), not the time tables'. CI 41152904075 measured 1.564e-05
             % for it against the 1e-9 claimed for the time tables alone; the two are now recorded apart.
