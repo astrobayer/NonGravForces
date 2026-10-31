@@ -1574,7 +1574,19 @@ per-day scale + linear bias per axis, both satellites together:
   state at every chunk otherwise); `NgfTestCase.standardUnscaled()` is now also steadyState (tests about something
   else); `tNgfIntegration` runs standard AS SHIPPED through 'ThermalOrbit' and compares with Model.accel along the
   whole sample orbit, and its 'Native' false comparisons take a "standardSteady" configuration. The baseline moves with
-  the preset and is re-frozen next. The user guide's demo transcript (Step 4, "thermal steadyState") is stale until the
+  the preset: **re-frozen 2026-10-31 (release-checks run 41156458334, 76 min, 100-replicate day bootstrap)** --
+
+| | S_xx | S_zz | residual rms x / y / z [nm/s^2] |
+|---|---|---|---|
+| C, 0.17.0 (steadyState) | 0.96615 +- 0.00246 | 0.81984 +- 0.00193 | 2.13 / 3.40 / 3.46 |
+| C, transient | **0.99569** +- 0.00246 | **1.09401** +- 0.00192 | 2.26 / 2.52 / 2.82 |
+| D, 0.17.0 (steadyState) | 0.97193 +- 0.00267 | 0.79256 +- 0.00329 | 2.19 / 12.2 / 3.99 |
+| D, transient | **1.00175** +- 0.00265 | **1.06854** +- 0.00279 | 2.27 / 12.1 / 3.09 |
+
+  The along-track scale is now 1.00 on both satellites and the radial 1.07-1.09: 0.17.0's S_zz ~ 0.8 was the
+  steady-state thermal model, and the radial scale is now bounded only by the radiator's unknown capacity (0.96-1.08 at
+  constant residual, heatCapacityFit). checkAlignment still warns on every day: y and z 1-5 s, x -5 to -22 s (C) --
+  the along-track lead the transient walls introduce, the next thing to read. The user guide's demo transcript (Step 4, "thermal steadyState") is stale until the
   demo is re-run.
 
 **Next, the owner's call:** whether `standard` should take `thermal.model = "transient"` (it changes the baseline's
