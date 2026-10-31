@@ -187,7 +187,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   `tools/userGuideTranscript.m` (release-checks `what: transcript`) regenerates the guide's transcript. The audit found
   ONE CODE DEFECT, mine from PR #126 and older in `Model.series`: transient walls carried across chunks HELD the interval
   across every boundary; chunks after the first now start one epoch early and drop it (`forceBudget`,
-  `densityInversion`, `Model.series`); new test `tNgfApp/forceBudgetTransientChunks`. ◐, predicted gate 511 (510 + 1).
+  `densityInversion`, `Model.series`); new test `tNgfApp/forceBudgetTransientChunks`. ☑ CI on 8734694: 511/511, predicted 511, 0 audit shortfalls.
   Both PDFs build locally (pdflatex, 73 / 126 pages, no undefined references).
   **x lead read at the shadow edges** (alignment run 41187770368, standard): ACT1B sees shadow ENTRY ~4 s earlier and
   EXIT 1-3 s later than the conical model, every day, all axes -- the real shadow is wider (atmosphere), not a time tag;
