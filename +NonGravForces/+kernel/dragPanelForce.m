@@ -30,7 +30,7 @@ function [F, info] = dragPanelForce(macro, rho, species, T_K, vrel_body, options
 %
 %   ACCOMMODATION ('Alpha'). A scalar or 1xK coefficient, or a
 %   kernel.accommodation struct. A struct with .coverage describes a surface of
-%   two states (walker2014): the re-emitted momentum is
+%   two states (walker2014, sesam): the re-emitted momentum is
 %   theta Cp_re(alpha_a) + (1 - theta) Cp_re(alpha_s), which is the drag-coefficient
 %   mixture of that model exactly, because alpha enters nothing else.
 %
@@ -88,7 +88,8 @@ function [F, info] = dragPanelForce(macro, rho, species, T_K, vrel_body, options
 %   NonGravForces:dragPanelForce:inputModel    'Model' missing or not in the set, or its required options absent
 %   NonGravForces:dragPanelForce:inputShape    rho, species, T_K, vrel_body, Alpha or Shadow with the wrong shape
 %   NonGravForces:dragPanelForce:inputRange    |v| = 0, rho < 0, T_K <= 0, Tw <= 0, a fraction or a number/normal ratio outside [0, 1]
-%                                              (the tangential ratio is signed and need only be finite)
+%                                              (the tangential ratio is signed and need only be finite), or an
+%                                              accommodation struct's alpha/coverage/alphaSubstrate outside [0, 1]
 %   NonGravForces:dragPanelForce:numericNaN    NaN/Inf in an input
 %   NonGravForces:gsiCoefficients:*            propagated from the coefficient model (e.g. inputCd, inputSpecular)
 %   NonGravForces:accommodation:*              propagated when a numeric Alpha is validated
@@ -103,7 +104,7 @@ function [F, info] = dragPanelForce(macro, rho, species, T_K, vrel_body, options
 %   mm = NonGravForces.geom.graceFO("C");
 %   [rho, sp, T] = NonGravForces.env.density("msis00", ep, lla, sw);
 %   F = NonGravForces.kernel.dragPanelForce(mm, rho, sp, T(2,:), vrel, 'Model', "sentman", 'Alpha', 0.85, 'Tw_K', 300);
-%   a = squeeze(sum(F, 2)) / 601.214;        % 3xK acceleration, ~5e-8 m/s^2 along -x at solar minimum
+%   a = squeeze(sum(F, 2)) / 601.214;        % 3xK acceleration, a few 1e-8 m/s^2 along -vrel (unscaled MSIS)
 %
 % See also NonGravForces.kernel.gsiCoefficients, NonGravForces.kernel.accommodation, NonGravForces.geom.flowShadow, NonGravForces.kernel.assemble.
 %

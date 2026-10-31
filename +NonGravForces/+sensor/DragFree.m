@@ -56,13 +56,15 @@ classdef DragFree < NonGravForces.sensor.Sensor
 %   Bias          3x1   double  m/s^2       Additive residual offset; default zeros
 %   GainError     1x1   double  -           Relative error of the residual; default 0
 %   ThrusterAsd   3x1   double  m/s^2/rtHz  Actuation noise floor injected inside the
-%                                           bandwidth; default 1e-11 per axis
+%                                           bandwidth, >= 0; a scalar applies to all three
+%                                           axes; default 1e-11 per axis
 %   Name          1x1   string  -           Label; default "dragFree"
 %
 % METHODS
 %   y          = observe(obj, dyn)     dyn: .a 3xK non-gravitational acceleration, body frame.
 %                                      y: .value 3xK residual, .mask 3xK, .frame "body",
-%                                      .info (.commanded .saturated .settleSamples .gainAtBandwidth)
+%                                      .epoch (dyn.epoch if given, else []), .info (.commanded
+%                                      .saturated .settleSamples .gainAtBandwidth .provenance)
 %   [J, names] = partials(obj, dyn)    d(residual)/d([bias; gainError]), (3K)x4, axis fastest
 %   asd        = noiseModel(obj, f_Hz) 3xN residual ASD: thruster noise shaped by the
 %                                      complementary sensitivity, i.e. injected where the loop
@@ -74,9 +76,10 @@ classdef DragFree < NonGravForces.sensor.Sensor
 %                                      frequency without running a series through it
 %
 % ERRORS
-%   NonGravForces:DragFree:inputShape   an argument or dyn.a has the wrong size
+%   NonGravForces:DragFree:inputShape   Bias, ThrusterAsd or dyn.a has the wrong size, or
+%                                       noiseModel's f_Hz is not positive and finite
 %   NonGravForces:DragFree:inputRange   bandwidth <= 0, order < 1 or not an integer,
-%                                       Authority <= 0, SampleRate <= 2 f_c
+%                                       Authority <= 0, ThrusterAsd < 0, SampleRate <= 2 f_c
 %   NonGravForces:DragFree:inputDyn     dyn lacks a
 %   NonGravForces:DragFree:numericNaN   an input contains NaN or Inf
 %

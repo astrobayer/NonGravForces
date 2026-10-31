@@ -41,6 +41,14 @@ function ME = fail(unit, mnemonic, message, varargin)
 %   NonGravForces:fail:inputMnemonic   mnemonic does not start with a
 %                                      taxonomy token
 %   NonGravForces:fail:inputHint       message lacks the ' -> ' hint marker
+%   MATLAB:validators:mustBeNonzeroLengthText   unit, mnemonic or message empty
+%   These two identifiers are raised with error(), not through fail itself.
+%
+% ACCURACY
+%   Not applicable.
+%
+% REFERENCES
+%   HANDOVER principle P10 (one raise point); CLAUDE.md section 3 (error conventions).
 %
 % EXAMPLE
 %   NonGravForces.fail("eclipseFactor", "inputShape", ...

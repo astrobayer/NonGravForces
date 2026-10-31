@@ -29,6 +29,8 @@ function [src, info] = radiationSources(epoch, r, q_body2gcrs, options, nv)
 %   reference sphere (earthRadiance "ceres"), with the measured monthly albedo a_j
 %   and the measured longwave exitance L_j in place of e_j S/4:
 %       P_albedo = a_j S mu_s mu A_j / (pi rho^2 c),   P_ir = L_j mu A_j / (pi rho^2 c).
+%   ceresClimatology: the same as ceres, with the GROOPS monthly climatology
+%   (earthRadiance "ceresClimatology", 'Climatology') supplying a_j and L_j.
 %   pointSource: the far-field Lambert sphere,
 %   P_albedo = (2/3) a0 S (R/|r|)^2 psi(theta) / c with the Lambert phase law
 %   psi = (sin theta + (pi - theta) cos theta)/pi, theta the Sun-Earth-satellite
@@ -63,7 +65,8 @@ function [src, info] = radiationSources(epoch, r, q_body2gcrs, options, nv)
 %   Ceres         1x1   struct  -      io.importCERES result; erp.backend ceres only. Default [].
 %   Climatology   1x1   struct  -      .albedo and .longwave io.importGroopsGrid results;
 %                                      erp.backend ceresClimatology only. Default [].
-%   RotationItrsToGcrs 3x3xK double -  ITRS->GCRS rotation; erp.backend ceres only. Default [].
+%   RotationItrsToGcrs 3x3xK double -  ITRS->GCRS rotation; erp.backend ceres and
+%                                      ceresClimatology only. Default [].
 %
 % OUTPUT ARGUMENTS
 %   Name     Size    Type    Units  Description
@@ -73,7 +76,8 @@ function [src, info] = radiationSources(epoch, r, q_body2gcrs, options, nv)
 %                                   .nu (1xK Sun shadow factor), .M, .K,
 %                                   .frame "body", .meta (see info).
 %   info     1x1     struct  -      .sunSource (Options value or "caller"), .sunDistance_m (1xK), .sunUnit_gcrs
-%                                   (3xK), .eclipseModel, .lunarEclipse,
+%                                   (3xK), .eclipseModel, .eclipse (eclipseFactor's info),
+%                                   .lunarEclipse,
 %                                   .erpBackend, .grid, .tiles (earthRadiance
 %                                   struct or []), .tsi_W_m2, .earthRadius_m,
 %                                   .speedOfLight_m_s, .provenance.
@@ -91,11 +95,15 @@ function [src, info] = radiationSources(epoch, r, q_body2gcrs, options, nv)
 %   distance): irrelevant here.
 %
 % ERRORS
-%   NonGravForces:radiationSources:inputShape      r not 3xK, q not 4xK, or K differs from epoch
+%   NonGravForces:radiationSources:inputShape      epoch not an epoch struct, r not 3xK, q not 4xK, or
+%                                                  K differs from epoch; a caller 'Sun' not a finite
+%                                                  3xK, or given without 'EclipticNormal' (solaarsCF)
+%                                                  or without 'Moon' (srp.lunarEclipse)
 %   NonGravForces:radiationSources:numericNaN      NaN/Inf in r or q
 %   NonGravForces:radiationSources:depKernel       sun.source rs.de440 without 'Ephemeris'
 %   NonGravForces:radiationSources:inputCeres      'Ceres', 'Climatology' or 'RotationItrsToGcrs' given with erp.backend none
 %   NonGravForces:earthRadiance:inputCeres         ceres inputs missing, or given to another backend
+%   NonGravForces:earthRadiance:inputClimatology   ceresClimatology inputs missing, or given to another backend
 %   NonGravForces:eclipseFactor:*, NonGravForces:earthRadiance:*   from the callees
 %   referenceSystem:*                              propagated unwrapped
 %

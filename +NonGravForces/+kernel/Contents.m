@@ -2,7 +2,7 @@
 % Version 0.17.0  29-Oct-2026
 %
 %   gsiCoefficients      - Normal and tangential plate coefficients: sentman maxwell constantCd (cll/schamberg refuse)
-%   accommodation        - Energy accommodation per epoch: fixed or Pilinski 2010 or the Walker/Mehta adsorbate mixture
+%   accommodation        - Energy accommodation per epoch: fixed or either Pilinski fit or the Walker/Mehta adsorbate mixture or SESAM
 %   dragPanelForce       - Per-panel gas-momentum force in body frame
 %   radiationPanelForce  - Per-panel radiation force for a source list in body frame
 %   thermalRecoil        - Per-panel thermal re-emission recoil force

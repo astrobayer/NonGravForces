@@ -2,9 +2,11 @@
 # the regression baseline over the reference month 2020-01 C and D from the runner's DATAPOOL
 # (tools/regressionBaseline.m, ~3-4 h) and the per-epoch benchmark (tools/benchmark.m, minutes).
 # Also one diagnostic on the same month: "alignment" runs tools/alignmentMonth.m (the lag between
-# ACT1B and the model per day and axis, raw and with the bias removed, per effect; ~3 h), and
+# ACT1B and the model per day and axis, per effect, at the shadow edges, with the other thermal and
+# eclipse models; ~2 h; input preset "precise" runs every fifth day of that preset), and
 # "heatcapacity" runs tools/heatCapacityFit.m (the wall heat capacities per panel group fitted to ACT1B
-# through the transient thermal model; ~2 h).
+# through the transient thermal model; ~2 h). "transcript" runs tools/userGuideTranscript.m (the user
+# guide's Steps 1-8 on the committed excerpt, minutes) for the guide's transcript.
 #
 # Neither is a gate. They exist as a workflow because a release needs both at the version being
 # released (audit check 14 refuses a version the baseline was not verified at; check 13 compares every
@@ -22,11 +24,14 @@ on:
   workflow_dispatch:
     inputs:
       what:
-        description: "baseline-freeze | baseline-compare | benchmark | alignment | heatcapacity"
+        description: "baseline-freeze | baseline-compare | benchmark | alignment | heatcapacity | transcript"
         default: "baseline-compare"
+      preset:
+        description: "alignment only: the Model preset (standard | precise)"
+        default: "standard"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.inputs.what }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.inputs.what }}-${{ github.event.inputs.preset }}
   cancel-in-progress: true
 
 permissions:
@@ -39,6 +44,7 @@ jobs:
     env:
       READING_DATA_POOL: ${{ vars.READING_DATA_POOL }}
       RELEASE_WHAT: ${{ github.event.inputs.what }}
+      RELEASE_PRESET: ${{ github.event.inputs.preset }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with: { path: NonGravForces, persist-credentials: false }
@@ -115,15 +121,32 @@ jobs:
                     disp(T);
                     out = fullfile(pwd, "tools", "benchmark_reference.csv");
                 case "alignment"
-                    rep = NonGravForces.buildMex('Target', "msis"); assert(rep.upToDate, "releaseChecks:mex", "MEX target msis did not build");
-                    alignmentMonth();
+                    preset = string(getenv("RELEASE_PRESET")); if strlength(preset) == 0, preset = "standard"; end
+                    targets = "msis";
+                    if preset == "precise"   % msis21 and the DE440 kernel, which this run otherwise does not fetch
+                        setupNonGravForces('Verbose', false, 'FetchData', "never", 'FetchKernels', "ifMissing", 'FetchGroops', "never", 'FetchPool', "never");
+                        targets = ["msis" "msis21"];
+                    end
+                    for target = targets
+                        rep = NonGravForces.buildMex('Target', target); assert(rep.upToDate, "releaseChecks:mex", "MEX target %s did not build", target);
+                    end
+                    days = [];
+                    % every third day up to 01-15: precise's exact flow shadow and 24x48 CERES tiles cost several times
+                    % standard, and the committed CERES excerpt holds monthly means centred 2019-12-16 and 2020-01-16, so
+                    % earthRadiance refuses any epoch after 2020-01-16 (run 41187772070 stopped there on 2020-01-16)
+                    if preset == "precise", days = 1:3:15; end
+                    alignmentMonth('Preset', preset, 'Days', days);
                     out = fullfile(pwd, "tools", "alignment_month.csv");
+                case "transcript"
+                    rep = NonGravForces.buildMex('Target', "msis"); assert(rep.upToDate, "releaseChecks:mex", "MEX target msis did not build");
+                    userGuideTranscript();   % prints the user guide's Steps 1-8 on the committed excerpt
+                    out = "";
                 case "heatcapacity"
                     rep = NonGravForces.buildMex('Target', "msis"); assert(rep.upToDate, "releaseChecks:mex", "MEX target msis did not build");
                     heatCapacityFit();
                     out = fullfile(pwd, "tools", "heat_capacity_fit.csv");
                 otherwise
-                    error("releaseChecks:what", "unknown input what = %s -> baseline-freeze, baseline-compare, benchmark, alignment or heatcapacity", what);
+                    error("releaseChecks:what", "unknown input what = %s -> baseline-freeze, baseline-compare, benchmark, alignment, heatcapacity or transcript", what);
             end
             if strlength(out) > 0
                 fprintf("----- BEGIN %s -----\n%s\n----- END %s -----\n", out, fileread(out), out);

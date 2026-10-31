@@ -59,7 +59,8 @@ function [f, info] = selfShadow(macro, dir_body, options)
 %   Samples         1x1   double  -      grid points per plate edge for the ray cast (default 40)
 %   LutResolution   1x1   double  -      cells per cube-face edge, integer in [1, 256]; default:
 %                                         the resolution of 'Lut' if given, else 16 (5.6 deg)
-%   Lut             1x1   struct  -      a previously returned table for this macro model
+%   Lut             1x1   struct  -      a previously returned table for this macro model; its own
+%                                         sample count is kept (Samples is not compared with it)
 %   Plate           1x1   double  -      evaluate this one plate only (index into the macro model):
 %                                         f is then 1xK; default [] (every plate)
 %
@@ -88,7 +89,7 @@ function [f, info] = selfShadow(macro, dir_body, options)
 %   NonGravForces:selfShadow:inputMacro       not a MacroModel, or without vertices on every plate
 %   NonGravForces:selfShadow:inputShape       dir_body not 3xK, not unit, or not finite; 'Plate' not a plate index
 %   NonGravForces:selfShadow:inputResolution  LutResolution not an integer in [1, 256]
-%   NonGravForces:selfShadow:inputLut         'Lut' built for another geometry, resolution or sample count
+%   NonGravForces:selfShadow:inputLut         'Lut' built for another geometry or resolution (or not a table)
 %
 % REFERENCES
 %   Wöske et al. (2019) Adv. Space Res. 63:1096 (finite-element ray tracing vs plates);

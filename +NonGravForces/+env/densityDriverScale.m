@@ -29,6 +29,10 @@ function S = densityDriverScale(sw, cls, options)
 %   square", trimmed days); 'Offset' adds a satellite's own level in log f, -0.041 for
 %   GRACE-FO 1 (its accelerometer densities read 4 % below Swarm's in the same years).
 %
+%   A Model applies S as its 'DensityScale' under Options drag.densityScale "driver"; under
+%   "combined" (the standard preset since 0.17.0) S is the 'Fallback' of env.densityScale and
+%   serves the days without a Swarm factor.
+%
 % INPUT ARGUMENTS
 %   Name  Size  Type    Units  Description
 %   ----  ----  ----    -----  -----------

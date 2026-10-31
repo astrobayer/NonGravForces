@@ -17,26 +17,28 @@ function T = alignmentMonth(options)
 %   This tool separates them. For each day it evaluates the Model along GNV1B exactly as
 %   app.calibrate does (pchip onto the 10 Hz raw grid, CRN-filtered with the ACC kernel onto
 %   the ACT1B epochs), and measures checkAlignment's lag and peak correlation per axis for:
-%     raw         ACT1B against the filtered model -- what the calibration run reported;
+%     raw         ACT1B against the filtered model -- what the calibration run reports;
 %     linear      ACT1B minus b0 + b1*tau, fitted per axis jointly with a model scale
 %                 (y = s*m + b0 + b1*tau, the baseline's "linear" bias per day), against the model;
-%     quadratic   the same with b2*tau^2 as well;
-%     drag, srp, erp, thermal
-%                 one effect alone: the linear-bias-corrected ACT1B minus s times every OTHER effect
-%                 (s the common scale of "linear"), against that effect. srp is the radiation of the
-%                 same preset with erp.backend "none" (the Sun alone), erp the full radiation minus
-%                 it (albedo + longwave), thermal the preset's recoil (steadyState in standard: no
-%                 thermal inertia);
-%     transient   as "linear", against the model with thermal.model "transient" (Woeske's lumped
-%                 walls, graceFO's heat capacities);
-%     thermalTransient  as "thermal", with the transient model's recoil and its own scale.
-%   Run 41029605595 (2020-01, 0.17.0) answered the first question: the lags survive bias removal
-%   (no lag moved by more than 1.4 s, peaks 0.95-0.99) and stay against radiation + thermal. The
-%   per-effect variants say which effect carries them; the transient variants whether thermal
-%   inertia, absent from the steady-state preset, is the phase. tau is the day's time in days from
+%     drag, radiation, thermal
+%                 one effect alone: the bias-corrected ACT1B minus s times every OTHER effect, against
+%                 that effect;
+%     altThermal  as "linear", with the preset's OTHER thermal model (steadyState <-> transient);
+%     altEclipse  as "linear", with the preset's OTHER eclipse model (conical <-> solaarsCF);
+%     entry, exit as "linear", but only within +-EdgeWindow_s of each shadow entry (exit), from the
+%                 preset's own shadow factor nu crossing 0.5 -- the timing of the eclipse steps alone;
+%     entryAltThermal, exitAltThermal, entryAltEclipse, exitAltEclipse
+%                 the same windows with the alternative models.
+%   Positive lag: ACT1B lags the model. History: run 41029605595 (0.17.0) showed the lags survive bias
+%   removal; run 41042736099 that the y/z lags are thermal inertia (now the standard preset's transient
+%   walls). On x the steady-state model already had ACT1B LEADING by 4.2 s (C) / 1.9 s (D), carried by
+%   srp alone (-4.4 / -2.1 s, peak 0.99), and the transient walls take it to -7.6 / -5.0 s. On x the
+%   radiation signal is mostly the eclipse steps, so the entry/exit split says whether that lead is a
+%   common timing (both steps early), a shadow-shape error (entry early, exit late, or the reverse) or
+%   the thermal response after the steps (altThermal against linear). tau is the day's time in days from
 %   its middle epoch. No series is shifted, nothing is calibrated for keeps.
 %
-%   IT LIVES IN tools/ like regressionBaseline.m: three models per day make a month ~3 h on the CI
+%   IT LIVES IN tools/ like regressionBaseline.m: three models per day make a month ~2 h on the CI
 %   runner, a diagnostic, not a gate. release-checks.yml runs it ("what: alignment") and prints the
 %   written CSV into the log.
 %
@@ -49,17 +51,18 @@ function T = alignmentMonth(options)
 %   Days        1xD   double  -      Days of the month to use; default [] = every day folder present
 %   Preset      1x1   string  -      Model preset; default "standard"
 %   MaxLag      1x1   double  s      checkAlignment's search bound; default 60 (timeSeriesPreparation's Config)
+%   EdgeWindow_s 1x1  double  s      half-width of the windows around shadow entries and exits; default 300
 %   Output      1x1   string  -      CSV written; default tools/alignment_month.csv
 %
 % OUTPUT ARGUMENTS
 %   Name  Size  Type   Units  Description
 %   ----  ----  ----   -----  -----------
-%   T     Nx9   table  -      satellite, day, variant, axis, lag_s, peak, verdict, scale (s of the joint
+%   T     Nx10  table  -      satellite, day, variant, axis, lag_s, peak, verdict, scale (s of the joint
 %                             fit with the variant's total model, NaN for raw), rmsRatio (rms of the corrected obs over rms of the raw
-%                             obs after its mean; 1 for raw)
+%                             obs after its mean; 1 for raw), edges (shadow entries + exits of the day)
 %
 % ERRORS
-%   NonGravForces:alignmentMonth:dataMissing  no pool or month folder, or the density-scale inputs
+%   NonGravForces:alignmentMonth:dataMissing  no pool or month folder, the density-scale inputs, or precise's CERES/DE440
 %
 % EXAMPLE
 %   T = alignmentMonth('Pool', "E:\DATAPOOL", 'Days', 1:2, 'Satellites', "C");
@@ -72,6 +75,7 @@ arguments
     options.Days double = []
     options.Preset (1,1) string = "standard"
     options.MaxLag (1,1) double {mustBePositive} = 60
+    options.EdgeWindow_s (1,1) double {mustBePositive} = 300
     options.Output (1,1) string = ""
 end
 unit = "alignmentMonth";
@@ -111,91 +115,121 @@ ids = ["timeSeriesPreparation:checkAlignment:offset" "timeSeriesPreparation:chec
 was = warning('off', ids(1)); for id = ids(2:end), was(end + 1) = warning('off', id); end %#ok<AGROW>
 cleanup = onCleanup(@() warning(was)); %#ok<NASGU>     % the states the caller had, restored
 
+% The precise preset's CERES and DE440 inputs, as tNgfIntegration builds them (committed excerpt: 2020-01 only).
+extraArgs = {};
+if o.erp.backend == "ceres"
+    cerFiles = string(fullfile(root, 'data', 'ceres', ["rsut" "rlut" "rsdt"] + "_mon_CERES-EBAF-4-2-1_NASA-GISS_gn_201912-202001.nc"));
+    if options.Month ~= "2020-01" || ~all(isfile(cerFiles))
+        NonGravForces.fail(unit, "dataMissing", "preset %s takes erp.backend ceres and the committed CERES excerpt covers 2020-01 only -> use Month 2020-01 after setupNonGravForces", options.Preset);
+    end
+    % The excerpt holds the monthly means of 2019-12 and 2020-01, centred on the 16th; earthRadiance interpolates
+    % between them and refuses epochs after 2020-01-16 (run 41187772070), so later days are refused here first.
+    late = str2double(extractAfter(days, 8)) > 15;
+    if any(late)
+        NonGravForces.fail(unit, "dataMissing", "preset %s: the committed CERES excerpt ends at 2020-01-16, and days %s lie beyond it -> pass 'Days' within 1..15", ...
+            options.Preset, strjoin(extractAfter(days(late), 8), ", "));
+    end
+    extraArgs = [extraArgs, {'Ceres', NonGravForces.io.importCERES(cerFiles)}];
+end
+if o.sun.source == "rs.de440"
+    kernel = fullfile(root, 'data', 'kernels', 'de440s.bsp');
+    if ~isfile(kernel)
+        NonGravForces.fail(unit, "dataMissing", "preset %s takes sun.source rs.de440 and %s is missing -> run setupNonGravForces", options.Preset, kernel);
+    end
+    extraArgs = [extraArgs, {'Ephemeris', referenceSystem.readEphemeris(string(kernel))}];
+end
+
+% Each day is evaluated three times: the preset, the preset with the OTHER thermal model and the preset with the
+% OTHER eclipse model (steadyState <-> transient, conical <-> solaarsCF).
+thAlt = "transient";  if o.thermal.model == "transient", thAlt = "steadyState"; end
+eclAlt = "solaarsCF"; if o.srp.eclipse == "solaarsCF",   eclAlt = "conical";    end
+oTh = NonGravForces.Options(options.Preset, "thermal.model", thAlt);
+oEcl = NonGravForces.Options(options.Preset, "srp.eclipse", eclAlt);
+
 rows = {};
-variants = ["raw" "linear" "quadratic" "drag" "srp" "erp" "thermal" "transient" "thermalTransient"];
-effects = ["drag" "srp" "erp" "thermal"];
+variants = ["raw" "linear" "drag" "radiation" "thermal" "altThermal" "altEclipse" ...
+    "entry" "exit" "entryAltThermal" "exitAltThermal" "entryAltEclipse" "exitAltEclipse"];
+effects = ["drag" "radiation" "thermal"];
 ax = ["x" "y" "z"];
-oSun = NonGravForces.Options(options.Preset, "erp.backend", "none");
-oTr = NonGravForces.Options(options.Preset, "thermal.model", "transient");
+fprintf('alignmentMonth: preset %s (thermal %s, eclipse %s); altThermal %s, altEclipse %s; edge windows +-%g s\n', ...
+    options.Preset, o.thermal.model, o.srp.eclipse, thAlt, eclAlt, options.EdgeWindow_s);
 for sat = options.Satellites
     ts = tic;
     [acc, orb, att, used] = localReadMonth(monthDir, days, sat, eop);
     macro = NonGravForces.geom.graceFO(sat);
-    modelArgs = {'Attitude', att, 'Eop', eop, 'SpaceWeather', sw, scaleArgs{:}};
+    modelArgs = {'Attitude', att, 'Eop', eop, 'SpaceWeather', sw, scaleArgs{:}, extraArgs{:}};
     M = NonGravForces.Model(macro, o, modelArgs{:});
-    Msun = NonGravForces.Model(macro, oSun, modelArgs{:});
-    Mtr = NonGravForces.Model(macro, oTr, modelArgs{:});
+    Mth = NonGravForces.Model(macro, oTh, modelArgs{:});
+    Mecl = NonGravForces.Model(macro, oEcl, modelArgs{:});
     for k = 1:numel(acc)
         F = localFilteredModel(M, acc(k), K, orb(k), att);
-        Fsun = localFilteredModel(Msun, acc(k), K, orb(k), att);
-        Ftr = localFilteredModel(Mtr, acc(k), K, orb(k), att);
-        E = struct('drag', F.drag.obs, 'srp', Fsun.radiation.obs, 'erp', F.radiation.obs - Fsun.radiation.obs, ...
-            'thermal', F.thermal.obs);
-        Etr = E; Etr.thermal = Ftr.thermal.obs;
+        Fth = localFilteredModel(Mth, acc(k), K, orb(k), att);
+        Fecl = localFilteredModel(Mecl, acc(k), K, orb(k), att);
+        [inEntry, inExit, nEdges] = localEdgeWindows(acc(k).t, F.nu, options.EdgeWindow_s);
         y = acc(k).obs;
         tau = double(acc(k).t - acc(k).t(round(end / 2))) / 86400e9;
         reps = cell(1, numel(variants)); s = NaN(numel(variants), 3); ratio = ones(numel(variants), 3);
         reps{1} = timeSeriesPreparation.checkAlignment(acc(k), F.total, MaxLag = options.MaxLag);
         for v = 2:numel(variants)
-            yc = NaN(size(y)); refObs = NaN(size(y));
-            switch variants(v)
-                case {"transient" "thermalTransient"}, total = Ftr.total.obs; parts = Etr;
-                otherwise,                             total = F.total.obs;   parts = E;
+            name = variants(v);
+            if endsWith(name, "AltThermal") || name == "altThermal", G = Fth;
+            elseif endsWith(name, "AltEclipse") || name == "altEclipse", G = Fecl;
+            else, G = F;
             end
+            mask = true(size(y, 1), 1);
+            if startsWith(name, "entry"), mask = inEntry; elseif startsWith(name, "exit"), mask = inExit; end
+            yc = NaN(size(y)); refObs = NaN(size(y));
             for j = 1:3
-                m = total(:, j);
+                m = G.total.obs(:, j);
                 ok = isfinite(y(:, j)) & isfinite(m);
-                switch variants(v)
-                    case "quadratic", X = [m, ones(size(m)), tau, tau .^ 2];
-                    otherwise,        X = [m, ones(size(m)), tau];
-                end
-                c = localFit(X(ok, :), y(ok, j));
+                X = [m, ones(size(m)), tau];
+                c = localFit(X(ok, :), y(ok, j));             % the day's scale and linear bias, on the whole day
                 yb = y(:, j) - X(:, 2:end) * c(2:end);        % the bias curve removed
                 s(v, j) = c(1);
-                switch variants(v)
-                    case {"linear" "quadratic" "transient"}
-                        yc(:, j) = yb;
-                        refObs(:, j) = m;
-                    otherwise                                  % one effect alone
-                        e = variants(v);
-                        if e == "thermalTransient", e = "thermal"; end
-                        others = zeros(size(m));
-                        for f = effects(effects ~= e), others = others + parts.(f)(:, j); end
-                        yc(:, j) = yb - c(1) * others;
-                        refObs(:, j) = parts.(e)(:, j);
+                if ismember(name, effects)                    % one effect alone
+                    others = zeros(size(m));
+                    for f = effects(effects ~= name), others = others + G.(f).obs(:, j); end
+                    yc(:, j) = yb - c(1) * others;
+                    refObs(:, j) = G.(name).obs(:, j);
+                else                                          % the whole model, on the day or on the edge windows
+                    yc(:, j) = yb;
+                    refObs(:, j) = m;
                 end
-                y0 = y(ok, j) - mean(y(ok, j)); yv = yc(ok, j) - mean(yc(ok, j), 'omitnan');
+                yc(~mask, j) = NaN; refObs(~mask, j) = NaN;
+                use = ok & mask;
+                y0 = y(use, j) - mean(y(use, j)); yv = yc(use, j) - mean(yc(use, j), 'omitnan');
                 ratio(v, j) = sqrt(mean(yv .^ 2, 'omitnan') / mean(y0 .^ 2));
             end
             reps{v} = timeSeriesPreparation.checkAlignment(localArc(acc(k).t, yc, acc(k).names, "ACT1B_CORRECTED"), ...
-                localArc(acc(k).t, refObs, acc(k).names, "MODEL_" + upper(variants(v))), MaxLag = options.MaxLag);
+                localArc(acc(k).t, refObs, acc(k).names, "MODEL_" + upper(name)), MaxLag = options.MaxLag);
         end
         for v = 1:numel(variants)
             for j = 1:3
-                rows(end + 1, :) = {sat, used(k), variants(v), ax(j), reps{v}.lag(j), reps{v}.peak(j), reps{v}.verdict(j), s(v, j), ratio(v, j)}; %#ok<AGROW>
+                rows(end + 1, :) = {sat, used(k), variants(v), ax(j), reps{v}.lag(j), reps{v}.peak(j), reps{v}.verdict(j), s(v, j), ratio(v, j), nEdges}; %#ok<AGROW>
             end
         end
-        fprintf('alignmentMonth %s %s: raw %s | srp %s | erp %s | thermal %s | transient %s | thermalTransient %s s\n', sat, used(k), ...
-            localLags(reps{1}), localLags(reps{variants == "srp"}), localLags(reps{variants == "erp"}), localLags(reps{variants == "thermal"}), ...
-            localLags(reps{variants == "transient"}), localLags(reps{variants == "thermalTransient"}));
+        lagOf = @(name) localLags(reps{variants == name});
+        fprintf('alignmentMonth %s %s (%d edges): linear %s | entry %s | exit %s | altThermal %s | altEclipse %s s\n', sat, used(k), nEdges, ...
+            lagOf("linear"), lagOf("entry"), lagOf("exit"), lagOf("altThermal"), lagOf("altEclipse"));
     end
     fprintf('alignmentMonth %s: %d days in %.0f s\n', sat, numel(acc), toc(ts));
 end
-T = cell2table(rows, 'VariableNames', {'satellite', 'day', 'variant', 'axis', 'lag_s', 'peak', 'verdict', 'scale', 'rmsRatio'});
+T = cell2table(rows, 'VariableNames', {'satellite', 'day', 'variant', 'axis', 'lag_s', 'peak', 'verdict', 'scale', 'rmsRatio', 'edges'});
 writetable(T, out);
 
-% The summary: per satellite, variant and axis, the median |lag|, the largest |lag| and the median peak.
-fprintf('\nalignmentMonth summary (median |lag| s / max |lag| s / median peak / days aligned within 1 s)\n');
+% The summary: per satellite, variant and axis, the median SIGNED lag (positive: ACT1B lags the model), the
+% median |lag|, the largest |lag| and the median peak.
+fprintf('\nalignmentMonth summary (median lag s / median |lag| s / max |lag| s / median peak / days aligned within 1 s)\n');
 for sat = options.Satellites
     for v = variants
         parts = strings(1, 3);
         for j = 1:3
             r = T(T.satellite == sat & T.variant == v & T.axis == ax(j), :);
             L = abs(r.lag_s);
-            parts(j) = sprintf('%s %6.2f / %5.1f / %.3f / %2d of %2d', ax(j), median(L, 'omitnan'), max(L), median(r.peak, 'omitnan'), ...
-                nnz(L <= 1), height(r));
+            parts(j) = sprintf('%s %6.2f / %5.2f / %4.1f / %.3f / %2d of %2d', ax(j), median(r.lag_s, 'omitnan'), median(L, 'omitnan'), max(L), ...
+                median(r.peak, 'omitnan'), nnz(L <= 1), height(r));
         end
-        fprintf('  %s %-9s %s\n', sat, v, strjoin(parts, "  |  "));
+        fprintf('  %s %-15s %s\n', sat, v, strjoin(parts, "  |  "));
     end
 end
 end
@@ -224,6 +258,19 @@ F.total = timeSeriesPreparation.crnApply(localArc(tRaw, pchip(ts, a, tq).', name
 for e = ["drag" "radiation" "thermal"]
     F.(e) = timeSeriesPreparation.crnApply(localArc(tRaw, pchip(ts, ai.(e), tq).', names, "MODEL_" + upper(e)), K, OutputEpochs = acc.t);
 end
+F.nu = interp1(ts, ai.nu, double(acc.t - t0) / 1e9, 'linear');   % the shadow factor at the ACT1B epochs (unfiltered)
+end
+
+function [inEntry, inExit, n] = localEdgeWindows(t, nu, w)
+%LOCALEDGEWINDOWS The ACT1B epochs within +-w s of a shadow entry (nu falls through 0.5) or exit (rises through it).
+s = double(t - t(1)) / 1e9;
+lit = nu(:) >= 0.5;                       % NaN (outside the orbit) counts as shadow; the orbit covers the day
+d = diff(lit);
+tIn = s(find(d == -1) + 1); tOut = s(find(d == 1) + 1);
+inEntry = false(numel(s), 1); inExit = false(numel(s), 1);
+for k = 1:numel(tIn),  inEntry = inEntry | abs(s - tIn(k)) <= w; end
+for k = 1:numel(tOut), inExit = inExit | abs(s - tOut(k)) <= w; end
+n = numel(tIn) + numel(tOut);
 end
 
 function c = localFit(X, y)

@@ -77,12 +77,9 @@ function [epoch, r, v, aux] = readGNV1B(files, options)
 %   NonGravForces:readGNV1B:dataEmpty       no record survives the filters
 %   NonGravForces:readGNV1B:dataColumn      a position/velocity column is missing
 %   NonGravForces:readGNV1B:dataFrame       coord_ref is not 'E' for every record
-%   referenceSystem:*, gracefoReading:*     propagated unwrapped (including
-%   MATLAB:badsubscript                     from gracefoReading.readL1bMulti when SEVERAL
-%                                           files are given and TimeRange excludes every
-%                                           record (dependency defect, HANDOVER O-12)
-%                                           leapSecondTable:beforeUtcEpoch
-%                                           for a pre-1972 EOP series)
+%   referenceSystem:*, gracefoReading:*     propagated unwrapped (a pre-1972 EOP
+%                                           series is trimmed with a warning,
+%                                           not refused; see the note above)
 %
 % REFERENCES
 %   JPL D-56935, GNV1B format; IERS Conventions (2010) Ch. 5 via referenceSystem.

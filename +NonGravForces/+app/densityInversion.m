@@ -34,6 +34,15 @@ function [T, info] = densityInversion(model, epoch, r, v, q, aMeasured, options)
 %   modelling error, and it is a statement about the data. Clipping at zero would
 %   turn a visible failure into a plausible-looking density floor.
 %
+%   A TRANSIENT THERMAL MODEL (thermal.model "transient", the standard preset's
+%   since PR #126) carries its wall temperatures from chunk to chunk: the last
+%   epoch's temperatures of one chunk are passed as 'T0_K' to Model.accel for
+%   the next, as Model.series does, so the subtracted thermal recoil is not
+%   re-started from the steady state at every chunk. Every later chunk is
+%   evaluated from ONE EPOCH EARLY - the previous chunk's last epoch, at its
+%   temperatures - and that epoch is dropped, so the interval across the
+%   boundary is integrated exactly as in one call.
+%
 % INPUT ARGUMENTS
 %   Name        Size    Type    Units   Description
 %   ----        ----    ----    -----   -----------
@@ -49,7 +58,9 @@ function [T, info] = densityInversion(model, epoch, r, v, q, aMeasured, options)
 %   ----      ----  ----    -----  -----------
 %   Frame     1x1   string  -      "body" (default) or "gcrs"; aMeasured is read in it
 %   Chunk     1x1   double  -      Epochs per evaluation, >= 1; default the model's
-%                                  Options.series.chunk. Does not change the result
+%                                  Options.series.chunk; rounded to an integer. Changes
+%                                  the result by rounding only, transient walls included
+%                                  (see ACCURACY)
 %   MinDrag   1x1   double  m/s^2  Below this modelled drag magnitude the epoch is marked
 %                                  unusable instead of dividing by it; default 1e-12
 %
@@ -63,14 +74,17 @@ function [T, info] = densityInversion(model, epoch, r, v, q, aMeasured, options)
 %                                      .usable logical (false where the modelled drag is below
 %                                      MinDrag, where rho_model is zero, or where the epoch was
 %                                      not finite). rho is NaN wherever usable is false
-%   info   1x1     struct     -        .K .chunks .frame .usable (count) .provenance
+%   info   1x1     struct     -        .K .chunks .chunkSize .frame .usable (count)
+%                                      .minDrag .provenance
 %
 % ACCURACY
 %   Exact by construction where the model is the truth: feeding a model's own
 %   acceleration back in returns its own density, and the round trip is the
 %   reference test. Against real data the accuracy is that of everything
 %   subtracted first - the radiation model, the macro model, the attitude and the
-%   calibration - and no bound here can speak for those.
+%   calibration - and no bound here can speak for those. For thermal.model
+%   "transient" 'Chunk' changes the subtracted thermal recoil only by the
+%   rounding of the overlap epoch evaluated twice.
 %
 % ERRORS
 %   NonGravForces:densityInversion:inputModel   model is not a NonGravForces.Model
@@ -143,11 +157,18 @@ rhoModel = zeros(1, K); dragProj = zeros(1, K); dragMod = zeros(1, K);
 perp = zeros(1, K); usable = false(1, K);
 T0 = [];                                                 % a transient model's walls carry over from chunk to chunk
 for c = 1:nC
+    % A transient chunk after the first starts ONE EPOCH EARLY, at the previous chunk's last epoch and its
+    % temperatures, so the interval across the boundary is integrated as in one call; that epoch is dropped.
+    lead = ~isempty(T0);
+    idxE = first(c) - lead:last(c);
     idx = first(c):last(c);
-    ep = referenceSystem.daySecondToEpoch([epoch.day(idx) epoch.sec(idx)], epoch.scale);
-    qc = []; if ~isempty(q), qc = q(:, idx); end
-    [~, ai] = model.accel(ep, r(:, idx), v(:, idx), qc, 'Frame', options.Frame, 'T0_K', T0);
+    ep = referenceSystem.daySecondToEpoch([epoch.day(idxE) epoch.sec(idxE)], epoch.scale);
+    qc = []; if ~isempty(q), qc = q(:, idxE); end
+    [~, ai] = model.accel(ep, r(:, idxE), v(:, idxE), qc, 'Frame', options.Frame, 'T0_K', T0);
     if model.options.thermal.model == "transient", T0 = ai.temperature_K(:, end); end
+    if lead
+        for f = ["drag" "radiation" "thermal" "rho"], ai.(f) = ai.(f)(:, 2:end); end
+    end
     % What the measurement must explain once everything that is not gas is removed.
     residual = aMeasured(:, idx) - ai.radiation - ai.thermal;
     dm = ai.drag;

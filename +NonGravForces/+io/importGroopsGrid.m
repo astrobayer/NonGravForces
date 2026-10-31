@@ -52,7 +52,8 @@ function [grid, aux] = importGroopsGrid(file, options)
 %   ----   ----  ----    -----  -----------
 %   grid   1x1   struct  -      .type, .version (string); .lon_deg (1xNlon), .lat_deg (1xNlat,
 %                               GEOCENTRIC, decreasing -- see below); .radius_m (1xNlat); .area_sr (NlatxNlon);
-%                               .values (NlatxNlonxT); .mjd (1x(T+1) node epochs BOUNDING THE
+%                               .values (NlatxNlonxT; for a griddedData T is its C value
+%                               columns); .mjd (1x(T+1) node epochs BOUNDING THE
 %                               GRIDS RETURNED, so after a 'TimeRange' seek it is the subrange and
 %                               not the file's whole node list; [] for griddedData);
 %                               .isTimeSeries (logical)
@@ -83,12 +84,14 @@ function [grid, aux] = importGroopsGrid(file, options)
 %   axis is uniform in intent, not in its bytes; index it with the average spacing.
 %
 % ERRORS
-%   NonGravForces:importGroopsGrid:inputFile       the file does not exist
-%   NonGravForces:importGroopsGrid:dataFormat      not a GROOPS binary, or the payload does not
-%                                                  fill the file, or the node and grid counts disagree
+%   NonGravForces:importGroopsGrid:inputFile       the file does not exist or cannot be opened
+%   NonGravForces:importGroopsGrid:dataFormat      not a GROOPS binary, the solid angles do not
+%                                                  match the axes, the payload does not fill the
+%                                                  file, or the node, column and grid counts disagree
 %   NonGravForces:importGroopsGrid:unsupportedType a GROOPS type this reader does not serve
-%   NonGravForces:importGroopsGrid:inputRange      'TimeRange' not two increasing finite MJD, or
-%                                                  given for a file that carries no time
+%   NonGravForces:importGroopsGrid:inputRange      'TimeRange' not two increasing finite MJD,
+%                                                  given for a file that carries no time, or
+%                                                  covered by no grid of the file
 %
 % REFERENCES
 %   GROOPS data pool, Institute of Geodesy, TU Graz,

@@ -33,14 +33,19 @@ function S = densityScale(files, sw, options)
 %   COMBINED (2026-10-28, owner's choice after the flux correction did worse): with 'Fallback', an
 %   env.densityDriverScale result, every day without a Swarm factor takes the predicted one. The
 %   measurement where it exists (2013-12 on), the prediction from F30 and Ap everywhere else -- the
-%   switch is per UTC day and stated by S.source, so no day mixes the two.
+%   switch is per UTC day and stated by S.source, so no day mixes the two. The standard preset
+%   takes drag.densityScale "combined" since 0.17.0, and a standard Model refuses to evaluate
+%   without this result as its 'DensityScale'.
+%
+%   Only Swarm's satellites enter: files of a TOLEOS dataset (CHAMP, GRACE, GRACE-FO), which
+%   io.readSwarmDensity also reads, are read and then not used.
 %
 % INPUT ARGUMENTS
 %   Name     Size  Type    Units  Description
 %   ----     ----  ----    -----  -----------
 %   files    1xF   string  -      Swarm DNSxPOD HAPI CSV files (io.readSwarmDensity), any
 %                                 months, of B and of A and/or C. Files of one satellite are
-%                                 read together.
+%                                 read together; an epoch in two files counts once.
 %   sw       1x1   struct  -      io.spaceWeather result (celestrak family), the drivers of
 %                                 the model density.
 %
@@ -63,7 +68,8 @@ function S = densityScale(files, sw, options)
 % OUTPUT ARGUMENTS
 %   Name  Size  Type    Units  Description
 %   ----  ----  ----    -----  -----------
-%   S     1x1   struct  -      .kind "swarm" ("combined" with 'Fallback'), .fallback, .day (1xD UTC MJD of each day), .satellite (1xP "A"|"B"|"C"),
+%   S     1x1   struct  -      .kind "swarm" ("combined" with 'Fallback'), .fallback (the
+%                              'Fallback' struct, or []), .day (1xD UTC MJD of each day), .satellite (1xP "A"|"B"|"C"),
 %                              .factor (PxD), .height_m (PxD mean geodetic height of the used
 %                              records), .nUsed (PxD), .low (1xD) and .high (1xD) bracket factors,
 %                              .hLow_m .hHigh_m (1xD), .model, .stride, .files, .provenance, and

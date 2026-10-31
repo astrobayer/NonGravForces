@@ -42,7 +42,7 @@ function [epoch, angle_rad, aux] = readIMU1B(files, options)
 %   epoch      1x1   struct  -      referenceSystem epoch struct, K entries, "GPS" (each record's own time)
 %   angle_rad  1xK   double  rad    FiltAng of the record's gyro, deg2rad of the published value
 %   aux        1x1   struct  -      .gyroId (1xK), .gyros (sorted ids present), .timeRef (1xK string,
-%                                   "G" = GPS), .angleRange_rad ([-1 1]*deg2rad(5758), the header's
+%                                   "G" = GPS; 1x0 when the file has no time_ref), .angleRange_rad ([-1 1]*deg2rad(5758), the header's
 %                                   valid range), .product, .satellite, .files, .numRecords,
 %                                   .sampling_s (median spacing of ALL records, i.e. the gyro
 %                                   interleave, not one gyro's 0.125 s), .obsNames, .units,

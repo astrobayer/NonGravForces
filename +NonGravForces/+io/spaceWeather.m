@@ -8,7 +8,7 @@ function sw = spaceWeather(files, options)
 %   d  = sw.query(epoch)                                               % drivers at K epochs
 %
 %   Loads the solar and geomagnetic indices a thermosphere model needs and
-%   returns them with a query function. The two families are never mixed:
+%   returns them with a query function. The four families are never mixed:
 %   NRLMSISE-00 / MSIS 2.1 want F10.7 and ap, JB2008 wants F10, S10, M10, Y10
 %   and DTC, and the JB2008 indices are not F10.7 substitutes. Dst (Kyoto) and
 %   F30 (CLS, the DTM2020 driver) are families of their own, loaded beside the
@@ -80,7 +80,7 @@ function sw = spaceWeather(files, options)
 % OUTPUT ARGUMENTS
 %   Name     Size  Type    Units  Description
 %   ----     ----  ----    -----  -----------
-%   sw       1x1   struct  -      .format ("celestrak"|"jb2008"), .mjd (Nx1,
+%   sw       1x1   struct  -      .format ("celestrak"|"jb2008"|"dst"|"f30"), .mjd (Nx1,
 %                                 0h UTC of each day), .span (1x2 MJD),
 %                                 .index (struct of Nx1 / Nx8 / Nx24 arrays,
 %                                 names below), .files, .query (handle),
@@ -110,8 +110,9 @@ function sw = spaceWeather(files, options)
 %
 % ERRORS
 %   NonGravForces:spaceWeather:inputFiles     wrong number of files for the family
-%   NonGravForces:spaceWeather:inputFormat    a file's content matches no known
-%                                             family, or not the requested one
+%   NonGravForces:spaceWeather:inputFormat    a file cannot be opened, its content
+%                                             matches no known family, or not the
+%                                             requested one
 %   NonGravForces:spaceWeather:dataColumn     a required column is missing
 %   NonGravForces:spaceWeather:dataMalformed  a record does not parse (bad date,
 %                                             DTC row without 24 values, JD and

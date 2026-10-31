@@ -111,6 +111,27 @@ classdef tNgfApp < NgfTestCase
             tc.verifyBoundAndRecord("forceBudget share vs rms_norm ratio", ...
                 max(abs(B1.share - B1.rms_norm / B1.rms_norm(end))), 0, "-", "one division, quoted back");
         end
+        function forceBudgetTransientChunks(tc)
+            % Transient walls carry their temperatures from chunk to chunk. Until 2026-10-31 the next chunk STARTED at the
+            % last temperatures, so the interval across every boundary was held instead of integrated; since then a later
+            % chunk is evaluated from one epoch early and drops it. Chunked and unchunked then integrate the same
+            % intervals from the same states, and differ by the rounding of the overlap epoch evaluated in another batch.
+            [e, rr, vv] = tc.arc(40);
+            o = NgfTestCase.standardUnscaled("thermal.model", "transient");
+            Mt = NonGravForces.Model(tc.macro, o, 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw);
+            B1 = NonGravForces.app.forceBudget(Mt, e, rr, vv, [], 'Chunk', 40);
+            B7 = NonGravForces.app.forceBudget(Mt, e, rr, vv, [], 'Chunk', 7);
+            rel = max(abs(B7.rms_norm - B1.rms_norm) ./ max(B1.rms_norm, realmin));
+            tc.verifyBoundAndRecord("forceBudget, transient walls, chunks of 7 vs one chunk", rel, 1e-12, "-", ...
+                "the boundary intervals are integrated as in one call; a held step would show at ~1e-4 relative in the thermal row");
+            % Model.series carries the walls the same way.
+            M7 = NonGravForces.Model(tc.macro, o.set("series.chunk", 7), 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw);
+            S1 = Mt.series(e, rr, vv, tc.att.at(e));
+            S7 = M7.series(e, rr, vv, tc.att.at(e));
+            A1 = [S1.ax S1.ay S1.az]; A7 = [S7.ax S7.ay S7.az];
+            tc.verifyBoundAndRecord("Model.series, transient walls, chunks of 7 vs 8640", max(abs(A7 - A1), [], 'all') / max(abs(A1), [], 'all'), 1e-12, "-", ...
+                "as above, for series' own chunking");
+        end
     end
 
     % ================================================================ vectorization

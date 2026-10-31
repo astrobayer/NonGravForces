@@ -53,8 +53,9 @@ classdef tNgfGeom < NgfTestCase
     end
     methods (Test, TestTags = {'precision'})
         function graceFOPrecision(tc)
-            % Non-convexity: the silhouette defect must equal 2*A_inner*c50 in Z
-            % (inner and outer flank normals cancel in Y). Bound 1e-9 m^2: arithmetic.
+            % The silhouette defect is the sum of the PRINTED area vectors, which do not close on each other (a closed body,
+            % convex or not, gives zero): in Z the flanks' 2*A*c50 terms plus nadir minus zenith; in Y the inner and
+            % outer flank normals cancel. Bound 1e-9 m^2: arithmetic.
             % c50 is taken from the packed unit normal (O-2, 2026-09-07), not from the printed 0.642787 (norm 1 - 7.3e-7).
             mm = NonGravForces.geom.graceFO("C");
             s = mm.silhouetteDefect();

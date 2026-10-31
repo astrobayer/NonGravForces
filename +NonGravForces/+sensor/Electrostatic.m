@@ -110,14 +110,19 @@ classdef Electrostatic < NonGravForces.sensor.Sensor
 %                                      optional .gravityGradient 3x3xK.
 %                                      y: .value 3xM (accelerometer frame, M = ceil(K/stride)),
 %                                      .mask 3xM logical, .frame, .epoch (sampled like .value),
-%                                      .info (.kernel "crn ACC" | "user" | "none", .outputStride)
+%                                      .info (.K, .filtered, .kernel "crn ACC" | "crn <preset>" |
+%                                      "user" | "none", .edgeSamples, .outputStride, .gradient
+%                                      "none" | "supplied", .provenance)
 %   [J, names] = partials(obj, dyn)    d(y)/d(theta), (3M)x15, theta = [bias; S(:); dr].
 %                                      Row (k-1)*3+i is axis i of epoch k: axis fastest
 %   asd        = noiseModel(obj, f_Hz) 3xN one-sided amplitude spectral density
 %   n          = numParameters(obj)    15
+%   S          = Electrostatic.skew(v) static: the 3x3 matrix with S w = v x w
 %
 % ERRORS
-%   NonGravForces:Electrostatic:inputShape   an argument or a dyn field has the wrong size
+%   NonGravForces:Electrostatic:inputShape   an argument or a dyn field has the wrong size, 'OutputRate'
+%                                            does not divide 'SampleRate' by a whole number, 'NoiseAsd'
+%                                            is negative, or noiseModel's f_Hz is not positive and finite
 %   NonGravForces:Electrostatic:inputKernel  the kernel is empty-summed, of even length, not a vector,
 %                                            text other than "crn", a struct without .F/.fs, or a
 %                                            CRN kernel whose .fs differs from 'SampleRate'

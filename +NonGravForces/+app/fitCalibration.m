@@ -145,8 +145,9 @@ function [cal, info] = fitCalibration(obs, ref, options)
 % NAME-VALUE ARGUMENTS
 %   Name               Size  Type    Units  Description
 %   ----               ----  ----    -----  -----------
-%   Kernel             1x1   string  -      "crn" (default): crnKernel("ACC"); a crnKernel struct;
-%                                           or [] for an unfiltered observation
+%   Kernel             1x1   string  -      "crn" (default): crnKernel("ACC"); a crnKernel struct
+%                                           (fields F, fs, Nf, Nh, Tf, preset); or [] for an
+%                                           unfiltered observation
 %   BiasBasis          1x1   string  -      "constant" | "linear" (default) | "hat" | "pspline"
 %   BiasKnotSpacing_s  1x1   double  s      Knot spacing of "hat" and "pspline"; default 10800.
 %                                           Below the kernel span Tf it warns
@@ -222,7 +223,10 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %
 % ERRORS
 %   NonGravForces:fitCalibration:depMissing        lsqvce or timeSeriesPreparation is not on the path
-%   NonGravForces:fitCalibration:inputArc          obs or ref not a three-axis Arc in m/s2
+%   NonGravForces:fitCalibration:inputArc          obs or ref not a three-axis Arc in m/s2; one obs
+%                                                  arc with several refs; several obs arcs with
+%                                                  neither one ref nor one per arc, or not in time
+%                                                  order, or overlapping
 %   NonGravForces:fitCalibration:inputScale        a mask that is neither "diag", "full" nor 3x3,
 %                                                  or a non-finite 'ScaleApriori'
 %   NonGravForces:fitCalibration:inputGrid         'Kernel' [] and an obs epoch ref does not carry

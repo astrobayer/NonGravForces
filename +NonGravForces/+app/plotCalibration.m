@@ -19,7 +19,9 @@ function [f, files] = plotCalibration(cal, t, options)
 %             gaps but took over a minute on 4000 samples, too slow to draw.
 %             The first shows why the formal sigmas lie (N-03a measured the
 %             bootstrap sigma at 26 times the formal one); the second whether a
-%             low-order AR model would have explained the colour.
+%             low-order AR model would have explained the colour. An axis
+%             with no more than 2 'MaxLag' finite residual samples gets an
+%             empty ACF panel (its title only).
 %   Everything drawn comes from the calibration's own methods (scaleAt,
 %   scaleSigmaAt, biasAt, basis) and from timeSeriesPreparation.tsmodels: the
 %   figure computes nothing of its own, so it cannot disagree with the object.
@@ -45,7 +47,8 @@ function [f, files] = plotCalibration(cal, t, options)
 %   Name   Size  Type    Units  Description
 %   ----   ----  ----    -----  -----------
 %   f      1x1   figure  -      The figure
-%   files  1xF   string  -      Files written ("" entries none)
+%   files  1xF   string  -      Files written: calibration.png in 'ExportTo', or a 1x0
+%                               string without it
 %
 % ACCURACY
 %   Not applicable: a figure draws numbers computed elsewhere, each with its

@@ -105,12 +105,15 @@ function [rho, species, T, info] = density(model, epoch, lla, sw, options)
 %   T        2xK   double  K        [exospheric temperature; temperature at h];
 %                                   NaN for "exponential".
 %   info     1x1   struct  -        .backend, .drivers (struct actually used:
-%                                   f107 f107a ap, and .source "spaceWeather" |
-%                                   "caller" | "none"), .anomalousOxygen,
-%                                   .msisInput (struct doy sec alt_km lat_deg
-%                                   lon_deg, 1xK each, and lst_h for msis00;
-%                                   both msis backends), .dtmInput (doy
-%                                   alt_km lst_h lat_rad lon_rad; dtm2020), .provenance.
+%                                   f107 f107a ap for the msis backends, f107
+%                                   f107bar kp3 kp24 for dtm2020, and .source
+%                                   "spaceWeather" | "caller" | "none"),
+%                                   .anomalousOxygen (false for exponential and
+%                                   dtm2020), .msisInput (struct doy sec alt_km
+%                                   lat_deg lon_deg, 1xK each, and lst_h for msis00;
+%                                   both msis backends), .dtmInput (doy alt_km
+%                                   lst_h lat_rad lon_rad; dtm2020), .exponential
+%                                   (the parameters; exponential), .provenance.
 %
 % ACCURACY
 %   msis00 is bit-identical to the reference C for the same inputs (same

@@ -12,7 +12,7 @@ function [T, info] = perRevolution(obs, ref, options)
 %   always uses -- one estimator, applied per window. The cross-track scale
 %   is held at its a priori unless 'Fit' says otherwise, as in fitCalibration.
 %
-%   A GATED WINDOW IS NaN WITH ITS REASON, NEVER A NUMBER (v3 WP-16). Two
+%   A GATED WINDOW IS NaN WITH ITS REASON, NEVER A NUMBER (v3 WP-16). Three
 %   gates decide:
 %     "window"            fewer than 'MinWindowFraction' of the rows the
 %                         window should hold are usable (a gap, the filter's
@@ -72,7 +72,7 @@ function [T, info] = perRevolution(obs, ref, options)
 %   averages over one revolution whatever its phase.
 %
 % ERRORS
-%   NonGravForces:perRevolution:inputArc      obs is not a timeSeriesPreparation.Arc
+%   NonGravForces:perRevolution:inputArc      obs is not a three-column timeSeriesPreparation.Arc
 %   NonGravForces:perRevolution:inputFit      'Fit' sets a pair this unit owns, or is not name-value
 %   NonGravForces:perRevolution:inputEffects  an effect without .name and a 3-axis .arc
 %   NonGravForces:perRevolution:dataEmpty     no usable observation epoch

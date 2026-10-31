@@ -24,11 +24,21 @@ function p = provenance(unit, options)
 %   Name      Size  Type    Units  Description
 %   ----      ----  ----    -----  -----------
 %   p         1x1   struct  -      .unit .toolboxVersion .dependencies (name,
-%                                  version) .optionHash (string, 8 hex) .files
+%                                  version; cached per session) .optionHash
+%                                  (string, 8 hex) .files
 %                                  .warnings .note .created (datetime UTC)
 %
 % ERRORS
-%   None.
+%   None of its own; MATLAB:validators:* for arguments of the wrong class or size.
+%
+% ACCURACY
+%   .optionHash is a 32-bit FNV-1a-style digest of jsonencode(Options): it tells
+%   option sets apart, it is not a cryptographic hash. "00000000" for no options.
+%   The dependency versions are read ONCE per MATLAB session and cached; after
+%   swapping a dependency, `clear functions` before trusting .dependencies.
+%
+% REFERENCES
+%   HANDOVER rule R2; Fowler, Noll and Vo, FNV hash (IETF draft-eastlake-fnv).
 %
 % EXAMPLE
 %   p = NonGravForces.provenance("env.eclipseFactor");

@@ -35,7 +35,18 @@ function [F, tau, info] = singleEpoch(macro, gas, src, Tpanel_K, options)
 %   radiation source list, the attitude, the self-shadowing and the panel
 %   temperatures are inputs, computed by env and geom in MATLAB. This unit is the
 %   kernel layer and nothing else. It also does no frame work: everything in and
-%   out is body frame, SI, radians.
+%   out is body frame, SI, radians, and the MEX links no referenceSystem code
+%   (its rsApiRotation is ITRS->GCRS and has no place in a body-frame kernel,
+%   HANDOVER B.1).
+%
+%   NARROWER THAN THE MATLAB UNITS. The gas shadow is ONE fraction per plate
+%   applied to every term (dragPanelForce's NxK 'fraction' form, the hyperthermal
+%   approximation); geom.flowShadow's per-species ratios are not accepted. Alpha
+%   is one number; kernel.accommodation's two-state structs (walker2014, sesam)
+%   are not accepted. A Model whose preset uses either (the standard preset's
+%   flow-shadow table) is reproduced on the compiled side by app.DynamicsSource's
+%   native evaluator (mex/ngfRhs.c), not by this unit; the end-to-end parity test
+%   named above therefore runs the fast preset.
 %
 %   MATLAB REMAINS NORMATIVE. The C is a port of +kernel/*.m, verified against
 %   them (tests/tNgfMex.m) and against the frozen independent Python mirror
@@ -88,7 +99,7 @@ function [F, tau, info] = singleEpoch(macro, gas, src, Tpanel_K, options)
 %                                  .speedRatio 8x1 per species (NaN for constantCd)
 %                                  .Cp .Ctau Nx1 mixture coefficients per unit rho
 %                                  .absorbed_W_m2 Nx1 (before CrScale), .emitted_W_m2 Nx1
-%                                  .backend "mex", .kernelVersion, .provenance
+%                                  .model, .backend "mex", .kernelVersion, .provenance
 %
 % ACCURACY
 %   The C evaluates the same closed forms as +kernel/*.m in the same association
@@ -111,8 +122,10 @@ function [F, tau, info] = singleEpoch(macro, gas, src, Tpanel_K, options)
 %   NonGravForces:singleEpoch:inputModel    'Model' missing, unknown, or missing its required options
 %   NonGravForces:singleEpoch:inputShape    a field of gas or src, Tpanel_K or CentreOfMass has the wrong shape
 %   NonGravForces:singleEpoch:inputSources  src lacks dir/P/band, a band is not vis|ir, or a direction is not a unit vector
-%   NonGravForces:singleEpoch:inputRange    |v| = 0, rho < 0, T <= 0, alpha outside [0,1], P < 0, a shadow outside [0,1]
-%   NonGravForces:singleEpoch:numericNaN    NaN or Inf in an input
+%   NonGravForces:singleEpoch:inputRange    |v| = 0, rho < 0, T <= 0 (sentman/maxwell), alpha outside [0,1], Tw_K <= 0,
+%                                           P < 0, Tpanel_K < 0, a shadow outside [0,1]
+%   NonGravForces:singleEpoch:numericNaN    NaN or Inf in an input the model reads, or a non-finite CentreOfMass or
+%                                           panel centroid (no torque can be formed)
 %   NonGravForces:kernelGateway:*           raised by the C gateway; reaching one means a contract above let something through
 %
 % REFERENCES

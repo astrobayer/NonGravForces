@@ -23,8 +23,9 @@ s   = opt.toStruct()                              % plain struct, for hashing/di
 
 \subsubsection*{METHODS}
 \begin{lstlisting}
-opt = set(obj, name, value, ...)   A COPY with the dotted fields replaced; this is a value
-                                   class, so the original is unchanged. Unknown names error.
+opt = set(obj, name, value)        A COPY with ONE dotted field replaced (chain calls for
+                                   several); this is a value class, so the original is
+                                   unchanged. Unknown names error; text becomes a string.
 s   = toStruct(obj)                The same option set as a plain struct, with one field per
                                    family (.preset .drag .srp .erp .thermal .torques .geom
                                    .sun .series .partials). It exists so that provenance can
@@ -32,7 +33,7 @@ s   = toStruct(obj)                The same option set as a plain struct, with o
                                    not a second way to configure anything, and nothing reads
                                    it back.
 \end{lstlisting}
-Configure once, evaluate many (principle P5). Every field is validated at construction; an unknown field name errors, and EVERY ADMISSIBLE VALUE EVALUATES: a value this toolbox cannot compute is not offered (rule R4, HANDOVER LP-C finding F5). Presets fix the DEFAULT tier of every model family; extended models (HWM14 winds, body torques) are opt-ins no preset enables, so preset results never move when one lands. The deliberate moves: 0.17.0's standard preset takes the combined observed density scale (owner ruling 2026-10-29, HANDOVER O-19), and since 2026-10-31 the transient thermal model (owner ruling 2026-10-30): the steady state's recoil led ACT1B's by 8-18 s on y and z over 2020-01, and the transient walls take that to 2-4 s (tools/alignmentMonth.m, HANDOVER "The checkAlignment lags of the 0.17.0 baseline"). A transient Model integrates the walls over the epochs of ONE call, from the steady state at its first epoch (Model.accel 'T0\_K' carries them on). The precise preset stays steadyState until the same is measured for it.
+Configure once, evaluate many (principle P5). Every field is validated at construction; an unknown field name errors, and EVERY ADMISSIBLE VALUE EVALUATES: a value this toolbox cannot compute is not offered (rule R4, HANDOVER LP-C finding F5). Presets fix the DEFAULT tier of every model family; extended models (HWM14 winds, body torques) are opt-ins no preset enables, so preset results never move when one lands. The deliberate moves: 0.17.0's standard preset takes the combined observed density scale (owner ruling 2026-10-29, HANDOVER O-19), and since 2026-10-31 the transient thermal model (owner ruling 2026-10-30): the steady state's recoil led ACT1B's by 8-18 s on y and z over 2020-01, and the transient walls take that to 2-4 s (tools/alignmentMonth.m, HANDOVER "The checkAlignment lags of the 0.17.0 baseline"). A transient Model integrates the walls over the epochs of ONE call, from the steady state at its first epoch (Model.accel 'T0\_K' carries them on; Model.series does so between its chunks). app.DynamicsSource serves it only on its native path, from a temperature table built with 'ThermalOrbit'. The precise preset stays steadyState until the same is measured for it.
 
 \begin{lstlisting}
 FIDELITY LADDER
@@ -49,7 +50,50 @@ FIDELITY LADDER
   geom.selfShadow         none          lut 16          lut 32
   geom.flowShadow         exact         table           exact
   sun.source              rs.analytic   rs.analytic     rs.de440
+Common to all three: drag.wind corotation, drag.Tw_K 300, drag.cdScale 1, drag.cd 2.2,
+drag.specularFraction [], drag.surfaceMass_amu [], srp.tsi const.S0 (1361),
+srp.lunarEclipse false, srp.crScale 1, thermal.internalPower_W 0, torques false,
+series.useParallel false, series.chunk 8640, partials.method "analytic".
 \end{lstlisting}
+
+\subsubsection*{INPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+preset & 1x1 & string & - & "fast", "standard" (default) or "precise" \\
+overrides & 1x2N & cell & - & optional "group.field", value pairs, applied by set() in order \\
+\end{longtable}
+
+\subsubsection*{NAME-VALUE ARGUMENTS}
+The overrides above: any dotted field of PROPERTIES, e.g. "drag.density", "msis00". Numeric ranges: drag.alpha and drag.specularFraction [0, 1] or [], drag.surfaceMass\_amu (0, 1e6] or [], drag.Tw\_K [1, 2000], drag.cdScale and srp.crScale [0.1, 10], drag.cd [0.5, 10], srp.tsi [1300, 1400], thermal.internalPower\_W [0, 1e4], series.chunk [1, 1e7], geom.lutResolution integer [1, 256]; erp.grid [nRings nSectors] non-negative integers; srp.lunarEclipse, torques.*, series.useParallel logical scalars.
+
+
+\subsubsection*{OUTPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{7.90cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+opt & 1x1 & NonGravForces.\allowbreak{}Options & the validated option set (value class) \\
+\end{longtable}
 
 \subsubsection*{PROPERTIES (read-only after construction; change through set())}
 \begin{lstlisting}
@@ -94,13 +138,13 @@ sun         struct    .source "rs.analytic"|"rs.de440"
 series      struct    .useParallel (logical) .chunk (double, epochs)
 partials    struct    .method "analytic" | "finiteDiff"
 \end{lstlisting}
-A field a model does not read is NOT silently ignored when it contradicts the choice: Model refuses a non-empty drag.alpha beside a non-fixed accommodation, a maxwell gas without drag.specularFraction, walker2014 without drag.surfaceMass\_amu, and internal power on a macro model with no shares.
+A field a model does not read is NOT silently ignored when it contradicts the choice: Model refuses a non-empty drag.alpha beside a non-fixed accommodation (and fixed without one), a maxwell gas without drag.specularFraction, walker2014 without drag.surfaceMass\_amu (and a surface mass beside any other accommodation), geom.flowShadow "table" beside selfShadow "raycast", and internal power on a macro model with no shares.
 
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}Options:\allowbreak{}inputPreset}] unknown preset
-\item[\texttt{NonGravForces:\allowbreak{}Options:\allowbreak{}inputField}] unknown dotted field name, or name-value overrides not in pairs
+\item[\texttt{NonGravForces:\allowbreak{}Options:\allowbreak{}inputField}] unknown dotted field name (or "preset"), or overrides not in pairs
 \item[\texttt{NonGravForces:\allowbreak{}Options:\allowbreak{}inputValue}] value outside its admissible set
 \end{description}
 
@@ -198,7 +242,7 @@ v & 1x1 & struct & - & .major .minor .patch (uint16), .semantic (string, compose
 
 \subsection{\texttt{NonGravForces.dependencyReport}}
 \label{api:NonGravForces.dependencyReport}
-\noindent Presence and version of the five ecosystem toolboxes.
+\noindent Presence and version of the five ecosystem toolboxes and MICE.
 
 \begin{lstlisting}
 deps = NonGravForces.dependencyReport
@@ -236,13 +280,13 @@ Verbose & 1x1 & logical & - & Print a table (default true). \\
 \endfoot
 \bottomrule
 \endlastfoot
-deps & 1x6 & struct & - & .name .required (logical) .present (logical) .version (string, "" if absent) .minimum (string) .comparable (logical: the two are dotted numbers and can be ordered) .belowMinimum (logical: present, comparable and older than .minimum) .setup (string: setup function) .role (string) \\
+deps & 1x6 & struct & - & One element each for referenceSystem, gracefoReading (required), gjToolbox, timeSeriesPreparation, lsqvce and mice (optional), in that order: .name .required (logical) .present (logical) .version (string, "" if absent) .minimum (string) .comparable (logical: the two are dotted numbers and can be ordered) .belowMinimum (logical: present, comparable and older than .minimum) .setup (string: setup function) .role (string) \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
 None. Warning NonGravForces:dependencyReport:depMissing per absent
 
-REQUIRED dependency.
+REQUIRED dependency (an absent optional one is only reported).
 
 
 \subsection{\texttt{NonGravForces.fail}}
@@ -295,7 +339,10 @@ ME & 1x1 & MException & - & Only when an output is requested; then nothing is th
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}fail:\allowbreak{}inputMnemonic}] mnemonic does not start with a taxonomy token
 \item[\texttt{NonGravForces:\allowbreak{}fail:\allowbreak{}inputHint}] message lacks the ' -\textgreater{} ' hint marker
+\item[\texttt{MATLAB:\allowbreak{}validators:\allowbreak{}mustBeNonzeroLengthText}] unit, mnemonic or message empty
 \end{description}
+These two identifiers are raised with error(), not through fail itself.
+
 
 \subsection{\texttt{NonGravForces.provenance}}
 \label{api:NonGravForces.provenance}
@@ -357,11 +404,11 @@ Note & 1x1 & string & - & Free text (default "") \\
 \endfoot
 \bottomrule
 \endlastfoot
-p & 1x1 & struct & - & .unit .toolboxVersion .dependencies (name, version) .optionHash (string, 8 hex) .files .warnings .note .created (datetime UTC) \\
+p & 1x1 & struct & - & .unit .toolboxVersion .dependencies (name, version; cached per session) .optionHash (string, 8 hex) .files .warnings .note .created (datetime UTC) \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
-None.
+None of its own; MATLAB:validators:* for arguments of the wrong class or size.
 
 
 \subsection{\texttt{NonGravForces.buildMex}}
@@ -411,13 +458,13 @@ GjToolboxSource & 1x1 & string & - & Directory holding gj\_native.h (odeSuite's 
 \endfoot
 \bottomrule
 \endlastfoot
-report & 1xT & struct & - & One element per target (T = 1 for a named Target, 6 for "all"), each with .target (string), .file (string), .present (logical), .upToDate (logical: present and digest matches the sources), .sourceDigest (string, SHA-256 of the sources), .binaryDigest (string recorded at build time, "" if none), .compiler (string, "" when not built now), .built (logical: compiled in this call), .sources (1xN string), .sourcesPresent (logical: every source file exists; false is a REPORT under 'Check' and an error otherwise), .sourceDir (string, where the third-party source was looked for; "" for the kernel, which has none). The digest covers whatever source was actually used, so a different NRLMSISE-00 release marks the binary stale and forces a rebuild -- which is the mechanism that makes tracking upstream safe rather than merely convenient. \\
+report & 1xT & struct & - & One element per target (T = 1 for a named Target, 6 for "all"), each with .target (string), .file (string), .present (logical), .upToDate (logical: present and digest matches the sources), .sourceDigest (string, SHA-256 of the sources), .binaryDigest (string recorded at build time, "" if none), .compiler (string, "" when not built now), .built (logical: compiled in this call), .sources (1xN string), .sourcesPresent (logical: every source file exists; false is a REPORT under 'Check' and an error otherwise), .sourceDir (string, where the third-party source was looked for; gjToolbox's csrc for rhs; "" for the kernel, which has none, and for an unbuildable rhs). The digest covers whatever source was actually used, so a different NRLMSISE-00 release marks the binary stale and forces a rebuild -- which is the mechanism that makes tracking upstream safe rather than merely convenient. \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}buildMex:\allowbreak{}depCompiler}] no C compiler selected and no MinGW-w64 support package found; or no gfortran beside the selected compiler (msis21, hwm14, dtm2020)
-\item[\texttt{NonGravForces:\allowbreak{}buildMex:\allowbreak{}depMissing}] the NRLMSISE-00, NRLMSIS 2.1, HWM14 or DTM2020 source is absent
+\item[\texttt{NonGravForces:\allowbreak{}buildMex:\allowbreak{}depCompiler}] no C compiler selected and no MinGW-w64 support package found; or no gfortran beside the selected compiler (msis21, hwm14, dtm2020), or it does not run, or its static runtime is missing, or mex -setup C did not select the MinGW-w64 found
+\item[\texttt{NonGravForces:\allowbreak{}buildMex:\allowbreak{}depMissing}] the NRLMSISE-00, NRLMSIS 2.1, HWM14 or DTM2020 source is absent, or Target "rhs" without gjToolbox or its gj\_native.h
 \item[\texttt{NonGravForces:\allowbreak{}buildMex:\allowbreak{}dataMissing}] a source file of mex/ is missing
 \item[\texttt{NonGravForces:\allowbreak{}buildMex:\allowbreak{}numericBuild}] gfortran refused a file (its output is in the message)
 \item[\texttt{MATLAB:\allowbreak{}mex:\allowbreak{}*}] compiler errors propagate unwrapped
@@ -494,8 +541,7 @@ aux & 1x1 & struct & - & .angular\_rad\_s2 (3xK, ang\_accl\_*), .residual\_m\_s2
 \item[\texttt{NonGravForces:\allowbreak{}readACC1B:\allowbreak{}dataSatellite}] the files mix GRACE-C and GRACE-D
 \item[\texttt{NonGravForces:\allowbreak{}readACC1B:\allowbreak{}dataEmpty}] no record survives TimeRange/QualityBitMask
 \item[\texttt{NonGravForces:\allowbreak{}readACC1B:\allowbreak{}dataColumn}] lin\_accl\_* or ang\_accl\_* missing from the header
-\item[\texttt{gracefoReading:\allowbreak{}*}] propagated unwrapped (missing file,
-\item[\texttt{MATLAB:\allowbreak{}badsubscript}] from gracefoReading.readL1bMulti when SEVERAL files are given and TimeRange excludes every record (dependency defect, HANDOVER O-12) malformed record, column mismatch)
+\item[\texttt{gracefoReading:\allowbreak{}*}] propagated unwrapped (missing file, malformed record, column mismatch)
 \end{description}
 
 \subsection{\texttt{NonGravForces.io.readSCA1B}}
@@ -569,7 +615,6 @@ aux & 1x1 & struct & - & .frame "BODY-\textgreater{}GCRS", .convention (referenc
 \item[\texttt{NonGravForces:\allowbreak{}readSCA1B:\allowbreak{}dataColumn}] a quaternion column is missing
 \item[\texttt{NonGravForces:\allowbreak{}readSCA1B:\allowbreak{}dataQuaternion}] a file quaternion is not of unit norm
 \item[\texttt{gracefoReading:\allowbreak{}*, referenceSystem:\allowbreak{}*}] propagated unwrapped
-\item[\texttt{MATLAB:\allowbreak{}badsubscript}] from gracefoReading.readL1bMulti when SEVERAL files are given and TimeRange excludes every record (dependency defect, HANDOVER O-12)
 \end{description}
 
 \subsection{\texttt{NonGravForces.io.readGNV1B}}
@@ -647,9 +692,7 @@ aux & 1x1 & struct & - & .frame ("GCRS"\textbar{}"ITRS"), .sigma\_r\_m (3xK, xpo
 \item[\texttt{NonGravForces:\allowbreak{}readGNV1B:\allowbreak{}dataEmpty}] no record survives the filters
 \item[\texttt{NonGravForces:\allowbreak{}readGNV1B:\allowbreak{}dataColumn}] a position/velocity column is missing
 \item[\texttt{NonGravForces:\allowbreak{}readGNV1B:\allowbreak{}dataFrame}] coord\_ref is not 'E' for every record
-\item[\texttt{referenceSystem:\allowbreak{}*, gracefoReading:\allowbreak{}*}] propagated unwrapped (including
-\item[\texttt{MATLAB:\allowbreak{}badsubscript}] from gracefoReading.readL1bMulti when SEVERAL files are given and TimeRange excludes every record (dependency defect, HANDOVER O-12)
-\item[\texttt{leapSecondTable:\allowbreak{}beforeUtcEpoch}] for a pre-1972 EOP series)
+\item[\texttt{referenceSystem:\allowbreak{}*, gracefoReading:\allowbreak{}*}] propagated unwrapped (a pre-1972 EOP series is trimmed with a warning, not refused; see the note above)
 \end{description}
 
 \subsection{\texttt{NonGravForces.io.readTHR1B}}
@@ -722,7 +765,6 @@ aux & 1x1 & struct & - & .epoch (GPS epoch struct of ALL K records), .thruster (
 \item[\texttt{NonGravForces:\allowbreak{}readTHR1B:\allowbreak{}dataTimeRef}] time\_ref is not 'G' (GPS) for every record
 \item[\texttt{NonGravForces:\allowbreak{}readTHR1B:\allowbreak{}depMissing}] timeSeriesPreparation (the event table's owner) not on the path
 \item[\texttt{gracefoReading:\allowbreak{}*, referenceSystem:\allowbreak{}*}] propagated unwrapped
-\item[\texttt{MATLAB:\allowbreak{}badsubscript}] from gracefoReading.readL1bMulti when SEVERAL files are given and TimeRange excludes every record (dependency defect, HANDOVER O-12)
 \end{description}
 
 \subsection{\texttt{NonGravForces.io.readMAS1B}}
@@ -792,12 +834,11 @@ aux & 1x1 & struct & - & .prodFlagBits, .qualflgBits, .product, .satellite, .fil
 \item[\texttt{NonGravForces:\allowbreak{}readMAS1B:\allowbreak{}dataProduct}] a file is not a MAS1B product
 \item[\texttt{NonGravForces:\allowbreak{}readMAS1B:\allowbreak{}dataSatellite}] the files mix satellites
 \item[\texttt{NonGravForces:\allowbreak{}readMAS1B:\allowbreak{}dataEmpty}] no record survives TimeRange
-\item[\texttt{NonGravForces:\allowbreak{}readMAS1B:\allowbreak{}dataColumn}] gas\_mass\_tnk1/2 or mass\_tnk missing
+\item[\texttt{NonGravForces:\allowbreak{}readMAS1B:\allowbreak{}dataColumn}] gas\_mass\_tnk1 or gas\_mass\_tnk2 missing from the header
 \item[\texttt{NonGravForces:\allowbreak{}readMAS1B:\allowbreak{}dataMissing}] no record has a usable total (both tank columns and mass\_tnk absent)
 \item[\texttt{NonGravForces:\allowbreak{}readMAS1B:\allowbreak{}dataRange}] a total is \textgreater{}= 100 kg or \textless{}= 0 kg
 \item[\texttt{NonGravForces:\allowbreak{}readMAS1B:\allowbreak{}dataTimeRef}] time\_ref is not 'G' for every record
 \item[\texttt{gracefoReading:\allowbreak{}*}] propagated unwrapped
-\item[\texttt{MATLAB:\allowbreak{}badsubscript}] from gracefoReading.readL1bMulti when SEVERAL files are given and TimeRange excludes every record (dependency defect, HANDOVER O-12)
 \end{description}
 
 \subsection{\texttt{NonGravForces.io.readMAG1B}}
@@ -859,7 +900,7 @@ TimeRange & 1x2 & double\textbar{}\allowbreak{}datetime & - & Forwarded to readL
 \endlastfoot
 epoch & 1x1 & struct & - & referenceSystem epoch struct, K entries, "GPS". \\
 field & 1x1 & struct & - & .B\_srf\_T (3xK, TESLA -- the file is microtesla and this converts, because the toolbox is SI throughout) .torquerNet\_A (3xK, AMPERE, the A + B sum per axis) .torquerBranch\_A (6xK, ampere, rows 1A 2A 3A 1B 2B 3B, as read) .magnitude\_T (1xK, \textbar{}B\textbar{}) \\
-aux & 1x1 & struct & - & .calibration (.magField 3xK, .torquer 1xK, unapplied), .qualityBits (8xK logical, bit 0 first), .torquerBranchNames (1x6 string), .product, .satellite, .files, .numRecords, .sampling\_s, .obsNames, .units, .provenance. \\
+aux & 1x1 & struct & - & .epoch (the epoch struct again), .calibration (.magField 3xK, .torquer 1xK, unapplied; NaN when the columns are absent), .qualityBits (8xK logical, bit 0 first), .qualflgBits (Kx8, as the other readers), .torquerBranchNames (1x6 string), .product, .satellite, .files, .numRecords, .sampling\_s, .obsNames, .units, .provenance. \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
@@ -940,7 +981,7 @@ mass & 1x1 & struct & - & .kind ("constant"\textbar{}"mas1b"), .satellite, .valu
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}massModel:\allowbreak{}inputMas1b}] Mode "mas1b" without Epoch/GasMass\_kg, mismatched lengths, non-finite gas mass, or non-increasing epochs
-\item[\texttt{NonGravForces:\allowbreak{}massModel:\allowbreak{}inputAnchor}] Anchor\_kg \textless{}= 500 kg
+\item[\texttt{NonGravForces:\allowbreak{}massModel:\allowbreak{}inputAnchor}] Anchor\_kg not finite or \textless{}= 500 kg
 \item[\texttt{NonGravForces:\allowbreak{}massModel:\allowbreak{}inputEpoch}] (from .at) query epoch further than two sample intervals beyond the series, or not an epoch struct
 \item[\texttt{NonGravForces:\allowbreak{}massModel:\allowbreak{}numericRange}] (from .at) a resulting mass \textless{}= 500 kg
 \item[\texttt{referenceSystem:\allowbreak{}*}] propagated unwrapped (scale conversion)
@@ -1006,13 +1047,13 @@ Format & 1x1 & string & - & "auto" (default; identified from content), "celestra
 \endfoot
 \bottomrule
 \endlastfoot
-sw & 1x1 & struct & - & .format ("celestrak"\textbar{}"jb2008"), .mjd (Nx1, 0h UTC of each day), .span (1x2 MJD), .index (struct of Nx1 / Nx8 / Nx24 arrays, names below), .files, .query (handle), .provenance. celestrak .index: f107Observed f107Adjusted f107ObservedCentre81 f107ObservedLast81 apDaily ap3h (Nx8) kp3h (Nx8, /10) kpSum sunspotNumber dataType (string) jb2008 .index: f10 f10b s10 s10b m10 m10b y10 y10b ssrc (string) dtc (Nx24, NaN where DTCFILE has no day) dst .index: dst (Nx24 nT, base value applied, NaN for the WDC missing value 9999), dailyMean (Nx1 nT, as printed), version (Nx1 string) f30 .index: for each band b of f30 f15 f107 f8 f32 (CLS f30, f15, f10.7, f8, f3.2): b, bCorrected (CLS \_c, flare-corrected), bPrecision (\_p), bFlag (\_f); Nx1 sfu, NaN where CLS writes -1 f30 also sets .adjusted (true: "adjusted to 1 AU", false: "not adjusted"), read from the file header. \\
+sw & 1x1 & struct & - & .format ("celestrak"\textbar{}"jb2008"\textbar{}"dst"\textbar{}"f30"), .mjd (Nx1, 0h UTC of each day), .span (1x2 MJD), .index (struct of Nx1 / Nx8 / Nx24 arrays, names below), .files, .query (handle), .provenance. celestrak .index: f107Observed f107Adjusted f107ObservedCentre81 f107ObservedLast81 apDaily ap3h (Nx8) kp3h (Nx8, /10) kpSum sunspotNumber dataType (string) jb2008 .index: f10 f10b s10 s10b m10 m10b y10 y10b ssrc (string) dtc (Nx24, NaN where DTCFILE has no day) dst .index: dst (Nx24 nT, base value applied, NaN for the WDC missing value 9999), dailyMean (Nx1 nT, as printed), version (Nx1 string) f30 .index: for each band b of f30 f15 f107 f8 f32 (CLS f30, f15, f10.7, f8, f3.2): b, bCorrected (CLS \_c, flare-corrected), bPrecision (\_p), bFlag (\_f); Nx1 sfu, NaN where CLS writes -1 f30 also sets .adjusted (true: "adjusted to 1 AU", false: "not adjusted"), read from the file header. \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}spaceWeather:\allowbreak{}inputFiles}] wrong number of files for the family
-\item[\texttt{NonGravForces:\allowbreak{}spaceWeather:\allowbreak{}inputFormat}] a file's content matches no known family, or not the requested one
+\item[\texttt{NonGravForces:\allowbreak{}spaceWeather:\allowbreak{}inputFormat}] a file cannot be opened, its content matches no known family, or not the requested one
 \item[\texttt{NonGravForces:\allowbreak{}spaceWeather:\allowbreak{}dataColumn}] a required column is missing
 \item[\texttt{NonGravForces:\allowbreak{}spaceWeather:\allowbreak{}dataMalformed}] a record does not parse (bad date, DTC row without 24 values, JD and YYYY/DDD disagree, a WDC Dst record not 120 columns, a CLS cont\_day that disagrees with its date, a day twice)
 \item[\texttt{NonGravForces:\allowbreak{}spaceWeather:\allowbreak{}inputEpoch}] (query) not an epoch struct
@@ -1087,8 +1128,8 @@ aux & 1x1 & struct & - & .files (1x3, in the order rsut rlut rsdt), .trackingId 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}importCERES:\allowbreak{}inputFiles}] not three files, or not one each of rsut, rlut, rsdt
-\item[\texttt{NonGravForces:\allowbreak{}importCERES:\allowbreak{}dataMissing}] a file does not exist, or a loaded value is a fill value or NaN
-\item[\texttt{NonGravForces:\allowbreak{}importCERES:\allowbreak{}dataFormat}] not an obs4MIPs CERES EBAF file, units not W m-2, time units not "days since", non-uniform grid, or the files disagree
+\item[\texttt{NonGravForces:\allowbreak{}importCERES:\allowbreak{}dataMissing}] a file does not exist, or a loaded value is a fill value, NaN or negative
+\item[\texttt{NonGravForces:\allowbreak{}importCERES:\allowbreak{}dataFormat}] not an obs4MIPs CERES EBAF file (a global attribute missing), units not W m-2, dimensions not lon/lat/time, time units not "days since", non-uniform grid, or the files disagree
 \item[\texttt{NonGravForces:\allowbreak{}importCERES:\allowbreak{}inputPeriod}] Period malformed or not bracketed by the files' months
 \end{description}
 
@@ -1150,16 +1191,16 @@ TimeRange & 1x2 & double & MJD & Read only the grids whose interval intersects [
 \endfoot
 \bottomrule
 \endlastfoot
-grid & 1x1 & struct & - & .type, .version (string); .lon\_deg (1xNlon), .lat\_deg (1xNlat, GEOCENTRIC, decreasing -- see below); .radius\_m (1xNlat); .area\_sr (NlatxNlon); .values (NlatxNlonxT); .mjd (1x(T+1) node epochs BOUNDING THE GRIDS RETURNED, so after a 'TimeRange' seek it is the subrange and not the file's whole node list; [] for griddedData); .isTimeSeries (logical) \\
+grid & 1x1 & struct & - & .type, .version (string); .lon\_deg (1xNlon), .lat\_deg (1xNlat, GEOCENTRIC, decreasing -- see below); .radius\_m (1xNlat); .area\_sr (NlatxNlon); .values (NlatxNlonxT; for a griddedData T is its C value columns); .mjd (1x(T+1) node epochs BOUNDING THE GRIDS RETURNED, so after a 'TimeRange' seek it is the subrange and not the file's whole node list; [] for griddedData); .isTimeSeries (logical) \\
 aux & 1x1 & struct & - & .file, .bytes, .ellipsoid (.a, .b), .pointCount, .gridCount, .gridsRead (1xT index of the grids actually read, into the FILE), .mjdFile (1x2 first and last node of the file, whatever was read), .areaSum\_sr (must be 4*pi), .provenance \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}importGroopsGrid:\allowbreak{}inputFile}] the file does not exist
-\item[\texttt{NonGravForces:\allowbreak{}importGroopsGrid:\allowbreak{}dataFormat}] not a GROOPS binary, or the payload does not fill the file, or the node and grid counts disagree
+\item[\texttt{NonGravForces:\allowbreak{}importGroopsGrid:\allowbreak{}inputFile}] the file does not exist or cannot be opened
+\item[\texttt{NonGravForces:\allowbreak{}importGroopsGrid:\allowbreak{}dataFormat}] not a GROOPS binary, the solid angles do not match the axes, the payload does not fill the file, or the node, column and grid counts disagree
 \item[\texttt{NonGravForces:\allowbreak{}importGroopsGrid:\allowbreak{}unsupportedType}] a GROOPS type this reader does not serve
-\item[\texttt{NonGravForces:\allowbreak{}importGroopsGrid:\allowbreak{}inputRange}] 'TimeRange' not two increasing finite MJD, or given for a file that carries no time
+\item[\texttt{NonGravForces:\allowbreak{}importGroopsGrid:\allowbreak{}inputRange}] 'TimeRange' not two increasing finite MJD, given for a file that carries no time, or covered by no grid of the file
 \end{description}
 
 \subsection{\texttt{NonGravForces.io.igrfCoefficients}}
@@ -1221,15 +1262,15 @@ Epoch & 1x1 & struct\textbar{}\allowbreak{}double & - & A referenceSystem epoch 
 \bottomrule
 \endlastfoot
 coeff & 1x1 & struct & nT & .gTable, .hTable ((nMax+1)x(nMax+1)xE, one page per epoch) .epochs (1xE decimal years, 1900.0 ... 2025.0) .svG, .svH ((nMax+1)x(nMax+1), nT/year, degree \textless{}= svMax) .nMax (13), .svMax (8) .g, .h ((nMax+1)x(nMax+1) at 'Epoch', else []) .year (decimal year used, else NaN) \\
-aux & 1x1 & struct & - & .file, .generation, .numCoefficients, .validFrom, .validTo, .header (the two comment lines), .provenance \\
+aux & 1x1 & struct & - & .file, .generation, .numCoefficients, .validFrom, .validTo, .header (the file's comment lines), .provenance \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}igrfCoefficients:\allowbreak{}dataMissing}] the file does not exist
-\item[\texttt{NonGravForces:\allowbreak{}igrfCoefficients:\allowbreak{}dataFormat}] no "g/h n m ..." header line, or a row whose field count disagrees with that header
+\item[\texttt{NonGravForces:\allowbreak{}igrfCoefficients:\allowbreak{}dataFormat}] no "g/h n m ..." header line, its epoch columns do not parse as years, or a row whose field count disagrees with that header
 \item[\texttt{NonGravForces:\allowbreak{}igrfCoefficients:\allowbreak{}dataColumn}] a row is neither g nor h, or n and m are not a valid Schmidt pair (m \textless{}= n, n \textgreater{}= 1)
-\item[\texttt{NonGravForces:\allowbreak{}igrfCoefficients:\allowbreak{}inputRange}] 'Epoch' before the first epoch or more than five years past the last
+\item[\texttt{NonGravForces:\allowbreak{}igrfCoefficients:\allowbreak{}inputRange}] 'Epoch' before the first epoch or more than five years past the last, or a numeric 'Epoch' that is not one finite decimal year
 \item[\texttt{NonGravForces:\allowbreak{}igrfCoefficients:\allowbreak{}numericNaN}] a coefficient does not parse as a number
 \end{description}
 
@@ -1300,7 +1341,7 @@ aux & 1x1 & struct & - & .rhoOrbitMean (1xK kg/m\textasciicircum{}3, the product
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}inputRange}] TimeRange is not [mjd0 mjd1] with mjd0 \textless{}= mjd1
 \item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}dataFormat}] no HAPI JSON header, an undecodable one, or a status other than 1200 (OK)
-\item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}dataColumn}] a required parameter is missing from the header, or a data line does not have the header's columns
+\item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}dataColumn}] the first parameter is not Timestamp, a required parameter is missing from the header, or a data line does not have the header's columns
 \item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}dataUnits}] a parameter's units are not the ones converted here
 \item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}dataSatellite}] the files are of different datasets, or of a dataset this reader does not know
 \item[\texttt{NonGravForces:\allowbreak{}readSwarmDensity:\allowbreak{}dataEmpty}] no record survives TimeRange
@@ -1366,7 +1407,7 @@ QualityBitMask & 1xQ & double & - & qualflg bits removing a record; forwarded. D
 \endlastfoot
 epoch & 1x1 & struct & - & referenceSystem epoch struct, K entries, "GPS" (each record's own time) \\
 angle\_\allowbreak{}rad & 1xK & double & rad & FiltAng of the record's gyro, deg2rad of the published value \\
-aux & 1x1 & struct & - & .gyroId (1xK), .gyros (sorted ids present), .timeRef (1xK string, "G" = GPS), .angleRange\_rad ([-1 1]*deg2rad(5758), the header's valid range), .product, .satellite, .files, .numRecords, .sampling\_s (median spacing of ALL records, i.e. the gyro interleave, not one gyro's 0.125 s), .obsNames, .units, .qualflgBits, .provenance \\
+aux & 1x1 & struct & - & .gyroId (1xK), .gyros (sorted ids present), .timeRef (1xK string, "G" = GPS; 1x0 when the file has no time\_ref), .angleRange\_rad ([-1 1]*deg2rad(5758), the header's valid range), .product, .satellite, .files, .numRecords, .sampling\_s (median spacing of ALL records, i.e. the gyro interleave, not one gyro's 0.125 s), .obsNames, .units, .qualflgBits, .provenance \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
@@ -1450,7 +1491,7 @@ LocalSolarTime\_\allowbreak{}h & 1xK & double & h & msis00 and dtm2020. Override
 rho & 1xK & double & kg/\allowbreak{}m\textasciicircum{}3 & Total mass density. \\
 species & 8xK & double & 1/\allowbreak{}m\textasciicircum{}3 & Number densities He O N2 O2 Ar H N O\_anomalous (const.speciesName order); NaN for "exponential". \\
 T & 2xK & double & K & [exospheric temperature; temperature at h]; NaN for "exponential". \\
-info & 1x1 & struct & - & .backend, .drivers (struct actually used: f107 f107a ap, and .source "spaceWeather" \textbar{} "caller" \textbar{} "none"), .anomalousOxygen, .msisInput (struct doy sec alt\_km lat\_deg lon\_deg, 1xK each, and lst\_h for msis00; both msis backends), .dtmInput (doy alt\_km lst\_h lat\_rad lon\_rad; dtm2020), .provenance. \\
+info & 1x1 & struct & - & .backend, .drivers (struct actually used: f107 f107a ap for the msis backends, f107 f107bar kp3 kp24 for dtm2020, and .source "spaceWeather" \textbar{} "caller" \textbar{} "none"), .anomalousOxygen (false for exponential and dtm2020), .msisInput (struct doy sec alt\_km lat\_deg lon\_deg, 1xK each, and lst\_h for msis00; both msis backends), .dtmInput (doy alt\_km lst\_h lat\_rad lon\_rad; dtm2020), .exponential (the parameters; exponential), .provenance. \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
@@ -1492,7 +1533,7 @@ f = S.at(epoch, h_m)                        % 1xK factor on the model density
 \endfoot
 \bottomrule
 \endlastfoot
-files & 1xF & string & - & Swarm DNSxPOD HAPI CSV files (io.readSwarmDensity), any months, of B and of A and/or C. Files of one satellite are read together. \\
+files & 1xF & string & - & Swarm DNSxPOD HAPI CSV files (io.readSwarmDensity), any months, of B and of A and/or C. Files of one satellite are read together; an epoch in two files counts once. \\
 sw & 1x1 & struct & - & io.spaceWeather result (celestrak family), the drivers of the model density. \\
 \end{longtable}
 
@@ -1530,7 +1571,7 @@ Fallback & 1x1 & struct & - & an env.densityDriverScale result for the same Mode
 \endfoot
 \bottomrule
 \endlastfoot
-S & 1x1 & struct & - & .kind "swarm" ("combined" with 'Fallback'), .fallback, .day (1xD UTC MJD of each day), .satellite (1xP "A"\textbar{}"B"\textbar{}"C"), .factor (PxD), .height\_m (PxD mean geodetic height of the used records), .nUsed (PxD), .low (1xD) and .high (1xD) bracket factors, .hLow\_m .hHigh\_m (1xD), .model, .stride, .files, .provenance, and .at (function handle: epoch struct (any scale), 1xK heights [m] -\textgreater{} 1xK factors), .source (function handle: epoch -\textgreater{} 1xK "swarm" \textbar{} "driver" \textbar{} "none", the factor .at takes) \\
+S & 1x1 & struct & - & .kind "swarm" ("combined" with 'Fallback'), .fallback (the 'Fallback' struct, or []), .day (1xD UTC MJD of each day), .satellite (1xP "A"\textbar{}"B"\textbar{}"C"), .factor (PxD), .height\_m (PxD mean geodetic height of the used records), .nUsed (PxD), .low (1xD) and .high (1xD) bracket factors, .hLow\_m .hHigh\_m (1xD), .model, .stride, .files, .provenance, and .at (function handle: epoch struct (any scale), 1xK heights [m] -\textgreater{} 1xK factors), .source (function handle: epoch -\textgreater{} 1xK "swarm" \textbar{} "driver" \textbar{} "none", the factor .at takes) \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
@@ -1688,9 +1729,9 @@ info & 1x1 & struct & - & .model, .corotation\_m\_s (3xK, the term removed), .hw
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}wind:\allowbreak{}inputShape}] r or v not 3xK with K matching the epoch
+\item[\texttt{NonGravForces:\allowbreak{}wind:\allowbreak{}inputShape}] r, v or Wind\_m\_s not 3xK with K matching the epoch
 \item[\texttt{NonGravForces:\allowbreak{}wind:\allowbreak{}inputEop}] "corotation" or "hwm14" without 'Eop'
-\item[\texttt{NonGravForces:\allowbreak{}wind:\allowbreak{}inputAp}] "hwm14" disturbed without an ap source, both sources, a negative or malformed Ap, or an ap input to another model
+\item[\texttt{NonGravForces:\allowbreak{}wind:\allowbreak{}inputAp}] "hwm14" disturbed without an ap source (or with a SpaceWeather not of the celestrak family), both sources, a negative or malformed Ap, an ap source with 'Disturbed' false, or an ap input to another model
 \item[\texttt{NonGravForces:\allowbreak{}wind:\allowbreak{}depMissing}] "hwm14" MEX not built
 \item[\texttt{NonGravForces:\allowbreak{}wind:\allowbreak{}inputRange}] "hwm14" at a position below the ellipsoid (the model does not return there)
 \item[\texttt{NonGravForces:\allowbreak{}hwm14Gateway:\allowbreak{}*}] the gateway's refusals, unwrapped
@@ -1836,18 +1877,18 @@ RotationItrsToGcrs & 3x3xK & double & - & ITRS-\textgreater{}GCRS rotation at th
 \endfoot
 \bottomrule
 \endlastfoot
-tiles & 1x1 & struct & - & .backend, .grid, .radius\_m, .M (tiles, 0 for pointSource), .n (3xMxK unit normals of the tile centres, GCRS), .area\_m2 (MxK), .lat\_rad (MxK geocentric latitude of the centres, GCRS; for ceres the ITRS geodetic latitude the grid was read at), .capAngle\_rad (1xK), .albedo (MxK; 1xK for pointSource), .emissivity (same; [] for ceres), .exitanceLw\_W\_m2 (MxK, ceres; [] otherwise), .ceres (ceres: .product .version .months (the two bracketing nodes per epoch, 2xK datetime) .timeWeight (1xK)), .climatology (ceresClimatology: .referenceHeight\_m measured from the file, .gridIndex (1xK, into the grids PASSED), .month (1xK datetime of each grid's opening node), .nodes, .gridCount), .daysSinceT0 (1xK), .coefficients, .provenance. \\
+tiles & 1x1 & struct & - & .backend, .grid, .radius\_m, .M (tiles, 0 for pointSource), .n (3xMxK unit normals of the tile centres, GCRS), .area\_m2 (MxK), .lat\_rad (MxK geocentric latitude of the centres, GCRS; for ceres the ITRS geodetic latitude the grid was read at, for ceresClimatology the ITRS geocentric one), .capAngle\_rad (1xK), .albedo (MxK; 1xK for pointSource), .emissivity (same; [] for ceres and ceresClimatology), .exitanceLw\_W\_m2 (MxK, ceres and ceresClimatology; [] otherwise), .ceres (ceres: .product .version .months (the two bracketing nodes per epoch, 2xK datetime) .timeWeight (1xK)), .climatology (ceresClimatology: .referenceHeight\_m measured from the file, .gridIndex (1xK, into the grids PASSED), .month (1xK datetime of each grid's opening node), .nodes (1x2, first and last node of the grids passed), .gridCount), .daysSinceT0 (1xK), .coefficients, .provenance. \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}earthRadiance:\allowbreak{}inputClimatology}] the Climatology grids are missing, mismatched, not a time series, not uniform in longitude, not decreasing in latitude, not one constant height above the ellipsoid, or given to a backend that does not read them
-\item[\texttt{NonGravForces:\allowbreak{}earthRadiance:\allowbreak{}inputGrid}] grid not two positive integers (knocke)
+\item[\texttt{NonGravForces:\allowbreak{}earthRadiance:\allowbreak{}inputClimatology}] the Climatology grids are missing, mismatched, not a time series, not uniform in longitude, not decreasing in latitude, not one constant height above the ellipsoid, given to a backend that does not read them, or ceresClimatology without a usable 'RotationItrsToGcrs'
+\item[\texttt{NonGravForces:\allowbreak{}earthRadiance:\allowbreak{}inputGrid}] grid not two positive integers (every backend but pointSource)
 \item[\texttt{NonGravForces:\allowbreak{}earthRadiance:\allowbreak{}inputShape}] r not 3xK or epoch not an epoch struct
 \item[\texttt{NonGravForces:\allowbreak{}earthRadiance:\allowbreak{}numericNaN}] NaN/Inf in r
-\item[\texttt{NonGravForces:\allowbreak{}earthRadiance:\allowbreak{}inputRange}] \textbar{}r\textbar{} \textless{}= R (inside the Earth, or below the ceres reference level)
-\item[\texttt{NonGravForces:\allowbreak{}earthRadiance:\allowbreak{}inputCeres}] ceres without a usable 'Ceres' or 'RotationItrsToGcrs', or either given to another backend
-\item[\texttt{NonGravForces:\allowbreak{}earthRadiance:\allowbreak{}dataRange}] an epoch outside the months the 'Ceres' struct holds
+\item[\texttt{NonGravForces:\allowbreak{}earthRadiance:\allowbreak{}inputRange}] \textbar{}r\textbar{} \textless{}= R (inside the Earth, or below the reference level of ceres or ceresClimatology)
+\item[\texttt{NonGravForces:\allowbreak{}earthRadiance:\allowbreak{}inputCeres}] ceres without a usable 'Ceres' or 'RotationItrsToGcrs', 'Ceres' given to another backend, or 'RotationItrsToGcrs' given to knocke or pointSource
+\item[\texttt{NonGravForces:\allowbreak{}earthRadiance:\allowbreak{}dataRange}] an epoch outside the months the 'Ceres' struct holds, or outside the nodes of the 'Climatology' grids
 \item[\texttt{referenceSystem:\allowbreak{}*}] propagated unwrapped
 \end{description}
 
@@ -1973,7 +2014,7 @@ Moon & 3xK & double & m & Caller-supplied Earth -\textgreater{} Moon vector, use
 EclipticNormal & 3xK & double & - & Caller-supplied unit ecliptic normal, needed with 'Sun' when srp.eclipse is solaarsCF (the ephemeris path measures it as r\_sun x v\_sun). Default []. \\
 Ceres & 1x1 & struct & - & io.importCERES result; erp.backend ceres only. Default []. \\
 Climatology & 1x1 & struct & - & .albedo and .longwave io.importGroopsGrid results; erp.backend ceresClimatology only. Default []. \\
-RotationItrsToGcrs & 3x3xK & double & - & ITRS-\textgreater{}GCRS rotation; erp.backend ceres only. Default []. \\
+RotationItrsToGcrs & 3x3xK & double & - & ITRS-\textgreater{}GCRS rotation; erp.backend ceres and ceresClimatology only. Default []. \\
 \end{longtable}
 
 \subsubsection*{OUTPUT ARGUMENTS}
@@ -1991,16 +2032,17 @@ RotationItrsToGcrs & 3x3xK & double & - & ITRS-\textgreater{}GCRS rotation; erp.
 \bottomrule
 \endlastfoot
 src & 1x1 & struct & - & .dir (3xMxK, body, unit, satellite -\textgreater{} source), .P (MxK, Pa), .band (1xM string "vis"\textbar{}"ir"), .nu (1xK Sun shadow factor), .M, .K, .frame "body", .meta (see info). \\
-info & 1x1 & struct & - & .sunSource (Options value or "caller"), .sunDistance\_m (1xK), .sunUnit\_gcrs (3xK), .eclipseModel, .lunarEclipse, .erpBackend, .grid, .tiles (earthRadiance struct or []), .tsi\_W\_m2, .earthRadius\_m, .speedOfLight\_m\_s, .provenance. \\
+info & 1x1 & struct & - & .sunSource (Options value or "caller"), .sunDistance\_m (1xK), .sunUnit\_gcrs (3xK), .eclipseModel, .eclipse (eclipseFactor's info), .lunarEclipse, .erpBackend, .grid, .tiles (earthRadiance struct or []), .tsi\_W\_m2, .earthRadius\_m, .speedOfLight\_m\_s, .provenance. \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}radiationSources:\allowbreak{}inputShape}] r not 3xK, q not 4xK, or K differs from epoch
+\item[\texttt{NonGravForces:\allowbreak{}radiationSources:\allowbreak{}inputShape}] epoch not an epoch struct, r not 3xK, q not 4xK, or K differs from epoch; a caller 'Sun' not a finite 3xK, or given without 'EclipticNormal' (solaarsCF) or without 'Moon' (srp.lunarEclipse)
 \item[\texttt{NonGravForces:\allowbreak{}radiationSources:\allowbreak{}numericNaN}] NaN/Inf in r or q
 \item[\texttt{NonGravForces:\allowbreak{}radiationSources:\allowbreak{}depKernel}] sun.source rs.de440 without 'Ephemeris'
 \item[\texttt{NonGravForces:\allowbreak{}radiationSources:\allowbreak{}inputCeres}] 'Ceres', 'Climatology' or 'RotationItrsToGcrs' given with erp.backend none
 \item[\texttt{NonGravForces:\allowbreak{}earthRadiance:\allowbreak{}inputCeres}] ceres inputs missing, or given to another backend
+\item[\texttt{NonGravForces:\allowbreak{}earthRadiance:\allowbreak{}inputClimatology}] ceresClimatology inputs missing, or given to another backend
 \item[\texttt{NonGravForces:\allowbreak{}eclipseFactor:\allowbreak{}*, NonGravForces:\allowbreak{}earthRadiance:\allowbreak{}*}] from the callees
 \item[\texttt{referenceSystem:\allowbreak{}*}] propagated unwrapped
 \end{description}
@@ -2013,17 +2055,19 @@ info & 1x1 & struct & - & .sunSource (Options value or "caller"), .sunDistance\_
 
 \begin{lstlisting}
 mm = NonGravForces.geom.MacroModel(panels, 'Name', "GRACE-C", 'Inertia', I)
-s  = mm.silhouetteDefect()     % 3x1; zero for a closed convex body
+s  = mm.silhouetteDefect()     % 3x1; zero for any closed body
 \end{lstlisting}
 
 \subsubsection*{METHODS}
 \begin{lstlisting}
 s = silhouetteDefect(obj)  sum_k A_k n_k, the area-weighted sum of the outward normals, 3x1
-                           in the body frame. It is ZERO for a closed convex body, so it is
-                           the one-line check that a panel set closes: a non-zero value means
-                           the panels do not enclose a volume, usually a missing face or a
-                           normal pointing inward. It is a DIAGNOSTIC and no force reads it;
-                           geom.graceFO's own tests assert it against the handbook geometry.
+                           in the body frame. It is ZERO for ANY closed body, convex or not
+                           (the divergence theorem), so it is the one-line check that a panel
+                           set closes: a non-zero value means the areas do not enclose a
+                           volume -- a missing face, a normal pointing inward, or printed
+                           areas that do not close on each other (the GRACE/GRACE-FO tables:
+                           0.14 m^2 along z). It is a DIAGNOSTIC and no force reads it;
+                           geom.graceFO's and geom.grace's tests assert its exact value.
 \end{lstlisting}
 \begin{lstlisting}
 PANELS is a struct array, one element per surface element, with fields
@@ -2104,7 +2148,7 @@ Mass\_\allowbreak{}kg & 1x1 & double & kg & Spacecraft mass; default NaN (a Mode
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}MacroModel:\allowbreak{}inputPanels}] missing field / wrong shape; internalShare or Mass\_kg invalid
+\item[\texttt{NonGravForces:\allowbreak{}MacroModel:\allowbreak{}inputPanels}] missing field; an area not finite and positive; a heatCapacity\_J\_m2K \textless{}= 0; internalShare or Mass\_kg invalid
 \item[\texttt{NonGravForces:\allowbreak{}MacroModel:\allowbreak{}inputEnergy}] a+s+d \textasciitilde{}= 1 in a band
 \item[\texttt{NonGravForces:\allowbreak{}MacroModel:\allowbreak{}inputNormal}] non-unit normal
 \item[\texttt{NonGravForces:\allowbreak{}MacroModel:\allowbreak{}inputVertices}] vertices not 3xV, not planar, area off by \textgreater{} 5 \%, wound clockwise, or centroid\_m \textgreater{} 5 cm from the polygon centroid
@@ -2167,7 +2211,7 @@ SolarArrayOperating & 1x1 & logical & true: absVis 0.65 / diffVis 0.30 (closes).
 \endfoot
 \bottomrule
 \endlastfoot
-mm & 1x1 & NonGravForces.geom.MacroModel with .inertia (Table 4), .V (plate polygons), .heatCapacity, .mass\_kg (the handbook mass of that satellite, NonGravForces.const.graceFO) \\
+mm & 1x1 & NonGravForces.geom.MacroModel with .inertia (Table 4), .centreOfMass and .proofMassOffset (Table 4, CG and CG -\textgreater{} ACC), .V (plate polygons), .heatCapacity, .mass\_kg (the handbook mass of that satellite, NonGravForces.const.graceFO) \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
@@ -2311,9 +2355,9 @@ mm & 1x1 & NonGravForces.\allowbreak{}geom.\allowbreak{}MacroModel &  & 6 + P pl
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}boxWing:\allowbreak{}inputDims}] dims not three positive finite lengths
-\item[\texttt{NonGravForces:\allowbreak{}boxWing:\allowbreak{}inputOptics}] optics lacks .bus (or .array when arrays are given) or a coefficient triple does not sum to 1 (via MacroModel)
-\item[\texttt{NonGravForces:\allowbreak{}boxWing:\allowbreak{}inputArray}] an array entry lacks area\_m2/normal/centroid\_m or its normal is not unit
-\item[\texttt{NonGravForces:\allowbreak{}MacroModel:\allowbreak{}*}] from the constructor
+\item[\texttt{NonGravForces:\allowbreak{}boxWing:\allowbreak{}inputOptics}] optics lacks .bus.vis/.bus.ir (or .array.vis/.array.ir when arrays are given), or a vis/ir triple does not have three elements
+\item[\texttt{NonGravForces:\allowbreak{}boxWing:\allowbreak{}inputArray}] an array entry lacks area\_m2/normal/centroid\_m, its area is not a positive scalar, or its normal is not 3-element unit (1e-5)
+\item[\texttt{NonGravForces:\allowbreak{}MacroModel:\allowbreak{}*}] from the constructor: inputEnergy when a vis/ir triple does not sum to 1, inputPanels for a non-positive HeatCapacity\_J\_m2K or Mass\_kg
 \end{description}
 
 \subsection{\texttt{NonGravForces.geom.selfShadow}}
@@ -2362,7 +2406,7 @@ dir\_\allowbreak{}body & 3xK & double & - & Unit directions from the body, body 
 Method & 1x1 & string & - & "raycast" (default) \textbar{} "lut" \\
 Samples & 1x1 & double & - & grid points per plate edge for the ray cast (default 40) \\
 LutResolution & 1x1 & double & - & cells per cube-face edge, integer in [1, 256]; default: the resolution of 'Lut' if given, else 16 (5.6 deg) \\
-Lut & 1x1 & struct & - & a previously returned table for this macro model \\
+Lut & 1x1 & struct & - & a previously returned table for this macro model; its own sample count is kept (Samples is not compared with it) \\
 Plate & 1x1 & double & - & evaluate this one plate only (index into the macro model): f is then 1xK; default [] (every plate) \\
 \end{longtable}
 
@@ -2389,7 +2433,7 @@ info & 1x1 & struct & - & .method, .samples, .lut (struct .f N x 6(n+1)\textasci
 \item[\texttt{NonGravForces:\allowbreak{}selfShadow:\allowbreak{}inputMacro}] not a MacroModel, or without vertices on every plate
 \item[\texttt{NonGravForces:\allowbreak{}selfShadow:\allowbreak{}inputShape}] dir\_body not 3xK, not unit, or not finite; 'Plate' not a plate index
 \item[\texttt{NonGravForces:\allowbreak{}selfShadow:\allowbreak{}inputResolution}] LutResolution not an integer in [1, 256]
-\item[\texttt{NonGravForces:\allowbreak{}selfShadow:\allowbreak{}inputLut}] 'Lut' built for another geometry, resolution or sample count
+\item[\texttt{NonGravForces:\allowbreak{}selfShadow:\allowbreak{}inputLut}] 'Lut' built for another geometry or resolution (or not a table)
 \end{description}
 
 \subsection{\texttt{NonGravForces.geom.flowShadow}}
@@ -2459,8 +2503,8 @@ Integrals & 1x1 & logical & - & also return the unobstructed coefficient integra
 \endfoot
 \bottomrule
 \endlastfoot
-S & 1x1 & struct & - & .beam NxK (occlusion along v\_rel), .number .normal .tangential NxKx8 (species in const.speciesName order; [] without T\_K), .speedRatio 8xK, .kind "flow", .tableFallback (1xK logical: the epochs Method "table" computed exactly because they lie outside the table; [] for the other methods). With vrel\_body = [] and T\_K = [] under Method "table": the table itself (.n .t0 .h .ns .s0 .hs .halfWidthTan .shaded .plus .minus, rows plate x species x \{number normal tangential\}) \\
-info & 1x1 & struct & - & .method, .quadrature, .directionsPerEpoch, .integrals (struct CN CpInc CtauInc NxKx8, with 'Integrals'), .provenance \\
+S & 1x1 & struct & - & .beam NxK (occlusion along v\_rel), .number .normal .tangential NxKx8 (species in const.speciesName order; [] without T\_K), .speedRatio 8xK, .kind "flow", .tableFallback (1xK logical: the epochs Method "table" computed exactly because they lie outside the table; [] for the other methods). With vrel\_body = [] and T\_K = [] under Method "table": the table itself (.n .t0 .h .ns .s0 .hs .halfWidthTan .shaded .quadrature .plus .minus, rows plate x species x \{number normal tangential\}, only the plates .shaded that the Lut ever occludes) \\
+info & 1x1 & struct & - & .method, .quadrature, .directionsPerEpoch, .integrals (struct CN CpInc CtauInc NxKx8, with 'Integrals'), .provenance; under Method "table" also .table (the grid without its values) and .fallbackEpochs (count of epochs computed exactly) \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
@@ -2518,7 +2562,7 @@ src & 1x1 & struct & - & env.radiationSources output: .dir 3xMxK, .P MxK, .band 
 Model & 1x1 & string & - & "steadyState" (default) \textbar{} "transient" \\
 Exposed & NxKxM & double & - & Unobstructed fraction of every plate toward every source, from geom.selfShadow (default: none = 1); N x K when the list has one source \\
 InternalPower\_\allowbreak{}W & 1x1 & double & W & Total internal dissipation radiated through the panels (default 0) \\
-InternalShare & 1xN & double & - & Share of the internal power per panel (sums to 1); REQUIRED when InternalPower\_W \textgreater{} 0 (rule R5) \\
+InternalShare & 1xN & double & - & Share of the internal power per panel (\textgreater{}= 0, sums to 1); REQUIRED when InternalPower\_W \textgreater{} 0 (rule R5), ignored otherwise; macro.internalShare is NOT read here \\
 Epoch & 1x1 & struct & - & referenceSystem epoch struct, K entries (transient) \\
 T0\_\allowbreak{}K & 1xN & double & K & Initial temperatures (transient) \\
 \end{longtable}
@@ -2543,9 +2587,9 @@ info & 1x1 & struct & - & .model, .absorbed\_W\_m2 (NxK q\_abs), .internal\_W\_m
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}thermalState:\allowbreak{}inputMacro}] not a MacroModel; transient with NaN heat capacity
+\item[\texttt{NonGravForces:\allowbreak{}thermalState:\allowbreak{}inputMacro}] not a MacroModel; transient with a NaN or non-positive heat capacity
 \item[\texttt{NonGravForces:\allowbreak{}thermalState:\allowbreak{}inputSources}] src lacks dir/P/band or its sizes disagree
-\item[\texttt{NonGravForces:\allowbreak{}thermalState:\allowbreak{}inputShape}] Exposed not NxKxM in [0,1], T0\_K not 1xN, Epoch not K entries
+\item[\texttt{NonGravForces:\allowbreak{}thermalState:\allowbreak{}inputShape}] Exposed not NxKxM in [0,1]; transient with T0\_K not N finite values \textgreater{}= 0, or Epoch not an epoch struct of K strictly increasing entries
 \item[\texttt{NonGravForces:\allowbreak{}thermalState:\allowbreak{}inputInternal}] InternalPower\_W \textgreater{} 0 without a share summing to 1
 \item[\texttt{NonGravForces:\allowbreak{}thermalState:\allowbreak{}numericNaN}] NaN/Inf in the sources or the result
 \end{description}
@@ -2909,7 +2953,7 @@ T\_\allowbreak{}K & 1xK & double & K & Gas kinetic temperature at the satellite 
 \bottomrule
 \endlastfoot
 Alpha & 1x1\textbar{}\allowbreak{}1xK & double & - & Coefficient in [0, 1]; required by "fixed", refused by the others \\
-SurfaceMass\_\allowbreak{}amu & 1x1 & double & amu & Surface lattice particle mass, \textgreater{} 0; required by "walker2014", refused by "sesam" (which fixes 65) \\
+SurfaceMass\_\allowbreak{}amu & 1x1 & double & amu & Surface lattice particle mass, \textgreater{} 0; required by "walker2014", refused by "sesam" (which fixes 65), ignored by "fixed" and "pilinski20xx" \\
 RelativeSpeed\_\allowbreak{}ms & 1x1\textbar{}\allowbreak{}1xK & double & m/\allowbreak{}s & Satellite speed relative to the gas, \textgreater{} 0; required by "sesam", refused by the others \\
 \end{longtable}
 
@@ -2933,7 +2977,7 @@ info & 1x1 & struct & - & .K, .pressureO\_Pa (walker2014, sesam), .meanMass\_amu
 
 \subsubsection*{WARNINGS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}accommodation:\allowbreak{}outsideFit}] a computed model was evaluated outside the range it was fitted in. Raised ONCE PER CALL, naming how many of the K epochs and which range; silence it with warning('off', 'NonGravForces:accommodation:outsideFit') when the extrapolation is intended. Owner ruling of 2026-09-17 (HANDOVER O-42): warn rather than refuse, because extrapolating a fitted model knowingly is legitimate and refusing would forbid it. THIS AND dependencyReport ARE THE ONLY UNITS THAT MAY WARN; a warning is not printing, since it carries an identifier and can be silenced. IT WILL FIRE ON GRACE-FO. At 520 km in solar minimum P\_O is \textasciitilde{}1.4e-8 Pa, three orders below walker2014's fitted domain, and the adsorption models return 0.11-0.17 where the fitted literature reports 0.82-0.93 (measured 2026-09-17). That is the extrapolation this warning exists to name, and it is why all three presets take a fixed alpha instead.
+\item[\texttt{NonGravForces:\allowbreak{}accommodation:\allowbreak{}outsideFit}] a computed model was evaluated outside the range it was fitted in. Raised ONCE PER CALL, naming how many of the K epochs and which range; silence it with warning('off', 'NonGravForces:accommodation:outsideFit') when the extrapolation is intended. Owner ruling of 2026-09-17 (HANDOVER O-42): warn rather than refuse, because extrapolating a fitted model knowingly is legitimate and refusing would forbid it. This was the first unit after dependencyReport allowed to warn (app.fitCalibration and app.Calibration have since joined it); a warning is not printing, since it carries an identifier and can be silenced. IT WILL FIRE ON GRACE-FO. At 520 km in solar minimum P\_O is \textasciitilde{}1.4e-8 Pa, three orders below walker2014's fitted domain, and the adsorption models return 0.11-0.17 where the fitted literature reports 0.82-0.93 (measured 2026-09-17). That is the extrapolation this warning exists to name, and it is why all three presets take a fixed alpha instead.
 \end{description}
 
 \subsubsection*{ERRORS}
@@ -2942,8 +2986,8 @@ info & 1x1 & struct & - & .K, .pressureO\_Pa (walker2014, sesam), .meanMass\_amu
 \item[\texttt{NonGravForces:\allowbreak{}accommodation:\allowbreak{}inputAlpha}] fixed without 'Alpha', Alpha outside [0, 1] or not 1x1/1xK, or Alpha given to another model
 \item[\texttt{NonGravForces:\allowbreak{}accommodation:\allowbreak{}inputSurfaceMass}] walker2014 without a positive 'SurfaceMass\_amu', or a mass given to sesam
 \item[\texttt{NonGravForces:\allowbreak{}accommodation:\allowbreak{}inputSpeed}] sesam without a positive 'RelativeSpeed\_ms', or a speed given to another model
-\item[\texttt{NonGravForces:\allowbreak{}accommodation:\allowbreak{}numericNaN}] NaN/Inf in Alpha, species or T\_K
-\item[\texttt{NonGravForces:\allowbreak{}accommodation:\allowbreak{}inputRange}] a negative density or a non-positive temperature (models that read them)
+\item[\texttt{NonGravForces:\allowbreak{}accommodation:\allowbreak{}numericNaN}] NaN/Inf in Alpha, species or T\_K (species and T\_K are screened for EVERY model, fixed included)
+\item[\texttt{NonGravForces:\allowbreak{}accommodation:\allowbreak{}inputRange}] a negative density or a non-positive temperature (every model but fixed)
 \end{description}
 
 \subsection{\texttt{NonGravForces.kernel.dragPanelForce}}
@@ -3023,7 +3067,7 @@ info & 1x1 & struct & - & .gamma (NxK), .theta\_rad (NxK), .speed\_m\_s (1xK), .
 \item[\texttt{NonGravForces:\allowbreak{}dragPanelForce:\allowbreak{}inputMacro}] macro is not a NonGravForces.geom.MacroModel
 \item[\texttt{NonGravForces:\allowbreak{}dragPanelForce:\allowbreak{}inputModel}] 'Model' missing or not in the set, or its required options absent
 \item[\texttt{NonGravForces:\allowbreak{}dragPanelForce:\allowbreak{}inputShape}] rho, species, T\_K, vrel\_body, Alpha or Shadow with the wrong shape
-\item[\texttt{NonGravForces:\allowbreak{}dragPanelForce:\allowbreak{}inputRange}] \textbar{}v\textbar{} = 0, rho \textless{} 0, T\_K \textless{}= 0, Tw \textless{}= 0, a fraction or a number/normal ratio outside [0, 1] (the tangential ratio is signed and need only be finite)
+\item[\texttt{NonGravForces:\allowbreak{}dragPanelForce:\allowbreak{}inputRange}] \textbar{}v\textbar{} = 0, rho \textless{} 0, T\_K \textless{}= 0, Tw \textless{}= 0, a fraction or a number/normal ratio outside [0, 1] (the tangential ratio is signed and need only be finite), or an accommodation struct's alpha/coverage/alphaSubstrate outside [0, 1]
 \item[\texttt{NonGravForces:\allowbreak{}dragPanelForce:\allowbreak{}numericNaN}] NaN/Inf in an input
 \item[\texttt{NonGravForces:\allowbreak{}gsiCoefficients:\allowbreak{}*}] propagated from the coefficient model (e.g. inputCd, inputSpecular)
 \item[\texttt{NonGravForces:\allowbreak{}accommodation:\allowbreak{}*}] propagated when a numeric Alpha is validated
@@ -3088,7 +3132,7 @@ Shadow & NxKxM & double & - & Self-shadow fraction per plate, epoch and source (
 \bottomrule
 \endlastfoot
 F & 3xNxK & double & N & Force on each plate, body frame, summed over the sources \\
-info & 1x1 & struct & - & .absorbed\_W\_m2 (NxK, a P c gamma summed over sources: the flux thermalState needs), .litCount (NxK, sources with gamma \textgreater{} 0), .M, .K, .bands, .provenance \\
+info & 1x1 & struct & - & .absorbed\_W\_m2 (NxK, a P c gamma f summed over sources, f the Shadow fraction: the flux thermalState needs), .litCount (NxK, sources with gamma \textgreater{} 0, counted before the Shadow), .M, .K, .bands, .provenance \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
@@ -3382,6 +3426,7 @@ info & 1x1 & struct & - & .what, .wrt, .unit (the parameter's unit as a string),
 \item[\texttt{NonGravForces:\allowbreak{}partials:\allowbreak{}inputMissing}] a name-value this combination needs was not given
 \item[\texttt{NonGravForces:\allowbreak{}partials:\allowbreak{}inputShape}] an input has the wrong shape
 \item[\texttt{NonGravForces:\allowbreak{}gsiCoefficients:\allowbreak{}*}] propagated from the coefficient model
+\item[\texttt{NonGravForces:\allowbreak{}dragPanelForce:\allowbreak{}*, :\allowbreak{}radiationPanelForce:\allowbreak{}*, :\allowbreak{}thermalRecoil:\allowbreak{}*, :\allowbreak{}accommodation:\allowbreak{}*}] propagated: the force each derivative is formed from is evaluated (and its inputs validated) by that unit
 \end{description}
 
 \subsection{\texttt{NonGravForces.kernel.singleEpoch}}
@@ -3454,7 +3499,7 @@ CentreOfMass & 3x1 & double & m & Torque reference point, default macro.centreOf
 \endlastfoot
 F & 3x3 & double & N & Total force, body frame; columns drag \textbar{} radiation \textbar{} thermal \\
 tau & 3x3 & double & N m & Torque about CentreOfMass, same column order \\
-info & 1x1 & struct & - & .Fk 3xNx3 per-panel forces, pages in the same order .gamma Nx1 n.v of the gas stream, .theta\_rad Nx1 .speedRatio 8x1 per species (NaN for constantCd) .Cp .Ctau Nx1 mixture coefficients per unit rho .absorbed\_W\_m2 Nx1 (before CrScale), .emitted\_W\_m2 Nx1 .backend "mex", .kernelVersion, .provenance \\
+info & 1x1 & struct & - & .Fk 3xNx3 per-panel forces, pages in the same order .gamma Nx1 n.v of the gas stream, .theta\_rad Nx1 .speedRatio 8x1 per species (NaN for constantCd) .Cp .Ctau Nx1 mixture coefficients per unit rho .absorbed\_W\_m2 Nx1 (before CrScale), .emitted\_W\_m2 Nx1 .model, .backend "mex", .kernelVersion, .provenance \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
@@ -3464,8 +3509,8 @@ info & 1x1 & struct & - & .Fk 3xNx3 per-panel forces, pages in the same order .g
 \item[\texttt{NonGravForces:\allowbreak{}singleEpoch:\allowbreak{}inputModel}] 'Model' missing, unknown, or missing its required options
 \item[\texttt{NonGravForces:\allowbreak{}singleEpoch:\allowbreak{}inputShape}] a field of gas or src, Tpanel\_K or CentreOfMass has the wrong shape
 \item[\texttt{NonGravForces:\allowbreak{}singleEpoch:\allowbreak{}inputSources}] src lacks dir/P/band, a band is not vis\textbar{}ir, or a direction is not a unit vector
-\item[\texttt{NonGravForces:\allowbreak{}singleEpoch:\allowbreak{}inputRange}] \textbar{}v\textbar{} = 0, rho \textless{} 0, T \textless{}= 0, alpha outside [0,1], P \textless{} 0, a shadow outside [0,1]
-\item[\texttt{NonGravForces:\allowbreak{}singleEpoch:\allowbreak{}numericNaN}] NaN or Inf in an input
+\item[\texttt{NonGravForces:\allowbreak{}singleEpoch:\allowbreak{}inputRange}] \textbar{}v\textbar{} = 0, rho \textless{} 0, T \textless{}= 0 (sentman/maxwell), alpha outside [0,1], Tw\_K \textless{}= 0, P \textless{} 0, Tpanel\_K \textless{} 0, a shadow outside [0,1]
+\item[\texttt{NonGravForces:\allowbreak{}singleEpoch:\allowbreak{}numericNaN}] NaN or Inf in an input the model reads, or a non-finite CentreOfMass or panel centroid (no torque can be formed)
 \item[\texttt{NonGravForces:\allowbreak{}kernelGateway:\allowbreak{}*}] raised by the C gateway; reaching one means a contract above let something through
 \end{description}
 
@@ -3504,10 +3549,10 @@ Every method takes 'Frame', "body" (default) or "gcrs". These are the rest, and 
 \endlastfoot
 torque, evaluate & B\_\allowbreak{}body & 3xK & double & T & Magnetic field at the satellite, BODY frame. Required by the magnetic torque and by nothing else; default [] and the term is omitted. Get it from env.magneticField, rotated to the body. \\
 torque, evaluate & Dipole\_\allowbreak{}Am2 & 3x1 & double & A m\textasciicircum{}2 & Residual magnetic dipole of the spacecraft, body frame; default []. The torque is m x B, so BOTH of these are needed or neither is: one alone leaves the term out silently. torques.magnetic must also be true. \\
-accel, & T0\_\allowbreak{}K & Nx1 & double & K & Initial panel temperatures for a TRANSIENT thermal model, one per panel; default [] and the steady state is used as the start. Ignored by thermal.model "none" and "steadyState". \\
-series & Quantities & 1x2 & string & - & "accel" (default), "torque", or both. Selects which columns the timetable carries; a torque column costs the torque reduction, which accel alone does not pay for. \\
+accel, evaluate & T0\_\allowbreak{}K & Nx1 & double & K & Initial panel temperatures for a TRANSIENT thermal model (the standard preset), one per panel; default [] and the steady state at the call's FIRST epoch is the start, so pass the last column of info.temperature\_K to carry the walls from one call into the next (series does this between its chunks). Ignored by thermal.model "none" and "steadyState". \\
+series & Quantities & 1xQ & string & - & "accel" (default), "torque", or both. Selects which columns the timetable carries; a torque column costs the torque reduction, which accel alone does not pay for. \\
 partials & Method & 1x1 & string & - & "" (default: the Options' partials.method), "analytic" or "finiteDiff". analytic uses kernel.partials' closed forms; finiteDiff is a central difference in the parameter, for cross-checking the analytic form. A complex step is NOT offered and is refused by name: MATLAB's erf, erfc and every norm in the chain discard the imaginary part (measured 2026-09-08). \\
-partials & WithRespectTo & 1xP & string & - & Any of "r", "v" (default ["r" "v"]), "cdScale", "crScale", "alpha". alpha is refused for a two-state surface, which computes its own coverage. \\
+partials & WithRespectTo & 1xP & string & - & Any of "r", "v" (default ["r" "v"]), "cdScale", "crScale", "alpha". alpha is refused unless drag.accommodation is "fixed" (every other model computes its own), and under finiteDiff when it sits on the edge of [0, 1]. \\
 \end{longtable}
 The Model owns the packed macro model, the attitude provider, the mass, the Earth-orientation, space-weather, ephemeris and CERES sources, the resolved Options and the self-shadow table. It computes forces and torques and nothing else: time, frames and attitude kinematics are referenceSystem, reading is gracefoReading, integration is gjToolbox (through app.DynamicsSource).
 
@@ -3519,12 +3564,14 @@ WHAT IT COMPOSES, in order, per epoch:
   2. the geodetic height              referenceSystem.cartesianToGeodetic on the ITRS position
   3. density and composition          env.density with the space-weather drivers, times the observed
                                       daily scale when drag.densityScale is "swarm" (env.densityScale,
-                                      observed) or "driver" (env.densityDriverScale, predicted)
+                                      observed), "driver" (env.densityDriverScale, predicted) or
+                                      "combined" (env.densityScale with 'Fallback', the standard preset)
   4. the radiation source list        env.radiationSources (Sun, Earth tiles, eclipse)
   5. occlusion                        geom.selfShadow per radiation source; geom.flowShadow for the gas
                                       (Method "table" when geom.flowShadow is "table", the standard preset)
-  6. panel temperatures               geom.thermalState with the per-source occlusion
-  7. accommodation                    kernel.accommodation (fixed, pilinski2010/2011, walker2014)
+  6. panel temperatures               geom.thermalState with the per-source occlusion (steady state,
+                                      or integrated over the call's epochs for "transient")
+  7. accommodation                    kernel.accommodation (fixed, pilinski2010/2011, walker2014, sesam)
   8. per-panel forces                 kernel.dragPanelForce, radiationPanelForce, thermalRecoil
   9. reductions                       kernel.assemble, and kernel.bodyTorques for the torque
 Every step is the unit that owns that fact; the Model adds no physics. Until
@@ -3550,7 +3597,7 @@ FRAME. Results are BODY frame by default (principle P4: the body frame is what a
 \bottomrule
 \endlastfoot
 macro & 1x1 & NonGravForces.\allowbreak{}geom.\allowbreak{}MacroModel & - & Packed panel geometry \\
-options & 1x1 & NonGravForces.\allowbreak{}Options & - & Resolved options (default "standard") \\
+options & 1x1 & NonGravForces.\allowbreak{}Options & - & Resolved options (default "standard", which evaluates only with 'DensityScale') \\
 \end{longtable}
 
 \subsubsection*{CONSTRUCTOR NAME-VALUE ARGUMENTS}
@@ -3570,15 +3617,15 @@ options & 1x1 & NonGravForces.\allowbreak{}Options & - & Resolved options (defau
 Attitude & 1x1 & AttitudeProvider & - & BODY-\textgreater{}GCRS quaternions, used when a method is called without q. Default []. \\
 Mass & 1x1 & double\textbar{}\allowbreak{}struct & kg & A constant mass, or an io.massModel result. Default: the macro model's mass\_kg (geom.graceFO carries the handbook value); a macro model without one is REFUSED, never given GRACE-C's (LP-C F10). \\
 Eop & 1x1 & struct & - & referenceSystem.readEop result or a file path. REQUIRED to evaluate: the geodetic height needs the ITRS rotation and the co-rotation its rate. \\
-SpaceWeather & 1x1 & struct & - & io.spaceWeather result. Required by msis00, msis21 and dtm2020. \\
+SpaceWeather & 1x1 & struct & - & io.spaceWeather result. Required by msis00, msis21 and dtm2020, and by drag.wind "hwm14". \\
 Ephemeris & 1x1 & struct & - & referenceSystem.readEphemeris result, required when sun.source is "rs.de440". \\
 Exponential & 1x1 & struct & - & .rho0\_kg\_m3 .h0\_m .H\_m, required when drag.density is "exponential". \\
 Ceres & 1x1 & struct & - & io.importCERES result, required when erp.backend is "ceres". \\
 Climatology & 1x1 & struct & - & .albedo and .longwave io.importGroopsGrid results, required when erp.backend is "ceresClimatology". \\
-DensityScale & 1x1 & struct & - & env.densityScale result (drag.densityScale "swarm"; with 'Fallback' "combined") or env.densityDriverScale result ("driver"), required by those and refused otherwise; its kind must match the option and it must have been formed for this Model's drag.density. Density and every species density are multiplied by S.at(epoch, geodetic height), so the gas force scales exactly (it is linear in them). \\
+DensityScale & 1x1 & struct & - & env.densityScale result (drag.densityScale "swarm"; with 'Fallback' "combined") or env.densityDriverScale result ("driver"), required by those (so by the standard preset) and refused otherwise; its kind must match the option and it must have been formed for this Model's drag.density. Density and every species density are multiplied by S.at(epoch, geodetic height), so the gas force scales exactly (it is linear in them). \\
 \end{longtable}
 
-\subsubsection*{OUTPUT (accel / torque / evaluate)}
+\subsubsection*{OUTPUT ARGUMENTS (accel / torque / evaluate)}
 \begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{7.90cm}@{}}
 \toprule
 {\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Description}} \\
@@ -3593,7 +3640,13 @@ DensityScale & 1x1 & struct & - & env.densityScale result (drag.densityScale "sw
 \bottomrule
 \endlastfoot
 a, tau & 3xK & double & acceleration [m/s\textasciicircum{}2] or torque [N m] \\
-info & 1x1 & struct & .frame, .drag .radiation .thermal (3xK each, the same frame), .bodyTorque (torque only), .rho (1xK), .nu (1xK shadow factor), .mass\_kg (1xK), .vrel\_body, .sources (M), .temperature\_K (NxK), .flowShadow, .accommodation, .lla, .densityScale (1xK, ones with drag.densityScale "none"), .backends, .provenance \\
+info & 1x1 & struct & .frame, .K, .drag .radiation .thermal (3xK each, the same frame; torques from torque), .bodyTorque (torque and evaluate), .torque (evaluate only: .drag .radiation .thermal torques), .rho (1xK), .nu (1xK shadow factor), .mass\_kg (1xK), .vrel\_body, .sources (number M of radiation sources), .temperature\_K (NxK), .flowShadow, .accommodation, .lla, .densityScale (1xK, ones with drag.densityScale "none"), .backends, .provenance \\
+OUTPUT & (series & /\allowbreak{} budget /\allowbreak{} partials) &  \\
+T & timetable &  & one row per epoch: ax ay az [m/s\textasciicircum{}2] and/or tx ty tz [N m] \\
+B & table &  & rows drag, radiation, thermal, total; rms\_x..rms\_z, max\_x..max\_z, rms\_norm [m/s\textasciicircum{}2] \\
+J & 3xPxK & double & d a / d parameter, one column per entry of names \\
+names & 1xP & string & "rx" "ry" "rz" "vx" "vy" "vz" and the scalar parameters \\
+info & 1x1 & struct & .method .frame .stateStep .analytic .K .provenance \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
@@ -3601,13 +3654,13 @@ info & 1x1 & struct & .frame, .drag .radiation .thermal (3xK each, the same fram
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}inputMacro}] macro is not a MacroModel
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}inputOptions}] options is not an Options object, or its choices contradict each other (alpha beside a non-fixed accommodation, maxwell without a specular fraction, walker2014 without a surface mass, internal power without shares, geom.flowShadow table beside selfShadow raycast, a 'DensityScale' with drag.densityScale "none", of the other kind, or formed for another drag.density)
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}inputMass}] no 'Mass' and no mass on the macro model, or 'Mass' not a positive mass / massModel
-\item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}inputState}] epoch, r, v or q disagree in size, or are not finite
+\item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}inputState}] epoch, r, v or q disagree in size, or are not finite, or the attitude provider returned the wrong number of quaternions
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}inputAttitude}] no q was given and the Model has no attitude provider
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}dependEop}] evaluated without 'Eop'
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}dependWeather}] evaluated without 'SpaceWeather' or 'Exponential' for the density backend, or without 'SpaceWeather' for drag.wind hwm14
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}dependDensityScale}] evaluated with drag.densityScale "swarm", "driver" or "combined" and no 'DensityScale'
 \item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}dependCeres}] evaluated with erp.backend ceres and no 'Ceres', or ceresClimatology and no 'Climatology'
-\item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}unsupported}] a method option this Model cannot honour (partials of alpha for a computed accommodation, transient thermal under parfor, unknown quantities)
+\item[\texttt{NonGravForces:\allowbreak{}Model:\allowbreak{}unsupported}] a method option this Model cannot honour (partials of alpha for a computed accommodation or, by finiteDiff, at the edge of [0, 1]; an unknown 'WithRespectTo' entry or 'Method'; transient thermal under series.useParallel; unknown 'Quantities')
 \item[\texttt{NonGravForces:\allowbreak{}\textless{}unit\textgreater{}:\allowbreak{}*}] propagated unwrapped from the unit that refused
 \end{description}
 
@@ -3700,16 +3753,19 @@ y          = observe(obj, dyn)     dyn: .a 3xK body, .omega 3xK body, .omegaDot 
                                    optional .gravityGradient 3x3xK.
                                    y: .value 3xM (accelerometer frame, M = ceil(K/stride)),
                                    .mask 3xM logical, .frame, .epoch (sampled like .value),
-                                   .info (.kernel "crn ACC" | "user" | "none", .outputStride)
+                                   .info (.K, .filtered, .kernel "crn ACC" | "crn <preset>" |
+                                   "user" | "none", .edgeSamples, .outputStride, .gradient
+                                   "none" | "supplied", .provenance)
 [J, names] = partials(obj, dyn)    d(y)/d(theta), (3M)x15, theta = [bias; S(:); dr].
                                    Row (k-1)*3+i is axis i of epoch k: axis fastest
 asd        = noiseModel(obj, f_Hz) 3xN one-sided amplitude spectral density
 n          = numParameters(obj)    15
+S          = Electrostatic.skew(v) static: the 3x3 matrix with S w = v x w
 \end{lstlisting}
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}Electrostatic:\allowbreak{}inputShape}] an argument or a dyn field has the wrong size
+\item[\texttt{NonGravForces:\allowbreak{}Electrostatic:\allowbreak{}inputShape}] an argument or a dyn field has the wrong size, 'OutputRate' does not divide 'SampleRate' by a whole number, 'NoiseAsd' is negative, or noiseModel's f\_Hz is not positive and finite
 \item[\texttt{NonGravForces:\allowbreak{}Electrostatic:\allowbreak{}inputKernel}] the kernel is empty-summed, of even length, not a vector, text other than "crn", a struct without .F/.fs, or a CRN kernel whose .fs differs from 'SampleRate'
 \item[\texttt{NonGravForces:\allowbreak{}Electrostatic:\allowbreak{}depMissing}] "crn" asked for and timeSeriesPreparation is not on the path
 \item[\texttt{NonGravForces:\allowbreak{}Electrostatic:\allowbreak{}inputDyn}] dyn lacks a, omega or omegaDot, or their epoch counts differ; with a CRN kernel: dyn.epoch missing, of the wrong length or type, or not on the kernel's grid
@@ -3773,19 +3829,23 @@ Name & 1x1 & string & - & Instrument label; default "atomInterferometer" \\
 y          = observe(obj, dyn)     dyn: .a 3xK body [m/s^2]; when 'Rotation', .omega 3xK
                                    [rad/s] and .atomVelocity 3xK [m/s], the atom cloud
                                    relative to the instrument, body frame.
+                                   dyn.velocity (retired 2026-09-15) is refused.
                                    y: .value 1xK full phase [rad], .mask 1xK,
-                                   .frame "beam", .info (.wrapped .fringe .weighted
-                                   .coriolis .cycleEpochs)
+                                   .frame "beam", .epoch (dyn.epoch if given, else []),
+                                   .info (.wrapped .fringe .weighted .coriolis
+                                   .cycleEpochs .deadTime_s .provenance)
 [J, names] = partials(obj, dyn)    d(phase)/d([phaseBias; gainError]), Kx2
-asd        = noiseModel(obj, f_Hz) 1xN phase ASD [rad/sqrt(Hz)]; divide by k_eff T^2 for
-                                   the equivalent acceleration ASD
+asd        = noiseModel(obj, f_Hz) 1xN phase ASD [rad/sqrt(Hz)], 'PhaseAsd' up to the
+                                   Nyquist frequency of the cycle rate, 1/(2 cycle), and
+                                   Inf above it (nothing is measured there); divide by
+                                   k_eff T^2 for the equivalent acceleration ASD
 n          = numParameters(obj)    2
 \end{lstlisting}
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}AtomInterferometer:\allowbreak{}inputShape}] an argument or a dyn field has the wrong size
-\item[\texttt{NonGravForces:\allowbreak{}AtomInterferometer:\allowbreak{}inputRange}] kEff \textless{}= 0, T \textless{}= 0, cycle \textless{} 2T, SampleRate \textless{}= 0, or the axis has zero length
+\item[\texttt{NonGravForces:\allowbreak{}AtomInterferometer:\allowbreak{}inputShape}] axis or dyn.a has the wrong size, or noiseModel's f\_Hz is not positive and finite
+\item[\texttt{NonGravForces:\allowbreak{}AtomInterferometer:\allowbreak{}inputRange}] kEff \textless{}= 0, T \textless{}= 0, cycle \textless{} 2T, SampleRate \textless{}= 0, PhaseAsd \textless{} 0, or the axis has zero length
 \item[\texttt{NonGravForces:\allowbreak{}AtomInterferometer:\allowbreak{}inputDyn}] dyn lacks a, or lacks omega/atomVelocity when 'Rotation' is on, or their epoch counts differ, or it carries the retired field velocity
 \item[\texttt{NonGravForces:\allowbreak{}AtomInterferometer:\allowbreak{}numericNaN}] an input contains NaN or Inf
 \end{description}
@@ -3836,7 +3896,7 @@ Authority & 1x1 & double & m/\allowbreak{}s\textasciicircum{}2 & Maximum acceler
 SampleRate & 1x1 & double & Hz & Sample rate of dyn, \textgreater{} 0; default 1. Must exceed 2 f\_c or the bandwidth is not on the grid \\
 Bias & 3x1 & double & m/\allowbreak{}s\textasciicircum{}2 & Additive residual offset; default zeros \\
 GainError & 1x1 & double & - & Relative error of the residual; default 0 \\
-ThrusterAsd & 3x1 & double & m/\allowbreak{}s\textasciicircum{}2/\allowbreak{}rtHz & Actuation noise floor injected inside the bandwidth; default 1e-11 per axis \\
+ThrusterAsd & 3x1 & double & m/\allowbreak{}s\textasciicircum{}2/\allowbreak{}rtHz & Actuation noise floor injected inside the bandwidth, \textgreater{}= 0; a scalar applies to all three axes; default 1e-11 per axis \\
 Name & 1x1 & string & - & Label; default "dragFree" \\
 \end{longtable}
 
@@ -3844,7 +3904,8 @@ Name & 1x1 & string & - & Label; default "dragFree" \\
 \begin{lstlisting}
 y          = observe(obj, dyn)     dyn: .a 3xK non-gravitational acceleration, body frame.
                                    y: .value 3xK residual, .mask 3xK, .frame "body",
-                                   .info (.commanded .saturated .settleSamples .gainAtBandwidth)
+                                   .epoch (dyn.epoch if given, else []), .info (.commanded
+                                   .saturated .settleSamples .gainAtBandwidth .provenance)
 [J, names] = partials(obj, dyn)    d(residual)/d([bias; gainError]), (3K)x4, axis fastest
 asd        = noiseModel(obj, f_Hz) 3xN residual ASD: thruster noise shaped by the
                                    complementary sensitivity, i.e. injected where the loop
@@ -3858,8 +3919,8 @@ m          = magnitudeResponse(obj, f_Hz)   |S(f)| of the cascade, evaluated on 
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}DragFree:\allowbreak{}inputShape}] an argument or dyn.a has the wrong size
-\item[\texttt{NonGravForces:\allowbreak{}DragFree:\allowbreak{}inputRange}] bandwidth \textless{}= 0, order \textless{} 1 or not an integer, Authority \textless{}= 0, SampleRate \textless{}= 2 f\_c
+\item[\texttt{NonGravForces:\allowbreak{}DragFree:\allowbreak{}inputShape}] Bias, ThrusterAsd or dyn.a has the wrong size, or noiseModel's f\_Hz is not positive and finite
+\item[\texttt{NonGravForces:\allowbreak{}DragFree:\allowbreak{}inputRange}] bandwidth \textless{}= 0, order \textless{} 1 or not an integer, Authority \textless{}= 0, ThrusterAsd \textless{} 0, SampleRate \textless{}= 2 f\_c
 \item[\texttt{NonGravForces:\allowbreak{}DragFree:\allowbreak{}inputDyn}] dyn lacks a
 \item[\texttt{NonGravForces:\allowbreak{}DragFree:\allowbreak{}numericNaN}] an input contains NaN or Inf
 \end{description}
@@ -3909,9 +3970,9 @@ reference & 1x1 & NonGravForces.\allowbreak{}Model or Arc & m/\allowbreak{}s\tex
 \endfoot
 \bottomrule
 \endlastfoot
-Orbit & 1xN & struct & - & .epoch (referenceSystem epoch, GPS), .r and .v (3xK, GCRS, m and m/s), e.g. from io.readGNV1B; required with a Model, covering the arc plus half a CRN window \\
-Attitude & 1x1 & struct & - & geom.AttitudeProvider for the orbit epochs; [] (default) uses the Model's own provider \\
-Config & 1x1 & struct & - & timeSeriesPreparation.Config; default Config(acc), with run.filterReference set true \\
+Orbit & 1xN & struct & - & .epoch (referenceSystem epoch, GPS), .r and .v (3xK, GCRS, m and m/s), e.g. from io.readGNV1B; required with a Model. It should cover the arc plus half a CRN window; it is clipped to its overlap with that span and refused only without any overlap \\
+Attitude & 1x1 & object & - & geom.AttitudeProvider, evaluated at the orbit epochs; [] (default) uses the Model's own provider \\
+Config & 1x1 & object & - & timeSeriesPreparation.Config; default Config(acc) (of the first arc in a campaign); run.filterReference is set true either way \\
 QualFlags & 1x1 & struct & - & Passed to run's mask stage; default none \\
 Thrusters & 1x1 & struct & - & THR1B Arc, passed to run's mask stage; default none \\
 Jumps & 1x1 & logical & - & Turn run's "jump" events into bias steps; default false (they are reported in diagnostics.jumps either way) \\
@@ -3939,8 +4000,8 @@ res & 1x1 & struct & - & timeSeriesPreparation.run's fields (arc, reference, dia
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}calibrate:\allowbreak{}inputArc}] acc is not a three-axis Arc in m/s2
-\item[\texttt{NonGravForces:\allowbreak{}calibrate:\allowbreak{}inputReference}] reference is neither a Model nor such an Arc
-\item[\texttt{NonGravForces:\allowbreak{}calibrate:\allowbreak{}inputOrbit}] a Model without 'Orbit', a malformed Orbit, or an orbit that does not cover the arc
+\item[\texttt{NonGravForces:\allowbreak{}calibrate:\allowbreak{}inputReference}] reference is neither a Model nor such an Arc, one arc with several references, or a campaign's reference array whose length is neither 1 nor N
+\item[\texttt{NonGravForces:\allowbreak{}calibrate:\allowbreak{}inputOrbit}] a Model without 'Orbit', a malformed Orbit (fields, 3xK shapes, increasing epochs; a campaign's not 1 or 1xN), or an orbit that does not overlap the arc
 \item[\texttt{NonGravForces:\allowbreak{}calibrate:\allowbreak{}inputConfig}] the Config names no CRN preset
 \item[\texttt{NonGravForces:\allowbreak{}calibrate:\allowbreak{}dataEmpty}] a campaign in which run refused every day
 \item[\texttt{NonGravForces:\allowbreak{}calibrate:\allowbreak{}unsupportedMultiArc}] 'Jumps' true in a campaign
@@ -3957,6 +4018,7 @@ res & 1x1 & struct & - & timeSeriesPreparation.run's fields (arc, reference, dia
 src = NonGravForces.app.DynamicsSource(model, 'Epoch', tai)
 src = NonGravForces.app.DynamicsSource(model, 'Epoch', tai, 'Gravity', gravitySource)
 src = NonGravForces.app.DynamicsSource(model, 'Epoch', tai, 'Parameters', ["cdScale" "crScale"])
+src = NonGravForces.app.DynamicsSource(model, 'Epoch', tai, 'ThermalOrbit', orb)   % thermal.model transient
 sol = gjToolbox.propagate(src, [0 5400], r0, v0, gjToolbox.Options('Epoch', tai, 'Step', 5, 'Binding', "native"))
 \end{lstlisting}
 
@@ -3991,7 +4053,7 @@ model & 1x1 & NonGravForces.\allowbreak{}Model & - & Configured and complete (at
 \endfoot
 \bottomrule
 \endlastfoot
-Epoch & 1x1 & datetime & TAI & The run epoch, unzoned, as gjToolbox.Options carries it. Required; a context Epoch must equal it. \\
+Epoch & 1x1 & datetime & TAI & The run epoch, unzoned, as gjToolbox.Options carries it. Required (default NaT, refused); a context Epoch must equal it. \\
 Attitude & 1x1 & string & - & "provider" (default, the Model's) or "nominal" \\
 AlongVelocity & 1x1 & logical & - & Nominal attitude: +X along the velocity (default true) \\
 Parameters & 1xP & string & - & Estimated parameters: any of "cdScale", "crScale"; default none \\
@@ -3999,13 +4061,14 @@ Native & 1x1 & logical & - & Publish the compiled entry (default true) \\
 Gravity & 1x1 & object & - & Another gjToolbox.DynamicsSource added before this one; default [] \\
 Margin\_\allowbreak{}s & 1x1 & double & s & Table margin beyond the stencil span (default 3600) \\
 TableStep\_\allowbreak{}s & 1x1 & double & s & Table spacing (default 60) \\
-ThermalOrbit & 1x1 & struct & - & thermal.model transient only, and required by it: the reference orbit (.epoch, .r and .v in GCRS, e.g. io.readGNV1B) along which prepare() integrates the wall temperatures; it must cover the tables' span and should start well before it (the walls start from the steady state at its first epoch). Default struct() \\
+ThermalOrbit & 1x1 & struct & - & thermal.model transient only, and required by it: the reference orbit (.epoch, a referenceSystem epoch struct with K increasing entries; .r and .v, 3xK in GCRS, m and m/s; e.g. the three outputs of io.readGNV1B packed into a struct) along which prepare() integrates the wall temperatures; it must cover the tables' span and should start well before it (the walls start from the steady state at its first epoch). Default struct() \\
 \end{longtable}
 
 \subsubsection*{PROPERTIES (beyond the interface's)}
 \begin{lstlisting}
-model, epoch, parameters, native, gravity, margin_s, tableStep_s, tables (the prepared
-summary: .nT, .nb, .breakpoints, .handle), StateSize (3), ParameterRule, Vectorized (true)
+model, epoch, attitudeSource, alongVelocity, parameters, native, gravity, margin_s,
+tableStep_s, thermalOrbit, tables (the prepared tables: .nT, .nb, .breakpoints, .handle,
+.tPanel, .scale, ...), StateSize (3), ParameterRule, Vectorized (true)
 \end{lstlisting}
 
 \subsubsection*{METHODS}
@@ -4019,12 +4082,14 @@ release()          Free the native context (called under onCleanup by gjToolbox.
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}inputModel}] model is not a NonGravForces.Model, or its options cannot be served (raycast, squad; transient thermal without 'ThermalOrbit' or with 'Native' false)
+\item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}inputModel}] model is not a scalar NonGravForces.Model; its options cannot be served (raycast; a non-slerp attitude provider; transient thermal without 'ThermalOrbit' or with 'Native' false); the Model lacks what its options need (Eop, the attitude provider, SpaceWeather, Ceres, DensityScale, Exponential); 'Parameters' outside cdScale/crScale; 'Margin\_s' \textless{} 0 or 'TableStep\_s' \textless{}= 0; accel() given a non-scalar t or mismatched R, V; diagnostics() without Native
 \item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}unsupportedOption}] erp.backend ceresClimatology or drag.density dtm2020, which have no native evaluator; use Model.accel or series instead
-\item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}inputEpoch}] no 'Epoch', or a context Epoch that disagrees
-\item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}inputGravity}] 'Gravity' is not a gjToolbox.DynamicsSource
-\item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}depMissing}] the rhs MEX is not built (Native), or gjToolbox is absent
-\item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}dataRange}] the attitude, the space weather, CERES or 'ThermalOrbit' does not cover the span plus the margin
+\item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}inputEpoch}] no 'Epoch' (or a zoned one), or a context Epoch that disagrees
+\item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}inputGravity}] 'Gravity' is not a gjToolbox.DynamicsSource, or (Native) publishes no NativeEntry
+\item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}depMissing}] the rhs MEX is not built (Native), or sun.source rs.de440 without the Model's 'Ephemeris'. Without gjToolbox the class does not load at all (MATLAB's own error)
+\item[\texttt{NonGravForces:\allowbreak{}DynamicsSource:\allowbreak{}dataRange}] the attitude nodes or 'ThermalOrbit' do not cover the tables' span (span plus the margin); a space-weather file that does not cover it raises io.spaceWeather's own error
+\item[\texttt{NonGravForces:\allowbreak{}rhsGateway:\allowbreak{}dataRange}] native evaluation outside its domain: t outside the tables, a UTC day without a density scale, a height too far outside Swarm's bracket, hwm14 below the ellipsoid
+\item[\texttt{NonGravForces:\allowbreak{}rhsGateway:\allowbreak{}numericModel}] native evaluation failed otherwise (e.g. the gravity entry)
 \item[\texttt{gjToolbox:\allowbreak{}dynamics:\allowbreak{}notPrepared}] accel() before prepare()
 \end{description}
 
@@ -4074,7 +4139,7 @@ q & 4xK & double & - & BODY-\textgreater{}GCRS quaternions, or [] to take them f
 \bottomrule
 \endlastfoot
 Frame & 1x1 & string & - & "body" (default) or "gcrs" \\
-Chunk & 1x1 & double & - & Epochs per evaluation, \textgreater{}= 1; default the first model's Options.series.chunk. The result does not depend on it beyond the rounding named under ACCURACY \\
+Chunk & 1x1 & double & - & Epochs per evaluation, \textgreater{}= 1; default the first model's Options.series.chunk; rounded to an integer. For a The result does not depend on it beyond the rounding named under ACCURACY, transient walls included \\
 Labels & 1xM & string & - & One label per model, default the model's preset name with an index appended when two share it \\
 \end{longtable}
 
@@ -4150,7 +4215,7 @@ aMeasured & 3xK & double & m/\allowbreak{}s\textasciicircum{}2 & Calibrated non-
 \bottomrule
 \endlastfoot
 Frame & 1x1 & string & - & "body" (default) or "gcrs"; aMeasured is read in it \\
-Chunk & 1x1 & double & - & Epochs per evaluation, \textgreater{}= 1; default the model's Options.series.chunk. Does not change the result \\
+Chunk & 1x1 & double & - & Epochs per evaluation, \textgreater{}= 1; default the model's Options.series.chunk; rounded to an integer. Changes the result by rounding only, transient walls included (see ACCURACY) \\
 MinDrag & 1x1 & double & m/\allowbreak{}s\textasciicircum{}2 & Below this modelled drag magnitude the epoch is marked unusable instead of dividing by it; default 1e-12 \\
 \end{longtable}
 
@@ -4169,7 +4234,7 @@ MinDrag & 1x1 & double & m/\allowbreak{}s\textasciicircum{}2 & Below this modell
 \bottomrule
 \endlastfoot
 T & Kx7 & timetable & - & .rho\_kg\_m3 inverted density, .rho\_model\_kg\_m3 the backend's own, .scale their ratio, .dragProjected\_m\_s2 the measurement along u, .dragModel\_m\_s2 the model along u, .residualPerp\_m\_s2 the norm of what is left across u, .usable logical (false where the modelled drag is below MinDrag, where rho\_model is zero, or where the epoch was not finite). rho is NaN wherever usable is false \\
-info & 1x1 & struct & - & .K .chunks .frame .usable (count) .provenance \\
+info & 1x1 & struct & - & .K .chunks .chunkSize .frame .usable (count) .minDrag .provenance \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
@@ -4213,7 +4278,7 @@ Start & 1x1 & int64 & ns & First epoch, GPS ns past 2000-01-01 12:00:00; default
 Seed & 1x1 & double & - & Seed of every random draw; default 1 \\
 Scale & 3x3 & double & - & True scale matrix S (a 3x1 is its diagonal); default diag([0.96 0.98 0.95]) \\
 RegressorFcn & 1x1 & function\_\allowbreak{}handle & - & Measured series z(ts) (n x K, ts in s since Start) whose planted coupling raw += z * RegressorCoupling'; default none (N-11a) \\
-RegressorCoupling & 3xK & double & m/\allowbreak{}s\textasciicircum{}2/\allowbreak{}unit & The true coefficients; default empty \\
+RegressorCoupling & 3xn & double & m/\allowbreak{}s\textasciicircum{}2/\allowbreak{}unit & The true coefficients, one column per column of z; default zeros(3, 0) \\
 ScaleTemperature & 3x3 & double & 1/\allowbreak{}unit & True temperature dependence of the scale (N-11b), driven by the FIRST column z1 of RegressorFcn: S(t) = Scale + ScaleTemperature * (z1(t) - Tref); default zeros \\
 ScaleTemperatureReference & 1x1 & double & unit & Tref; default [] = the mean of z1 over the raw grid, which is the reference fitCalibration uses on one arc \\
 ScaleDrift & 3x3 & double & 1/\allowbreak{}day & True linear drift of S, so S(t) = Scale + ScaleDrift * (t - Start) / 1 day; default zeros \\
@@ -4250,7 +4315,7 @@ truth & 1x1 & struct & - & .scale (at Start) .scaleDrift\_per\_day .regressors (
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}syntheticPair:\allowbreak{}depMissing}] timeSeriesPreparation is not on the path
-\item[\texttt{NonGravForces:\allowbreak{}syntheticPair:\allowbreak{}inputShape}] Scale, ScaleDrift, Bias, BiasDrift, Quadratic or NoiseAsd of the wrong size, or not finite
+\item[\texttt{NonGravForces:\allowbreak{}syntheticPair:\allowbreak{}inputShape}] Scale, ScaleDrift, Bias, BiasDrift, Quadratic or NoiseAsd of the wrong size, or not finite; ScaleTemperature not a finite 3x3, or nonzero without RegressorFcn; RegressorFcn not returning one row per raw sample, or RegressorCoupling not 3x(its columns)
 \item[\texttt{NonGravForces:\allowbreak{}syntheticPair:\allowbreak{}inputRange}] the arc is too short for the CRN window plus the spikes and the gap, or the spikes find no room clear of each other
 \item[\texttt{timeSeriesPreparation:\allowbreak{}*}] from crnKernel, crnApply, synthTimeSeries, Arc
 \end{description}
@@ -4346,7 +4411,7 @@ cal & 1x1 & NonGravForces.app.Calibration \\
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}inputFit}] the fit struct lacks a field, or one has the wrong size
-\item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}inputBasis}] unknown basis, knots or jumps not increasing, too few knots
+\item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}inputBasis}] unknown basis, knots or jumps not increasing, too few knots, or epochs that are not int64 GPS ns
 \item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}inputArc}] apply: not a 3-column arc in m/s2
 \item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}unsupportedQuadratic}] apply with a non-zero K2
 \item[\texttt{NonGravForces:\allowbreak{}Calibration:\allowbreak{}dataSchema}] load: not a calibration file, or no schemaVersion
@@ -4405,7 +4470,7 @@ ref & 1xN & timeSeriesPreparation.\allowbreak{}Arc & m/\allowbreak{}s\textasciic
 \endfoot
 \bottomrule
 \endlastfoot
-Kernel & 1x1 & string & - & "crn" (default): crnKernel("ACC"); a crnKernel struct; or [] for an unfiltered observation \\
+Kernel & 1x1 & string & - & "crn" (default): crnKernel("ACC"); a crnKernel struct (fields F, fs, Nf, Nh, Tf, preset); or [] for an unfiltered observation \\
 BiasBasis & 1x1 & string & - & "constant" \textbar{} "linear" (default) \textbar{} "hat" \textbar{} "pspline" \\
 BiasKnotSpacing\_\allowbreak{}s & 1x1 & double & s & Knot spacing of "hat" and "pspline"; default 10800. Below the kernel span Tf it warns \\
 Scale & 3x3 & string & - & "diag" (default) \textbar{} "full" \textbar{} a 3x3 logical mask \\
@@ -4448,7 +4513,7 @@ info & 1x1 & struct & - & .residual (Arc at obs epochs, NaN where not fitted) .n
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}depMissing}] lsqvce or timeSeriesPreparation is not on the path
-\item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputArc}] obs or ref not a three-axis Arc in m/s2
+\item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputArc}] obs or ref not a three-axis Arc in m/s2; one obs arc with several refs; several obs arcs with neither one ref nor one per arc, or not in time order, or overlapping
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputScale}] a mask that is neither "diag", "full" nor 3x3, or a non-finite 'ScaleApriori'
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputGrid}] 'Kernel' [] and an obs epoch ref does not carry
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputKernel}] a kernel that is neither "crn", a struct nor []
@@ -4617,7 +4682,7 @@ info & 1x1 & struct & - & .calibrations (1xR cell of app.Calibration, [] where g
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}perRevolution:\allowbreak{}inputArc}] obs is not a timeSeriesPreparation.Arc
+\item[\texttt{NonGravForces:\allowbreak{}perRevolution:\allowbreak{}inputArc}] obs is not a three-column timeSeriesPreparation.Arc
 \item[\texttt{NonGravForces:\allowbreak{}perRevolution:\allowbreak{}inputFit}] 'Fit' sets a pair this unit owns, or is not name-value
 \item[\texttt{NonGravForces:\allowbreak{}perRevolution:\allowbreak{}inputEffects}] an effect without .name and a 3-axis .arc
 \item[\texttt{NonGravForces:\allowbreak{}perRevolution:\allowbreak{}dataEmpty}] no usable observation epoch
@@ -4768,7 +4833,7 @@ ExportTo & 1x1 & string & - & Folder: writes calibration.png at 200 dpi; default
 \bottomrule
 \endlastfoot
 f & 1x1 & figure & - & The figure \\
-files & 1xF & string & - & Files written ("" entries none) \\
+files & 1xF & string & - & Files written: calibration.png in 'ExportTo', or a 1x0 string without it \\
 \end{longtable}
 
 \subsubsection*{ERRORS}
@@ -4842,7 +4907,7 @@ ExportTo & 1x1 & string & - & Folder: writes attribution.png at 200 dpi; default
 \bottomrule
 \endlastfoot
 f & 1x1 & figure & - & The figure \\
-files & 1xF & string & - & Files written \\
+files & 1xF & string & - & Files written: attribution.png in 'ExportTo', or a 1x0 string without it \\
 \end{longtable}
 
 \subsubsection*{ERRORS}

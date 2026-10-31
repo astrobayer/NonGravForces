@@ -7,7 +7,10 @@ function mm = graceFO(satellite, options)
 %   Eight plates in the Science Reference Frame (+X to the K-band horn, +Z
 %   nadir, +Y completes). Side panels at 50 deg (normals sin/cos 50 exactly
 %   as printed). The body is NOT convex: the overhanging flanks expose their
-%   undersides, so sum(A n) ~= 0 and self-shadowing is physical.
+%   undersides, so self-shadowing is physical. sum(A n) is nevertheless not
+%   zero for a different reason: it vanishes for ANY closed body, and the
+%   PRINTED areas do not close on each other (0.14 m^2 along z; the polygons
+%   below, which do close, differ from them by up to 2 %).
 %
 %   The S-band boom (Table 5 note 4: projection area 0.0461901 m^2, a
 %   cylinder) is excluded: a flat plate cannot represent it, and its axis is
@@ -56,6 +59,7 @@ function mm = graceFO(satellite, options)
 %
 % OUTPUT ARGUMENTS
 %   mm         1x1  NonGravForces.geom.MacroModel with .inertia (Table 4),
+%                   .centreOfMass and .proofMassOffset (Table 4, CG and CG -> ACC),
 %                   .V (plate polygons), .heatCapacity, .mass_kg (the handbook
 %                   mass of that satellite, NonGravForces.const.graceFO)
 %
@@ -78,7 +82,7 @@ function mm = graceFO(satellite, options)
 %   Siemes et al. (2023) JSWSC 13:16, tuned array coefficients (opt-in later).
 %
 % EXAMPLE
-%   mm = NonGravForces.geom.graceFO("C"); mm.silhouetteDefect()
+%   mm = NonGravForces.geom.graceFO("C"); mm.silhouetteDefect()     % [0; 0; 0.14] m^2
 %
 % See also NonGravForces.geom.MacroModel, NonGravForces.geom.selfShadow, NonGravForces.geom.thermalState.
 %

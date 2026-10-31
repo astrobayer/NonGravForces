@@ -35,7 +35,7 @@ function [F, info] = thermalRecoil(macro, T_K)
 %   between plates) and the Lambertian assumption; for GRACE, TRP is the
 %   second-largest radiation term (Wöske et al. 2019; Vielberg & Kusche 2020;
 %   Siemes et al. 2023: 6.4 nm/s^2 cross-track RMS), so the temperature error
-%   dominates, not this formula. Measured here on GRACE-FO 2020-01-01: 5.263
+%   dominates, not this formula. Measured here (steadyState, 2026-09-17) on GRACE-FO 2020-01-01: 5.263
 %   nm/s^2 cross-track RMS, between Hladczuk et al. (2024)'s 4.22 for GRACE-FO
 %   and Siemes' 6.4 for GRACE-A.
 %
@@ -48,8 +48,10 @@ function [F, info] = thermalRecoil(macro, T_K)
 %       reradiation fits "more than 39% worse" to calibrated cross-track
 %       accelerations than the standard model, and the conclusions state it "did
 %       not lead to improvements". Modelling it hurts.
-%   The presets follow the first, for reasons that are about the evidence and not
-%   about preference: it is the right satellite, it is four years later, and its
+%   The standard and precise presets follow the first (standard with Hladczuk's
+%   further step, the transient walls of geom.thermalState, since 2026-10-31;
+%   precise in steady state; fast sets thermal.model "none"), for reasons that
+%   are about the evidence and not about preference: it is the right satellite, it is four years later, and its
 %   whole Section 3 is devoted to repairing the cross-track calibration that
 %   Vielberg & Kusche name as a possible cause of their own result (they also
 %   name neglected horizontal winds in the drag model, which this toolbox models

@@ -43,6 +43,7 @@ Delivered (status key: ☑ verified in MATLAB, ◐ delivered-untested, ○ speci
 | Transient thermal on the native path (PR #126, 2026-10-31, owner's ruling: standard goes transient and stays integrable): `app.DynamicsSource` 'ThermalOrbit' -- prepare integrates the wall temperatures once along the reference orbit with Model.accel and pchips them onto the table nodes; `mex/ngfRhs.c` NGF_THERMAL_TABLE reads them by time and forms the recoil; refused without the orbit, with 'Native' false, or when the orbit does not cover the tables | `+app/DynamicsSource.m`, `mex/ngfRhs.c`, `mex/ngfRhs.h`, `mex/ngfRhsGateway.c`, `tests/tNgfIntegration.m` | ☑ CI 41154819317: 510/510, predicted 510 |
 | The standard preset goes transient (PR #126, 2026-10-31, owner's ruling): `Options` standard thermal.model "transient" with Woeske's capacities (fitted, not improved: run 41140282748); `Model.accel` 'T0_K'; `forceBudget`/`densityInversion` carry the walls across chunks; tests: `standardUnscaled` steady, `tNgfIntegration` "standardSteady" for 'Native' false, standard as shipped through 'ThermalOrbit' | `+NonGravForces/Options.m`, `Model.m`, `+app/forceBudget.m`, `+app/densityInversion.m`, `+geom/graceFO.m`, `tools/benchmark.m`, `tests/NgfTestCase.m`, `tests/tNgfIntegration.m`, `tests/tNgfModel.m` | ☑ CI 41154819317: 510/510, predicted 510; first run 41152904075 509/510 (the between-node bound of the time tables met the temperature table, recorded apart) |
 | User guide follows the transient standard preset (PR #127, 2026-10-31): preset table, the two owner-ruled exceptions to opt-in, the native-path refusal now only without 'ThermalOrbit' or with 'Native' false, a TRP paragraph on the measured effect, the Cost table marked as predating the transient walls (re-measured at the next release); the PDF is not rebuilt (O-38) | `doc/src/NonGravForces_UserGuide.tex` | documentation only, gate unchanged at 510 |
+| Documentation pass (PR #128, owner 2026-10-31): help-vs-code audit of all 64 units (comment lines only); theory document updated (density scale section, DTM2020, transient walls, IMU attitude check, workflow, rsApiRotation claim removed); generated test catalogue `doc/src/tests_generated.tex` as the theory PDF's appendix, compared by audit check 6; GettingStarted.html rewritten; `tools/userGuideTranscript.m` + release-checks `transcript`. CODE FIX found by the audit: transient walls held the interval across every chunk boundary in `forceBudget`, `densityInversion` and `Model.series`; later chunks now start one epoch early and drop it | `+NonGravForces/Model.m`, `+app/forceBudget.m`, `+app/densityInversion.m`, 60 help blocks, `tools/buildDocs.py`, `auditPackage.py`, `doc/src/*`, `tests/tNgfApp.m` | ☑ CI on 8734694: 511/511, predicted 511 (510 + `tNgfApp/forceBudgetTransientChunks`), 0 audit shortfalls |
 | 10 documented stubs raising `NonGravForces:<name>:notImplemented` (**superseded: none left since LP-C; this table is the level record up to LP-6b, the status lines in README and CLAUDE.md section 5 are current**) | all packages | ○ |
 | Test infrastructure: `NgfTestCase`, `runNgfTests`, `auditTestCategories`, exemptions; 11 test classes, 262 tests, **gate GREEN 262/262** (74 at LP-0, 116 at LP-2, 142 at LP-3, 169 at LP-4, 231 at LP-5, 238 at LP-5x, 244 after the debt sweep) | `tests/` | ☑ |
 | CI: `ci.yml`, `ciGate.m`, `auditPackage.py`; Code Analyzer clean (0 findings) | repository root, `.github/workflows/` | ☑ (local run 2026-08-27) |
@@ -1589,6 +1590,38 @@ per-day scale + linear bias per axis, both satellites together:
   constant residual, heatCapacityFit). checkAlignment still warns on every day: y and z 1-5 s, x -5 to -22 s (C) --
   the along-track lead the transient walls introduce, the next thing to read. The user guide's demo transcript (Step 4, "thermal steadyState") is stale until the
   demo is re-run.
+
+**The x lead read at the shadow edges (PR #128, run 41187770368, standard preset as shipped = transient + conical; C 31
+days in 4703 s, D 28 in 4065 s).** `tools/alignmentMonth.m` now measures the lag within +-300 s of each shadow entry and
+exit (nu crossing 0.5, ~30 edges per day) and with the other thermal and eclipse model. Median signed lag in s
+(positive: ACT1B lags the model), C / D, every day of the month with the same sign unless noted:
+
+| | x | y | z |
+|---|---|---|---|
+| whole day (linear) | -7.6 / -5.0 | -0.7 / -3.5 | +0.8 / +3.4 |
+| shadow ENTRY, conical | **-3.9 / -4.4** (31/31, 28/28 negative) | -4.7 / -6.7 | -3.9 / -3.7 |
+| shadow EXIT, conical | **+1.0 / +1.2** (all positive) | +0.8 / +0.6 | +3.2 / +3.7 |
+| entry, solaarsCF | +1.1 / +0.4 (mixed sign) | +0.9 / -1.9 | +0.8 / +1.0 |
+| exit, solaarsCF | **-8.7 / -8.7** (all negative) | -9.4 / -10.3 | -7.0 / -6.8 |
+| entry / exit, steadyState walls | -3.7 / +1.1 (C) | -3.9 / +0.6 | -4.0 / +4.9 |
+
+- **It is the shadow, and it is not a time tag.** ACT1B sees the Sun go ~4 s EARLIER at entry and come back ~1-3 s LATER
+  at exit than the conical model says -- on all three axes and on every day. A time-tag error would shift both edges the
+  same way. The real shadow is WIDER than the geometric cone (~4 s x 7.6 km/s ~ 30 km at entry), which is what the
+  atmosphere's extinction and refraction do; the thermal model does not move the edges (steadyState gives the same).
+- **solaarsCF fixes the entry and breaks the exit**: entry ~0 s, but exit -8.7 s on every day of both satellites, i.e.
+  solaarsCF holds the shadow ~9 s too LONG after exit. An asymmetry of that size between entry and exit, uniform over a
+  month, is more likely an implementation question than physics (the attenuation curve is a function of the grazing
+  height, which entry and exit traverse in opposite directions): next is a symmetry check of `env.eclipseFactor`
+  solaarsCF on mirrored geometry against `tools/pyxcheck`'s coefficients.
+- The whole-day x lag (-7.6 s) is not the edges alone: with steadyState walls it is -4.2 s; the transient walls add
+  ~3 s of their own on x (kapton front/rear), which the heat-capacity fit already showed.
+- **precise (run 41187772070) stopped after three days of GRACE-C**: the committed CERES excerpt ends at 2020-01-16 and
+  `earthRadiance` refused the next day (`release-checks` now runs precise on 1:3:15, and the tool refuses later days up
+  front). The three days (01, 06, 11; precise = steadyState + solaarsCF + unscaled msis21) say the same as standard's
+  edges: entry -10 / -4 / -1 s, exit -12 / -8 / -9 s on y/z -- solaarsCF's exit again ~9 s late; whole-day y/z
+  -0.2/+0.6, +5.7/+5.0, +10.6/+7.9 s steady against -8.9/-9.0, -5.4/-5.6, -2.6/-3.3 s transient. With solaarsCF's exit
+  error in the same signal the thermal choice for precise cannot be read cleanly: **solaarsCF first, then precise.**
 
 **Next, the owner's call:** whether `standard` should take `thermal.model = "transient"` (it changes the baseline's
 S_zz from ~0.8 to ~1.08 and needs a re-freeze), and whether the heat capacities are to be fitted (the lag per

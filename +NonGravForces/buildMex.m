@@ -120,7 +120,8 @@ function report = buildMex(options)
 %                                 exists; false is a REPORT under 'Check' and an
 %                                 error otherwise),
 %                                 .sourceDir (string, where the third-party source
-%                                 was looked for; "" for the kernel, which has none).
+%                                 was looked for; gjToolbox's csrc for rhs; "" for
+%                                 the kernel, which has none, and for an unbuildable rhs).
 %                                 The digest covers whatever source was actually
 %                                 used, so a different NRLMSISE-00 release marks
 %                                 the binary stale and forces a rebuild -- which
@@ -130,11 +131,22 @@ function report = buildMex(options)
 % ERRORS
 %   NonGravForces:buildMex:depCompiler   no C compiler selected and no MinGW-w64
 %                                        support package found; or no gfortran beside
-%                                        the selected compiler (msis21, hwm14, dtm2020)
-%   NonGravForces:buildMex:depMissing    the NRLMSISE-00, NRLMSIS 2.1, HWM14 or DTM2020 source is absent
+%                                        the selected compiler (msis21, hwm14, dtm2020), or it
+%                                        does not run, or its static runtime is missing, or
+%                                        mex -setup C did not select the MinGW-w64 found
+%   NonGravForces:buildMex:depMissing    the NRLMSISE-00, NRLMSIS 2.1, HWM14 or DTM2020 source is absent,
+%                                        or Target "rhs" without gjToolbox or its gj_native.h
 %   NonGravForces:buildMex:dataMissing   a source file of mex/ is missing
 %   NonGravForces:buildMex:numericBuild  gfortran refused a file (its output is in the message)
 %   MATLAB:mex:*                         compiler errors propagate unwrapped
+%
+% ACCURACY
+%   Not applicable: a build step. Staleness is decided by a SHA-256 over the source
+%   bytes (C, Fortran and data files), so any change to them reports the binary stale.
+%
+% REFERENCES
+%   HANDOVER C3, LP-C WP-C6/C9/C11, O-14 (MinGW location), O-34 (NRLMSISE-00 not vendored);
+%   THIRD-PARTY-NOTICES.md.
 %
 % EXAMPLE
 %   r = NonGravForces.buildMex('Check', true); [r.target; r.upToDate]

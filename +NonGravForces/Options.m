@@ -8,8 +8,9 @@ classdef Options
 %   s   = opt.toStruct()                              % plain struct, for hashing/display
 %
 % METHODS
-%   opt = set(obj, name, value, ...)   A COPY with the dotted fields replaced; this is a value
-%                                      class, so the original is unchanged. Unknown names error.
+%   opt = set(obj, name, value)        A COPY with ONE dotted field replaced (chain calls for
+%                                      several); this is a value class, so the original is
+%                                      unchanged. Unknown names error; text becomes a string.
 %   s   = toStruct(obj)                The same option set as a plain struct, with one field per
 %                                      family (.preset .drag .srp .erp .thermal .torques .geom
 %                                      .sun .series .partials). It exists so that provenance can
@@ -29,7 +30,9 @@ classdef Options
 %   ACT1B's by 8-18 s on y and z over 2020-01, and the transient walls take that to
 %   2-4 s (tools/alignmentMonth.m, HANDOVER "The checkAlignment lags of the 0.17.0
 %   baseline"). A transient Model integrates the walls over the epochs of ONE call,
-%   from the steady state at its first epoch (Model.accel 'T0_K' carries them on).
+%   from the steady state at its first epoch (Model.accel 'T0_K' carries them on;
+%   Model.series does so between its chunks). app.DynamicsSource serves it only on
+%   its native path, from a temperature table built with 'ThermalOrbit'.
 %   The precise preset stays steadyState until the same is measured for it.
 %
 %   FIDELITY LADDER
@@ -46,6 +49,27 @@ classdef Options
 %     geom.selfShadow         none          lut 16          lut 32
 %     geom.flowShadow         exact         table           exact
 %     sun.source              rs.analytic   rs.analytic     rs.de440
+%   Common to all three: drag.wind corotation, drag.Tw_K 300, drag.cdScale 1, drag.cd 2.2,
+%   drag.specularFraction [], drag.surfaceMass_amu [], srp.tsi const.S0 (1361),
+%   srp.lunarEclipse false, srp.crScale 1, thermal.internalPower_W 0, torques false,
+%   series.useParallel false, series.chunk 8640, partials.method "analytic".
+%
+% INPUT ARGUMENTS
+%   Name       Size  Type    Units  Description
+%   ----       ----  ----    -----  -----------
+%   preset     1x1   string  -      "fast", "standard" (default) or "precise"
+%   overrides  1x2N  cell    -      optional "group.field", value pairs, applied by set() in order
+%
+% NAME-VALUE ARGUMENTS
+%   The overrides above: any dotted field of PROPERTIES, e.g. "drag.density", "msis00".
+%   Numeric ranges: drag.alpha and drag.specularFraction [0, 1] or [], drag.surfaceMass_amu
+%   (0, 1e6] or [], drag.Tw_K [1, 2000], drag.cdScale and srp.crScale [0.1, 10], drag.cd
+%   [0.5, 10], srp.tsi [1300, 1400], thermal.internalPower_W [0, 1e4], series.chunk [1, 1e7],
+%   geom.lutResolution integer [1, 256]; erp.grid [nRings nSectors] non-negative integers;
+%   srp.lunarEclipse, torques.*, series.useParallel logical scalars.
+%
+% OUTPUT ARGUMENTS
+%   opt   1x1   NonGravForces.Options   the validated option set (value class)
 %
 % PROPERTIES (read-only after construction; change through set())
 %   preset      string    "fast" | "standard" | "precise"
@@ -90,14 +114,24 @@ classdef Options
 %   partials    struct    .method "analytic" | "finiteDiff"
 %
 %   A field a model does not read is NOT silently ignored when it contradicts the
-%   choice: Model refuses a non-empty drag.alpha beside a non-fixed accommodation,
-%   a maxwell gas without drag.specularFraction, walker2014 without
-%   drag.surfaceMass_amu, and internal power on a macro model with no shares.
+%   choice: Model refuses a non-empty drag.alpha beside a non-fixed accommodation
+%   (and fixed without one), a maxwell gas without drag.specularFraction,
+%   walker2014 without drag.surfaceMass_amu (and a surface mass beside any other
+%   accommodation), geom.flowShadow "table" beside selfShadow "raycast", and
+%   internal power on a macro model with no shares.
+%
+% ACCURACY
+%   No numerical content: the accuracy of a choice is stated by the unit that
+%   evaluates it (Model and the units it composes).
 %
 % ERRORS
 %   NonGravForces:Options:inputPreset   unknown preset
-%   NonGravForces:Options:inputField    unknown dotted field name, or name-value overrides not in pairs
+%   NonGravForces:Options:inputField    unknown dotted field name (or "preset"), or overrides not in pairs
 %   NonGravForces:Options:inputValue    value outside its admissible set
+%
+% REFERENCES
+%   HANDOVER Part D.3 and O-19 / O-42; March et al. (2021) (alpha 0.85); Montenbruck &
+%   Gill (2005) (Cd 2.2).
 %
 % EXAMPLE
 %   opt = NonGravForces.Options("standard", "drag.wind", "hwm14");

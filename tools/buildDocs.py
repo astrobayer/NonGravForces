@@ -22,6 +22,15 @@ So every derivable fact is now derived, and each from its single authority
                                                       chapter
     the error taxonomy     +NonGravForces/fail.m   -> the mnemonic table
     the version and date   toolboxVersion.m        -> every footer
+    the test classes       tests/tNgf*.m           -> the test catalogue: every
+                                                      test method, its category,
+                                                      the unit it is credited
+                                                      to, its comment, and each
+                                                      recorded bound with its
+                                                      stated reason
+    the last gate run      tests/last_run.txt      -> the measured value beside
+                                                      each bound, with the run
+                                                      it came from
     the pages themselves   this file               -> helptoc.xml
 
 The prose that is NOT derivable lives here, in this generator, because a
@@ -49,6 +58,9 @@ VERSION_FILE = os.path.join(ROOT, "+NonGravForces", "toolboxVersion.m")
 OPTIONS_FILE = os.path.join(ROOT, "+NonGravForces", "Options.m")
 TEX_GENERATED = os.path.join(ROOT, "doc", "src", "generated.tex")
 TEX_API = os.path.join(ROOT, "doc", "src", "api_generated.tex")
+TEX_TESTS = os.path.join(ROOT, "doc", "src", "tests_generated.tex")
+TESTS = os.path.join(ROOT, "tests")
+LAST_RUN = os.path.join(ROOT, "tests", "last_run.txt")
 
 STYLE = ("body{font-family:Helvetica,Arial,sans-serif;max-width:900px;margin:2em auto;line-height:1.45}"
          "code,pre{background:#f4f4f4;padding:2px 4px}pre{padding:8px;overflow-x:auto}"
@@ -736,6 +748,188 @@ def render_unit(row):
     return out
 
 
+# ---------------------------------------------------------------------------------------------
+# The test catalogue (doc/src/tests_generated.tex)
+#
+# Added 2026-10-31 on the owner's request for a PDF that describes every test. Everything is read
+# from the test classes themselves (method, TestTags block, the comment under the function line,
+# each verifyBoundAndRecord call's label, bound, units and reason) and from tests/last_run.txt (the
+# measured value). The unit a method is credited to follows auditTestCategories.m's rule exactly:
+# the LONGEST catalogued name the method name begins with, case-insensitively.
+
+def _matlab_args(call):
+    """Top-level comma-separated arguments of a call's argument text (quotes and brackets respected)."""
+    args, depth, cur, quote = [], 0, [], None
+    for i, c in enumerate(call):
+        if quote:
+            cur.append(c)
+            if c == quote:
+                quote = None
+            continue
+        if c in ('"', "'") and (c == '"' or not cur or not (cur[-1].isalnum() or cur[-1] in ")]}.'_")):
+            quote = c
+            cur.append(c)
+            continue
+        if c in "([{":
+            depth += 1
+        elif c in ")]}":
+            depth -= 1
+        if c == "," and depth == 0:
+            args.append("".join(cur).strip())
+            cur = []
+            continue
+        cur.append(c)
+    if "".join(cur).strip():
+        args.append("".join(cur).strip())
+    return args
+
+
+def _literal(arg):
+    """The text of a string literal argument, or of a concatenation of literals; None otherwise."""
+    parts = re.findall(r'"((?:[^"]|"")*)"|\'((?:[^\']|\'\')*)\'', arg)
+    rest = re.sub(r'"(?:[^"]|"")*"|\'(?:[^\']|\'\')*\'', "", arg)
+    if not parts or re.sub(r"[\s+\[\],]", "", rest):
+        return None
+    return "".join((a or b).replace('""', '"').replace("''", "'") for a, b in parts)
+
+
+def _bound_calls(body):
+    """Every verifyBoundAndRecord call in a method body: (label, bound, units, note)."""
+    text = re.sub(r"\.\.\.[^\n]*\n\s*", " ", body)
+    out = []
+    for m in re.finditer(r"verifyBoundAndRecord\(", text):
+        i, depth, quote = m.end(), 1, None
+        while i < len(text) and depth:
+            c = text[i]
+            if quote:
+                if c == quote:
+                    quote = None
+            elif c == '"':
+                quote = c
+            elif c == "(":
+                depth += 1
+            elif c == ")":
+                depth -= 1
+            i += 1
+        a = _matlab_args(text[m.end():i - 1]) + ["", "", "", "", ""]
+        out.append((_literal(a[0]), a[2].strip(), _literal(a[3]) or "", _literal(a[4]) or ""))
+    return out
+
+
+def _last_run():
+    """(header line, {label: measured}) from tests/last_run.txt; the first record of a label wins."""
+    if not os.path.isfile(LAST_RUN):
+        return "", {}
+    lines = open(LAST_RUN, encoding="utf-8").read().split("\n")
+    header = " ".join(l.strip() for l in lines[:2] if l.strip())
+    measured, inside = {}, False
+    for l in lines:
+        if l.startswith("== "):
+            inside = l.startswith("== recorded bounds")
+            continue
+        m = re.match(r"^(.*?)\s+([-+0-9.eEInfNa]+)\s+<=\s+[-+0-9.eEInfNa]+\s", l) if inside else None
+        if m and m.group(1).strip() not in measured:
+            measured[m.group(1).strip()] = m.group(2)
+    return header, measured
+
+
+def _test_classes():
+    """[(class, H1, [(method, tags, comment, bounds)])] for every tests/tNgf*.m, in file order."""
+    classes = []
+    for path in sorted(f for f in os.listdir(TESTS) if re.match(r"tNgf\w*\.m$", f)):
+        lines = open(os.path.join(TESTS, path), encoding="utf-8").read().split("\n")
+        h1 = ""
+        for l in lines[1:6]:
+            if l.startswith("%"):
+                h1 = re.sub(r"^%\s*[A-Za-z0-9_]+\s+", "", l).strip()
+                break
+        methods, tags, intest, i = [], [], False, 0
+        while i < len(lines):
+            l = lines[i]
+            mb = re.match(r"^    methods\b\s*(\((.*)\))?", l)
+            if mb:
+                attrs = mb.group(2) or ""
+                intest = re.search(r"\bTest\b", attrs) is not None
+                tags = re.findall(r"'(\w+)'", attrs.split("TestTags", 1)[1]) if "TestTags" in attrs else []
+            mf = re.match(r"^        function\s+(?:\[?[\w, ]*\]?\s*=\s*)?(\w+)\s*\(", l)
+            if mf and intest:
+                j, comment = i + 1, []
+                while j < len(lines) and lines[j].strip().startswith("%"):
+                    comment.append(lines[j].strip().lstrip("%").strip())
+                    j += 1
+                k = j
+                while k < len(lines) and lines[k] != "        end":
+                    k += 1
+                body = "\n".join(lines[i:k])
+                text = " ".join(comment)
+                text = re.sub(r"^[A-Z][A-Z0-9_]+\s+", "", text)      # a %NAME H1 prefix
+                methods.append((mf.group(1), tags, text, _bound_calls(body)))
+                i = k
+            i += 1
+        classes.append((path[:-2], h1, methods))
+    return classes
+
+
+def render_tests_tex():
+    """doc/src/tests_generated.tex: every test method, its category, unit, purpose and bounds."""
+    version = read_version()[0]
+    rows = list(csv.DictReader(open(CSV, encoding="utf-8")))
+    units = [r for r in rows if r["status"] not in ("stub", "interface")]
+    header, measured = _last_run()
+    classes = _test_classes()
+    nMethods = sum(len(m) for _, _, m in classes)
+    nBounds = sum(len(b) for _, _, ms in classes for _, _, _, b in ms)
+    out = ["% GENERATED by tools/buildDocs.py from tests/tNgf*.m (methods, tags, comments, recorded",
+           "% bounds) and tests/last_run.txt (measured values).",
+           "% DO NOT EDIT: auditPackage.py compares this file by content and refuses a stale one.",
+           "% Regenerate with: python tools/buildDocs.py",
+           "",
+           "\\noindent This catalogue is generated from the test classes by \\texttt{tools/buildDocs.py}: "
+           "%d test methods in %d classes, %d recorded bounds, toolbox version %s. For each method it "
+           "gives the category its \\texttt{TestTags} block assigns, the unit \\texttt{auditTestCategories} "
+           "credits it to (the longest catalogued name the method name begins with), the comment under its "
+           "function line, and every bound it records through \\texttt{verifyBoundAndRecord}: label, bound, "
+           "units and the reason stated for the bound's size. The measured value beside a bound is the one "
+           "\\texttt{tests/last\\_run.txt} holds, from the run: \\emph{%s}; a dash means that run did not "
+           "record the label (a newer test, or a label built at run time). A method whose label is computed "
+           "at run time is shown as \\emph{(computed label)}. The seven categories and the rules behind them "
+           "are those of the section on testing." % (nMethods, len(classes), nBounds, tex(version), tex(header) or "none"),
+           ""]
+    for cls, h1, methods in classes:
+        out += ["\\subsection{\\texttt{%s}}" % tex(cls)]
+        if h1:
+            out += ["\\noindent %s" % tex(h1), ""]
+        if not methods:
+            out += ["\\noindent (no test methods)", ""]
+            continue
+        out.append("\\begin{description}[leftmargin=1em,style=nextline,itemsep=2pt,font=\\normalfont\\ttfamily\\small]")
+        for name, tags, comment, bounds in methods:
+            owner, best = "", 0
+            for r in units:
+                if name.lower().startswith(r["name"].lower()) and len(r["name"]) > best:
+                    owner, best = r["package"] + "." + r["name"] if r["package"] != "NonGravForces" else r["name"], len(r["name"])
+            meta = ", ".join(tags) if tags else "untagged"
+            meta += " \\textperiodcentered\\ " + ("\\texttt{%s}" % tex_tight(owner) if owner else "no unit")
+            item = "\\item[%s] {\\small\\emph{%s}}" % (tex_tight(name), meta)
+            if comment:
+                item += " --- " + tex(comment if len(comment) <= 700 else comment[:697].rsplit(" ", 1)[0] + " ...")
+            out.append(item)
+            if bounds:
+                out.append("\\begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\\small")
+                for label, bound, units_, note in bounds:
+                    shown = tex(label) if label is not None else "\\emph{(computed label)}"
+                    val = measured.get(label, "---") if label is not None else "---"
+                    line = "\\item %s: measured %s, bound %s" % (shown, tex(val), tex(bound))
+                    if units_ and units_ != "-":
+                        line += " %s" % tex(units_)
+                    if note:
+                        line += " --- \\emph{%s}" % tex(note)
+                    out.append(line)
+                out.append("\\end{itemize}")
+        out += ["\\end{description}", ""]
+    return "\n".join(out).rstrip() + "\n"
+
+
 def page(title, body, version, date, model):
     """The shared chrome. One place for the head, the style and the footer."""
     return ("<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + html.escape(title, quote=False) +
@@ -817,22 +1011,62 @@ def render_all():
              "<code>auditPackage.py</code> refuses calls into any other product, in code and in help text.</p>")
     out["Architecture.html"] = page("Architecture", "".join(p), version, date, model)
 
-    # --- getting started
-    p = ["<pre>setupNonGravForces      %% path, dependency report, and the NRLMSISE-00 fetch</pre>"
-         "<p>Setup is the only part of the toolbox that touches the network. The NRLMSISE-00 C source is not "
-         "redistributed here &mdash; its package carries no such grant &mdash; so setup clones it from its "
-         "maintainer at a pinned commit the first time it runs, and prints a line saying so. "
-         "<code>'FetchMsis', \"never\"</code> leaves the network alone; <code>NGF_NRLMSISE00</code> points at a "
-         "copy you already have. Everything except the <code>msis00</code> density backend works without it.</p>"
-         "<pre>NonGravForces.buildMex          %% compile the two MEX gateways, once per machine\n"
-         "matlab -batch ciGate            %% the gate: Code Analyzer clean, then the whole suite</pre>"
-         "<p>Then run a demo. Each is a working sequence of public calls, and each is EXECUTED BY "
-         "THE GATE (<code>tests/tNgfDemos.m</code>), so an API that moves breaks the demo in CI "
-         "rather than in front of a reader:</p>"
+    # --- getting started (rewritten 2026-10-31: the old page named one setup call of six and "two MEX gateways")
+    p = ["<p>This page is the short path from a fresh clone to a first evaluation. The user guide "
+         "(<code>doc/src/NonGravForces_UserGuide.tex</code>) is the long one, and the theory document "
+         "(<code>doc/src/NonGravForces_Theory_and_Implementation.tex</code>) describes every model and every "
+         "test. Neither PDF is committed: the CI job <code>theory</code> builds both on every push and attaches "
+         "them to the run as the artefacts <code>userGuide</code> and <code>theoryDocument</code>; locally, "
+         "<code>pdflatex</code> in <code>doc/src</code> builds them.</p>"
+         "<h2>1. What you need</h2>"
+         "<p>MATLAB R2026a, base MATLAB only (the Parallel Computing Toolbox is used when present); the MinGW-w64 "
+         "C compiler support package for the MEX targets; gfortran only for the opt-in DTM2020 backend. Five "
+         "sibling toolboxes, set up in this order:</p>"
+         "<pre>run('...\\referenceSystem\\setupReferenceSystem.m')                 %% time, EOP, frames, Sun/Moon\n"
+         "run('...\\gracefoReading\\setupGraceFOReading.m')                   %% the L1B readers\n"
+         "run('...\\odeSuite\\gjToolboxSetup.m')                              %% app.DynamicsSource (integrator)\n"
+         "run('...\\timeSeriesPreparation\\setupTimeSeriesPreparation.m')     %% CRN filter, QC, Arc\n"
+         "run('...\\lsqvce\\lsqvce_setup.m')                                  %% the calibration estimator</pre>"
+         "<h2>2. Set up and build</h2>"
+         "<pre>cd('...\\NonGravForces'); setupNonGravForces    %% path, dependency report, pinned fetches\n"
+         "NonGravForces.buildMex                          %% msis, msis21, hwm14, dtm2020, rhs, kernel</pre>"
+         "<p>Setup is the only part of the toolbox that touches the network. Third-party model sources and data "
+         "(NRLMSISE-00, NRLMSIS 2.1, HWM14, DTM2020, IGRF, CERES, the DE440 kernel) are not redistributed here: "
+         "setup fetches each at a pinned commit or SHA-256 the first time it runs and says so. "
+         "<code>'FetchMsis'</code>, <code>'FetchData'</code> and <code>'FetchKernels'</code> take "
+         "<code>\"never\"</code> to leave the network alone. With a DATAPOOL (<code>'DataPool'</code> or the "
+         "environment variable) setup also fetches the observation data of the reference days. "
+         "<code>buildMex</code> refuses rather than fetching: an installer may reach the network, a build step "
+         "may not.</p>"
+         "<h2>3. Verify</h2>"
+         "<pre>runNgfTests                      %% the suite; 'ExcludeSlow', false adds the speed tests\n"
+         "matlab -batch ciGate             %% what CI runs: the suite, the category audit, the verdict</pre>"
+         "<h2>4. A first evaluation</h2>"
+         "<p>On the committed excerpts of GRACE-C, 2020-01-01. The <code>standard</code> preset multiplies "
+         "NRLMSISE-00 by an observed daily density scale and refuses to evaluate without one:</p>"
+         "<pre>f   = @(varargin) fullfile(pwd, 'data', varargin{:});\n"
+         "eop = referenceSystem.readEop(f('eop', 'finals2000A_2019-09_2020-03.all'));\n"
+         "sw  = NonGravForces.io.spaceWeather(f('spaceweather', 'SW-All_2019-09_2020-03.csv'));\n"
+         "cls = NonGravForces.io.spaceWeather(f('spaceweather', 'radio_flux_adjusted_observation_2007-09_2008-03_2019-09_2020-03.txt'));\n"
+         "swarm = string(f('samples', 'swarm', \"SW_OPER_DNS\" + [\"A\" \"B\" \"C\"] + \"POD_2_2020-01-01_2020-01-03.csv\"));\n"
+         "S   = NonGravForces.env.densityScale(swarm, sw, 'Fallback', NonGravForces.env.densityDriverScale(sw, cls));\n"
+         "[ep, r, v] = NonGravForces.io.readGNV1B(f('samples', 'GNV1B_2020-01-01_C_04.txt'), 'Eop', eop);\n"
+         "[eq, q]    = NonGravForces.io.readSCA1B(f('samples', 'SCA1B_2020-01-01_C_04.txt'));\n"
+         "att = NonGravForces.geom.AttitudeProvider(eq, q);\n"
+         "M   = NonGravForces.Model(NonGravForces.geom.graceFO(\"C\"), NonGravForces.Options(\"standard\"), ...\n"
+         "          'Attitude', att, 'Eop', eop, 'SpaceWeather', sw, 'DensityScale', S);\n"
+         "[a, info] = M.accel(ep, r, v, att.at(ep));     %% 3xK m/s^2 in the body frame; info.drag, .radiation, .thermal</pre>"
+         "<h2>5. The demos</h2>"
+         "<p>Each is a working sequence of public calls, and each is EXECUTED BY THE GATE "
+         "(<code>tests/tNgfDemos.m</code>), so an API that moves breaks the demo in CI rather than in front of "
+         "a reader:</p>"
          "<pre>demoForceBudget         %% per-effect budget, two presets side by side\n"
          "demoDensityInversion    %% recover a planted density scale\n"
          "demoGraceFOCalibration  %% recover a planted bias and scale\n"
          "demoCAI                 %% cold-atom accelerometer, and why it needs the attitude rate</pre>"
+         "<p>Then <code>doc NonGravForces</code> for the function reference, and <code>help "
+         "NonGravForces.&lt;unit&gt;</code> for any unit: every help block follows one template (syntax, "
+         "arguments with units and defaults, outputs, accuracy, errors, references, an example).</p>"
          "<p>The toolbox is MIT licensed. See <code>THIRD-PARTY-NOTICES.md</code> for what that does not "
          "cover.</p>"]
     out["GettingStarted.html"] = page("Getting Started", "".join(p), version, date, model)
@@ -920,6 +1154,7 @@ def main(argv):
     targets = [(os.path.join(HTML, name), name, text) for name, text in sorted(pages.items())]
     targets.append((TEX_GENERATED, "src/generated.tex", render_generated_tex()))
     targets.append((TEX_API, "src/api_generated.tex", render_api_tex()))
+    targets.append((TEX_TESTS, "src/tests_generated.tex", render_tests_tex()))
     stale = []
     for path, name, text in targets:
         current = open(path, encoding="utf-8").read() if os.path.isfile(path) else ""

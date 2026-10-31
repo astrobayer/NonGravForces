@@ -543,66 +543,86 @@ the observation. The result is the run's struct plus \texttt{calibration} (an
 (\texttt{calibrate(yMeas, aModel, epoch)}) is gone.
 
 \section{What this chain actually prints}
-\noindent \textbf{This transcript was printed at 0.12.0}, before the observed density scale (0.17.0)
-and the transient walls (2026-10-31) entered the \texttt{standard} preset; it shows the shape of
-the output, and its numbers are the old preset's. The current ones are bounded by the tests of the
-units it calls.
+\noindent Printed by \texttt{tools/userGuideTranscript.m} (release-checks \texttt{what: transcript}, run
+41189157722, 2026-10-31, on the CI runner) with the \texttt{standard} preset as shipped: NRLMSISE-00
+times the combined observed density scale, and the transient walls. The tool runs the calls of Steps
+1--8 above on the committed excerpt; re-run it whenever the preset moves.
 \begin{lstlisting}
---- Step 1: the auxiliary data -------------------------------------------
-EOP rows 213, space weather family celestrak
+--- Step 1: the auxiliary data ----------------------------------------------
+space weather family celestrak, CLS family f30, Swarm files 3
 
---- Step 2: orbit and attitude -------------------------------------------
-GNV1B epochs 600 (GPS), |r| = 6885.4 km, |v| = 7.5970 km/s
+--- Step 2: orbit and attitude ----------------------------------------------
+GNV1B epochs 600 (GPS), |r| = 6887.5 km, |v| = 7.5979 km/s
 SCA1B quaternions 600, provider method slerp
 
---- Step 3: the spacecraft ----------------------------------------------
+--- Step 3: the spacecraft --------------------------------------------------
 panels 8, area sum 16.9163 m^2, mass 601.214 kg
 silhouette defect |sum A_k n_k| = 1.406e-01 m^2
-   (zero only for a CLOSED body; the 8-panel GRACE-FO model is an open box-wing,
-    so a non-zero value here is expected and is not a fault)
+   (zero for any CLOSED body; the printed handbook areas do not close on each other)
 
---- Step 4: the options and the model ------------------------------------
-preset standard: density msis00, gsi sentman, accommodation fixed (alpha 0.85), erp knocke, thermal steadyState
+--- Step 4: the options and the model ---------------------------------------
+preset standard: density msis00 x scale combined, gsi sentman, accommodation fixed (alpha 0.85), erp knocke, thermal transient
 
---- Step 5: evaluate over an arc -----------------------------------------
-epochs 200, |a| RMS 2.4555e-08 m/s^2
-   drag      7.6358e-09   (31.1 % of the total RMS)
+--- Step 5: evaluate over an arc --------------------------------------------
+epochs 200, |a| RMS 2.6510e-08 m/s^2
+   drag      3.2765e-09   (12.4 % of the total RMS)
    radiation 2.3439e-08
-   thermal   5.5046e-09
-info fields: frame, K, rho, nu, mass_kg, vrel_body, sources, temperature_K, flowShadow, accommodation, lla, backends, drag, radiation, thermal, provenance
-density 4.5107e-14 kg/m^3, |v_rel| 7594.2 m/s
+   thermal   5.9567e-09
+info fields: frame, K, rho, nu, mass_kg, vrel_body, sources, temperature_K, flowShadow, accommodation, lla, densityScale, backends, drag, radiation, thermal, provenance
+density 1.9123e-14 kg/m^3 (scale 0.422), |v_rel| 7594.2 m/s
 
---- Step 6: the per-effect budget ----------------------------------------
+--- Step 6: the per-effect budget -------------------------------------------
       effect        rms_norm
     ___________    __________
 
-    "drag"         7.6358e-09
+    "drag"         3.2765e-09
     "radiation"    2.3439e-08
-    "thermal"      5.5046e-09
-    "total"        2.4555e-08
+    "thermal"      5.9567e-09
+    "total"         2.651e-08
 
+--- Step 7: compare with the measured accelerations -------------------------
+cross-track correlation with ACT1B  0.9743
+radial      correlation with ACT1B  0.9988
 
---- Step 7: compare with the measured accelerations ----------------------
-cross-track correlation with ACT1B  0.9722
-radial      correlation with ACT1B  0.9954
+--- Step 8: calibrate -------------------------------------------------------
+Warning: checkAlignment: lin_accl_x (60 s), lin_accl_y (48.65 s): lag above 30 s or at the search edge;
+check the time systems, nothing was shifted.
+    parameter       value         sigma
+    _________    ___________    __________
 
---- Step 8: calibrate ----------------------------------------------------
-(printed by the 0.12.0 estimator; not re-run for 0.13.0 -- see below)
+     "S_11"           1.8739        1.0762
+     "S_21"                0             0
+     "S_31"                0             0
+     "S_12"                0             0
+     "S_22"          0.69567       0.92215
+     "S_32"                0             0
+     "S_13"                0             0
+     "S_23"                0             0
+     "S_33"          0.29963      0.082403
+     "b_x_1"     -2.9398e-07    1.2831e-08
+     "b_x_2"     -2.4215e-07     2.008e-07
+     "b_y_1"     -1.1272e-05    2.1209e-08
+     "b_y_2"      1.5512e-07    1.8458e-07
+     "b_z_1"     -1.6138e-07    2.1272e-10
+     "b_z_2"     -1.4056e-06    2.3372e-07
 \end{lstlisting}
 
-\noindent \textbf{The lesson of this step survives the rewrite, the numbers did not.} With the
-0.12.0 estimator, 200 seconds of this excerpt gave scale factors of 0.16, 0.70 and 0.85 at
-condition numbers 57, 46 and 7: a scale factor is determined by the \emph{spread} of the modelled
-signal across the arc, and minutes of a 90-minute orbit carry almost none. The 0.13.0 estimator
-reports the same fact in its gates (\texttt{res.calibration.gates.cond}, \texttt{.vif}) and refuses
-a full scale matrix the arc cannot separate; its numbers for this excerpt are written to
+\noindent \textbf{Step 8 is printed to show what ten minutes cannot do.} The scales come out
+1.87~$\pm$~1.08, 0.70~$\pm$~0.92 and 0.30~$\pm$~0.08 against the month's 1.00 and 1.09: a scale factor
+is determined by the \emph{spread} of the modelled signal across the arc, and 600 seconds of a
+90-minute orbit carry almost none (the 0.12.0 estimator gave 0.16, 0.70 and 0.85 on 200 seconds), and
+the checkAlignment warning says the same from the other side --- on a short arc the lag search has
+nothing to lock onto. The estimator reports this in its gates (\texttt{res.calibration.gates.cond},
+\texttt{.vif}) and refuses a full scale matrix the arc cannot separate; its numbers for this excerpt
+are also written to
 \texttt{tests/last\_run.txt} by \texttt{tNgfCalibrate/calibrateRealDay} on every gate run rather
 than copied here, where nothing would compare them. \textbf{Use hours rather than minutes, and read
 the gates before believing \texttt{scale}.}
 
-Note also the silhouette defect of \SI{0.14}{\metre\squared} in step~3. That quantity is zero for a
-\emph{closed} body; the 8-panel GRACE-FO model is an open box-wing, so a non-zero value there is
-expected and is not a fault.
+Note also the silhouette defect of \SI{0.14}{\metre\squared} in step~3. That quantity is zero for
+any \emph{closed} body, convex or not; it is non-zero here because the handbook's printed panel
+areas do not close on each other (the plate polygons, which do close, differ from them by up to
+2\,\%), and it is not a fault.
 %=======================================================================================
 \chapter{Worked examples}
 \label{ch:examples}

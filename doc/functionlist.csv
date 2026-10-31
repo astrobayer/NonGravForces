@@ -39,7 +39,7 @@ geom,AttitudeProvider,class,L3,WP-11,done,BODY->GCRS quaternions at query epochs
 geom,checkAttitudeSense,function,L3,WP-11,done,Physics test of quaternion sense (nadir and line-of-sight)
 geom,attitudeQuality,function,L3,N-12,done,Attitude-quality diagnostic: SCA1B rates against the IMU gyros and the nominal frame with 1 and 2 cpr
 kernel,gsiCoefficients,function,L4,WP-13,done,Normal and tangential plate coefficients: sentman maxwell constantCd (cll/schamberg refuse)
-kernel,accommodation,function,L4,WP-C7,done,Energy accommodation per epoch: fixed or Pilinski 2010 or the Walker/Mehta adsorbate mixture
+kernel,accommodation,function,L4,WP-C7,done,Energy accommodation per epoch: fixed or either Pilinski fit or the Walker/Mehta adsorbate mixture or SESAM
 kernel,dragPanelForce,function,L4,WP-13,done,Per-panel gas-momentum force in body frame
 kernel,radiationPanelForce,function,L4,WP-12,done,Per-panel radiation force for a source list in body frame
 kernel,thermalRecoil,function,L4,WP-12,done,Per-panel thermal re-emission recoil force

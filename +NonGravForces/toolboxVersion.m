@@ -43,6 +43,12 @@ function v = toolboxVersion(format)
 % ERRORS
 %   MATLAB:validators:mustBeMember   Unknown format keyword.
 %
+% ACCURACY
+%   Not applicable: the version is a stated fact, not a computed value.
+%
+% REFERENCES
+%   astrobayer/ci-actions VERSIONING.md (semantic versioning, owner's ruling 2026-09-21).
+%
 % EXAMPLE
 %   NonGravForces.toolboxVersion('string')
 %

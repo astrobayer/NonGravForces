@@ -64,9 +64,6 @@ function [epoch, a_srf, aux] = readACC1B(files, options)
 %   NonGravForces:readACC1B:dataEmpty       no record survives TimeRange/QualityBitMask
 %   NonGravForces:readACC1B:dataColumn      lin_accl_* or ang_accl_* missing from the header
 %   gracefoReading:*                        propagated unwrapped (missing file,
-%   MATLAB:badsubscript                     from gracefoReading.readL1bMulti when SEVERAL
-%                                           files are given and TimeRange excludes every
-%                                           record (dependency defect, HANDOVER O-12)
 %                                           malformed record, column mismatch)
 %
 % REFERENCES
