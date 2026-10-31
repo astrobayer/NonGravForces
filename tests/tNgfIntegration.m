@@ -234,7 +234,7 @@ classdef tNgfIntegration < NgfTestCase
             % HWM14 winds, maxwell, the point source and the lunar shadow (hwm14). The last two exist
             % only to reach the accommodation enum: MATLAB and C number it independently, so a value no
             % configuration selects would let both paths run and quietly evaluate different models.
-            worstNode = 0; worstBetween = 0;
+            worstNode = 0; worstBetween = 0; worstBetweenTransient = 0;
             names = ["fast" "standard" "precise" "hwm14" "pilinski2011" "walker2014" "sesam"];
             for name = names
                 [src, M] = tc.sourceFor(name);
@@ -245,6 +245,8 @@ classdef tNgfIntegration < NgfTestCase
                     rel = norm(a1 - a0) / norm(a0);
                     if mod(t, 60) == 0
                         worstNode = max(worstNode, rel);
+                    elseif M.options.thermal.model == "transient"
+                        worstBetweenTransient = max(worstBetweenTransient, rel);
                     else
                         worstBetween = max(worstBetween, rel);
                     end
@@ -255,6 +257,12 @@ classdef tNgfIntegration < NgfTestCase
                 "accumulated rounding of two implementations of one expression set, written in the same association order where it decides the digits; measured 2.504e-14 on 2026-09-16");
             tc.verifyBoundAndRecord("native evaluator vs Model.accel between the table nodes (60 s tables)", worstBetween, 1e-9, "-", ...
                 "the cubic tables' interpolation error, not the model's: measured 8.124e-11 at 60 s spacing, and it falls as the fourth power of the step");
+            % Since 2026-10-31 standard, hwm14 and pilinski2011 carry transient walls, whose temperatures the native
+            % path ALSO reads from a cubic table: between nodes that table's error comes on top, and it is the
+            % temperatures' (an eclipse edge is not smooth), not the time tables'. CI 41152904075 measured 1.564e-05
+            % for it against the 1e-9 claimed for the time tables alone; the two are now recorded apart.
+            tc.verifyBoundAndRecord("native evaluator vs Model.accel between the table nodes, transient walls (60 s tables)", worstBetweenTransient, 1e-4, "-", ...
+                "the wall-temperature table's cubic between nodes; measured 1.564e-05 (CI 41152904075); shrink TableStep_s where it matters");
         end
     end
 

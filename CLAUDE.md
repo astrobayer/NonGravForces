@@ -182,7 +182,9 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   themselves are NOT determined (best factors gain 1 %, C and D disagree, the radiator trades against S_zz 0.96-1.08 at
   constant residual) -- Woeske's kept. `Options` standard thermal.model "transient"; `Model.accel` 'T0_K';
   forceBudget/densityInversion carry the walls across chunks; `standardUnscaled()` also steady; tNgfIntegration
-  "standardSteady" for 'Native' false. ◐, predicted 510. Baseline re-freeze next.
+  "standardSteady" for 'Native' false. ◐, predicted 510. First CI run 41152904075: 509/510 -- DynamicsSourceReference's
+  between-node bound (1e-9, the TIME tables) met the transient walls' TEMPERATURE table at 1.564e-05; recorded apart now
+  (1e-4), the node parity held at 1e-13. Baseline re-freeze next.
 - **2026-10-31, PR #126 (owner: standard goes transient and stays integrable; capacities fitted first):** the native path
   serves thermal.model "transient" by a TABLE: `app.DynamicsSource(..., 'ThermalOrbit', orb)` integrates the wall
   temperatures once along a reference orbit with Model.accel at prepare (pchip onto the table nodes), `mex/ngfRhs.c`
