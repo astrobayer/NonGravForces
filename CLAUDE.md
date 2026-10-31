@@ -181,7 +181,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   a/b instead of the component along the ecliptic normal (the projected spin axis); on GRACE-FO's polar orbit that
   widened the modelled shadow by ~8 s per edge and skewed it at larger beta, the size and asymmetry ACT1B showed
   (alignment run 41187770368). Fixed in `env.eclipseFactor` and `mex/ngfRhs.c`; new bound in
-  `tNgfEnv/eclipseFactorMetamorphic` (the same atmospheric limb height above a and above b). ◐, predicted gate 511.
+  `tNgfEnv/eclipseFactorMetamorphic` (the same atmospheric limb height above a and above b). predicted gate 511 (☑ below).
   **Same PR, the eight code defects the help audit found (owner: fix them):** `env.densityScale` REFUSES a TOLEOS file
   (was read and silently dropped); `env.densityDriverScale` refuses CLS's flux not adjusted to 1 AU; `io.igrfCoefficients`
   refuses an epoch struct of more than one epoch; `provenance`'s FNV-1a is exact (the double product lost its low bits;
@@ -193,7 +193,8 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   every model (thermal). Owner's call: standard on solaarsCF (re-freeze).
   **precise** (run 41213060789, 5 days C and D): steadyState walls lead ACT1B by 12-20 s on y/z, transient takes it to
   2-7 s; recommended: precise -> transient (owner). First CI on a086fa7 red on Code Analyzer ISCL (`numel == 1` in
-  `igrfCoefficients`), fixed.
+  `igrfCoefficients`), fixed; the second (fa9707a) 510/511, the new fromItsg assertion
+  joined two CHAR paths into one; fixed. ☑ CI 41245260551 on fe5c8b3: 511/511, predicted 511, Code Analyzer clean.
 - **2026-10-31, PR #128 (documentation, owner: all four points):** (1) a help-vs-code audit of all 64 units by four
   agents, comment lines only (stale errors lists, missing info fields, wrong defaults, examples a standard Model would
   refuse; Options gained the template sections it lacked); (2) the theory document brought to 0.17+: the observed density
