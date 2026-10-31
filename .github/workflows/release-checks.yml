@@ -2,7 +2,8 @@
 # the regression baseline over the reference month 2020-01 C and D from the runner's DATAPOOL
 # (tools/regressionBaseline.m, ~3-4 h) and the per-epoch benchmark (tools/benchmark.m, minutes).
 # Also one diagnostic on the same month: "alignment" runs tools/alignmentMonth.m (the lag between
-# ACT1B and the model per day and axis, raw and with the bias removed, per effect; ~3 h), and
+# ACT1B and the model per day and axis, per effect, at the shadow edges, with the other thermal and
+# eclipse models; ~2 h; input preset "precise" runs every fifth day of that preset), and
 # "heatcapacity" runs tools/heatCapacityFit.m (the wall heat capacities per panel group fitted to ACT1B
 # through the transient thermal model; ~2 h).
 #
@@ -24,9 +25,12 @@ on:
       what:
         description: "baseline-freeze | baseline-compare | benchmark | alignment | heatcapacity"
         default: "baseline-compare"
+      preset:
+        description: "alignment only: the Model preset (standard | precise)"
+        default: "standard"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.inputs.what }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.inputs.what }}-${{ github.event.inputs.preset }}
   cancel-in-progress: true
 
 permissions:
@@ -39,6 +43,7 @@ jobs:
     env:
       READING_DATA_POOL: ${{ vars.READING_DATA_POOL }}
       RELEASE_WHAT: ${{ github.event.inputs.what }}
+      RELEASE_PRESET: ${{ github.event.inputs.preset }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with: { path: NonGravForces, persist-credentials: false }
@@ -115,8 +120,18 @@ jobs:
                     disp(T);
                     out = fullfile(pwd, "tools", "benchmark_reference.csv");
                 case "alignment"
-                    rep = NonGravForces.buildMex('Target', "msis"); assert(rep.upToDate, "releaseChecks:mex", "MEX target msis did not build");
-                    alignmentMonth();
+                    preset = string(getenv("RELEASE_PRESET")); if strlength(preset) == 0, preset = "standard"; end
+                    targets = "msis";
+                    if preset == "precise"   % msis21 and the DE440 kernel, which this run otherwise does not fetch
+                        setupNonGravForces('Verbose', false, 'FetchData', "never", 'FetchKernels', "ifMissing", 'FetchGroops', "never", 'FetchPool', "never");
+                        targets = ["msis" "msis21"];
+                    end
+                    for target = targets
+                        rep = NonGravForces.buildMex('Target', target); assert(rep.upToDate, "releaseChecks:mex", "MEX target %s did not build", target);
+                    end
+                    days = [];
+                    if preset == "precise", days = 1:5:31; end   % every fifth day: precise's exact flow shadow and 24x48 CERES tiles cost several times standard
+                    alignmentMonth('Preset', preset, 'Days', days);
                     out = fullfile(pwd, "tools", "alignment_month.csv");
                 case "heatcapacity"
                     rep = NonGravForces.buildMex('Target', "msis"); assert(rep.upToDate, "releaseChecks:mex", "MEX target msis did not build");
