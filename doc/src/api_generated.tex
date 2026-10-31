@@ -1270,7 +1270,7 @@ aux & 1x1 & struct & - & .file, .generation, .numCoefficients, .validFrom, .vali
 \item[\texttt{NonGravForces:\allowbreak{}igrfCoefficients:\allowbreak{}dataMissing}] the file does not exist
 \item[\texttt{NonGravForces:\allowbreak{}igrfCoefficients:\allowbreak{}dataFormat}] no "g/h n m ..." header line, its epoch columns do not parse as years, or a row whose field count disagrees with that header
 \item[\texttt{NonGravForces:\allowbreak{}igrfCoefficients:\allowbreak{}dataColumn}] a row is neither g nor h, or n and m are not a valid Schmidt pair (m \textless{}= n, n \textgreater{}= 1)
-\item[\texttt{NonGravForces:\allowbreak{}igrfCoefficients:\allowbreak{}inputRange}] 'Epoch' before the first epoch or more than five years past the last, or a numeric 'Epoch' that is not one finite decimal year
+\item[\texttt{NonGravForces:\allowbreak{}igrfCoefficients:\allowbreak{}inputRange}] 'Epoch' before the first epoch or more than five years past the last, or a numeric 'Epoch' that is not one finite decimal year, or an epoch struct holding more than one epoch
 \item[\texttt{NonGravForces:\allowbreak{}igrfCoefficients:\allowbreak{}numericNaN}] a coefficient does not parse as a number
 \end{description}
 
@@ -1576,7 +1576,7 @@ S & 1x1 & struct & - & .kind "swarm" ("combined" with 'Fallback'), .fallback (th
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}densityScale:\allowbreak{}inputSatellites}] no B, or neither A nor C, among the files
+\item[\texttt{NonGravForces:\allowbreak{}densityScale:\allowbreak{}inputSatellites}] no B, or neither A nor C, among the files; or a file that is not Swarm A/B/C (a TOLEOS density of CHAMP, GRACE or GRACE-FO)
 \item[\texttt{NonGravForces:\allowbreak{}densityScale:\allowbreak{}inputModel}] Model is not a density backend with drivers
 \item[\texttt{NonGravForces:\allowbreak{}densityScale:\allowbreak{}dataDay}] S.at at an epoch whose day has no factor (no file covers it, or fewer than MinRecords records) and no 'Fallback' was given
 \item[\texttt{NonGravForces:\allowbreak{}densityScale:\allowbreak{}inputFallback}] 'Fallback' is not an env.densityDriverScale result, or was formed for another density model
@@ -1651,7 +1651,7 @@ S & 1x1 & struct & - & .kind "driver", .model "msis00", .proxy "F30", .coef (str
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}densityDriverScale:\allowbreak{}inputModel}] Model is not msis00
-\item[\texttt{NonGravForces:\allowbreak{}densityDriverScale:\allowbreak{}inputFamily}] sw is not the celestrak family or cls not f30
+\item[\texttt{NonGravForces:\allowbreak{}densityDriverScale:\allowbreak{}inputFamily}] sw is not the celestrak family, or cls not f30, or cls is the flux not adjusted to 1 AU (.adjusted false)
 \item[\texttt{NonGravForces:\allowbreak{}densityDriverScale:\allowbreak{}dataDay}] S.at at a UTC day whose 81 previous days of F30 or whose Ap are not all in the files
 \item[\texttt{NonGravForces:\allowbreak{}densityDriverScale:\allowbreak{}inputRange}] h not 1xK, one height per epoch
 \end{description}
@@ -2406,7 +2406,7 @@ dir\_\allowbreak{}body & 3xK & double & - & Unit directions from the body, body 
 Method & 1x1 & string & - & "raycast" (default) \textbar{} "lut" \\
 Samples & 1x1 & double & - & grid points per plate edge for the ray cast (default 40) \\
 LutResolution & 1x1 & double & - & cells per cube-face edge, integer in [1, 256]; default: the resolution of 'Lut' if given, else 16 (5.6 deg) \\
-Lut & 1x1 & struct & - & a previously returned table for this macro model; its own sample count is kept (Samples is not compared with it) \\
+Lut & 1x1 & struct & - & a previously returned table for this macro model; its own sample count is kept and reported in info.samples (Samples is not compared with it) \\
 Plate & 1x1 & double & - & evaluate this one plate only (index into the macro model): f is then 1xK; default [] (every plate) \\
 \end{longtable}
 
@@ -2659,8 +2659,9 @@ provenance   struct
 q = at(epoch)              4xK unit quaternions BODY->GCRS at the query epochs
 [q, info] = at(epoch)      info from interpolateQuaternions plus .converted (logical)
 q = nominal(r, v, xAlongVelocity)   static, 4xK from a 3xK state and a logical
-ap = fromItsg(files, 'Method', m)   static, a provider over TU Graz's attitude files (chronological,
-                                    one satellite), conjugated once; source "itsg"
+ap = fromItsg(files, 'Method', m)   static, a provider over TU Graz's attitude files (one satellite, in
+                                    any order: sorted, an epoch held twice with the same rotation kept
+                                    once), conjugated once; source "itsg"
 \end{lstlisting}
 
 \subsubsection*{ERRORS}
@@ -2668,7 +2669,7 @@ ap = fromItsg(files, 'Method', m)   static, a provider over TU Graz's attitude f
 \item[\texttt{NonGravForces:\allowbreak{}AttitudeProvider:\allowbreak{}inputNodes}] qNodes not 4xM, epochNodes not an epoch struct with M entries, M \textless{} 2
 \item[\texttt{NonGravForces:\allowbreak{}AttitudeProvider:\allowbreak{}inputEpoch}] at(): not an epoch struct
 \item[\texttt{NonGravForces:\allowbreak{}AttitudeProvider:\allowbreak{}inputShape}] nominal(): r or v not 3xK, or degenerate (r x v = 0)
-\item[\texttt{NonGravForces:\allowbreak{}AttitudeProvider:\allowbreak{}dataItsg}] fromItsg(): a file is not a 4-column quaternion product
+\item[\texttt{NonGravForces:\allowbreak{}AttitudeProvider:\allowbreak{}dataItsg}] fromItsg(): a file is not a 4-column quaternion product, or two files hold one epoch with different attitudes
 \item[\texttt{gracefoReading:\allowbreak{}*}] fromItsg(): propagated unwrapped
 \item[\texttt{referenceSystem:\allowbreak{}interpolateQuaternions:\allowbreak{}*}] propagated unwrapped (queryOutOfRange in particular)
 \item[\texttt{referenceSystem:\allowbreak{}*}] propagated unwrapped

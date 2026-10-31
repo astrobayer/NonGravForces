@@ -46,6 +46,9 @@ classdef tNgfCore < NgfTestCase
             tc.verifyEqual(p.created.TimeZone, 'UTC');
             q = NonGravForces.provenance("unitA");
             tc.verifyEqual(q.optionHash, "00000000");
+            % 32-bit FNV-1a of jsonencode(struct('k', 1)) = '{"k":1}', computed in Python's exact integers
+            % (2026-10-31: the double product had rounded its low bits away)
+            tc.verifyEqual(p.optionHash, "4f77d9b7");
         end
         function optionsContract(tc)
             o = NonGravForces.Options;

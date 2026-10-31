@@ -336,13 +336,15 @@ lutArgs = {'Method', "lut", 'Lut', options.Lut, 'Quadrature', options.Quadrature
 info = struct();
 if isequal(size(vrel_body), [0 0]) && isequal(size(T_K), [0 0])
     S = localFlowTable(macro, options.Lut, options.Quadrature, [1 -1]);    % the table itself, both cones
+    if wantInfo, info = localTableInfo(options, rmfield(S, intersect({'plus', 'minus'}, fieldnames(S))), 0); end
     return
 end
 S = NonGravForces.geom.flowShadow(macro, vrel_body, [], lutArgs{:});    % validates vrel_body; the beam is exact
 K = size(vrel_body, 2);
 S.tableFallback = false(1, K);
 if isequal(size(T_K), [0 0])
-    return                                                                 % hyperthermal only: nothing to tabulate
+    if wantInfo, info = localTableInfo(options, [], 0); end               % hyperthermal only: nothing tabulated
+    return
 end
 if ~(isequal(size(T_K), [1 K]) && all(isfinite(T_K)))
     NonGravForces.fail(unit, "inputShape", "T_K must be a finite 1x%d array, or [] for the hyperthermal limit -> got %s", K, mat2str(size(T_K)));
@@ -380,14 +382,16 @@ if any(out)
 end
 S.number = fN; S.normal = fP; S.tangential = fT; S.speedRatio = s; S.tableFallback = out;
 if wantInfo
-    info.method = "table";
-    info.quadrature = options.Quadrature;
-    info.directionsPerEpoch = 0;
-    info.integrals = struct('CN', [], 'CpInc', [], 'CtauInc', []);
-    info.table = rmfield(tb, {'plus', 'minus'});
-    info.fallbackEpochs = nnz(out);
-    info.provenance = NonGravForces.provenance("geom.flowShadow", 'Options', struct('method', "table", 'quadrature', options.Quadrature));
+    info = localTableInfo(options, rmfield(tb, {'plus', 'minus'}), nnz(out));
 end
+end
+
+function info = localTableInfo(options, table, fallbackEpochs)
+%LOCALTABLEINFO Method "table"'s info, the same fields on every return path (until 2026-10-31 the table-only and
+% the hyperthermal-only calls returned an empty struct). table is [] when nothing was tabulated (T_K = []).
+info = struct('method', "table", 'quadrature', options.Quadrature, 'directionsPerEpoch', 0, ...
+    'integrals', struct('CN', [], 'CpInc', [], 'CtauInc', []), 'table', table, 'fallbackEpochs', fallbackEpochs, ...
+    'provenance', NonGravForces.provenance("geom.flowShadow", 'Options', struct('method', "table", 'quadrature', options.Quadrature)));
 end
 
 function tb = localFlowTable(macro, lut, q, signs)

@@ -69,7 +69,8 @@ function S = densityDriverScale(sw, cls, options)
 %
 % ERRORS
 %   NonGravForces:densityDriverScale:inputModel   Model is not msis00
-%   NonGravForces:densityDriverScale:inputFamily  sw is not the celestrak family or cls not f30
+%   NonGravForces:densityDriverScale:inputFamily  sw is not the celestrak family, or cls not f30, or cls is the
+%                                                 flux not adjusted to 1 AU (.adjusted false)
 %   NonGravForces:densityDriverScale:dataDay      S.at at a UTC day whose 81 previous days of F30 or
 %                                                 whose Ap are not all in the files
 %   NonGravForces:densityDriverScale:inputRange   h not 1xK, one height per epoch
@@ -103,6 +104,10 @@ if options.Model ~= "msis00"
 end
 if ~isfield(sw, 'index') || ~isfield(sw.index, 'apDaily') || ~isfield(cls, 'index') || ~isfield(cls.index, 'f30')
     NonGravForces.fail(unit, "inputFamily", "sw must be io.spaceWeather of SW-All (celestrak) and cls of CLS's adjusted radio flux (f30) -> read the two files with io.spaceWeather");
+end
+if ~isfield(cls, 'adjusted') || ~isequal(cls.adjusted, true)
+    % the coefficients were fitted to the flux ADJUSTED to 1 AU; the absolute flux differs by +-3.4 % over the year
+    NonGravForces.fail(unit, "inputFamily", "cls is CLS's flux NOT adjusted to 1 AU, the coefficients were fitted to the adjusted one -> read radio_flux_adjusted_observation.txt");
 end
 % THE COEFFICIENT RECORD, transcribed from tools/densityDriverFit.m's full fit (trimmed days, F30), every digit.
 c = struct('run', "40676249479", 'centre_sfu', 75.712339474163883, 'a0', -0.70150825262940808, ...

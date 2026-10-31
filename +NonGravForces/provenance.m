@@ -32,7 +32,7 @@ function p = provenance(unit, options)
 %   None of its own; MATLAB:validators:* for arguments of the wrong class or size.
 %
 % ACCURACY
-%   .optionHash is a 32-bit FNV-1a-style digest of jsonencode(Options): it tells
+%   .optionHash is the 32-bit FNV-1a digest (exact since 2026-10-31) of jsonencode(Options): it tells
 %   option sets apart, it is not a cryptographic hash. "00000000" for no options.
 %   The dependency versions are read ONCE per MATLAB session and cached; after
 %   swapping a dependency, `clear functions` before trusting .dependencies.
@@ -79,7 +79,12 @@ txt = uint8(char(jsonencode(s)));
 x = uint32(2166136261);
 for b = txt
     x = bitxor(x, uint32(b));
-    x = uint32(mod(double(x) * 16777619, 2^32));
+    % x * 16777619 mod 2^32, EXACTLY: 16777619 = 2^24 + 403, and x * 2^24 mod 2^32 needs only x's low byte. Until
+    % 2026-10-31 the product was formed in one double, up to 7.2e16 > 2^53, so its low bits were rounded away
+    % before the mod and the hash was not FNV-1a.
+    lo = mod(double(x) * 403, 2^32);                       % < 1.8e12: exact in double
+    hi = mod(double(bitand(x, uint32(255))) * 2^24, 2^32);  % (x mod 2^8) * 2^24: exact
+    x = uint32(mod(lo + hi, 2^32));
 end
 h = string(lower(dec2hex(x, 8)));
 end

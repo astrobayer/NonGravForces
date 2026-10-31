@@ -182,6 +182,12 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   widened the modelled shadow by ~8 s per edge and skewed it at larger beta, the size and asymmetry ACT1B showed
   (alignment run 41187770368). Fixed in `env.eclipseFactor` and `mex/ngfRhs.c`; new bound in
   `tNgfEnv/eclipseFactorMetamorphic` (the same atmospheric limb height above a and above b). ◐, predicted gate 511.
+  **Same PR, the eight code defects the help audit found (owner: fix them):** `env.densityScale` REFUSES a TOLEOS file
+  (was read and silently dropped); `env.densityDriverScale` refuses CLS's flux not adjusted to 1 AU; `io.igrfCoefficients`
+  refuses an epoch struct of more than one epoch; `provenance`'s FNV-1a is exact (the double product lost its low bits;
+  hashes change); `geom.selfShadow` reports a reused table's own sample count; `geom.flowShadow` Method "table" fills
+  `info` on every path; `AttitudeProvider.fromItsg` sorts and keeps a twice-held epoch once (refuses differing copies);
+  `io.readMAG1B` records its files in the provenance. One assertion each inside existing test methods: gate stays 511.
 - **2026-10-31, PR #128 (documentation, owner: all four points):** (1) a help-vs-code audit of all 64 units by four
   agents, comment lines only (stale errors lists, missing info fields, wrong defaults, examples a standard Model would
   refuse; Options gained the template sections it lacked); (2) the theory document brought to 0.17+: the observed density

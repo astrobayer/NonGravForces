@@ -1454,6 +1454,9 @@ classdef tNgfEnv < NgfTestCase
             tc.verifyErrorId(@() NonGravForces.env.densityScale(files(2), sw), 'NonGravForces:densityScale:inputSatellites');
             tc.verifyErrorId(@() NonGravForces.env.densityScale(files([1 3]), sw), 'NonGravForces:densityScale:inputSatellites');
             tc.verifyErrorId(@() NonGravForces.env.densityScale(files, sw, 'Model', "exponential"), 'NonGravForces:densityScale:inputModel');
+            % a TOLEOS density beside the Swarm files is refused, not dropped (2026-10-31)
+            toleos = string(fullfile(tc.root, 'data', 'samples', 'toleos', 'GF_OPER_DNS1ACC_2_2020-01-01_00-06.csv'));
+            tc.verifyErrorId(@() NonGravForces.env.densityScale([files toleos], sw), 'NonGravForces:densityScale:inputSatellites');
             tc.verifyErrorId(@() S.at(referenceSystem.mjdToEpoch(58852.5, "UTC"), 490e3), 'NonGravForces:densityScale:dataDay');
             tc.verifyErrorId(@() S.at(referenceSystem.mjdToEpoch(58849.5, "UTC"), 900e3), 'NonGravForces:densityScale:inputRange');
             tc.verifyErrorId(@() S.at(e, 490e3), 'NonGravForces:densityScale:inputRange');
@@ -1625,6 +1628,8 @@ classdef tNgfEnv < NgfTestCase
             tc.verifySize(S.drivers(e), [8 3]);
             tc.verifyErrorId(@() NonGravForces.env.densityDriverScale(sw, cls, 'Model', "msis21"), 'NonGravForces:densityDriverScale:inputModel');
             tc.verifyErrorId(@() NonGravForces.env.densityDriverScale(cls, sw), 'NonGravForces:densityDriverScale:inputFamily');
+            clsAbs = cls; clsAbs.adjusted = false;      % the flux not adjusted to 1 AU (2026-10-31)
+            tc.verifyErrorId(@() NonGravForces.env.densityDriverScale(sw, clsAbs), 'NonGravForces:densityDriverScale:inputFamily');
             % 2019-10-01 needs F30 from 2019-07-12; the excerpt starts 2019-09-01
             tc.verifyErrorId(@() S.at(referenceSystem.mjdToEpoch(58757.5, "UTC"), 490e3), 'NonGravForces:densityDriverScale:dataDay');
             tc.verifyErrorId(@() S.at(e, 490e3), 'NonGravForces:densityDriverScale:inputRange');

@@ -37,8 +37,9 @@ function S = densityScale(files, sw, options)
 %   takes drag.densityScale "combined" since 0.17.0, and a standard Model refuses to evaluate
 %   without this result as its 'DensityScale'.
 %
-%   Only Swarm's satellites enter: files of a TOLEOS dataset (CHAMP, GRACE, GRACE-FO), which
-%   io.readSwarmDensity also reads, are read and then not used.
+%   Only Swarm's satellites enter: a file of a TOLEOS dataset (CHAMP, GRACE, GRACE-FO), which
+%   io.readSwarmDensity also reads, is REFUSED (inputSatellites; until 2026-10-31 it was read
+%   and silently dropped).
 %
 % INPUT ARGUMENTS
 %   Name     Size  Type    Units  Description
@@ -85,7 +86,8 @@ function S = densityScale(files, sw, options)
 %   on 2020-01. The day of an epoch is its UTC day.
 %
 % ERRORS
-%   NonGravForces:densityScale:inputSatellites  no B, or neither A nor C, among the files
+%   NonGravForces:densityScale:inputSatellites  no B, or neither A nor C, among the files; or a file that is
+%                                               not Swarm A/B/C (a TOLEOS density of CHAMP, GRACE or GRACE-FO)
 %   NonGravForces:densityScale:inputModel       Model is not a density backend with drivers
 %   NonGravForces:densityScale:dataDay          S.at at an epoch whose day has no factor (no file
 %                                               covers it, or fewer than MinRecords records) and no
@@ -141,6 +143,13 @@ for k = 1:numel(files)
     [ep, lla, rho, aux] = NonGravForces.io.readSwarmDensity(files(k));
     sat(k) = aux.satellite;
     data{k} = struct('day', ep.day(:)', 'sec', ep.sec(:)', 'lla', lla, 'rho', rho, 'valid', aux.valid);
+end
+notSwarm = ~ismember(sat, ["A" "B" "C"]);
+if any(notSwarm)
+    % io.readSwarmDensity also reads ESA's TOLEOS densities (CHAMP, GRACE, GRACE-FO). They are not a Swarm A/B/C
+    % bracket and were silently dropped here until 2026-10-31: never degrade silently, refuse them.
+    NonGravForces.fail(unit, "inputSatellites", "%s is %s, not Swarm A, B or C -> pass only the DNSxPOD files of Swarm", ...
+        files(find(notSwarm, 1)), sat(find(notSwarm, 1)));
 end
 P = unique(sat, 'stable');
 if ~any(P == "B") || ~any(P == "A" | P == "C")
