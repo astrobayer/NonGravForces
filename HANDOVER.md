@@ -1591,6 +1591,32 @@ per-day scale + linear bias per axis, both satellites together:
   the along-track lead the transient walls introduce, the next thing to read. The user guide's demo transcript (Step 4, "thermal steadyState") is stale until the
   demo is re-run.
 
+**The x lead read at the shadow edges (PR #128, run 41187770368, standard preset as shipped = transient + conical; C 31
+days in 4703 s, D 28 in 4065 s).** `tools/alignmentMonth.m` now measures the lag within +-300 s of each shadow entry and
+exit (nu crossing 0.5, ~30 edges per day) and with the other thermal and eclipse model. Median signed lag in s
+(positive: ACT1B lags the model), C / D, every day of the month with the same sign unless noted:
+
+| | x | y | z |
+|---|---|---|---|
+| whole day (linear) | -7.6 / -5.0 | -0.7 / -3.5 | +0.8 / +3.4 |
+| shadow ENTRY, conical | **-3.9 / -4.4** (31/31, 28/28 negative) | -4.7 / -6.7 | -3.9 / -3.7 |
+| shadow EXIT, conical | **+1.0 / +1.2** (all positive) | +0.8 / +0.6 | +3.2 / +3.7 |
+| entry, solaarsCF | +1.1 / +0.4 (mixed sign) | +0.9 / -1.9 | +0.8 / +1.0 |
+| exit, solaarsCF | **-8.7 / -8.7** (all negative) | -9.4 / -10.3 | -7.0 / -6.8 |
+| entry / exit, steadyState walls | -3.7 / +1.1 (C) | -3.9 / +0.6 | -4.0 / +4.9 |
+
+- **It is the shadow, and it is not a time tag.** ACT1B sees the Sun go ~4 s EARLIER at entry and come back ~1-3 s LATER
+  at exit than the conical model says -- on all three axes and on every day. A time-tag error would shift both edges the
+  same way. The real shadow is WIDER than the geometric cone (~4 s x 7.6 km/s ~ 30 km at entry), which is what the
+  atmosphere's extinction and refraction do; the thermal model does not move the edges (steadyState gives the same).
+- **solaarsCF fixes the entry and breaks the exit**: entry ~0 s, but exit -8.7 s on every day of both satellites, i.e.
+  solaarsCF holds the shadow ~9 s too LONG after exit. An asymmetry of that size between entry and exit, uniform over a
+  month, is more likely an implementation question than physics (the attenuation curve is a function of the grazing
+  height, which entry and exit traverse in opposite directions): next is a symmetry check of `env.eclipseFactor`
+  solaarsCF on mirrored geometry against `tools/pyxcheck`'s coefficients.
+- The whole-day x lag (-7.6 s) is not the edges alone: with steadyState walls it is -4.2 s; the transient walls add
+  ~3 s of their own on x (kapton front/rear), which the heat-capacity fit already showed.
+
 **Next, the owner's call:** whether `standard` should take `thermal.model = "transient"` (it changes the baseline's
 S_zz from ~0.8 to ~1.08 and needs a re-freeze), and whether the heat capacities are to be fitted (the lag per
 panel group is the observable).

@@ -189,6 +189,9 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   across every boundary; chunks after the first now start one epoch early and drop it (`forceBudget`,
   `densityInversion`, `Model.series`); new test `tNgfApp/forceBudgetTransientChunks`. ◐, predicted gate 511 (510 + 1).
   Both PDFs build locally (pdflatex, 73 / 126 pages, no undefined references).
+  **x lead read at the shadow edges** (alignment run 41187770368, standard): ACT1B sees shadow ENTRY ~4 s earlier and
+  EXIT 1-3 s later than the conical model, every day, all axes -- the real shadow is wider (atmosphere), not a time tag;
+  solaarsCF fixes the entry but holds the shadow ~9 s too long after exit (suspect implementation, next to check).
 - **2026-10-31, PR #127 (user guide):** `doc/src/NonGravForces_UserGuide.tex` follows the transient standard preset
   (preset table, opt-in exceptions, native refusal, TRP paragraph; the Cost table is marked as predating the walls and is
   re-measured at the next release). PDF not rebuilt (O-38). Documentation only: gate stays 510.
