@@ -131,7 +131,10 @@ jobs:
                         rep = NonGravForces.buildMex('Target', target); assert(rep.upToDate, "releaseChecks:mex", "MEX target %s did not build", target);
                     end
                     days = [];
-                    if preset == "precise", days = 1:5:31; end   % every fifth day: precise's exact flow shadow and 24x48 CERES tiles cost several times standard
+                    % every third day up to 01-15: precise's exact flow shadow and 24x48 CERES tiles cost several times
+                    % standard, and the committed CERES excerpt holds monthly means centred 2019-12-16 and 2020-01-16, so
+                    % earthRadiance refuses any epoch after 2020-01-16 (run 41187772070 stopped there on 2020-01-16)
+                    if preset == "precise", days = 1:3:15; end
                     alignmentMonth('Preset', preset, 'Days', days);
                     out = fullfile(pwd, "tools", "alignment_month.csv");
                 case "transcript"

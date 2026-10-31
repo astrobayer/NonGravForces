@@ -122,6 +122,13 @@ if o.erp.backend == "ceres"
     if options.Month ~= "2020-01" || ~all(isfile(cerFiles))
         NonGravForces.fail(unit, "dataMissing", "preset %s takes erp.backend ceres and the committed CERES excerpt covers 2020-01 only -> use Month 2020-01 after setupNonGravForces", options.Preset);
     end
+    % The excerpt holds the monthly means of 2019-12 and 2020-01, centred on the 16th; earthRadiance interpolates
+    % between them and refuses epochs after 2020-01-16 (run 41187772070), so later days are refused here first.
+    late = str2double(extractAfter(days, 8)) > 15;
+    if any(late)
+        NonGravForces.fail(unit, "dataMissing", "preset %s: the committed CERES excerpt ends at 2020-01-16, and days %s lie beyond it -> pass 'Days' within 1..15", ...
+            options.Preset, strjoin(extractAfter(days(late), 8), ", "));
+    end
     extraArgs = [extraArgs, {'Ceres', NonGravForces.io.importCERES(cerFiles)}];
 end
 if o.sun.source == "rs.de440"

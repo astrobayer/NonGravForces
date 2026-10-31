@@ -1616,6 +1616,12 @@ exit (nu crossing 0.5, ~30 edges per day) and with the other thermal and eclipse
   solaarsCF on mirrored geometry against `tools/pyxcheck`'s coefficients.
 - The whole-day x lag (-7.6 s) is not the edges alone: with steadyState walls it is -4.2 s; the transient walls add
   ~3 s of their own on x (kapton front/rear), which the heat-capacity fit already showed.
+- **precise (run 41187772070) stopped after three days of GRACE-C**: the committed CERES excerpt ends at 2020-01-16 and
+  `earthRadiance` refused the next day (`release-checks` now runs precise on 1:3:15, and the tool refuses later days up
+  front). The three days (01, 06, 11; precise = steadyState + solaarsCF + unscaled msis21) say the same as standard's
+  edges: entry -10 / -4 / -1 s, exit -12 / -8 / -9 s on y/z -- solaarsCF's exit again ~9 s late; whole-day y/z
+  -0.2/+0.6, +5.7/+5.0, +10.6/+7.9 s steady against -8.9/-9.0, -5.4/-5.6, -2.6/-3.3 s transient. With solaarsCF's exit
+  error in the same signal the thermal choice for precise cannot be read cleanly: **solaarsCF first, then precise.**
 
 **Next, the owner's call:** whether `standard` should take `thermal.model = "transient"` (it changes the baseline's
 S_zz from ~0.8 to ~1.08 and needs a re-freeze), and whether the heat capacities are to be fitted (the lag per
