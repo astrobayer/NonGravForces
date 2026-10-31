@@ -204,7 +204,7 @@ if isnumeric(ep)
     y = ep;
     return
 end
-if ~(isstruct(ep) && isscalar(ep) && isfield(ep, 'day') && numel(ep.day) == 1)
+if ~(isstruct(ep) && isscalar(ep) && isfield(ep, 'day') && isscalar(ep.day))
     % one coefficient set is ONE epoch; a vector year interpolated the arrays wrongly or errored (2026-10-31)
     NonGravForces.fail(unit, "inputRange", "'Epoch' must be one epoch -> got %d; call igrfCoefficients once per epoch, or once for the arc's middle (the secular variation over a day is ~1e-4 of the field)", numel(ep.day));
 end

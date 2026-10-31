@@ -1656,6 +1656,23 @@ C 31 days, D 28).** Median signed lag at the shadow edges, s (C / D):
 - **Owner's call:** whether `standard` takes `srp.eclipse = "solaarsCF"` (a preset change: native path supports it,
   baseline re-freeze) -- the edges argue for it, the whole-day lags neither for nor against.
 
+**precise with the corrected solaarsCF (run 41213060789, every third day 2020-01-01..13, C and D; precise = steadyState
+walls + solaarsCF + unscaled NRLMSIS 2.1).** Median signed lag, s (C / D):
+
+| | y whole day | z whole day | x entry | x exit | z entry | z exit |
+|---|---|---|---|---|---|---|
+| precise as shipped (steadyState) | +13.7 / +11.6 | +12.0 / +19.5 | +0.4 / +0.6 | +1.1 / +1.2 | -1.3 / -0.2 | +5.9 / +7.1 |
+| precise with transient walls | **+3.4 / +1.5** | **+2.6 / +6.7** | +0.3 / +0.5 | +0.9 / +1.1 | -0.8 / +0.1 | **+3.1 / +3.7** |
+| precise with conical | +8.2 / +5.7 | +7.1 / +13.1 | -7.3 / -7.1 | +1.7 / +1.7 | -8.9 / -8.3 | +5.2 / +6.0 |
+
+- **The steady state leads ACT1B by 12-20 s on y/z in precise too; transient walls take it to 2-7 s**, as in standard.
+  The x whole-day lag sits at the -60 s edge: precise's density is unscaled (the factor of 2 in solar minimum), so the
+  drag phase is not what is measured there. With solaarsCF the edges are within ~1 s; conical's entry is 7-9 s late.
+- **Recommendation for the owner: precise takes thermal.model "transient"** (no baseline is frozen for precise; the native
+  path serves it through 'ThermalOrbit').
+- CI on a086fa7 was red BEFORE the gate: Code Analyzer ISCL in the new `igrfCoefficients` refusal (`numel(...) == 1`
+  instead of `isscalar`) -- fixed in the next commit; `codeIssues` cannot run here, so a new line only shows on CI.
+
 **Next, the owner's call:** whether `standard` should take `thermal.model = "transient"` (it changes the baseline's
 S_zz from ~0.8 to ~1.08 and needs a re-freeze), and whether the heat capacities are to be fitted (the lag per
 panel group is the observable).

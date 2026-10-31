@@ -191,6 +191,9 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   **Corrected solaarsCF against ACT1B** (alignment run 41213058839): both shadow edges within ~1 s on x and y (entry x
   +1.1 / +1.3 s C / D against conical's -3.9 / -4.4; exit +0.5 / +0.6 against +1.0 / +1.2); z keeps +3 s at exit under
   every model (thermal). Owner's call: standard on solaarsCF (re-freeze).
+  **precise** (run 41213060789, 5 days C and D): steadyState walls lead ACT1B by 12-20 s on y/z, transient takes it to
+  2-7 s; recommended: precise -> transient (owner). First CI on a086fa7 red on Code Analyzer ISCL (`numel == 1` in
+  `igrfCoefficients`), fixed.
 - **2026-10-31, PR #128 (documentation, owner: all four points):** (1) a help-vs-code audit of all 64 units by four
   agents, comment lines only (stale errors lists, missing info fields, wrong defaults, examples a standard Model would
   refuse; Options gained the template sections it lacked); (2) the theory document brought to 0.17+: the observed density
