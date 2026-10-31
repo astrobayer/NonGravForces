@@ -166,6 +166,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         S.t0 = scalar(st, "t0"); S.dt = scalar(st, "dt"); nT = (int)scalar(st, "nT"); S.nT = nT;
         S.R = array(st, "R", 9L * nT); S.Rdot = array(st, "Rdot", 9L * nT); S.sun = array(st, "sun", 3L * nT);
         S.moon = array(st, "moon", -1); S.eclipticNormal = array(st, "eclipticNormal", -1); S.mass = array(st, "mass", nT);
+        S.tPanel = array(st, "tPanel", (S.thermal == NGF_THERMAL_TABLE) ? (long)n * nT : -1);
+        if (S.thermal == NGF_THERMAL_TABLE && S.tPanel == NULL) {
+            mexErrMsgIdAndTxt(GW_ID "inputSetup", "setup.tPanel is empty while thermal is the transient table");
+        }
         S.attitude = (int)scalar(st, "attitude"); S.alongVelocity = (int)scalar(st, "alongVelocity"); S.senseTranspose = (int)scalar(st, "senseTranspose");
         S.nq = (int)scalar(st, "nq"); S.tq = array(st, "tq", -1); S.q = array(st, "q", -1);
         nb = (int)scalar(st, "nb"); S.nb = nb; S.tb0 = scalar(st, "tb0");

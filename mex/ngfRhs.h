@@ -50,7 +50,7 @@ enum { NGF_ACC_FIXED = 0, NGF_ACC_PILINSKI2010 = 1, NGF_ACC_PILINSKI2011 = 2,
        NGF_ACC_WALKER2014 = 3, NGF_ACC_SESAM = 4 };
 enum { NGF_ECL_CYLINDRICAL = 0, NGF_ECL_CONICAL = 1, NGF_ECL_SOLAARS = 2 };
 enum { NGF_ERP_NONE = 0, NGF_ERP_POINT = 1, NGF_ERP_KNOCKE = 2, NGF_ERP_CERES = 3 };
-enum { NGF_THERMAL_NONE = 0, NGF_THERMAL_STEADY = 1 };
+enum { NGF_THERMAL_NONE = 0, NGF_THERMAL_STEADY = 1, NGF_THERMAL_TABLE = 2 };
 enum { NGF_SHADOW_NONE = 0, NGF_SHADOW_LUT = 1 };
 enum { NGF_ATT_PROVIDER = 0, NGF_ATT_NOMINAL = 1 };
 /* one UTC day of drag.densityScale: no factor (refused when reached), Swarm's bracket (log-linear in height,
@@ -85,6 +85,8 @@ typedef struct {
     int eclipse, lunar;
     int erp, nRings, nSectors;
     int thermal; double internalPower;
+    const double *tPanel;                             /* n x nT wall temperatures, K (NGF_THERMAL_TABLE: thermal.model transient,
+                                                         integrated once along the reference orbit at prepare), else NULL */
     int shadow, lutResolution; const double *lut;     /* n x 6(res+1)^2 */
     int nChi, nArc; const double *xChi, *wChi, *xArc, *wArc;   /* Gauss-Legendre on [-1, 1] */
     /* geom.flowShadow Method "table" (Options geom.flowShadow): trilinear over (v_y/|v_x|, v_z/|v_x|, s_O),

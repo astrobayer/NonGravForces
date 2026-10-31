@@ -34,6 +34,14 @@ function mm = graceFO(satellite, options)
 %   Table 6.1 layer stacks, which that thesis calls educated guesses: solar
 %   panel walls (arrays, zenith) 6015, Kapton/insulation/honeycomb walls
 %   (front, rear, inner flanks) 3843, teflon radiator (nadir) 219 J/(m^2 K).
+%   Since 2026-10-31 the standard preset's thermal model is transient, so these
+%   values enter every standard Model. They were FITTED against ACT1B before that
+%   switch (tools/heatCapacityFit.m, one factor per group of 0.25-4, 21 days of
+%   2020-01 C and D, run 41140282748) and KEPT: the best factors improve rms_y +
+%   rms_z by 1 % over Woeske's, C and D prefer different corners of the grid, and
+%   the kapton factor is not determined at all. The radiator factor moves the
+%   per-day z scale from 1.08 (x1) to 0.96 (x4) at the same residual, so S_zz is
+%   only known to that band (HANDOVER, "The checkAlignment lags").
 %
 % INPUT ARGUMENTS
 %   Name       Size Type   Units Description

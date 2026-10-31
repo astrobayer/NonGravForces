@@ -177,6 +177,31 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-10-30, PR #124, N-12)
 
+- **2026-10-31, PR #126: THE STANDARD PRESET IS TRANSIENT.** Heat-capacity fit (run 41140282748, 21 days of 2020-01):
+  transient walls take z rms 3.25 -> 2.28 nm/s^2 (y 4.05 -> 3.75, x 2.09 -> 2.21) for C and D together; the capacities
+  themselves are NOT determined (best factors gain 1 %, C and D disagree, the radiator trades against S_zz 0.96-1.08 at
+  constant residual) -- Woeske's kept. `Options` standard thermal.model "transient"; `Model.accel` 'T0_K';
+  forceBudget/densityInversion carry the walls across chunks; `standardUnscaled()` also steady; tNgfIntegration
+  "standardSteady" for 'Native' false. ◐, predicted 510. First CI run 41152904075: 509/510 -- DynamicsSourceReference's
+  between-node bound (1e-9, the TIME tables) met the transient walls' TEMPERATURE table at 1.564e-05; recorded apart now
+  (1e-4), the node parity held at 1e-13. ☑ CI 41154819317: 510/510, predicted 510, Code Analyzer clean. **Baseline RE-FROZEN with the transient preset** (run 41156458334, 76 min): S_xx C 0.966 -> **0.996**,
+  D 0.972 -> **1.002**; S_zz C 0.820 -> **1.094**, D 0.793 -> **1.069**; residual rms y / z C 3.40 / 3.46 -> 2.52 / 2.82, D
+  12.2 / 3.99 -> 12.1 / 3.09 nm/s^2 (x 2.13 -> 2.26, 2.19 -> 2.27). The accelerometer's scales are now ~1 on x and ~1.08 on z;
+  0.17.0's 0.82 / 0.79 were the steady-state thermal model. checkAlignment still warns: y/z 1-5 s, x -5..-22 s (C).
+- **2026-10-31, PR #126 (owner: standard goes transient and stays integrable; capacities fitted first):** the native path
+  serves thermal.model "transient" by a TABLE: `app.DynamicsSource(..., 'ThermalOrbit', orb)` integrates the wall
+  temperatures once along a reference orbit with Model.accel at prepare (pchip onto the table nodes), `mex/ngfRhs.c`
+  reads them by time (`NGF_THERMAL_TABLE`, cubic like every table) and forms the recoil. Refused without 'ThermalOrbit',
+  with 'Native' false, and at prepare when the orbit does not cover the tables. `tools/heatCapacityFit.m` (release-checks
+  `what: heatcapacity`) fits one factor per wall group (array, kapton, radiator) on Woeske's capacities. New test
+  `tNgfIntegration/DynamicsSourceThermalTableReference`; written without MATLAB (C syntax-checked with gcc), ◐,
+  predicted gate 510 (509 + 1); ☑ with the preset switch, CI 41154819317: 510/510.
+- **2026-10-30, PR #126 (the lag separated): THERMAL INERTIA.** `tools/alignmentMonth.m` with three models per day (run
+  41042736099): with `thermal.model = "transient"` the y/z lags fall from 17.3 / 10.5 s (C) and 8.2 / 18.5 s (D) to
+  1.8 / 2.0 and 3.6 / 3.4 s, peaks up to 0.98; the standard preset's steadyState recoil leads the real one. **The
+  per-day calibration scale moves with it: z 0.820 / 0.790 -> 1.092 / 1.065, x 0.966 / 0.972 -> 0.998 / 1.005** --
+  S_zz ~ 0.8 is largely the thermal model. x lag grows (-4 -> -7.6 s C); heat capacities are guesses. Owner's call:
+  transient in standard (re-freeze) and/or fitted heat capacities. Tool only: gate stays 509.
 - **2026-10-30, PR #125 (the checkAlignment lags of the 0.17.0 baseline):** `tools/alignmentMonth.m` (release-checks
   `what: alignment`, run 41029605595) measured ACT1B against the filtered model per day and axis, raw, with a
   linear/quadratic bias removed, and per effect. **Not the estimator** (bias removal moves no lag by more than 1.4 s;

@@ -142,11 +142,13 @@ nC = numel(first);
 sumsq = zeros(nE, 3, M);
 mx = zeros(nE, 3, M);
 for m = 1:M
+    T0 = [];                                            % a transient model's walls carry over from chunk to chunk
     for c = 1:nC
         idx = first(c):last(c);
         ep = referenceSystem.daySecondToEpoch([epoch.day(idx) epoch.sec(idx)], epoch.scale);
         qc = []; if ~isempty(q), qc = q(:, idx); end
-        [a, ai] = mdl{m}.accel(ep, r(:, idx), v(:, idx), qc, 'Frame', options.Frame);
+        [a, ai] = mdl{m}.accel(ep, r(:, idx), v(:, idx), qc, 'Frame', options.Frame, 'T0_K', T0);
+        if mdl{m}.options.thermal.model == "transient", T0 = ai.temperature_K(:, end); end
         vals = {ai.drag, ai.radiation, ai.thermal, a};
         for i = 1:nE
             sumsq(i, :, m) = sumsq(i, :, m) + sum(vals{i}.^2, 2)';

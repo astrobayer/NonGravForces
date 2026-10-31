@@ -196,7 +196,9 @@ if isempty(which('gjToolbox.DynamicsSource')) || ~rhsReport.upToDate
         "NOT MEASURED: gjToolbox absent or the rhs MEX not built -> run gjToolboxSetup and NonGravForces.buildMex"};
 else
     try
-        ngfSrc = NonGravForces.app.DynamicsSource(stdModel, 'Epoch', tai, 'Margin_s', 120, 'TableStep_s', 60);
+        % the standard preset's transient walls (since 2026-10-31) are integrated along the fixture's own orbit
+        ngfSrc = NonGravForces.app.DynamicsSource(stdModel, 'Epoch', tai, 'Margin_s', 120, 'TableStep_s', 60, ...
+            'ThermalOrbit', struct('epoch', ep, 'r', r, 'v', v));
         ngfSrc = ngfSrc.prepare(struct('Span', tSpan, 'StencilSpan', tSpan, 'MaxColumns', 1));
         rNat = r(:, 1); vNat = v(:, 1); tNat = tMid;
         pointwise(end+1, :) = {"app.DynamicsSource.accel (native)", @() ngfSrc.accel(tNat, rNat, vNat), ...

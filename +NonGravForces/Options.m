@@ -21,10 +21,16 @@ classdef Options
 %   at construction; an unknown field name errors, and EVERY ADMISSIBLE VALUE
 %   EVALUATES: a value this toolbox cannot compute is not offered (rule R4,
 %   HANDOVER LP-C finding F5). Presets fix the DEFAULT tier of every model
-%   family; extended models (HWM14 winds, transient thermal, body torques) are
-%   opt-ins no preset enables, so preset results never move when one lands.
-%   The one deliberate move: 0.17.0's standard preset takes the combined observed
-%   density scale (owner ruling 2026-10-29, HANDOVER O-19).
+%   family; extended models (HWM14 winds, body torques) are opt-ins no preset
+%   enables, so preset results never move when one lands.
+%   The deliberate moves: 0.17.0's standard preset takes the combined observed
+%   density scale (owner ruling 2026-10-29, HANDOVER O-19), and since 2026-10-31 the
+%   transient thermal model (owner ruling 2026-10-30): the steady state's recoil led
+%   ACT1B's by 8-18 s on y and z over 2020-01, and the transient walls take that to
+%   2-4 s (tools/alignmentMonth.m, HANDOVER "The checkAlignment lags of the 0.17.0
+%   baseline"). A transient Model integrates the walls over the epochs of ONE call,
+%   from the steady state at its first epoch (Model.accel 'T0_K' carries them on).
+%   The precise preset stays steadyState until the same is measured for it.
 %
 %   FIDELITY LADDER
 %     field                   fast          standard        precise
@@ -36,7 +42,7 @@ classdef Options
 %     srp.eclipse             conical       conical         solaarsCF
 %     erp.backend             none          knocke          ceres
 %     erp.grid                -             12x24           24x48
-%     thermal.model           none          steadyState     steadyState (+transient opt-in)
+%     thermal.model           none          transient       steadyState (+transient opt-in)
 %     geom.selfShadow         none          lut 16          lut 32
 %     geom.flowShadow         exact         table           exact
 %     sun.source              rs.analytic   rs.analytic     rs.de440
@@ -179,7 +185,7 @@ classdef Options
                     % driver fit as fallback takes ACT1B's joint k_drag from 0.44 to 0.88-0.94 (2020-01).
                     dscale = "combined";
                     dens = "msis00"; gsi = "sentman"; acc = "fixed"; alpha = 0.85; ms = [];
-                    ecl = "conical"; erpB = "knocke"; grid = [12 24]; th = "steadyState"; ss = "lut"; lutN = 16; sunS = "rs.analytic"; fs = "table";
+                    ecl = "conical"; erpB = "knocke"; grid = [12 24]; th = "transient"; ss = "lut"; lutN = 16; sunS = "rs.analytic"; fs = "table";
                 case "precise"
                     % The FITTED constant of March et al. (2021), not a computed accommodation, by owner
                     % ruling of 2026-09-17 (HANDOVER O-42). That paper is the state of the art for this
