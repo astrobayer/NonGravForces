@@ -93,6 +93,12 @@ classdef tNgfGeometry < NgfTestCase
             tc.verifyEqual(info.method, "table"); tc.verifyEqual(info.fallbackEpochs, 0);
             Sb = NonGravForces.geom.flowShadow(tc.mm, vb, [], 'Method', "table", 'Lut', lut);
             tc.verifyEmpty(Sb.number); tc.verifyEqual(Sb.beam, S.beam); tc.verifyEqual(Sb.tableFallback, false(1, 2));
+            % every return path fills info (2026-10-31: the table-only and hyperthermal calls returned an empty struct)
+            [~, infoT] = NonGravForces.geom.flowShadow(tc.mm, [], [], 'Method', "table", 'Lut', lut);
+            [~, infoB] = NonGravForces.geom.flowShadow(tc.mm, vb, [], 'Method', "table", 'Lut', lut);
+            tc.verifyEqual(string(fieldnames(infoT))', string(fieldnames(info))'); tc.verifyEqual(string(fieldnames(infoB))', string(fieldnames(info))');
+            tc.verifyEqual([infoT.method infoB.method], ["table" "table"]); tc.verifyEqual([infoT.fallbackEpochs infoB.fallbackEpochs], [0 0]);
+            tc.verifyEqual(infoT.table, info.table); tc.verifyEmpty(infoB.table);
             Sl = NonGravForces.geom.flowShadow(tc.mm, vb, T, 'Method', "lut", 'Lut', lut);
             tc.verifyEmpty(Sl.tableFallback); tc.verifyEqual(Sl.beam, S.beam);
             g = @(varargin) NonGravForces.geom.flowShadow(varargin{:});
@@ -151,6 +157,10 @@ classdef tNgfGeometry < NgfTestCase
             [fl, infoL] = NonGravForces.geom.selfShadow(tc.mm, d, 'Method', "lut", 'LutResolution', 4);
             tc.verifySize(fl, [8 size(d, 2)]); tc.verifyEqual(infoL.lut.resolution, 4); tc.verifySize(infoL.lut.f, [8 6*25]); tc.verifySize(infoL.lut.nodes, [3 6*25]);
             tab = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut", 'LutResolution', 4); tc.verifyEqual(tab.f, infoL.lut.f);
+            % a reused table reports ITS sample count, whatever 'Samples' says (2026-10-31)
+            tab6 = NonGravForces.geom.selfShadow(tc.mm, [], 'Method', "lut", 'LutResolution', 2, 'Samples', 6);
+            [~, info6] = NonGravForces.geom.selfShadow(tc.mm, d, 'Method', "lut", 'Lut', tab6);
+            tc.verifyEqual(info6.samples, 6);
             [~, infoNoLut] = NonGravForces.geom.selfShadow(tc.mm, d); tc.verifyEmpty(infoNoLut.lut); tc.verifyEqual(infoNoLut.provenance.unit, "geom.selfShadow");
             o = struct('bus', struct('vis', [0.34 0.40 0.26], 'ir', [0.62 0.23 0.15]), 'array', struct('vis', [0.65 0.05 0.30], 'ir', [0.81 0.03 0.16]));
             bwA = NonGravForces.geom.boxWing([3 1.9 0.7], o, 'Array', struct('area_m2', 2, 'normal', [0; 0; -1], 'centroid_m', [0; 0; -1]));

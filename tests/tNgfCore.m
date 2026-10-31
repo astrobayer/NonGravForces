@@ -46,6 +46,9 @@ classdef tNgfCore < NgfTestCase
             tc.verifyEqual(p.created.TimeZone, 'UTC');
             q = NonGravForces.provenance("unitA");
             tc.verifyEqual(q.optionHash, "00000000");
+            % 32-bit FNV-1a of jsonencode(struct('k', 1)) = '{"k":1}', computed in Python's exact integers
+            % (2026-10-31: the double product had rounded its low bits away)
+            tc.verifyEqual(p.optionHash, "4f77d9b7");
         end
         function optionsContract(tc)
             o = NonGravForces.Options;
@@ -57,6 +60,8 @@ classdef tNgfCore < NgfTestCase
             tc.verifyEqual(o.set("drag.densityScale", "swarm").drag.densityScale, "swarm");
             tc.verifyErrorId(@() NonGravForces.Options("standard", "drag.densityScale", "dtm"), 'NonGravForces:Options:inputValue');
             p = NonGravForces.Options("precise"); tc.verifyEqual(p.erp.backend, "ceres");
+            % the thermal ladder: precise follows standard into the transient walls (owner ruling 2026-10-31)
+            tc.verifyEqual([NonGravForces.Options("fast").thermal.model, o.thermal.model, p.thermal.model], ["none" "transient" "transient"]);
             f = NonGravForces.Options("fast");    tc.verifyEqual(f.erp.backend, "none");
             tc.verifyErrorId(@() NonGravForces.Options("best"), 'NonGravForces:Options:inputPreset');
             tc.verifyErrorId(@() NonGravForces.Options("fast", "drag.densty", "msis00"), 'NonGravForces:Options:inputField');

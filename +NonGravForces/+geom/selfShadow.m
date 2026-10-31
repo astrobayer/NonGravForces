@@ -60,7 +60,8 @@ function [f, info] = selfShadow(macro, dir_body, options)
 %   LutResolution   1x1   double  -      cells per cube-face edge, integer in [1, 256]; default:
 %                                         the resolution of 'Lut' if given, else 16 (5.6 deg)
 %   Lut             1x1   struct  -      a previously returned table for this macro model; its own
-%                                         sample count is kept (Samples is not compared with it)
+%                                         sample count is kept and reported in info.samples (Samples
+%                                         is not compared with it)
 %   Plate           1x1   double  -      evaluate this one plate only (index into the macro model):
 %                                         f is then 1xK; default [] (every plate)
 %
@@ -166,10 +167,14 @@ switch options.Method
         end
 end
 if nargout > 1
+    % the sample count the numbers were made with: a reused table's own, not the argument (2026-10-31; the
+    % argument was reported even when a table built with another count was looked up)
+    samples = options.Samples;
+    if ~isempty(lut) && isfield(lut, 'samples'), samples = lut.samples; end
     info.method = options.Method;
-    info.samples = options.Samples;
+    info.samples = samples;
     info.lut = lut;
-    info.provenance = NonGravForces.provenance("geom.selfShadow", 'Options', struct('method', options.Method, 'samples', options.Samples, 'lutResolution', options.LutResolution));
+    info.provenance = NonGravForces.provenance("geom.selfShadow", 'Options', struct('method', options.Method, 'samples', samples, 'lutResolution', options.LutResolution));
 end
 end
 

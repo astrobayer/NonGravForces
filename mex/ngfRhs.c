@@ -401,7 +401,7 @@ static double ngfSolaars(const double *r, const double *rs, const double *e, dou
     rEperp = dot3(e, rEv);
     rEpar2 = fmax(0.0, (rEv[0] * rEv[0] + rEv[1] * rEv[1] + rEv[2] * rEv[2]) - rEperp * rEperp);
     sO = aE / bE;
-    rE = sqrt(rEperp * rEperp + sO * sO * rEpar2) / 1e6;
+    rE = sqrt(sO * sO * rEperp * rEperp + rEpar2) / 1e6;   /* the normal component stretched by a/b (2026-10-31) */
     rRc = fmin(45.0, fmax(2.0, rR / 1e6));
     for (k = 0; k < 8; k++) {
         const double *b = T[k] + 1;

@@ -44,6 +44,8 @@ Delivered (status key: ☑ verified in MATLAB, ◐ delivered-untested, ○ speci
 | The standard preset goes transient (PR #126, 2026-10-31, owner's ruling): `Options` standard thermal.model "transient" with Woeske's capacities (fitted, not improved: run 41140282748); `Model.accel` 'T0_K'; `forceBudget`/`densityInversion` carry the walls across chunks; tests: `standardUnscaled` steady, `tNgfIntegration` "standardSteady" for 'Native' false, standard as shipped through 'ThermalOrbit' | `+NonGravForces/Options.m`, `Model.m`, `+app/forceBudget.m`, `+app/densityInversion.m`, `+geom/graceFO.m`, `tools/benchmark.m`, `tests/NgfTestCase.m`, `tests/tNgfIntegration.m`, `tests/tNgfModel.m` | ☑ CI 41154819317: 510/510, predicted 510; first run 41152904075 509/510 (the between-node bound of the time tables met the temperature table, recorded apart) |
 | User guide follows the transient standard preset (PR #127, 2026-10-31): preset table, the two owner-ruled exceptions to opt-in, the native-path refusal now only without 'ThermalOrbit' or with 'Native' false, a TRP paragraph on the measured effect, the Cost table marked as predating the transient walls (re-measured at the next release); the PDF is not rebuilt (O-38) | `doc/src/NonGravForces_UserGuide.tex` | documentation only, gate unchanged at 510 |
 | Documentation pass (PR #128, owner 2026-10-31): help-vs-code audit of all 64 units (comment lines only); theory document updated (density scale section, DTM2020, transient walls, IMU attitude check, workflow, rsApiRotation claim removed); generated test catalogue `doc/src/tests_generated.tex` as the theory PDF's appendix, compared by audit check 6; GettingStarted.html rewritten; `tools/userGuideTranscript.m` + release-checks `transcript`. CODE FIX found by the audit: transient walls held the interval across every chunk boundary in `forceBudget`, `densityInversion` and `Model.series`; later chunks now start one epoch early and drop it | `+NonGravForces/Model.m`, `+app/forceBudget.m`, `+app/densityInversion.m`, 60 help blocks, `tools/buildDocs.py`, `auditPackage.py`, `doc/src/*`, `tests/tNgfApp.m` | ☑ CI on 8734694: 511/511, predicted 511 (510 + `tNgfApp/forceBudgetTransientChunks`), 0 audit shortfalls |
+| The eight code defects of the PR #128 help audit (PR #129, owner 2026-10-31): `env.densityScale` refuses TOLEOS files (were silently dropped), `env.densityDriverScale` refuses the unadjusted F30, `io.igrfCoefficients` refuses a multi-epoch struct, `provenance` hashes with exact FNV-1a (the double product rounded; hashes change), `geom.selfShadow` reports a reused table's samples, `geom.flowShadow` table fills `info` on every path, `AttitudeProvider.fromItsg` sorts and de-duplicates (refuses conflicting copies), `io.readMAG1B` records its files | `+env/densityScale.m`, `+env/densityDriverScale.m`, `+io/igrfCoefficients.m`, `provenance.m`, `+geom/selfShadow.m`, `+geom/flowShadow.m`, `+geom/AttitudeProvider.m`, `+io/readMAG1B.m`, tests in tNgfEnv/Io/Core/Geometry/Attitude | ☑ CI 41245260551: 511/511, predicted 511 (assertions inside existing methods) |
+| The precise preset goes transient (PR #129, 2026-10-31, owner's ruling on the recommendation of run 41213060789): `Options` precise thermal.model "transient" (steady state led ACT1B by 12-20 s on y/z, transient 2-7 s); no baseline is frozen for precise; the native path serves it through 'ThermalOrbit', which `tNgfIntegration` already passes for every transient configuration (precise, walker2014, sesam now among them). **standard keeps srp.eclipse "conical"** (owner: leave as is, no re-freeze). Help (Options, thermalRecoil, thermalState), theory and user guide follow; `tNgfCore/optionsContract` asserts the thermal ladder | `Options.m`, docs, `tests/tNgfCore.m` | ◐ predicted gate 511 (one assertion inside an existing method) |
 | 10 documented stubs raising `NonGravForces:<name>:notImplemented` (**superseded: none left since LP-C; this table is the level record up to LP-6b, the status lines in README and CLAUDE.md section 5 are current**) | all packages | ○ |
 | Test infrastructure: `NgfTestCase`, `runNgfTests`, `auditTestCategories`, exemptions; 11 test classes, 262 tests, **gate GREEN 262/262** (74 at LP-0, 116 at LP-2, 142 at LP-3, 169 at LP-4, 231 at LP-5, 238 at LP-5x, 244 after the debt sweep) | `tests/` | ☑ |
 | CI: `ci.yml`, `ciGate.m`, `auditPackage.py`; Code Analyzer clean (0 findings) | repository root, `.github/workflows/` | ☑ (local run 2026-08-27) |
@@ -1622,6 +1624,58 @@ exit (nu crossing 0.5, ~30 edges per day) and with the other thermal and eclipse
   edges: entry -10 / -4 / -1 s, exit -12 / -8 / -9 s on y/z -- solaarsCF's exit again ~9 s late; whole-day y/z
   -0.2/+0.6, +5.7/+5.0, +10.6/+7.9 s steady against -8.9/-9.0, -5.4/-5.6, -2.6/-3.3 s transient. With solaarsCF's exit
   error in the same signal the thermal choice for precise cannot be read cleanly: **solaarsCF first, then precise.**
+
+**solaarsCF's oblateness mapping was INVERTED (PR #129, 2026-10-31).** `env.eclipseFactor`, `mex/ngfRhs.c` and the
+oracle's docstring stretched the IN-ECLIPTIC component of rE by sO = a/b, i.e. modelled an Earth flattened at the
+equator. The silhouette's short semi-axis lies along the ecliptic normal (at the January solstice exactly the projected
+spin axis), so the component ALONG the normal is the one to stretch onto the fit's sphere of radius a. A stdlib
+simulation (circular 490 km orbit, i = 89 deg, January pole) gives solaarsCF minus conical at the 50 % crossing: inverted
+mapping entry -8.0 / exit +8.0 s at beta 0, -8.3 / +8.6 s at beta 20, -10.9 / +5.4 s at beta 40 -- the size and the
+asymmetry ACT1B measured (+5.0 / -9.7 s against conical); corrected mapping -0.4 / +0.4 s, -0.8 / +0.4 s, -0.7 / +6.2 s.
+The physical anchor, now a test (`tNgfEnv/eclipseFactorMetamorphic`): the half-shadow limb sits the same 22.5 km above
+the equatorial radius in the ecliptic plane and above the polar radius along the normal (the inverted mapping put the
+polar limb 42.5 km above b). The thesis itself (VTechWorks) was not reachable from the session; the decision rests on
+the geometry and on the measured asymmetry. Affects only srp.eclipse "solaarsCF" (precise; standard is conical).
+Predicted gate unchanged at 511 (a new bound inside an existing method). Next: re-run alignment for standard
+(altEclipse = solaarsCF) and precise (1:3:15) to read the corrected edges, then decide precise's thermal model.
+
+**The corrected solaarsCF against ACT1B (run 41213058839, standard + altEclipse solaarsCF with the PR #129 mapping;
+C 31 days, D 28).** Median signed lag at the shadow edges, s (C / D):
+
+| | x entry | x exit | y entry | y exit | z entry | z exit |
+|---|---|---|---|---|---|---|
+| conical (the preset) | -3.85 / -4.38 | +1.00 / +1.24 | -4.70 / -6.67 | +0.81 / +0.60 | -3.93 / -3.68 | +3.23 / +3.72 |
+| solaarsCF, inverted (run 41187770368) | +1.13 / +0.39 | -8.67 / -8.68 | +0.86 / -1.93 | -9.44 / -10.30 | +0.80 / +1.04 | -7.02 / -6.75 |
+| **solaarsCF, corrected** | **+1.09 / +1.31** | **+0.49 / +0.64** | **+0.37 / -0.26** | **+0.83 / +0.67** | **+0.96 / +1.32** | +2.98 / +3.63 |
+
+- The corrected SOLAARS-CF puts both edges within ~1 s of ACT1B on x and y (largest |lag| at entry 1.9 / 2.0 s on x
+  against conical's 11.8 / 11.6; days aligned within 1 s 13 and 22 of 31 on x for C against 3 and 16). z keeps +3 s at
+  EXIT under every eclipse model and both thermal models' windows -- that is the radial thermal response after sunrise,
+  not the shadow. **The atmosphere's widening of the shadow is real and SOLAARS-CF, correctly mapped, carries it.**
+- Whole-day lags move little and not uniformly (C y -0.7 -> +2.2, z +0.8 -> +2.8; D y -3.5 -> -0.1, z +3.4 -> +6.6; x
+  -7.6 -> -7.0 / -5.0 -> -4.2): over a whole day the thermal response, not the edge timing, sets the phase.
+- **Owner's call:** whether `standard` takes `srp.eclipse = "solaarsCF"` (a preset change: native path supports it,
+  baseline re-freeze) -- the edges argue for it, the whole-day lags neither for nor against.
+
+**precise with the corrected solaarsCF (run 41213060789, every third day 2020-01-01..13, C and D; precise = steadyState
+walls + solaarsCF + unscaled NRLMSIS 2.1).** Median signed lag, s (C / D):
+
+| | y whole day | z whole day | x entry | x exit | z entry | z exit |
+|---|---|---|---|---|---|---|
+| precise as shipped (steadyState) | +13.7 / +11.6 | +12.0 / +19.5 | +0.4 / +0.6 | +1.1 / +1.2 | -1.3 / -0.2 | +5.9 / +7.1 |
+| precise with transient walls | **+3.4 / +1.5** | **+2.6 / +6.7** | +0.3 / +0.5 | +0.9 / +1.1 | -0.8 / +0.1 | **+3.1 / +3.7** |
+| precise with conical | +8.2 / +5.7 | +7.1 / +13.1 | -7.3 / -7.1 | +1.7 / +1.7 | -8.9 / -8.3 | +5.2 / +6.0 |
+
+- **The steady state leads ACT1B by 12-20 s on y/z in precise too; transient walls take it to 2-7 s**, as in standard.
+  The x whole-day lag sits at the -60 s edge: precise's density is unscaled (the factor of 2 in solar minimum), so the
+  drag phase is not what is measured there. With solaarsCF the edges are within ~1 s; conical's entry is 7-9 s late.
+- **Recommendation for the owner: precise takes thermal.model "transient"** (RULED 2026-10-31: yes; standard keeps conical) (no baseline is frozen for precise; the native
+  path serves it through 'ThermalOrbit').
+- CI on a086fa7 was red BEFORE the gate: Code Analyzer ISCL in the new `igrfCoefficients` refusal (`numel(...) == 1`
+  instead of `isscalar`) -- fixed in the next commit; `codeIssues` cannot run here, so a new line only shows on CI.
+  CI on fa9707a: 510/511, `tNgfAttitude/attitudeProviderItsgContract` errored -- `[tc.f.itsg tc.f.itsg]` joined two
+  char vectors into ONE nonexistent path (mustBeFile); now a two-element string array. ☑ CI 41245260551 on fe5c8b3:
+  511/511, predicted 511.
 
 **Next, the owner's call:** whether `standard` should take `thermal.model = "transient"` (it changes the baseline's
 S_zz from ~0.8 to ~1.08 and needs a re-freeze), and whether the heat capacities are to be fitted (the lag per

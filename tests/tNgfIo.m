@@ -132,6 +132,8 @@ classdef tNgfIo < NgfTestCase
             tc.verifyErrorId(@() I(fullfile(tc.tmp, 'nothere.txt')), 'NonGravForces:igrfCoefficients:dataMissing');
             tc.verifyErrorId(@() I(tc.f.igrf, 'Epoch', 1899), 'NonGravForces:igrfCoefficients:inputRange');
             tc.verifyErrorId(@() I(tc.f.igrf, 'Epoch', 2031), 'NonGravForces:igrfCoefficients:inputRange');
+            % one coefficient set is one epoch: a struct of two is refused (2026-10-31; it interpolated wrongly)
+            tc.verifyErrorId(@() I(tc.f.igrf, 'Epoch', referenceSystem.daySecondToEpoch([58849 0; 58850 0], "UTC")), 'NonGravForces:igrfCoefficients:inputRange');
             tc.verifyErrorId(@() I(tc.f.mag), 'NonGravForces:igrfCoefficients:dataFormat');
         end
         function readMAG1BContract(tc)
@@ -146,6 +148,7 @@ classdef tNgfIo < NgfTestCase
             tc.verifyEqual(aux.torquerBranchNames, ["torque1A","torque2A","torque3A","torque1B","torque2B","torque3B"]);
             tc.verifySize(aux.calibration.magField, [3 K]);
             tc.verifySize(aux.qualityBits, [8 K]);
+            tc.verifyEqual(aux.provenance.files, reshape(string(aux.files), 1, []), 'the files read are recorded, as by every L1B reader (2026-10-31)');
             tc.verifyEqual(aux.product, "MAG1B");
             tc.verifyEqual(aux.satellite, "C");
             tc.verifyErrorId(@() NonGravForces.io.readMAG1B(tc.f.mas), 'NonGravForces:readMAG1B:dataProduct');

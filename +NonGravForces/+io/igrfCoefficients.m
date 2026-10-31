@@ -67,7 +67,8 @@ function [coeff, aux] = igrfCoefficients(file, options)
 %                                                a valid Schmidt pair (m <= n, n >= 1)
 %   NonGravForces:igrfCoefficients:inputRange    'Epoch' before the first epoch or more than
 %                                                five years past the last, or a numeric 'Epoch'
-%                                                that is not one finite decimal year
+%                                                that is not one finite decimal year, or an epoch
+%                                                struct holding more than one epoch
 %   NonGravForces:igrfCoefficients:numericNaN    a coefficient does not parse as a number
 %
 % REFERENCES
@@ -202,6 +203,10 @@ if isnumeric(ep)
     end
     y = ep;
     return
+end
+if ~(isstruct(ep) && isscalar(ep) && isfield(ep, 'day') && isscalar(ep.day))
+    % one coefficient set is ONE epoch; a vector year interpolated the arrays wrongly or errored (2026-10-31)
+    NonGravForces.fail(unit, "inputRange", "'Epoch' must be one epoch -> got %d; call igrfCoefficients once per epoch, or once for the arc's middle (the secular variation over a day is ~1e-4 of the field)", numel(ep.day));
 end
 t = referenceSystem.epochTo(referenceSystem.convertTimeScale(ep, "UTC"), "datetime");
 t.TimeZone = 'UTC';

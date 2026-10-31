@@ -59,8 +59,9 @@ classdef AttitudeProvider
 %   q = at(epoch)              4xK unit quaternions BODY->GCRS at the query epochs
 %   [q, info] = at(epoch)      info from interpolateQuaternions plus .converted (logical)
 %   q = nominal(r, v, xAlongVelocity)   static, 4xK from a 3xK state and a logical
-%   ap = fromItsg(files, 'Method', m)   static, a provider over TU Graz's attitude files (chronological,
-%                                       one satellite), conjugated once; source "itsg"
+%   ap = fromItsg(files, 'Method', m)   static, a provider over TU Graz's attitude files (one satellite, in
+%                                       any order: sorted, an epoch held twice with the same rotation kept
+%                                       once), conjugated once; source "itsg"
 %
 % ACCURACY
 %   Interpolation: at the nodes the result reproduces the input to 1e-16;
@@ -75,7 +76,8 @@ classdef AttitudeProvider
 %   NonGravForces:AttitudeProvider:inputNodes      qNodes not 4xM, epochNodes not an epoch struct with M entries, M < 2
 %   NonGravForces:AttitudeProvider:inputEpoch      at(): not an epoch struct
 %   NonGravForces:AttitudeProvider:inputShape      nominal(): r or v not 3xK, or degenerate (r x v = 0)
-%   NonGravForces:AttitudeProvider:dataItsg        fromItsg(): a file is not a 4-column quaternion product
+%   NonGravForces:AttitudeProvider:dataItsg        fromItsg(): a file is not a 4-column quaternion product, or
+%                                                  two files hold one epoch with different attitudes
 %   gracefoReading:*                               fromItsg(): propagated unwrapped
 %   referenceSystem:interpolateQuaternions:*       propagated unwrapped (queryOutOfRange in particular)
 %   referenceSystem:*                              propagated unwrapped
@@ -155,6 +157,20 @@ classdef AttitudeProvider
                     NonGravForces.fail("AttitudeProvider", "dataItsg", "%s carries %d data columns, not the 4 of a quaternion -> pass TU Graz's attitude product", files(k), size(qk, 2));
                 end
                 t = [t; tk]; qf = [qf; qk]; %#ok<AGROW>
+            end
+            % Files given out of order, or overlapping at a day boundary, are put in order and an epoch held twice is
+            % kept once -- when both copies are the same rotation (q or -q). Until 2026-10-31 the files were joined as
+            % given and the interpolator downstream refused or, worse, interpolated across the overlap.
+            [t, ord] = sortrows(t); qf = qf(ord, :);
+            dup = [false; all(diff(t, 1, 1) == 0, 2)];
+            if any(dup)
+                k = find(dup);
+                same = abs(sum(qf(k, :) .* qf(k - 1, :), 2)) >= 1 - 1e-12;     % |q1 . q2| = 1: the same rotation
+                if ~all(same)
+                    NonGravForces.fail("AttitudeProvider", "dataItsg", "the files hold epoch (day %d, %.3f s) twice with different attitudes -> pass files that do not overlap, or one version of each day", ...
+                        t(k(find(~same, 1)), 1), t(k(find(~same, 1)), 2));
+                end
+                t = t(~dup, :); qf = qf(~dup, :);
             end
             ep = referenceSystem.daySecondToEpoch(t, "GPS");
             obj = NonGravForces.geom.AttitudeProvider(ep, referenceSystem.invertQuaternion(qf'), 'Method', options.Method);

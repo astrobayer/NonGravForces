@@ -49,8 +49,8 @@ function [F, info] = thermalRecoil(macro, T_K)
 %       accelerations than the standard model, and the conclusions state it "did
 %       not lead to improvements". Modelling it hurts.
 %   The standard and precise presets follow the first (standard with Hladczuk's
-%   further step, the transient walls of geom.thermalState, since 2026-10-31;
-%   precise in steady state; fast sets thermal.model "none"), for reasons that
+%   further step, the transient walls of geom.thermalState, since 2026-10-31, both;
+%   fast sets thermal.model "none"), for reasons that
 %   are about the evidence and not about preference: it is the right satellite, it is four years later, and its
 %   whole Section 3 is devoted to repairing the cross-track calibration that
 %   Vielberg & Kusche name as a possible cause of their own result (they also

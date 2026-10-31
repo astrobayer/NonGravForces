@@ -138,6 +138,7 @@ if isfield(raw, 'qualflgBits')
 else
     aux.qualityBits = false(8, K);
 end
-aux.provenance = NonGravForces.provenance("io.readMAG1B", 'Options', ...
+% the files read, as every other L1B reader records them (2026-10-31: only their number was recorded)
+aux.provenance = NonGravForces.provenance("io.readMAG1B", 'Files', aux.files, 'Options', ...
     struct('files', numel(files), 'records', K));
 end

@@ -177,6 +177,28 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-10-30, PR #124, N-12)
 
+- **2026-10-31, PR #129, owner rulings on the solaarsCF/precise runs: PRECISE IS TRANSIENT** (`Options` precise
+  thermal.model "transient"; steady state led ACT1B by 12-20 s on y/z, transient 2-7 s, run 41213060789; no precise
+  baseline to re-freeze; native path through 'ThermalOrbit'). **standard keeps srp.eclipse "conical"** (leave as is).
+  ◐, predicted gate 511 (one assertion in `tNgfCore/optionsContract`).
+- **2026-10-31, PR #129 (solaarsCF):** the oblateness mapping was INVERTED -- the in-ecliptic part of rE was stretched by
+  a/b instead of the component along the ecliptic normal (the projected spin axis); on GRACE-FO's polar orbit that
+  widened the modelled shadow by ~8 s per edge and skewed it at larger beta, the size and asymmetry ACT1B showed
+  (alignment run 41187770368). Fixed in `env.eclipseFactor` and `mex/ngfRhs.c`; new bound in
+  `tNgfEnv/eclipseFactorMetamorphic` (the same atmospheric limb height above a and above b). predicted gate 511 (☑ below).
+  **Same PR, the eight code defects the help audit found (owner: fix them):** `env.densityScale` REFUSES a TOLEOS file
+  (was read and silently dropped); `env.densityDriverScale` refuses CLS's flux not adjusted to 1 AU; `io.igrfCoefficients`
+  refuses an epoch struct of more than one epoch; `provenance`'s FNV-1a is exact (the double product lost its low bits;
+  hashes change); `geom.selfShadow` reports a reused table's own sample count; `geom.flowShadow` Method "table" fills
+  `info` on every path; `AttitudeProvider.fromItsg` sorts and keeps a twice-held epoch once (refuses differing copies);
+  `io.readMAG1B` records its files in the provenance. One assertion each inside existing test methods: gate stays 511.
+  **Corrected solaarsCF against ACT1B** (alignment run 41213058839): both shadow edges within ~1 s on x and y (entry x
+  +1.1 / +1.3 s C / D against conical's -3.9 / -4.4; exit +0.5 / +0.6 against +1.0 / +1.2); z keeps +3 s at exit under
+  every model (thermal). Owner's call: standard on solaarsCF (re-freeze).
+  **precise** (run 41213060789, 5 days C and D): steadyState walls lead ACT1B by 12-20 s on y/z, transient takes it to
+  2-7 s; recommended: precise -> transient (owner). First CI on a086fa7 red on Code Analyzer ISCL (`numel == 1` in
+  `igrfCoefficients`), fixed; the second (fa9707a) 510/511, the new fromItsg assertion
+  joined two CHAR paths into one; fixed. ☑ CI 41245260551 on fe5c8b3: 511/511, predicted 511, Code Analyzer clean.
 - **2026-10-31, PR #128 (documentation, owner: all four points):** (1) a help-vs-code audit of all 64 units by four
   agents, comment lines only (stale errors lists, missing info fields, wrong defaults, examples a standard Model would
   refuse; Options gained the template sections it lacked); (2) the theory document brought to 0.17+: the observed density
