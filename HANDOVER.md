@@ -41,6 +41,7 @@ Delivered (status key: ☑ verified in MATLAB, ◐ delivered-untested, ○ speci
 | The standard preset takes the combined density scale (PR #122 part 2, 2026-10-29, O-19, owner ruling): `Options` standard `drag.densityScale = "combined"` (fast, precise "none"); strict -- a standard Model evaluates only with 'DensityScale'; `NgfTestCase.standardUnscaled()` for tests about something else, `tNgfIntegration` on the preset as shipped; demos, benchmark and regressionBaseline build the scale (excerpts / pool); dragScaleMonth's reference row stays unscaled; `release-checks.yml` runs baseline and benchmark on the runner | `+NonGravForces/Options.m`, `tests/*.m`, `demos/demoForceBudget.m`, `tools/benchmark.m`, `tools/regressionBaseline.m`, `tools/dragScaleMonth.m`, `.github/workflows/release-checks.yml` | ☑ CI 40896217330: 493/493, predicted 493 (first run 40884016269 492/493: the gravity-free arc of DynamicsSourceMetamorphic left the Swarm bracket; it runs on the driver scale now) |
 | N-12 attitude sources and the attitude-quality diagnostic (PR #124, 2026-10-30, #69): IMU1B fetched into the pool months and cut (30 min of 2020-01-01..03 C); `io.readIMU1B` (FiltAng = each gyro's filtered accumulated angle, deg -> rad, 8 Hz per gyro, gyro ids kept apart, GPS time enforced); `geom.AttitudeProvider.fromItsg` (TU Graz's attitude conjugated once); `geom.attitudeQuality` (SCA1B rates vs gyro angle differences on the same 1 s intervals, fitted rate = a.omega + b, residual by exact projection, nominal-frame angles with 'Orbit', 1/2 cpr); oracle `tools/pyxcheck/attitude_quality_check.py`. Finding: on an Earth-pointing arc the gyro axis, scale and bias are not separable; the residual (3.6-4.3e-7 rad/s RMS) is the result | `+NonGravForces/+io/readIMU1B.m`, `+geom/attitudeQuality.m`, `+geom/AttitudeProvider.m`, `tests/tNgfAttitude.m`, `tools/cutFixtures.py`, `setupNonGravForces.m`, `tools/pyxcheck/attitude_quality_check.py` | ☑ CI 40980858655: 509/509, predicted 509 (493 + 16); first run 40978582699 507/509 (oracle quaternions unnormalised; an epoch asserted below the product's 1 us) |
 | Transient thermal on the native path (PR #126, 2026-10-31, owner's ruling: standard goes transient and stays integrable): `app.DynamicsSource` 'ThermalOrbit' -- prepare integrates the wall temperatures once along the reference orbit with Model.accel and pchips them onto the table nodes; `mex/ngfRhs.c` NGF_THERMAL_TABLE reads them by time and forms the recoil; refused without the orbit, with 'Native' false, or when the orbit does not cover the tables | `+app/DynamicsSource.m`, `mex/ngfRhs.c`, `mex/ngfRhs.h`, `mex/ngfRhsGateway.c`, `tests/tNgfIntegration.m` | ◐ predicted gate 510 (509 + 1) |
+| The standard preset goes transient (PR #126, 2026-10-31, owner's ruling): `Options` standard thermal.model "transient" with Woeske's capacities (fitted, not improved: run 41140282748); `Model.accel` 'T0_K'; `forceBudget`/`densityInversion` carry the walls across chunks; tests: `standardUnscaled` steady, `tNgfIntegration` "standardSteady" for 'Native' false, standard as shipped through 'ThermalOrbit' | `+NonGravForces/Options.m`, `Model.m`, `+app/forceBudget.m`, `+app/densityInversion.m`, `+geom/graceFO.m`, `tools/benchmark.m`, `tests/NgfTestCase.m`, `tests/tNgfIntegration.m`, `tests/tNgfModel.m` | ◐ predicted gate 510 (no new test methods) |
 | 10 documented stubs raising `NonGravForces:<name>:notImplemented` (**superseded: none left since LP-C; this table is the level record up to LP-6b, the status lines in README and CLAUDE.md section 5 are current**) | all packages | ○ |
 | Test infrastructure: `NgfTestCase`, `runNgfTests`, `auditTestCategories`, exemptions; 11 test classes, 262 tests, **gate GREEN 262/262** (74 at LP-0, 116 at LP-2, 142 at LP-3, 169 at LP-4, 231 at LP-5, 238 at LP-5x, 244 after the debt sweep) | `tests/` | ☑ |
 | CI: `ci.yml`, `ciGate.m`, `auditPackage.py`; Code Analyzer clean (0 findings) | repository root, `.github/workflows/` | ☑ (local run 2026-08-27) |
@@ -1548,6 +1549,33 @@ preset's recoil is `steadyState`, without thermal inertia).
   errors. srp alone carries the same lag as the whole model (it dominates y and z).
 - Caveat: each day's transient model starts from the steady state at its first epoch (spin-up of the order of the
   walls' time constants is inside the day).
+
+**The owner's rulings (2026-10-30): standard takes transient and stays integrable; the heat capacities are fitted
+first.** `tools/heatCapacityFit.m` (release-checks `what: heatcapacity`, run 41140282748, C 11 days in 3923 s, D 10
+days in 3425 s, every third day of 2020-01) fitted one factor in {0.25, 0.5, 1, 2, 4} on Woeske's capacity per wall
+group (array, kapton, radiator) -- the lumped walls do not exchange heat, so a transient Model per factor gives every
+panel's temperature and each combination is a sum of per-group recoils after the CRN filter. rms x / y / z [nm/s^2],
+per-day scale + linear bias per axis, both satellites together:
+
+| model | rms x / y / z | median scale x / y / z | median \|lag\| x / y / z s |
+|---|---|---|---|
+| steadyState (0.17.0) | 2.09 / 4.05 / 3.25 | 0.969 / 0.899 / 0.805 | 3.8 / 11.7 / 11.5 |
+| transient, Woeske x1 | 2.21 / 3.75 / 2.28 | 0.999 / 1.021 / 1.077 | 7.0 / 2.3 / 2.9 |
+| transient, best [0.5 0.25 4] | 2.16 / 3.77 / 2.20 | 0.975 / 0.961 / 0.961 | 6.7 / 2.4 / 2.1 |
+
+- **The transient walls are the gain**: z rms falls 30 % (3.25 -> 2.28), y 7 %, x rises 6 %.
+- **The capacities are NOT determined by ACT1B**: the best combination improves rms_y + rms_z by 1 % over Woeske's;
+  C prefers [1 4 4], D [0.5 4 0.25] (both at grid edges); the kapton factor ranges 0.25-4 within the top five. **The
+  radiator factor trades against the z scale at constant residual** (x1: S_zz 1.08, x4: 0.96), so with these data S_zz
+  is known only to that band. **Woeske's values are kept** (geom.graceFO's help records why).
+- **Done in PR #126 (2026-10-31):** `Options` standard sets `thermal.model = "transient"` (precise stays steadyState);
+  the native path serves it through the temperature table ('ThermalOrbit'); `Model.accel` takes 'T0_K', and
+  `app.forceBudget` and `app.densityInversion` carry the walls from chunk to chunk (they restarted from the steady
+  state at every chunk otherwise); `NgfTestCase.standardUnscaled()` is now also steadyState (tests about something
+  else); `tNgfIntegration` runs standard AS SHIPPED through 'ThermalOrbit' and compares with Model.accel along the
+  whole sample orbit, and its 'Native' false comparisons take a "standardSteady" configuration. The baseline moves with
+  the preset and is re-frozen next. The user guide's demo transcript (Step 4, "thermal steadyState") is stale until the
+  demo is re-run.
 
 **Next, the owner's call:** whether `standard` should take `thermal.model = "transient"` (it changes the baseline's
 S_zz from ~0.8 to ~1.08 and needs a re-freeze), and whether the heat capacities are to be fitted (the lag per

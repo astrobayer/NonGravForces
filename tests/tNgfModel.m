@@ -689,7 +689,10 @@ classdef tNgfModel < NgfTestCase
             MP0 = NonGravForces.Model(tc.macro, oP, 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw);
             tc.verifyErrorId(@() MP0.accel(e, rr, vv), 'NonGravForces:Model:dependDensityScale');
             MP = NonGravForces.Model(tc.macro, oP, 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', C);
-            tc.verifyEqual(MP.accel(e, rr, vv), MC.accel(e, rr, vv));
+            % (since 2026-10-31 the shipped preset is also transient: compared with the combined Model of the same walls)
+            tc.verifyEqual(oP.thermal.model, "transient");
+            MCt = NonGravForces.Model(tc.macro, oC.set("thermal.model", "transient"), 'Attitude', tc.att, 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'DensityScale', C);
+            tc.verifyEqual(MP.accel(e, rr, vv), MCt.accel(e, rr, vv));
         end
     end
     methods (Test, TestTags = {'metamorphic'})

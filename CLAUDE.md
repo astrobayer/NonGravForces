@@ -177,6 +177,12 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-10-30, PR #124, N-12)
 
+- **2026-10-31, PR #126: THE STANDARD PRESET IS TRANSIENT.** Heat-capacity fit (run 41140282748, 21 days of 2020-01):
+  transient walls take z rms 3.25 -> 2.28 nm/s^2 (y 4.05 -> 3.75, x 2.09 -> 2.21) for C and D together; the capacities
+  themselves are NOT determined (best factors gain 1 %, C and D disagree, the radiator trades against S_zz 0.96-1.08 at
+  constant residual) -- Woeske's kept. `Options` standard thermal.model "transient"; `Model.accel` 'T0_K';
+  forceBudget/densityInversion carry the walls across chunks; `standardUnscaled()` also steady; tNgfIntegration
+  "standardSteady" for 'Native' false. ◐, predicted 510. Baseline re-freeze next.
 - **2026-10-31, PR #126 (owner: standard goes transient and stays integrable; capacities fitted first):** the native path
   serves thermal.model "transient" by a TABLE: `app.DynamicsSource(..., 'ThermalOrbit', orb)` integrates the wall
   temperatures once along a reference orbit with Model.accel at prepare (pchip onto the table nodes), `mex/ngfRhs.c`

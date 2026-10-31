@@ -27,7 +27,7 @@ classdef Model
 %                                                     m x B, so BOTH of these are needed or neither
 %                                                     is: one alone leaves the term out silently.
 %                                                     torques.magnetic must also be true.
-%   evaluate    T0_K           Nx1    double  K       Initial panel temperatures for a TRANSIENT
+%   accel,      T0_K           Nx1    double  K       Initial panel temperatures for a TRANSIENT
 %                                                     thermal model, one per panel; default [] and
 %                                                     the steady state is used as the start. Ignored
 %                                                     by thermal.model "none" and "steadyState".
@@ -242,8 +242,9 @@ classdef Model
                 v double
                 q double = []
                 nv.Frame (1,1) string {mustBeMember(nv.Frame, ["body","gcrs"])} = "body"
+                nv.T0_K double = []
             end
-            st = obj.environment(epoch, r, v, q, []);
+            st = obj.environment(epoch, r, v, q, nv.T0_K);
             [a, info] = obj.reduceAccel(st, nv.Frame);
             if nargout > 1, info.provenance = localStamp(obj.provenance, "Model.accel"); end
         end

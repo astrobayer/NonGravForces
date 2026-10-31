@@ -141,11 +141,13 @@ last = min(first + chunk - 1, K);
 nC = numel(first);
 rhoModel = zeros(1, K); dragProj = zeros(1, K); dragMod = zeros(1, K);
 perp = zeros(1, K); usable = false(1, K);
+T0 = [];                                                 % a transient model's walls carry over from chunk to chunk
 for c = 1:nC
     idx = first(c):last(c);
     ep = referenceSystem.daySecondToEpoch([epoch.day(idx) epoch.sec(idx)], epoch.scale);
     qc = []; if ~isempty(q), qc = q(:, idx); end
-    [~, ai] = model.accel(ep, r(:, idx), v(:, idx), qc, 'Frame', options.Frame);
+    [~, ai] = model.accel(ep, r(:, idx), v(:, idx), qc, 'Frame', options.Frame, 'T0_K', T0);
+    if model.options.thermal.model == "transient", T0 = ai.temperature_K(:, end); end
     % What the measurement must explain once everything that is not gas is removed.
     residual = aMeasured(:, idx) - ai.radiation - ai.thermal;
     dm = ai.drag;

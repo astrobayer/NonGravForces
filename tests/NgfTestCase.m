@@ -97,11 +97,13 @@ classdef NgfTestCase < matlab.unittest.TestCase
             end
         end
         function o = standardUnscaled(varargin)
-            %STANDARDUNSCALED The standard preset with drag.densityScale "none": what "standard" was until 2026-10-29.
-            % Since then the preset takes the combined observed density scale, which a Model evaluates only with
-            % 'DensityScale' (Swarm files and CLS F30 of the day). A test about something else -- geometry,
-            % radiation, the calibration, a refusal -- states that it runs unscaled instead of carrying the data.
-            o = NonGravForces.Options("standard", "drag.densityScale", "none", varargin{:});
+            %STANDARDUNSCALED The standard preset with drag.densityScale "none" and thermal.model "steadyState": what
+            % "standard" was until 0.17.0. Since then the preset takes the combined observed density scale, which a Model
+            % evaluates only with 'DensityScale' (Swarm files and CLS F30 of the day), and since 2026-10-31 the transient
+            % walls, whose temperatures depend on the epochs of the call (a batch of one is not a batch of ten). A test
+            % about something else -- geometry, radiation, the calibration, a refusal, a vectorisation -- states that it
+            % runs unscaled and steady instead of carrying the data and the history.
+            o = NonGravForces.Options("standard", "drag.densityScale", "none", "thermal.model", "steadyState", varargin{:});
         end
         function T = recordTable()
             s = NgfTestCase.recordStore('get');

@@ -32,7 +32,7 @@ s   = toStruct(obj)                The same option set as a plain struct, with o
                                    not a second way to configure anything, and nothing reads
                                    it back.
 \end{lstlisting}
-Configure once, evaluate many (principle P5). Every field is validated at construction; an unknown field name errors, and EVERY ADMISSIBLE VALUE EVALUATES: a value this toolbox cannot compute is not offered (rule R4, HANDOVER LP-C finding F5). Presets fix the DEFAULT tier of every model family; extended models (HWM14 winds, transient thermal, body torques) are opt-ins no preset enables, so preset results never move when one lands. The one deliberate move: 0.17.0's standard preset takes the combined observed density scale (owner ruling 2026-10-29, HANDOVER O-19).
+Configure once, evaluate many (principle P5). Every field is validated at construction; an unknown field name errors, and EVERY ADMISSIBLE VALUE EVALUATES: a value this toolbox cannot compute is not offered (rule R4, HANDOVER LP-C finding F5). Presets fix the DEFAULT tier of every model family; extended models (HWM14 winds, body torques) are opt-ins no preset enables, so preset results never move when one lands. The deliberate moves: 0.17.0's standard preset takes the combined observed density scale (owner ruling 2026-10-29, HANDOVER O-19), and since 2026-10-31 the transient thermal model (owner ruling 2026-10-30): the steady state's recoil led ACT1B's by 8-18 s on y and z over 2020-01, and the transient walls take that to 2-4 s (tools/alignmentMonth.m, HANDOVER "The checkAlignment lags of the 0.17.0 baseline"). A transient Model integrates the walls over the epochs of ONE call, from the steady state at its first epoch (Model.accel 'T0\_K' carries them on). The precise preset stays steadyState until the same is measured for it.
 
 \begin{lstlisting}
 FIDELITY LADDER
@@ -45,7 +45,7 @@ FIDELITY LADDER
   srp.eclipse             conical       conical         solaarsCF
   erp.backend             none          knocke          ceres
   erp.grid                -             12x24           24x48
-  thermal.model           none          steadyState     steadyState (+transient opt-in)
+  thermal.model           none          transient       steadyState (+transient opt-in)
   geom.selfShadow         none          lut 16          lut 32
   geom.flowShadow         exact         table           exact
   sun.source              rs.analytic   rs.analytic     rs.de440
@@ -3504,7 +3504,7 @@ Every method takes 'Frame', "body" (default) or "gcrs". These are the rest, and 
 \endlastfoot
 torque, evaluate & B\_\allowbreak{}body & 3xK & double & T & Magnetic field at the satellite, BODY frame. Required by the magnetic torque and by nothing else; default [] and the term is omitted. Get it from env.magneticField, rotated to the body. \\
 torque, evaluate & Dipole\_\allowbreak{}Am2 & 3x1 & double & A m\textasciicircum{}2 & Residual magnetic dipole of the spacecraft, body frame; default []. The torque is m x B, so BOTH of these are needed or neither is: one alone leaves the term out silently. torques.magnetic must also be true. \\
-evaluate & T0\_\allowbreak{}K & Nx1 & double & K & Initial panel temperatures for a TRANSIENT thermal model, one per panel; default [] and the steady state is used as the start. Ignored by thermal.model "none" and "steadyState". \\
+accel, & T0\_\allowbreak{}K & Nx1 & double & K & Initial panel temperatures for a TRANSIENT thermal model, one per panel; default [] and the steady state is used as the start. Ignored by thermal.model "none" and "steadyState". \\
 series & Quantities & 1x2 & string & - & "accel" (default), "torque", or both. Selects which columns the timetable carries; a torque column costs the torque reduction, which accel alone does not pay for. \\
 partials & Method & 1x1 & string & - & "" (default: the Options' partials.method), "analytic" or "finiteDiff". analytic uses kernel.partials' closed forms; finiteDiff is a central difference in the parameter, for cross-checking the analytic form. A complex step is NOT offered and is refused by name: MATLAB's erf, erfc and every norm in the chain discard the imaginary part (measured 2026-09-08). \\
 partials & WithRespectTo & 1xP & string & - & Any of "r", "v" (default ["r" "v"]), "cdScale", "crScale", "alpha". alpha is refused for a two-state surface, which computes its own coverage. \\

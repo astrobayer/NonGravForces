@@ -84,6 +84,11 @@ classdef tNgfIntegration < NgfTestCase
                     % msis00 is the backend both Pilinski fits were made with, so this is the pairing
                     % their K is actually valid for (the precise preset's msis21 is not).
                     o = NonGravForces.Options("standard").set("drag.alpha", []).set("drag.accommodation", "pilinski2011");
+                case "standardSteady"
+                    % the standard preset with the steady-state walls it had until 2026-10-31: for the tests that
+                    % compare the native path with Model.accel THROUGH THE SOURCE ('Native', false), which the
+                    % transient walls cannot serve (they need the native temperature table)
+                    o = NonGravForces.Options("standard").set("thermal.model", "steadyState");
                 otherwise
                     o = NonGravForces.Options(name);
             end
@@ -92,7 +97,8 @@ classdef tNgfIntegration < NgfTestCase
             %SCALEDMODEL The standard preset with drag.densityScale of the given kind, from the committed Swarm and
             % CLS excerpts; extra arguments go to env.densityScale (e.g. 'MinRecords' to force the fallback).
             S = tc.scaleOf(kind, varargin{:});
-            M = NonGravForces.Model(tc.macro, NonGravForces.Options("standard").set("drag.densityScale", kind), 'Attitude', tc.att, ...
+            % steady walls: these tests are about the density scale, and one of them propagates an arc ('Native' false)
+            M = NonGravForces.Model(tc.macro, NonGravForces.Options("standard").set("drag.densityScale", kind).set("thermal.model", "steadyState"), 'Attitude', tc.att, ...
                 'Eop', tc.eop, 'SpaceWeather', tc.sw, 'Ceres', tc.cer, 'Ephemeris', tc.eph, 'DensityScale', S);
         end
         function S = scaleOf(tc, kind, varargin)
@@ -108,14 +114,17 @@ classdef tNgfIntegration < NgfTestCase
                     S = NonGravForces.env.densityScale(files, tc.sw, varargin{:}, 'Fallback', NonGravForces.env.densityDriverScale(tc.sw, cls));
             end
         end
-        function src = preparedFor(tc, M)
-            src = NonGravForces.app.DynamicsSource(M, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60);
+        function src = preparedFor(tc, M, varargin)
+            %PREPAREDFOR The native source of M on the sample day; transient walls (the standard preset since
+            % 2026-10-31) are integrated along the sample day's own GNV1B, as 'ThermalOrbit' requires.
+            extra = {};
+            if M.options.thermal.model == "transient", extra = {'ThermalOrbit', tc.orbitOf(1:numel(tc.ep.sec))}; end
+            src = NonGravForces.app.DynamicsSource(M, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60, extra{:}, varargin{:});
             src = src.prepare(struct('Span', [120 420], 'StencilSpan', [120 420], 'MaxColumns', 1));
         end
         function [src, M] = sourceFor(tc, name, varargin)
             M = tc.modelFor(tc.optionsFor(name));
-            src = NonGravForces.app.DynamicsSource(M, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60, varargin{:});
-            src = src.prepare(struct('Span', [120 420], 'StencilSpan', [120 420], 'MaxColumns', 1));
+            src = tc.preparedFor(M, varargin{:});
         end
         function orb = orbitOf(tc, idx)
             %ORBITOF The sample day's GNV1B (GCRS) over the given records, as 'ThermalOrbit' takes it.
@@ -123,6 +132,14 @@ classdef tNgfIntegration < NgfTestCase
                 'r', tc.r(:, idx), 'v', tc.v(:, idx));
         end
         function a = modelAccel(tc, M, k)
+            %MODELACCEL Model.accel at record k -- for transient walls along the WHOLE sample orbit, as the native
+            % table integrates them, and then record k: one epoch alone would start the walls at their steady state.
+            if M.options.thermal.model == "transient"
+                orb = tc.orbitOf(1:numel(tc.ep.sec));
+                A = M.accel(orb.epoch, orb.r, orb.v, [], 'Frame', "gcrs");
+                a = A(:, k);
+                return
+            end
             epk = referenceSystem.daySecondToEpoch([tc.ep.day(k) tc.ep.sec(k)], tc.ep.scale);
             a = M.accel(epk, tc.r(:, k), tc.v(:, k), [], 'Frame', "gcrs");
         end
@@ -139,7 +156,7 @@ classdef tNgfIntegration < NgfTestCase
     % ===================================================================== contract
     methods (Test, TestTags = {'contract'})
         function DynamicsSourceContract(tc)
-            M = tc.modelFor(NonGravForces.Options("standard"));
+            M = tc.modelFor(tc.optionsFor("standardSteady"));   % the refusals below test other arguments than the walls
             src = NonGravForces.app.DynamicsSource(M, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60);
             tc.verifyEqual(src.StateSize, 3); tc.verifyTrue(src.Vectorized); tc.verifyFalse(src.IsPrepared);
             tc.verifyErrorId(@() src.accel(0, tc.r(:, 1), tc.v(:, 1)), 'gjToolbox:dynamics:notPrepared');
@@ -201,7 +218,7 @@ classdef tNgfIntegration < NgfTestCase
             % a context epoch that disagrees, and a native path the options cannot serve
             s2 = D(M, 'Epoch', tc.tai);
             tc.verifyErrorId(@() s2.prepare(struct('Span', [0 60], 'StencilSpan', [0 60], 'Epoch', tc.tai + seconds(1))), 'NonGravForces:DynamicsSource:inputEpoch');
-            s3 = D(tc.modelFor(NonGravForces.Options("standard").set("geom.selfShadow", "raycast").set("geom.flowShadow", "exact")), 'Epoch', tc.tai, 'Margin_s', 30);
+            s3 = D(tc.modelFor(tc.optionsFor("standardSteady").set("geom.selfShadow", "raycast").set("geom.flowShadow", "exact")), 'Epoch', tc.tai, 'Margin_s', 30);
             tc.verifyErrorId(@() s3.prepare(struct('Span', [120 420], 'StencilSpan', [120 420])), 'NonGravForces:DynamicsSource:inputModel');
         end
     end
@@ -314,7 +331,7 @@ classdef tNgfIntegration < NgfTestCase
         function DynamicsSourcePrecision(tc)
             % The two PATHS of one source: the native entry and Model.accel, at a node, with everything else
             % identical. And the gravity source is added, not folded in: with it the acceleration is the sum.
-            [srcN, M] = tc.sourceFor("standard");
+            [srcN, M] = tc.sourceFor("standardSteady");   % 'Native' false cannot serve transient walls
             srcM = NonGravForces.app.DynamicsSource(M, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60, 'Native', false);
             srcM = srcM.prepare(struct('Span', [120 420], 'StencilSpan', [120 420], 'MaxColumns', 1));
             k = 181; t = double(tc.ep.sec(k) - tc.ep.sec(1));
@@ -366,7 +383,7 @@ classdef tNgfIntegration < NgfTestCase
             tc.verifyTrue(all(isfinite([a1; a2])) && norm(a1 - a2) > 0, 'two prepared sources must not share a context');
             s1.release(); s2.release();
             % the attitude must cover the span plus the margin: a wider margin than the excerpt is refused
-            M = tc.modelFor(NonGravForces.Options("standard"));
+            M = tc.modelFor(tc.optionsFor("standardSteady"));   % the 'Native' false sources below cannot serve transient walls
             wide = NonGravForces.app.DynamicsSource(M, 'Epoch', tc.tai, 'Margin_s', 3600);
             tc.verifyErrorId(@() wide.prepare(struct('Span', [120 420], 'StencilSpan', [120 420])), 'NonGravForces:DynamicsSource:dataRange');
             % a gravity source without a native entry cannot be added by the C evaluator, and says so
@@ -404,8 +421,7 @@ classdef tNgfIntegration < NgfTestCase
             % 1. cdScale multiplies the gas part and nothing else, through the native evaluator.
             [s1, M] = tc.sourceFor("standard");
             M2 = tc.modelFor(M.options.set("drag.cdScale", 2));
-            s2 = NonGravForces.app.DynamicsSource(M2, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60);
-            s2 = s2.prepare(struct('Span', [120 420], 'StencilSpan', [120 420], 'MaxColumns', 1));
+            s2 = tc.preparedFor(M2);
             d1 = s1.diagnostics(180, tc.r(:, 181), tc.v(:, 181));
             d2 = s2.diagnostics(180, tc.r(:, 181), tc.v(:, 181));
             tc.verifyBoundAndRecord("native drag doubles with cdScale", norm(d2.drag - 2 * d1.drag) / norm(d1.drag), 1e-15, "-", "an exact power of two through a linear factor");
@@ -476,7 +492,7 @@ classdef tNgfIntegration < NgfTestCase
         function DynamicsSourceSpeed(tc)
             % The native entry exists to be cheap in an inner loop: one evaluation against the same source's
             % MATLAB path, both timed inside one repeat on this host (rule T5, a ratio and never an absolute).
-            [srcN, M] = tc.sourceFor("standard");
+            [srcN, M] = tc.sourceFor("standardSteady");   % 'Native' false cannot serve transient walls
             srcM = NonGravForces.app.DynamicsSource(M, 'Epoch', tc.tai, 'Margin_s', 30, 'TableStep_s', 60, 'Native', false);
             srcM = srcM.prepare(struct('Span', [120 420], 'StencilSpan', [120 420], 'MaxColumns', 1));
             r1 = tc.r(:, 181); v1 = tc.v(:, 181);
