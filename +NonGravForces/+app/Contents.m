@@ -1,5 +1,5 @@
 % APP  NonGravForces.app - L8 layer.
-% Version 0.17.0  29-Oct-2026
+% Version 0.18.0  31-Oct-2026
 %
 %   DynamicsSource       - The acceleration as gjToolbox's integrator interface (native C entry)
 %   calibrate            - Accelerometer calibration of an Arc against a Model or a reference Arc: timeSeriesPreparation.run then lsqvce.fit; attribution

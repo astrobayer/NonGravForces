@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-10-18 (release 0.16.0), 2026-10-26 (PR #107, observation data) and 2026-10-29 (release 0.17.0) by Claude Opus 5.5. Toolbox version 0.17.0.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-10-18 (release 0.16.0), 2026-10-26 (PR #107, observation data) 2026-10-29 (release 0.17.0) and 2026-10-31 (release 0.18.0) by Claude Opus 5.5. Toolbox version 0.18.0.
 
 ---
 
@@ -175,12 +175,14 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-30, PR #124, N-12)
+## 5. Current status (2026-10-31, release 0.18.0)
 
+- **2026-10-31, release 0.18.0 (PR #130):** version bumped; the release measurements on the runner (baseline-compare,
+  benchmark) and the re-measured cost table of the user guide follow in this PR. ◐ until both are read. Gate stays 511.
 - **2026-10-31, PR #129, owner rulings on the solaarsCF/precise runs: PRECISE IS TRANSIENT** (`Options` precise
   thermal.model "transient"; steady state led ACT1B by 12-20 s on y/z, transient 2-7 s, run 41213060789; no precise
   baseline to re-freeze; native path through 'ThermalOrbit'). **standard keeps srp.eclipse "conical"** (leave as is).
-  ◐, predicted gate 511 (one assertion in `tNgfCore/optionsContract`).
+  ☑ CI 41247178221: 511/511, predicted 511, Code Analyzer clean; merged.
 - **2026-10-31, PR #129 (solaarsCF):** the oblateness mapping was INVERTED -- the in-ecliptic part of rE was stretched by
   a/b instead of the component along the ecliptic normal (the projected spin axis); on GRACE-FO's polar orbit that
   widened the modelled shadow by ~8 s per edge and skewed it at larger beta, the size and asymmetry ACT1B showed
