@@ -184,7 +184,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   forceBudget/densityInversion carry the walls across chunks; `standardUnscaled()` also steady; tNgfIntegration
   "standardSteady" for 'Native' false. ◐, predicted 510. First CI run 41152904075: 509/510 -- DynamicsSourceReference's
   between-node bound (1e-9, the TIME tables) met the transient walls' TEMPERATURE table at 1.564e-05; recorded apart now
-  (1e-4), the node parity held at 1e-13. Baseline re-freeze next.
+  (1e-4), the node parity held at 1e-13. ☑ CI 41154819317: 510/510, predicted 510, Code Analyzer clean. Baseline re-freeze next.
 - **2026-10-31, PR #126 (owner: standard goes transient and stays integrable; capacities fitted first):** the native path
   serves thermal.model "transient" by a TABLE: `app.DynamicsSource(..., 'ThermalOrbit', orb)` integrates the wall
   temperatures once along a reference orbit with Model.accel at prepare (pchip onto the table nodes), `mex/ngfRhs.c`
@@ -192,7 +192,7 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   with 'Native' false, and at prepare when the orbit does not cover the tables. `tools/heatCapacityFit.m` (release-checks
   `what: heatcapacity`) fits one factor per wall group (array, kapton, radiator) on Woeske's capacities. New test
   `tNgfIntegration/DynamicsSourceThermalTableReference`; written without MATLAB (C syntax-checked with gcc), ◐,
-  predicted gate 510 (509 + 1). Next: the fitted capacities into geom.graceFO, standard -> transient, re-freeze.
+  predicted gate 510 (509 + 1); ☑ with the preset switch, CI 41154819317: 510/510.
 - **2026-10-30, PR #126 (the lag separated): THERMAL INERTIA.** `tools/alignmentMonth.m` with three models per day (run
   41042736099): with `thermal.model = "transient"` the y/z lags fall from 17.3 / 10.5 s (C) and 8.2 / 18.5 s (D) to
   1.8 / 2.0 and 3.6 / 3.4 s, peaks up to 0.98; the standard preset's steadyState recoil leads the real one. **The
