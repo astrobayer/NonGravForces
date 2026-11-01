@@ -1681,6 +1681,29 @@ walls + solaarsCF + unscaled NRLMSIS 2.1).** Median signed lag, s (C / D):
 S_zz from ~0.8 to ~1.08 and needs a re-freeze), and whether the heat capacities are to be fitted (the lag per
 panel group is the observable).
 
+### GRACE-D 2020-01-22, the day that is D's cross-track residual (PR #131, 2026-11-01)
+
+The frozen baseline's cross-track residual of D over 2020-01 is 12.08 nm/s^2 against C's 2.51. The per-day bias sigmas of
+`tools/baseline_reference.json` (the fit estimates the noise per day) put it on one day: 2020-01-22, the first day after
+the safe mode (19-21 have no ACT1B), ~85 nm/s^2 over about half a day; without it the month is ~3.2 nm/s^2. Every other
+day of D is 2.6-3.4 nm/s^2 in `dragScaleMonth` (run 40849007121, firings cut), which skipped 01-22 for its non-GPS THR1B.
+
+`tools/dayDiagnosis.m` (run 41325337776; standard preset unscaled, one bias per day, 10 s), per GPS hour:
+- **D 01-22:** ACT1B 43015 records from ~12:03. Hour 12: rms y 293.8 nm/s^2, mean y -21.6, ACT1B 1 Hz noise y 14.0,
+  112 firings / 90.6 s on-time, SCA1B rate scatter 192.6 urad/s. Hours 13-23: rms y 3.9-12.9, noise 0.35-0.97, 5-25
+  firings / 0.5-2.5 s, rate 7.4-9.1. Day: rms y 83.18; **with every firing cut 0.75** (26 % of epochs cut). THR1B time_ref
+  G:283 R:27; the 27 R records are in hours 6-11, before ACT1B resumes.
+- **D 01-23:** rms y 9.42 (hours 0-13: 7.0-21.3, noise 0.6-1.6, 12-44 firings; hours 14-23: 3.0-5.4, noise 0.3-0.4);
+  firings cut 0.79 (38.5 % cut). 141 flagged ACT1B records in hour 17. Hour 10: z 15.05 with rate 24.0 urad/s.
+- **C 01-22 (reference):** rms y 2.46, noise 0.20, 6-23 firings / 0.3-1.2 s per hour, rate 2.9-5.3; firings cut 0.70.
+
+Reading: the excess is attitude re-acquisition on thrusters after the safe mode, concentrated in the first hour of data
+and decaying over ~26 h; outside the firings ACT1B agrees with the model as well as C does. The THR1B time_ref is not the
+problem (the R records precede the data). **`tools/regressionBaseline.m` calls `app.calibrate` without 'Thrusters'**, so
+the frozen baseline fits through every firing on both satellites; D simply fires more. Next (owner's call): pass THR1B to
+the baseline's calibration (readTHR1B must then accept a file whose non-GPS records lie outside the data, or drop them),
+re-freeze; or exclude the first hours after an ACT1B gap.
+
 ### Release 0.18.0 (2026-10-31, PR #130)
 
 What it carries: the transient thermal walls in `standard` (PR #126) and `precise` (PR #129, owner), served on the native
