@@ -1,7 +1,8 @@
 {
   "meta": {
-    "toolbox": "0.17.0",
+    "toolbox": "0.18.0",
     "generated": "2026-10-31 01:42 UTC",
+    "verified": "2026-11-01 00:11 UTC",
     "matlab": "26.1.0.3346908 (R2026a) Update 5",
     "month": "2020-01",
     "preset": "standard",

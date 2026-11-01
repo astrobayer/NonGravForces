@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-10-18 (release 0.16.0), 2026-10-26 (PR #107, observation data) and 2026-10-29 (release 0.17.0) by Claude Opus 5.5. Toolbox version 0.17.0.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-10-18 (release 0.16.0), 2026-10-26 (PR #107, observation data) 2026-10-29 (release 0.17.0) and 2026-10-31 (release 0.18.0) by Claude Opus 5.5. Toolbox version 0.18.0.
 
 ---
 
@@ -175,12 +175,17 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-30, PR #124, N-12)
+## 5. Current status (2026-10-31, release 0.18.0)
 
+- **2026-10-31, release 0.18.0 (PR #130):** the transient walls (standard, precise), SOLAARS-CF corrected, the help
+  audit's eight defects. Release measurements on the CI runner: **baseline PASSED at 0.18.0** (run 41248944129, 76 min:
+  every compared number 0 sigma from the 2026-10-31 freeze -- S_xx, S_zz, 186 / 168 biases, C and D); benchmark (run
+  41248946430) standard 26.5 / 3.99 / 0.762 ms at K = 1 / 10 / 100 (0.17.0: 20.0 / 3.17 / 0.650, the walls' cost),
+  fast 14.7 / 1.51 / 0.247, compiled kernel 1.30 ms, native 1.31 ms (0.895 / 0.996). Gate 511.
 - **2026-10-31, PR #129, owner rulings on the solaarsCF/precise runs: PRECISE IS TRANSIENT** (`Options` precise
   thermal.model "transient"; steady state led ACT1B by 12-20 s on y/z, transient 2-7 s, run 41213060789; no precise
   baseline to re-freeze; native path through 'ThermalOrbit'). **standard keeps srp.eclipse "conical"** (leave as is).
-  ◐, predicted gate 511 (one assertion in `tNgfCore/optionsContract`).
+  ☑ CI 41247178221: 511/511, predicted 511, Code Analyzer clean; merged.
 - **2026-10-31, PR #129 (solaarsCF):** the oblateness mapping was INVERTED -- the in-ecliptic part of rE was stretched by
   a/b instead of the component along the ecliptic normal (the projected spin axis); on GRACE-FO's polar orbit that
   widened the modelled shadow by ~8 s per edge and skewed it at larger beta, the size and asymmetry ACT1B showed
@@ -1093,10 +1098,10 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   differ by 4.0x — which is the real cost of a bad measurement: not the wrong digit, the conclusion
   drawn from it and written somewhere else.
 - **A per-epoch cost is mostly a property of the BATCH, not of the toolbox**, so never quote one
-  without K. `Model.accel` in the standard preset costs 20.0 ms at K=1 and 0.650 ms at K=100
-  (0.17.0, 2026-10-29, ON THE CI RUNNER -- 0.16.0's 11.9 / 0.440 were the owner's host, so the two releases
-  differ by host as well as by code), because one call pays most of its cost as setup before any
-  per-epoch work (fast: 13.3 ms and 0.241). A day at 1 Hz through `Model.series` was 1 min 16 s on 2026-09-18 -- a figure
+  without K. `Model.accel` in the standard preset costs 26.5 ms at K=1 and 0.762 ms at K=100
+  (0.18.0, 2026-11-01, ON THE CI RUNNER, with the transient walls; 0.17.0 on the same runner: 20.0 / 0.650;
+  0.16.0's 11.9 / 0.440 were the owner's host), because one call pays most of its cost as setup before any
+  per-epoch work (fast: 14.7 ms and 0.247). A day at 1 Hz through `Model.series` was 1 min 16 s on 2026-09-18 -- a figure
   `tools/benchmark.m` does NOT produce, so nothing regenerates it. The authority is `tools/benchmark_reference.csv`,
   which `tools/benchmark.m` writes and `auditPackage.py` check 13 compares every quoted figure
   against; `tools/benchmark_last.txt` is the gitignored host log and is NOT the authority, because a

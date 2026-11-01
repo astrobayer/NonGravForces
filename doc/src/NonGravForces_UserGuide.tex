@@ -829,27 +829,26 @@ the \SI{4.22}{} that Hładczuk et al.\ leave when they omit the term and the \SI
 \section{Cost}
 \textbf{The cost per epoch depends on how many epochs you ask for in one call, far more than on which
 preset you choose}, and that is the most useful thing to know about this toolbox's performance.
-Measured by \texttt{tools/benchmark.m} on 2026-10-29 (v0.17.0, R2026a, median of three after five
-warm-up calls) on the CI runner, NOT on the host that measured v0.16.0 (\SI{0.440}{\milli\second} for
-\texttt{standard} at $K=100$): the two tables differ by host as well as by code, and v0.17.0's
-\texttt{standard} preset also evaluates the daily density scale. \textbf{The table predates the
-transient walls} (Section~\ref{sec:trp}): \texttt{standard} has integrated the wall temperatures
-since 2026-10-31, which adds the sub-steps of that integration to every call and, on the native path,
-one integration along the reference orbit at \texttt{prepare}; the figures are re-measured at the next
-release. The table it writes is committed at
+Measured by \texttt{tools/benchmark.m} on 2026-11-01 (v0.18.0, R2026a, median of three after five
+warm-up calls) on the CI runner (release-checks run 41248946430). \texttt{standard} evaluates the
+daily density scale and, since v0.18.0, integrates the transient wall temperatures over the epochs of
+each call: against v0.17.0 on the same runner its cost at $K=100$ rose from 0.650 to
+\SI{0.762}{\milli\second} per epoch, and at $K=1$ from 20.0 to \SI{26.5}{\milli\second}. On the native
+path the walls cost nothing per call: they are integrated once along the reference orbit at
+\texttt{prepare} and read from a table. The table it writes is committed at
 \texttt{tools/benchmark\_reference.csv}, and the audit checks every figure below against it.
 
 \begin{table}[h]\centering\footnotesize
 \begin{tabular}{@{}lrrr@{}}\toprule
  & \multicolumn{3}{c}{ms per epoch, for a call of $K$ epochs}\\\cmidrule(l){2-4}
 path & $K=1$ & $K=10$ & $K=100$\\\midrule
-\texttt{Model.accel}, \texttt{standard} & 20.0 & 3.17 & 0.650\\
-\texttt{Model.accel}, \texttt{fast} & 13.3 & 1.94 & 0.241\\
-\texttt{Model.budget}, \texttt{fast} & 14.2 & 2.23 & 0.236\\
-\texttt{app.forceBudget}, \texttt{fast} & 13.2 & 2.52 & 0.267\\\midrule
+\texttt{Model.accel}, \texttt{standard} & 26.5 & 3.99 & 0.762\\
+\texttt{Model.accel}, \texttt{fast} & 14.7 & 1.51 & 0.247\\
+\texttt{Model.budget}, \texttt{fast} & 10.6 & 1.69 & 0.199\\
+\texttt{app.forceBudget}, \texttt{fast} & 16.9 & 1.85 & 0.260\\\midrule
 \multicolumn{4}{@{}l}{\emph{pointwise by construction --- these take one state and do not batch:}}\\
-\texttt{kernel.singleEpoch} (compiled) & \multicolumn{3}{r}{0.895}\\
-\texttt{app.DynamicsSource.accel} (native) & \multicolumn{3}{r}{0.996}\\
+\texttt{kernel.singleEpoch} (compiled) & \multicolumn{3}{r}{1.30}\\
+\texttt{app.DynamicsSource.accel} (native) & \multicolumn{3}{r}{1.31}\\
 \bottomrule
 \end{tabular}
 \end{table}
