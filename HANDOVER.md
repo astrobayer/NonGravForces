@@ -1681,6 +1681,26 @@ walls + solaarsCF + unscaled NRLMSIS 2.1).** Median signed lag, s (C / D):
 S_zz from ~0.8 to ~1.08 and needs a re-freeze), and whether the heat capacities are to be fitted (the lag per
 panel group is the observable).
 
+### Release 0.18.0 (2026-10-31, PR #130)
+
+What it carries: the transient thermal walls in `standard` (PR #126) and `precise` (PR #129, owner), served on the native
+path by a temperature table ('ThermalOrbit'); SOLAARS-CF's oblateness mapping corrected (PR #129); transient walls carried
+across `Model.series` / `forceBudget` / `densityInversion` chunks (PR #128); the eight defects of the help audit (PR #129,
+among them the exact FNV-1a in `provenance`, so provenance hashes differ from 0.17.0's); the generated test catalogue and
+the documentation pass (PR #128). `standard` keeps `srp.eclipse = "conical"` (owner, 2026-10-31).
+
+Release measurements on the CI runner (`release-checks.yml`, head 63e6a63):
+- **Baseline PASSED** (run 41248944129, 76 min): every compared number of 2020-01 C and D (usedDays, S_xx, S_zz, the
+  worst of 186 / 168 biases) is 0 sigma from the freeze of 2026-10-31 01:42 -- the chunk-overlap fix and the other
+  changes do not move the calibration at the printed digits. `meta.toolbox` 0.18.0, `meta.verified` 2026-11-01 00:11 UTC.
+  checkAlignment warned 60 times (31 C, 29 D; C lags up to ~10 s, D x -2..-17.5 s, one D y at the 60 s edge).
+- **Benchmark** (run 41248946430): `Model.accel` standard 26.5 / 3.99 / 0.762 ms per epoch at K = 1 / 10 / 100 (0.17.0
+  on the same runner: 20.0 / 3.17 / 0.650 -- the transient walls' sub-steps, +17 % at K = 100), fast 14.7 / 1.51 / 0.247,
+  `kernel.singleEpoch` 1.30 ms (0.895), native `DynamicsSource.accel` 1.31 ms (0.996). The compiled paths did not change
+  in code for the standard configuration measured; their +40 % is the runner's own spread (cf. fast 0.119 -> 0.241 at
+  0.17.0 with no code change) and is recorded, not explained.
+- Gate 511/511 (CI 41247178221 on the merged #129 head).
+
 ### Release 0.17.0 (2026-10-29)
 
 MINOR (added functionality, VERSIONING.md) with one deliberate preset change, by owner ruling: the `standard` preset
