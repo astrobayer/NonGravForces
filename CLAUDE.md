@@ -175,8 +175,18 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-10-31, release 0.18.0)
+## 5. Current status (2026-11-01, PR #131)
 
+- **2026-11-01, PR #131 (GRACE-D day by day, owner):** D's cross-track residual over 2020-01 (12.08 nm/s^2 against C's
+  2.51) is ONE day, 2020-01-22 (read from the baseline's per-day bias sigmas: ~85 nm/s^2 over half a day, ~3.2 without
+  it). `tools/dayDiagnosis.m` (release-checks `what: daydiag`, run 41325337776) hour by hour: ACT1B resumes at ~12:03
+  GPS after the safe mode, and hour 12 carries rms y **294 nm/s^2**, a mean of -21.6, ACT1B's own 1 Hz noise 14 nm/s^2
+  (0.2 on C), **112 firings with 90.6 s on-time** (C: ~0.6 s per hour) and an SCA1B rate scatter of 193 urad/s (C: 3-5)
+  -- attitude re-acquisition on thrusters. **With every firing cut the day's y residual is 0.75 nm/s^2** (C: 0.70). The
+  27 non-GPS THR1B records (time_ref R) fall in hours 6-11, BEFORE ACT1B resumes; they never touch the data. D fires
+  ~2-3x C's on-time per hour on 01-22 and the first half of 01-23 (y unmasked 5-21 nm/s^2 per hour), settling by 01-23
+  14:00. **`tools/regressionBaseline.m` passes no THR1B to `app.calibrate` ('Thrusters' unused)**: the baseline's
+  residuals include every firing. Tool only: gate stays 511.
 - **2026-10-31, release 0.18.0 (PR #130):** the transient walls (standard, precise), SOLAARS-CF corrected, the help
   audit's eight defects. Release measurements on the CI runner: **baseline PASSED at 0.18.0** (run 41248944129, 76 min:
   every compared number 0 sigma from the 2026-10-31 freeze -- S_xx, S_zz, 186 / 168 biases, C and D); benchmark (run

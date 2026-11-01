@@ -6,7 +6,8 @@
 # eclipse models; ~2 h; input preset "precise" runs every fifth day of that preset), and
 # "heatcapacity" runs tools/heatCapacityFit.m (the wall heat capacities per panel group fitted to ACT1B
 # through the transient thermal model; ~2 h). "transcript" runs tools/userGuideTranscript.m (the user
-# guide's Steps 1-8 on the committed excerpt, minutes) for the guide's transcript.
+# guide's Steps 1-8 on the committed excerpt, minutes) for the guide's transcript. "daydiag" runs
+# tools/dayDiagnosis.m (GRACE-D 2020-01-22 hour by hour against D 01-23 and C 01-22, minutes).
 #
 # Neither is a gate. They exist as a workflow because a release needs both at the version being
 # released (audit check 14 refuses a version the baseline was not verified at; check 13 compares every
@@ -24,7 +25,7 @@ on:
   workflow_dispatch:
     inputs:
       what:
-        description: "baseline-freeze | baseline-compare | benchmark | alignment | heatcapacity | transcript"
+        description: "baseline-freeze | baseline-compare | benchmark | alignment | heatcapacity | daydiag | transcript"
         default: "baseline-compare"
       preset:
         description: "alignment only: the Model preset (standard | precise)"
@@ -141,12 +142,16 @@ jobs:
                     rep = NonGravForces.buildMex('Target', "msis"); assert(rep.upToDate, "releaseChecks:mex", "MEX target msis did not build");
                     userGuideTranscript();   % prints the user guide's Steps 1-8 on the committed excerpt
                     out = "";
+                case "daydiag"
+                    rep = NonGravForces.buildMex('Target', "msis"); assert(rep.upToDate, "releaseChecks:mex", "MEX target msis did not build");
+                    dayDiagnosis();   % GRACE-D 2020-01-22 hour by hour, against D 01-23 and C 01-22
+                    out = "";
                 case "heatcapacity"
                     rep = NonGravForces.buildMex('Target', "msis"); assert(rep.upToDate, "releaseChecks:mex", "MEX target msis did not build");
                     heatCapacityFit();
                     out = fullfile(pwd, "tools", "heat_capacity_fit.csv");
                 otherwise
-                    error("releaseChecks:what", "unknown input what = %s -> baseline-freeze, baseline-compare, benchmark, alignment, heatcapacity or transcript", what);
+                    error("releaseChecks:what", "unknown input what = %s -> baseline-freeze, baseline-compare, benchmark, alignment, heatcapacity, daydiag or transcript", what);
             end
             if strlength(out) > 0
                 fprintf("----- BEGIN %s -----\n%s\n----- END %s -----\n", out, fileread(out), out);
