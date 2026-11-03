@@ -279,3 +279,18 @@ jobs:
         with:
           name: nonGravForcesRunLog
           path: NonGravForces/tests/last_run.txt
+
+      # The run log INTO THE JOB LOG as well (2026-11-03): the artifact above lives in blob storage that a
+      # cloud session cannot reach through its proxy, so tests/last_run.txt -- the file README.md's test count
+      # and the theory document's test catalogue are checked against -- went un-updated from 0.16.0 to 0.18.0.
+      # Between the markers the file is verbatim, so it can be committed from the log.
+      - name: Print the run log
+        if: always()
+        shell: powershell
+        run: |
+          $f = "NonGravForces/tests/last_run.txt"
+          if (Test-Path $f) {
+            Write-Output "----- BEGIN tests/last_run.txt -----"
+            Get-Content -Raw $f | Write-Output
+            Write-Output "----- END tests/last_run.txt -----"
+          }

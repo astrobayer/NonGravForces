@@ -175,8 +175,13 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-11-01, PR #131)
+## 5. Current status (2026-11-03, PR #132)
 
+- **2026-11-03, PR #132 (documentation status, owner):** `ci.yml`'s matlab job PRINTS `tests/last_run.txt` between
+  BEGIN/END markers into the job log (the artifact's blob storage is unreachable from a cloud session, which is why the
+  committed file stayed at 0.16.0's 444 tests through 0.18.0); the theory document gains the corrected SOLAARS-CF mapping
+  and its ACT1B edges (~1 s against conical's ~4 s late entry, standard keeps conical) and the GRACE-D 2020-01-22
+  thruster finding; the user guide's Step 8 says to pass 'Thrusters' (the baseline does not, as of 0.18.0).
 - **2026-11-01, PR #131 (GRACE-D day by day, owner):** D's cross-track residual over 2020-01 (12.08 nm/s^2 against C's
   2.51) is ONE day, 2020-01-22 (read from the baseline's per-day bias sigmas: ~85 nm/s^2 over half a day, ~3.2 without
   it). `tools/dayDiagnosis.m` (release-checks `what: daydiag`, run 41325337776) hour by hour: ACT1B resumes at ~12:03
