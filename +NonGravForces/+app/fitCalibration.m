@@ -104,9 +104,12 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %   lsqvce.fit: the covariance the Calibration carries is the BOOTSTRAP one
 %   when NBoot > 0, and uncertainty.inflation reports bootstrap/formal sigma.
 %   "estimate" hands the noise to lsqvce's joint variance-component estimator
-%   (Estimate "noise", the law of each axis estimated, AR whitener); a struct
-%   is declared as the lsqvce covariance spec of every axis as given (e.g. an
-%   'arma' law from timeSeriesPreparation.noise). The white default is a
+%   (Estimate "noise", the law of each axis estimated, AR whitener); an
+%   lsqvce.Noise law (lsqvce >= 7.0) is declared for every axis as given (e.g.
+%   lsqvce.Noise.arma(ar, sigma) from timeSeriesPreparation.noise's AR fit).
+%   Since 2026-11-03 the fit is declared as a lsqvce.TaskDefinition (one
+%   system, the axis's commons, day-scoped bias locals, one stream "acc");
+%   the v6 covariance struct is refused (inputNoise). The white default is a
 %   decision, not a convenience: the filtered residual is band-limited at
 %   0.035 Hz, so a whitening law estimated from it is ill-conditioned above
 %   the band, while the block bootstrap needs no law at all.
@@ -170,8 +173,8 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %   FixCrossTrack      1x1   logical -      Hold S_yy at its a-priori value; default true
 %   ScaleApriori       3x3   double  -      Values of the entries not estimated; default eye(3)
 %   Quadratic          1x1   logical -      Estimate K2 per axis; default false
-%   Noise              1x1   string  -      "white" (default) | "estimate" | an lsqvce
-%                                           covariance spec struct
+%   Noise              1x1   string  -      "white" (default) | "estimate" | one
+%                                           lsqvce.Noise law (lsqvce >= 7.0)
 %   NBoot              1x1   double  -      Bootstrap replicates, 0 for none; default 200
 %   Seed               1x1   double  -      Bootstrap seed; default 0
 %   VifMax             1x1   double  -      VIF gate for a row with several model columns;
@@ -222,7 +225,10 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %   unfiltered (its help names that approximation).
 %
 % ERRORS
-%   NonGravForces:fitCalibration:depMissing        lsqvce or timeSeriesPreparation is not on the path
+%   NonGravForces:fitCalibration:depMissing        lsqvce >= 7.0 (lsqvce.TaskDefinition) or
+%                                                  timeSeriesPreparation is not on the path
+%   NonGravForces:fitCalibration:inputNoise        'Noise' neither "white", "estimate" nor one
+%                                                  lsqvce.Noise (a v6 covariance struct)
 %   NonGravForces:fitCalibration:inputArc          obs or ref not a three-axis Arc in m/s2; one obs
 %                                                  arc with several refs; several obs arcs with
 %                                                  neither one ref nor one per arc, or not in time
@@ -300,9 +306,14 @@ arguments
     options.Robust (1,1) string {mustBeMember(options.Robust, ["none" "huber" "igg3" "bisquare"])} = "none"
 end
 unit = "fitCalibration";
-if isempty(which('lsqvce.fit')) || isempty(which('timeSeriesPreparation.crnApply'))
-    NonGravForces.fail(unit, "depMissing", "the estimate goes through lsqvce.fit and the filter through timeSeriesPreparation.crnApply -> run lsqvce_setup and setupTimeSeriesPreparation");
+if isempty(which('lsqvce.TaskDefinition')) || isempty(which('timeSeriesPreparation.crnApply'))
+    NonGravForces.fail(unit, "depMissing", "the estimate goes through lsqvce.fit on a lsqvce.TaskDefinition (lsqvce >= 7.0) and the filter through timeSeriesPreparation.crnApply -> run lsqvce_setup (7.0 or later) and setupTimeSeriesPreparation");
 end
+if ~(isa(options.Noise, 'lsqvce.Noise') && isscalar(options.Noise)) && ...
+        ~((isstring(options.Noise) || ischar(options.Noise)) && any(string(options.Noise) == ["white" "estimate"]))
+    NonGravForces.fail(unit, "inputNoise", "'Noise' must be ""white"", ""estimate"" or one lsqvce.Noise law -> got a %s (a v6 covariance struct is now lsqvce.Noise.<law>(...), e.g. lsqvce.Noise.arma([1 -0.5], 1))", class(options.Noise));
+end
+if ~isa(options.Noise, 'lsqvce.Noise'), options.Noise = string(options.Noise); end
 if ~isa(obs, 'timeSeriesPreparation.Arc') || ~isa(ref, 'timeSeriesPreparation.Arc')
     NonGravForces.fail(unit, "inputArc", "obs and ref must be timeSeriesPreparation.Arc objects with three acceleration columns in m/s2 -> got a %s and a %s", class(obs), class(ref));
 end
@@ -926,26 +937,14 @@ for j = 1:nd
     Dj = struct('A', {cell(1, nArc)}, 'B', {cell(1, nArc)}, 'l', {cell(1, nArc)}, 't', {cell(1, nArc)});
     for a = 1:nArc
         r = idx(cut(a) + 1:cut(a + 1));
-        % B spans EVERY local column of the system (lsqvce: m_a x nl), this day's block in place
-        Bj = [sparse(numel(r), (j - 1) * P), sparse(B{k}(r, :) ./ sB), sparse(numel(r), (nd - j) * P)];
-        Dj.A{a} = A{k}(r, :) ./ sA; Dj.B{a} = Bj; Dj.l{a} = L{k}(r) / sl;
+        % this day's local block only: lsqvce places it in the system's B by the locals' names
+        Dj.A{a} = A{k}(r, :) ./ sA; Dj.B{a} = B{k}(r, :) ./ sB; Dj.l{a} = L{k}(r) / sl;
         Dj.t{a} = tS{k}(r);                                % lags matter inside an arc only
     end
     D{j} = Dj;
 end
 p = size(Ac, 2);
-data = struct();
-data.commonParams = [repmat({'common'}, p, 1), num2cell((1:p).')];
-data.days = 1:nd;
-data.systems = struct('buildDay', @(day, obsType) D{day}, 'covariance', struct('acc', localCovSpec(noise)), ...
-    'localParams', {[repmat({'day'}, P, 1), num2cell((1:P).')]});
-if isstruct(noise) || noise ~= "estimate"
-    R = lsqvce.fit(data, lsqvce.Options(Robust = robust, Verbose = false));
-else
-    o = lsqvce.Options(Estimate = "noise", Pool = "stream", ArcFactors = false, Robust = robust, Verbose = false);
-    o.Noise = struct('Whitener', "ar");
-    R = lsqvce.fit(data, o);
-end
+R = lsqvce.fit(localTask(p, P, nd, @(day, ctx) localBuildDay(ctx, D{day}, P), noise), localFitOptions(noise, robust));
 x = R.x(:) * sl ./ sA(:);
 sc = struct('sA', sA, 'sl', sl);
 if nargout < 2, return, end
@@ -977,18 +976,7 @@ for k = 1:nArc
     D.A{k} = Xe(r, :); D.B{k} = zeros(numel(r), 0); D.l{k} = le(r); D.t{k} = tSec(r);
 end
 p = size(X, 2);
-data = struct();
-data.commonParams = [repmat({'common'}, p, 1), num2cell((1:p).')];
-data.days = 1;
-sys = struct('buildDay', @(day, obsType) D, 'covariance', struct('acc', localCovSpec(noise)));
-data.systems = sys;
-if isstruct(noise) || noise ~= "estimate"
-    R = lsqvce.fit(data, lsqvce.Options(Robust = robust, Verbose = false));
-else
-    o = lsqvce.Options(Estimate = "noise", Pool = "stream", ArcFactors = false, Robust = robust, Verbose = false);
-    o.Noise = struct('Whitener', "ar");
-    R = lsqvce.fit(data, o);
-end
+R = lsqvce.fit(localTask(p, 0, 1, @(day, ctx) localBuildDay(ctx, D, 0), noise), localFitOptions(noise, robust));
 % Back to the unscaled parameters. Q is the solve's own cofactor (sol.Cxx = sol.s0sq * Q), read
 % from the accumulator rather than divided out of Cxx, which a noise-free arc leaves 0 or NaN.
 % The cofactor (X'X)^-1 scales with the COLUMNS only; the covariance also carries the observation
@@ -999,14 +987,45 @@ Qxx = R.acc.commonCofactor() ./ (s(:) * s(:).');
 Cxx = R.sol.Cxx .* (sl^2 ./ (s(:) * s(:).'));
 end
 
-function c = localCovSpec(noise)
-%LOCALCOVSPEC The lsqvce covariance spec of the one observation type.
-if isstruct(noise)
-    c = noise;
-elseif noise == "estimate"
-    c = struct('type', 'diag', 'sigma', 1, 'estimate', "law");
+function task = localTask(p, P, nd, build, noise)
+%LOCALTASK The lsqvce 7 task: p commons, P day-scoped locals of one system, one stream "acc" over
+% days 1..nd. It compiles to the v6 declaration this unit built by hand until 2026-11-03, which
+% lsqvce fits bitwise alike (its test_taskDefinition): commons and locals in the same order, the
+% stream's law the same spec, its Estimate set only for the estimated law (v6 set 'estimate' there).
+task = lsqvce.TaskDefinition(Days = 1:nd);
+task.addCommon("c" + (1:p));
+sys = task.addSystem("acc");
+if P > 0, sys.addLocal("b" + (1:P), Scope = "day"); end
+est = string.empty;
+if isa(noise, 'lsqvce.Noise')
+    law = noise;
 else
-    c = struct('type', 'diag', 'sigma', 1);
+    law = lsqvce.Noise.white(1);
+    if noise == "estimate", est = "law"; end
+end
+sys.addStream("acc", Build = build, Noise = law, Estimate = est);
+end
+
+function out = localBuildDay(ctx, D, P)
+%LOCALBUILDDAY One day's arcs; the day's local block by name (lsqvce places the columns).
+out = ctx.newDay();
+names = "b" + (1:P);
+for a = 1:numel(D.A)
+    if P > 0
+        out.addArc(D.A{a}, D.l{a}, D.t{a}, Local = {names, D.B{a}});
+    else
+        out.addArc(D.A{a}, D.l{a}, D.t{a});
+    end
+end
+end
+
+function o = localFitOptions(noise, robust)
+%LOCALFITOPTIONS One GLS solve under the declared law, or lsqvce's joint VCE with an AR whitener.
+if ~isa(noise, 'lsqvce.Noise') && noise == "estimate"
+    o = lsqvce.Options(Estimate = "noise", Pool = "stream", ArcFactors = false, Robust = robust, Verbose = false);
+    o.Noise = struct('Whitener', "ar");
+else
+    o = lsqvce.Options(Robust = robust, Verbose = false);
 end
 end
 
@@ -1016,7 +1035,7 @@ z = z(all(isfinite(z), 2), :);
 l = z(:, 1); X = z(:, 2:end);
 s = sqrt(mean(X.^2, 1)); s(s == 0) = 1;
 sl = sqrt(mean(l.^2)); if sl == 0, sl = 1; end
-R = lsqvce.fit(struct('A', X ./ s, 'l', l / sl), lsqvce.Options(Robust = robust, Verbose = false));
+R = lsqvce.fit(lsqvce.TaskDefinition.fromMatrices(X ./ s, l / sl), lsqvce.Options(Robust = robust, Verbose = false));
 x = (R.x(:) * sl ./ s(:)).';
 end
 
@@ -1060,7 +1079,7 @@ arc = timeSeriesPreparation.Arc(t, X, aux);
 end
 
 function s = localNoiseName(noise)
-if isstruct(noise), s = "declared " + string(noise(1).type); else, s = string(noise); end
+if isa(noise, 'lsqvce.Noise'), s = "declared " + noise.Law; else, s = string(noise); end
 end
 
 function s = localKernelName(K)
@@ -1071,6 +1090,6 @@ function o = localHashable(options)
 %LOCALHASHABLE The options as provenance hashes them: a kernel struct by its preset only.
 o = options;
 if isstruct(o.Kernel), o.Kernel = "struct " + string(o.Kernel.preset); end
-if isstruct(o.Noise), o.Noise = "declared " + string(o.Noise(1).type); end
+if isa(o.Noise, 'lsqvce.Noise'), o.Noise = "declared " + o.Noise.Law; end
 if ~isempty(o.Regressors), o.Regressors = "regressors " + strjoin(unique([o.Regressors.names]), " "); end
 end

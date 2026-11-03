@@ -357,7 +357,7 @@ for i = 1:3
     v = rep.vif(2:end, 1);
     vif(live, i) = v;
     s = sqrt(mean(D.^2, 1)); s(s == 0) = 1; sl = sqrt(mean(r.^2)); if sl == 0, sl = 1; end
-    R = lsqvce.fit(struct('A', D ./ s, 'l', r / sl), lsqvce.Options(Verbose = false));
+    R = lsqvce.fit(lsqvce.TaskDefinition.fromMatrices(D ./ s, r / sl), lsqvce.Options(Verbose = false));
     x = R.x(:) * sl ./ s(:);
     u = sl^2 ./ (s(:) * s(:).');
     C = R.sol.Cxx .* u;

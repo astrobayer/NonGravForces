@@ -253,9 +253,13 @@ classdef tNgfFitCalibration < NgfTestCase
             tc.verifyTrue(all(isfinite(ce.scale), 'all'));
             tc.verifyEqual(ce.uncertainty.noise, "estimate");
             ca = NonGravForces.app.fitCalibration(obs, ref, 'NBoot', 0, ...
-                'Noise', struct('type', 'arma', 'ar', [1 -0.5], 'ma', 1, 'sigma', 1));
+                'Noise', lsqvce.Noise.arma([1 -0.5], 1));
             tc.verifyTrue(all(isfinite(ca.scale), 'all'));
             tc.verifyEqual(ca.uncertainty.noise, "declared arma");
+            % lsqvce 7 (2026-11-03): the v6 covariance struct is refused by name, not passed on
+            tc.verifyErrorId(@() NonGravForces.app.fitCalibration(obs, ref, 'NBoot', 0, ...
+                'Noise', struct('type', 'arma', 'ar', [1 -0.5], 'ma', 1, 'sigma', 1)), ...
+                "NonGravForces:fitCalibration:inputNoise");
         end
     end
 

@@ -235,10 +235,7 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: astrobayer/lsqvce
-          # PINNED to the last v6 release (2026-11-03): lsqvce 7.0.0 replaced lsqvce.fit's v6 data struct with
-          # lsqvce.TaskDefinition, and app.fitCalibration still declares v6 (60 calibration tests errored with
-          # lsqvce:fit:structDeclaration, CI 41691731161). Unpin with the migration to v7 (HANDOVER O-53).
-          ref: v6.35.1
+          ref: main             # lsqvce >= 7.0: app.fitCalibration declares a lsqvce.TaskDefinition (O-53)
           path: lsqvce
           token: ${{ secrets.REFERENCE_READ_TOKEN }}
           persist-credentials: false
