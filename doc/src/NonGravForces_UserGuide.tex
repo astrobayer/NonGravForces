@@ -542,6 +542,15 @@ the observation. The result is the run's struct plus \texttt{calibration} (an
 \texttt{app.Calibration}) and \texttt{attribution}. The matrix interface of 0.12.0
 (\texttt{calibrate(yMeas, aModel, epoch)}) is gone.
 
+\textbf{Pass the thruster firings.} \texttt{app.calibrate} cuts THR1B firings only when they are given
+(\texttt{'Thrusters'}, handed to the run's mask stage); by default it fits through them. On an
+ordinary day that costs little, but not after a safe mode: on GRACE-D's 2020-01-22, the day ACT1B
+resumes, the first hour carries 112 firings with 90.6\,s of on-time and a cross-track residual of
+\SI{294}{\nano\metre\per\second\squared}, and the day's \SI{83}{\nano\metre\per\second\squared} falls
+to \SI{0.75}{} once every firing is cut --- as good as GRACE-C's \SI{0.70}{} that day
+(\texttt{tools/dayDiagnosis.m}). That one day is GRACE-D's whole excess in the January 2020 regression
+baseline, which, as of 0.18.0, is calibrated without THR1B.
+
 \section{What this chain actually prints}
 \noindent Printed by \texttt{tools/userGuideTranscript.m} (release-checks \texttt{what: transcript}, run
 41189157722, 2026-10-31, on the CI runner) with the \texttt{standard} preset as shipped: NRLMSISE-00
