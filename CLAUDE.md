@@ -64,7 +64,7 @@ records — A.2 rule, B.4 — follow with N-02c.)
 | `referenceSystem` ≥ 2.3 (2.3.0; raised from 2.1 by N-02c for `epochTo(..., "gpsNanoseconds")`) | time scales, EOP, ITRS↔GCRS with derivatives, geodesy, quaternions, attitude interpolation, Sun/Moon states |
 | `gracefoReading` ≥ 1.1 (1.3.0; raised from 1.0.1 on 2026-10-26 for `readGroopsInstrument` on real GROOPS output, O-19) | L1B ASCII reading, quality flags, GROOPS instrument export/import. The 1.0.1 PATCH minimum of O-12/O-25 was the one exception to VERSIONING.md's MAJOR.MINOR rule; 1.1 contains that fix and ends the exception |
 | `timeSeriesPreparation` ≥ 1.5 (1.5.0; raised from 1.4 on 2026-10-20 for the ACH1B preset, its X-19) | The L1B CRN kernel (`crnKernel`), and after N-01 the `qc` stage. **Optional for the toolbox, required by `ciGate`**: `sensor.Electrostatic` filters with `crnKernel("ACC")` by DEFAULT (N-04, owner ruling 2026-10-14) and raises `Electrostatic:depMissing` without it. Its version is the `% Version` line of its `Contents.m` |
-| `lsqvce` ≥ 6.35 (6.35.0; raised from 6.22 on 2026-10-19 for `R.contributions` / `solveContributions`) | The one least-squares estimator (CONCEPT Q2). **Optional for the toolbox, required by `ciGate`**: `app.fitCalibration` declares kind A (one system, one day, one arc per contiguous run) per axis its day bootstrap solves the fit's per-day contributions and its single-arc bootstrap refits kind B. Version from `lsqvce.util.toolboxVersion` |
+| `lsqvce` ≥ 6.35 and **< 7** (CI pinned to v6.35.1 since 2026-11-03: 7.0 replaced the v6 data struct with `lsqvce.TaskDefinition`, O-53) (6.35.0; raised from 6.22 on 2026-10-19 for `R.contributions` / `solveContributions`) | The one least-squares estimator (CONCEPT Q2). **Optional for the toolbox, required by `ciGate`**: `app.fitCalibration` declares kind A (one system, one day, one arc per contiguous run) per axis its day bootstrap solves the fit's per-day contributions and its single-arc bootstrap refits kind B. Version from `lsqvce.util.toolboxVersion` |
 | `gjToolbox` (odeSuite) ≥ 0.1 (0.1.0) | Gauss-Jackson integration. **Optional for the toolbox, required by `ciGate`**: `app.DynamicsSource` subclasses `gjToolbox.DynamicsSource` (so it cannot even load without it) and the `buildMex` target `rhs` compiles against `csrc/gj_native.h` (ABI 1). `Model.rhs` is gone — O-4 closed by removal, 2026-09-16 |
 
 ### Key design decisions
@@ -182,6 +182,8 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   committed file stayed at 0.16.0's 444 tests through 0.18.0); the theory document gains the corrected SOLAARS-CF mapping
   and its ACT1B edges (~1 s against conical's ~4 s late entry, standard keeps conical) and the GRACE-D 2020-01-22
   thruster finding; the user guide's Step 8 says to pass 'Thrusters' (the baseline does not, as of 0.18.0).
+  **First CI 41691731161: 451/511** -- lsqvce's `main` went to 7.0.0 (TaskDefinition replaces the v6 data struct), 60
+  calibration tests errored with `lsqvce:fit:structDeclaration`. CI checks lsqvce out at `v6.35.1` now (O-53).
 - **2026-11-01, PR #131 (GRACE-D day by day, owner):** D's cross-track residual over 2020-01 (12.08 nm/s^2 against C's
   2.51) is ONE day, 2020-01-22 (read from the baseline's per-day bias sigmas: ~85 nm/s^2 over half a day, ~3.2 without
   it). `tools/dayDiagnosis.m` (release-checks `what: daydiag`, run 41325337776) hour by hour: ACT1B resumes at ~12:03
