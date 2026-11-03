@@ -4484,7 +4484,7 @@ Span & 1x2 & int64 & ns & [first last] epoch the bias and scale bases must cover
 FixCrossTrack & 1x1 & logical & - & Hold S\_yy at its a-priori value; default true \\
 ScaleApriori & 3x3 & double & - & Values of the entries not estimated; default eye(3) \\
 Quadratic & 1x1 & logical & - & Estimate K2 per axis; default false \\
-Noise & 1x1 & string & - & "white" (default) \textbar{} "estimate" \textbar{} an lsqvce covariance spec struct \\
+Noise & 1x1 & string & - & "white" (default) \textbar{} "estimate" \textbar{} one lsqvce.Noise law (lsqvce \textgreater{}= 7.0) \\
 NBoot & 1x1 & double & - & Bootstrap replicates, 0 for none; default 200 \\
 Seed & 1x1 & double & - & Bootstrap seed; default 0 \\
 VifMax & 1x1 & double & - & VIF gate for a row with several model columns; default 10 \\
@@ -4513,7 +4513,8 @@ info & 1x1 & struct & - & .residual (Arc at obs epochs, NaN where not fitted) .n
 
 \subsubsection*{ERRORS}
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
-\item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}depMissing}] lsqvce or timeSeriesPreparation is not on the path
+\item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}depMissing}] lsqvce \textgreater{}= 7.0 (lsqvce.TaskDefinition) or timeSeriesPreparation is not on the path
+\item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputNoise}] 'Noise' neither "white", "estimate" nor one lsqvce.Noise (a v6 covariance struct)
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputArc}] obs or ref not a three-axis Arc in m/s2; one obs arc with several refs; several obs arcs with neither one ref nor one per arc, or not in time order, or overlapping
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputScale}] a mask that is neither "diag", "full" nor 3x3, or a non-finite 'ScaleApriori'
 \item[\texttt{NonGravForces:\allowbreak{}fitCalibration:\allowbreak{}inputGrid}] 'Kernel' [] and an obs epoch ref does not carry
