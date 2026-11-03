@@ -184,6 +184,8 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   thruster finding; the user guide's Step 8 says to pass 'Thrusters' (the baseline does not, as of 0.18.0).
   **First CI 41691731161: 451/511** -- lsqvce's `main` went to 7.0.0 (TaskDefinition replaces the v6 data struct), 60
   calibration tests errored with `lsqvce:fit:structDeclaration`. CI checks lsqvce out at `v6.35.1` now (O-53).
+  ☑ CI on 8e871af: 511/511, GATE TRUE; `tests/last_run.txt` committed from that job's log (0.16.0's 444-test file
+  replaced), README's count and the generated test catalogue follow.
 - **2026-11-01, PR #131 (GRACE-D day by day, owner):** D's cross-track residual over 2020-01 (12.08 nm/s^2 against C's
   2.51) is ONE day, 2020-01-22 (read from the baseline's per-day bias sigmas: ~85 nm/s^2 over half a day, ~3.2 without
   it). `tools/dayDiagnosis.m` (release-checks `what: daydiag`, run 41325337776) hour by hour: ACT1B resumes at ~12:03

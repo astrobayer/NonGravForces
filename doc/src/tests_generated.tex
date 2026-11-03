@@ -3,7 +3,7 @@
 % DO NOT EDIT: auditPackage.py compares this file by content and refuses a stale one.
 % Regenerate with: python tools/buildDocs.py
 
-\noindent This catalogue is generated from the test classes by \texttt{tools/buildDocs.py}: 509 test methods in 22 classes, 526 recorded bounds, toolbox version 0.18.0. For each method it gives the category its \texttt{TestTags} block assigns, the unit \texttt{auditTestCategories} credits it to (the longest catalogued name the method name begins with), the comment under its function line, and every bound it records through \texttt{verifyBoundAndRecord}: label, bound, units and the reason stated for the bound's size. The measured value beside a bound is the one \texttt{tests/last\_run.txt} holds, from the run: \emph{NonGravForces 0.16.0  run 2026-10-20 12:40 UTC  MATLAB 26.1.0.3312084 (R2026a) Update 4 tests 444  passed 444  failed 0  incomplete 0  duration 455.5 s  GATE TRUE}; a dash means that run did not record the label (a newer test, or a label built at run time). A method whose label is computed at run time is shown as \emph{(computed label)}. The seven categories and the rules behind them are those of the section on testing.
+\noindent This catalogue is generated from the test classes by \texttt{tools/buildDocs.py}: 509 test methods in 22 classes, 526 recorded bounds, toolbox version 0.18.0. For each method it gives the category its \texttt{TestTags} block assigns, the unit \texttt{auditTestCategories} credits it to (the longest catalogued name the method name begins with), the comment under its function line, and every bound it records through \texttt{verifyBoundAndRecord}: label, bound, units and the reason stated for the bound's size. The measured value beside a bound is the one \texttt{tests/last\_run.txt} holds, from the run: \emph{NonGravForces 0.18.0  run 2026-11-03 18:58 UTC  MATLAB 26.1.0.3346908 (R2026a) Update 5 tests 511  passed 511  failed 0  incomplete 0  duration 1048.6 s  GATE TRUE}; a dash means that run did not record the label (a newer test, or a label built at run time). A method whose label is computed at run time is shown as \emph{(computed label)}. The seven categories and the rules behind them are those of the section on testing.
 
 \subsection{\texttt{tNgfApp}}
 \noindent Tests of the application layer (LP-7): app.forceBudget, app.densityInversion.
@@ -22,8 +22,8 @@
 \end{itemize}
 \item[forceBudgetTransientChunks] {\small\emph{precision \textperiodcentered\ \texttt{app.\allowbreak{}forceBudget}}} --- Transient walls carry their temperatures from chunk to chunk. Until 2026-10-31 the next chunk STARTED at the last temperatures, so the interval across every boundary was held instead of integrated; since then a later chunk is evaluated from one epoch early and drops it. Chunked and unchunked then integrate the same intervals from the same states, and differ by the rounding of the overlap epoch evaluated in another batch.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item forceBudget, transient walls, chunks of 7 vs one chunk: measured ---, bound 1e-12 --- \emph{the boundary intervals are integrated as in one call; a held step would show at \textasciitilde{}1e-4 relative in the thermal row}
-\item Model.series, transient walls, chunks of 7 vs 8640: measured ---, bound 1e-12 --- \emph{as above, for series' own chunking}
+\item forceBudget, transient walls, chunks of 7 vs one chunk: measured 0.0000e+00, bound 1e-12 --- \emph{the boundary intervals are integrated as in one call; a held step would show at \textasciitilde{}1e-4 relative in the thermal row}
+\item Model.series, transient walls, chunks of 7 vs 8640: measured 0.0000e+00, bound 1e-12 --- \emph{as above, for series' own chunking}
 \end{itemize}
 \item[forceBudgetVectorization] {\small\emph{vectorization \textperiodcentered\ \texttt{app.\allowbreak{}forceBudget}}} --- Two models in one call must give exactly what two calls give, one each: stacking is bookkeeping and may not touch a number.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
@@ -42,7 +42,7 @@
 \end{itemize}
 \item[forceBudgetSpeed] {\small\emph{speed \textperiodcentered\ \texttt{app.\allowbreak{}forceBudget}}} --- Chunking exists to bound the memory, not to be free. What must be true is that it does not cost a MULTIPLE of the unchunked run: the evaluation dominates and the accumulation is four sums of three numbers per chunk.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item forceBudget, 4 chunks / 1 chunk over 20 epochs: measured 2.3708e+00, bound 4.0 --- \emph{four Model.accel calls instead of one on the same 20 epochs; the per-call overhead is what this measures, and a ratio near 4 would mean the evaluation does not vectorise over epochs at all}
+\item forceBudget, 4 chunks / 1 chunk over 20 epochs: measured 2.9840e+00, bound 4.0 --- \emph{four Model.accel calls instead of one on the same 20 epochs; the per-call overhead is what this measures, and a ratio near 4 would mean the evaluation does not vectorise over epochs at all}
 \end{itemize}
 \item[densityInversionContract] {\small\emph{contract \textperiodcentered\ \texttt{app.\allowbreak{}densityInversion}}}
 \item[densityInversionReference] {\small\emph{reference \textperiodcentered\ \texttt{app.\allowbreak{}densityInversion}}} --- ROUND TRIP IS THE ORACLE. A model's own acceleration, fed back in, must return the model's own density: the inversion undoes exactly what the forward model did, and anything else would mean the two disagree about what the gas force is.
@@ -73,7 +73,7 @@
 \end{itemize}
 \item[densityInversionSpeed] {\small\emph{speed \textperiodcentered\ \texttt{app.\allowbreak{}densityInversion}}} --- The cost is Model.accel and nothing else; the inversion itself is a division per epoch. So chunking must cost what the extra Model.accel calls cost and no more.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item densityInversion, 4 chunks / 1 chunk over 20 epochs: measured 1.6173e+00, bound 4.0 --- \emph{four Model.accel calls instead of one; the divisions are free by comparison}
+\item densityInversion, 4 chunks / 1 chunk over 20 epochs: measured 1.6987e+00, bound 4.0 --- \emph{four Model.accel calls instead of one; the divisions are free by comparison}
 \end{itemize}
 \end{description}
 
@@ -84,25 +84,25 @@
 \item[readIMU1BContract] {\small\emph{contract \textperiodcentered\ \texttt{io.\allowbreak{}readIMU1B}}}
 \item[readIMU1BReference] {\small\emph{reference \textperiodcentered\ \texttt{io.\allowbreak{}readIMU1B}}} --- The raw text, parsed here: record k carries rcvtime\_intg, rcvtime\_frac (microseconds), time\_ref, satellite, gyro\_id and FiltAng (degrees). Epoch = 2000-01-01 12:00 GPS + intg + frac, i.e. GPS day 51544 + floor(...), the angle deg2rad(FiltAng).
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item readIMU1B first epoch vs 2020-01-01 00:00:00.116294 GPS: measured ---, bound 1e-6 s --- \emph{the tag's resolution is 1 us; CI 40978582699 found it off by more than 1e-9 s (value not printed)}
+\item readIMU1B first epoch vs 2020-01-01 00:00:00.116294 GPS: measured 2.6375e-08, bound 1e-6 s --- \emph{the tag's resolution is 1 us; CI 40978582699 found it off by more than 1e-9 s (value not printed)}
 \end{itemize}
 \item[readIMU1BPrecision] {\small\emph{precision \textperiodcentered\ \texttt{io.\allowbreak{}readIMU1B}}} --- The conversion is one multiplication by pi/180: back in degrees the published 15 digits return.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item readIMU1B rad2deg(angle) vs the published FiltAng, record 1: measured ---, bound 4 * eps rel --- \emph{one multiplication there and back}
+\item readIMU1B rad2deg(angle) vs the published FiltAng, record 1: measured 0.0000e+00, bound 4 * eps rel --- \emph{one multiplication there and back}
 \end{itemize}
 \item[readIMU1BVectorization] {\small\emph{vectorization \textperiodcentered\ \texttt{io.\allowbreak{}readIMU1B}}} --- Two days read together are the two days read alone, concatenated, bitwise.
 \item[readIMU1BRobustness] {\small\emph{robustness \textperiodcentered\ \texttt{io.\allowbreak{}readIMU1B}}} --- A record not tagged in GPS time is refused, an empty TimeRange is refused, a TimeRange inside the excerpt returns exactly the records it covers.
 \item[readIMU1BMetamorphic] {\small\emph{metamorphic \textperiodcentered\ \texttt{io.\allowbreak{}readIMU1B}}} --- Each gyro is sampled at 8 Hz, its records strictly increasing in time, and its accumulated angle turns at no more than the orbital rate projected on its axis (\textbar{}rate\textbar{} \textless{}= \textbar{}omega\textbar{} \textasciitilde{} 1.1e-3 rad/s).
 \item[readIMU1BSpeed] {\small\emph{speed \textperiodcentered\ \texttt{io.\allowbreak{}readIMU1B}}} --- The reader adds a column lookup, a conversion and a GPS check to gracefoReading's read: ratio near 1.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item readIMU1B / readL1b time ratio: measured ---, bound 5 --- \emph{a lookup and a conversion over the read}
+\item readIMU1B / readL1b time ratio: measured 1.0042e+00, bound 5 --- \emph{a lookup and a conversion over the read}
 \end{itemize}
 \item[attitudeQualityContract] {\small\emph{contract \textperiodcentered\ \texttt{geom.\allowbreak{}attitudeQuality}}}
 \item[attitudeQualityReference] {\small\emph{reference \textperiodcentered\ \texttt{geom.\allowbreak{}attitudeQuality}}} --- tools/pyxcheck/attitude\_quality\_check.py 2020-01-01 (standard library, raw text, the definitions): omega over the 101st interval and each gyro's residual RMS after the projection.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item attitudeQuality omega(101) vs the stdlib oracle: measured ---, bound 1e-9 --- \emph{the same rotation vector of R\_k' R\_k+1 in two languages; the oracle's convention (R\textasciicircum{}T of the active matrix) is the one the gyros fit}
-\item attitudeQuality gyro residual RMS vs the stdlib oracle (3 gyros): measured ---, bound 1e-5 rel --- \emph{both are exact projections; the epochs differ by referenceSystem's rounding of the GPS seconds}
-\item attitudeQuality gyro RMS rate vs the stdlib oracle (3 gyros): measured ---, bound 1e-6 rel --- \emph{the accumulated angle interpolated to the same SCA1B epochs and differenced}
+\item attitudeQuality omega(101) vs the stdlib oracle: measured 2.7789e-14, bound 1e-9 --- \emph{the same rotation vector of R\_k' R\_k+1 in two languages; the oracle's convention (R\textasciicircum{}T of the active matrix) is the one the gyros fit}
+\item attitudeQuality gyro residual RMS vs the stdlib oracle (3 gyros): measured 3.8585e-10, bound 1e-5 rel --- \emph{both are exact projections; the epochs differ by referenceSystem's rounding of the GPS seconds}
+\item attitudeQuality gyro RMS rate vs the stdlib oracle (3 gyros): measured 2.0261e-11, bound 1e-6 rel --- \emph{the accumulated angle interpolated to the same SCA1B epochs and differenced}
 \end{itemize}
 \item[attitudeQualityPrecision] {\small\emph{precision \textperiodcentered\ \texttt{geom.\allowbreak{}attitudeQuality}}} --- The residual is orthogonal to every column of the design, to rounding: the projection is exact however ill-conditioned the fit (condition numbers in the thousands on a nominal arc).
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
@@ -112,16 +112,16 @@
 \item[attitudeQualityRobustness] {\small\emph{robustness \textperiodcentered\ \texttt{geom.\allowbreak{}attitudeQuality}}} --- A gyro reset (a jump larger than the threshold) splits that gyro's series: no interval spans it, and every other interval keeps its rate.
 \item[attitudeQualityMetamorphic] {\small\emph{metamorphic \textperiodcentered\ \texttt{geom.\allowbreak{}attitudeQuality}}} --- 1. Physics: an Earth-pointing satellite turns about body y at the orbital rate, so the SCA1B rates are \textasciitilde{}(0, 2 pi / P, 0), and against the nominal frame the attitude is off by about a degree.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item attitudeQuality residual invariant to a gyro bias of 1e-5 rad/s: measured ---, bound 1e-6 --- \emph{the bias lies in the span of the design; rounding of a 1e-5 rad/s rate over 1 s}
+\item attitudeQuality residual invariant to a gyro bias of 1e-5 rad/s: measured 1.3539e-08, bound 1e-6 --- \emph{the bias lies in the span of the design; rounding of a 1e-5 rad/s rate over 1 s}
 \end{itemize}
 \item[attitudeQualitySpeed] {\small\emph{speed \textperiodcentered\ \texttt{geom.\allowbreak{}attitudeQuality}}} --- 1800 rotation vectors and three interpolations against the read of the IMU excerpt itself.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item attitudeQuality / readIMU1B time ratio (30 min): measured ---, bound 5 --- \emph{vectorised rotations and interpolations, cheaper than parsing the text}
+\item attitudeQuality / readIMU1B time ratio (30 min): measured 8.8522e-03, bound 5 --- \emph{vectorised rotations and interpolations, cheaper than parsing the text}
 \end{itemize}
 \item[attitudeProviderItsgContract] {\small\emph{contract \textperiodcentered\ \texttt{geom.\allowbreak{}AttitudeProvider}}}
 \item[attitudeProviderItsgReference] {\small\emph{reference \textperiodcentered\ \texttt{geom.\allowbreak{}AttitudeProvider}}} --- Graz's quaternion is SCA1B's in the other convention: conjugated once, the provider returns SCA1B's attitude at the shared 10 s epochs, the rotation to rounding.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item fromItsg vs readSCA1B at the shared epochs, rotation angle: measured ---, bound 1e-7 rad --- \emph{bit-identical quaternions conjugated once on both paths; acos near 1 resolves only sqrt(eps)}
+\item fromItsg vs readSCA1B at the shared epochs, rotation angle: measured 2.1073e-08, bound 1e-7 rad --- \emph{bit-identical quaternions conjugated once on both paths; acos near 1 resolves only sqrt(eps)}
 \end{itemize}
 \end{description}
 
@@ -159,14 +159,14 @@
 \end{itemize}
 \item[calibrateRobustness] {\small\emph{robustness \textperiodcentered\ \texttt{app.\allowbreak{}calibrate}}} --- A jump in the bias, declared: the step column recovers it and leaves the scale alone.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item calibrate recovers a declared jump: measured 0.0000e+00, bound 1e-6 rel --- \emph{noise-free; the step is one more exact column}
-\item calibrate scale beside a jump: measured 1.1102e-16, bound 1e-6 --- \emph{noise-free}
+\item calibrate recovers a declared jump: measured 3.5293e-15, bound 1e-6 rel --- \emph{noise-free; the step is one more exact column}
+\item calibrate scale beside a jump: measured 0.0000e+00, bound 1e-6 --- \emph{noise-free}
 \item calibrate jump epochs vs UTC-\textgreater{}GPS arithmetic: measured 0.0000e+00, bound 2 * eps(max(sec)) * 1e9 + 1 ns --- \emph{oracle in double seconds: eps of \textasciitilde{}6.3e8 s, plus the 1 ns rounding}
 \end{itemize}
 \item[calibrateMetamorphic] {\small\emph{metamorphic \textperiodcentered\ \texttt{app.\allowbreak{}calibrate}}} --- Two entry points, one code path: the Model reference handed back in as an Arc gives the same calibration bitwise; only the attribution, which needs the effects, differs.
 \item[calibrateSpeed] {\small\emph{speed \textperiodcentered\ \texttt{app.\allowbreak{}calibrate}}} --- calibrate's OWN cost: its parts are run (whose change-point QC is quadratic in the worst case) and fitCalibration, each with its own speed claim; what calibrate adds -- the jump conversion, the merge of options, the attribution -- must stay small beside them. A ratio of three timings on the same host (rule T5).
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item calibrate / (run + fitCalibration): measured 1.1148e+00, bound 1.5 --- \emph{calibrate adds conversions and a merge; an Arc reference has no attribution to fit}
+\item calibrate / (run + fitCalibration): measured 1.1373e+00, bound 1.5 --- \emph{calibrate adds conversions and a merge; an Arc reference has no attribution to fit}
 \end{itemize}
 \end{description}
 
@@ -234,11 +234,11 @@
 \end{itemize}
 \item[syntheticPairSpeed] {\small\emph{speed \textperiodcentered\ \texttt{app.\allowbreak{}syntheticPair}}} --- synthesis and CRN outputs both grow with the arc: twice the arc, about twice the cost.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item syntheticPair, 2x arc / 1x arc: measured 2.1990e+00, bound 4 --- \emph{n log n would be about 2.1; quadratic 4}
+\item syntheticPair, 2x arc / 1x arc: measured 1.9673e+00, bound 4 --- \emph{n log n would be about 2.1; quadratic 4}
 \end{itemize}
 \item[calibrationSpeed] {\small\emph{speed \textperiodcentered\ \texttt{app.\allowbreak{}Calibration}}}
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item Calibration.apply, 20000 / 5000 epochs: measured 2.6228e+00, bound 8 --- \emph{linear would be 4; the basis is evaluated column by column}
+\item Calibration.apply, 20000 / 5000 epochs: measured 2.2056e+00, bound 8 --- \emph{linear would be 4; the basis is evaluated column by column}
 \end{itemize}
 \end{description}
 
@@ -258,7 +258,7 @@
 \item[compareCalibrationsMetamorphic] {\small\emph{metamorphic \textperiodcentered\ \texttt{app.\allowbreak{}compareCalibrations}}} --- Reordering the candidates permutes the rows, bitwise, and leaves the winners alone; a 'Fit' pair a spec repeats is overridden by the spec.
 \item[compareCalibrationsSpeed] {\small\emph{speed \textperiodcentered\ \texttt{app.\allowbreak{}compareCalibrations}}} --- Each candidate costs Folds + 1 fits: two candidates, about twice one.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item compareCalibrations, 2 candidates / 1: measured 1.9484e+00, bound 4 --- \emph{linear in candidates would be 2; the shared buffer computation pulls it lower}
+\item compareCalibrations, 2 candidates / 1: measured 1.9742e+00, bound 4 --- \emph{linear in candidates would be 2; the shared buffer computation pulls it lower}
 \end{itemize}
 \end{description}
 
@@ -321,9 +321,9 @@
 \end{itemize}
 \item[densityDtm2020Reference] {\small\emph{reference \textperiodcentered\ \texttt{env.\allowbreak{}density}}} --- CNES's benchmark, every printed number: tz and tinf to 3 decimals, ro to 5 significant digits.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item dtm2020 vs CNES benchmark: tz (4 cases): measured ---, bound 1e-3 K --- \emph{printed to 3 decimals (half a unit 5e-4); first run 2026-10-27}
-\item dtm2020 vs CNES benchmark: tinf (4 cases): measured ---, bound 1e-3 K --- \emph{printed to 3 decimals (half a unit 5e-4); first run 2026-10-27}
-\item dtm2020 vs CNES benchmark: ro, relative (4 cases): measured ---, bound 1e-4 --- \emph{printed to 5 significant digits (half a unit \textless{}= 1.9e-5 relative); first run 2026-10-27}
+\item dtm2020 vs CNES benchmark: tz (4 cases): measured 3.7876e-04, bound 1e-3 K --- \emph{printed to 3 decimals (half a unit 5e-4); first run 2026-10-27}
+\item dtm2020 vs CNES benchmark: tinf (4 cases): measured 4.7384e-04, bound 1e-3 K --- \emph{printed to 3 decimals (half a unit 5e-4); first run 2026-10-27}
+\item dtm2020 vs CNES benchmark: ro, relative (4 cases): measured 1.4794e-05, bound 1e-4 --- \emph{printed to 5 significant digits (half a unit \textless{}= 1.9e-5 relative); first run 2026-10-27}
 \end{itemize}
 \item[densityReference] {\small\emph{reference \textperiodcentered\ \texttt{env.\allowbreak{}density}}} --- The 17 published cases of DOCUMENTATION \S{}7 (printed with \%E, 7 significant digits) must be reproduced digit for digit in every column: HE O N2 O2 AR RHO H N ANOM TINF TG.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
@@ -369,7 +369,7 @@
 \end{itemize}
 \item[densityDtm2020Precision] {\small\emph{precision \textperiodcentered\ \texttt{env.\allowbreak{}density}}} --- forms ro as the plain sum of its six partial densities; env.density converts each with the toolbox's molar masses, so n\_j m\_j summed must return rho to a few ulps.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item dtm2020: sum of n\_j m\_j over rho - 1: measured ---, bound 8 * eps --- \emph{six conversions and a sum against the model's own sum: rounding only}
+\item dtm2020: sum of n\_j m\_j over rho - 1: measured 3.3307e-16, bound 8 * eps --- \emph{six conversions and a sum against the model's own sum: rounding only}
 \end{itemize}
 \item[densitySpeciesSumPrecision] {\small\emph{precision \textperiodcentered\ \texttt{env.\allowbreak{}density}}} --- kernel.dragPanelForce re-forms the mass density from the species and const.speciesMass, while NRLMSISE-00 forms its own total from ITS molecular masses. Its ACCURACY block quotes the difference, so the difference has to be measured here rather than asserted.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
@@ -454,8 +454,8 @@
 \end{itemize}
 \item[densityDtm2020Metamorphic] {\small\emph{metamorphic \textperiodcentered\ \texttt{env.\allowbreak{}density}}} --- More solar flux, more density; higher, less. And beside NRLMSISE-00 on the reference day at GRACE-FO's altitude -- the number O-19 asks about: CNES fitted DTM2020 to the TU Delft CHAMP, GOCE and Swarm densities derived with high-fidelity satellite models.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item dtm2020 / msis00 at 490 km, 2020-01-01: \textbar{}log\textbar{} of the median ratio: measured ---, bound log(3) --- \emph{first run 2026-10-27: recorded; the solar-minimum density level O-19 asks about}
-\item dtm2020 / msis21 at 490 km, 2020-01-01: \textbar{}log\textbar{} of the median ratio: measured ---, bound log(3) --- \emph{first run 2026-10-27: recorded}
+\item dtm2020 / msis00 at 490 km, 2020-01-01: \textbar{}log\textbar{} of the median ratio: measured 7.3723e-01, bound log(3) --- \emph{first run 2026-10-27: recorded; the solar-minimum density level O-19 asks about}
+\item dtm2020 / msis21 at 490 km, 2020-01-01: \textbar{}log\textbar{} of the median ratio: measured 6.5067e-01, bound log(3) --- \emph{first run 2026-10-27: recorded}
 \end{itemize}
 \item[densityMetamorphic] {\small\emph{metamorphic \textperiodcentered\ \texttt{env.\allowbreak{}density}}} --- gtd7d - gtd7: the mass density gains exactly 16 * 1.66e-24 g times the anomalous-oxygen number density (the reference's own arithmetic, nrlmsise-00.c gtd7d), in SI 16 * 1.66e-24 * 1e-3 * 1e6 kg per m\textasciicircum{}-3.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
@@ -477,7 +477,7 @@
 \item SOLAARS-CF derivative jump (C1 proxy, 100 m steps): measured 4.8176e-03, bound 1e-2 --- \emph{smooth tanh sum: second difference small against the slope}
 \item SOLAARS-CF oblateness scaling relation: measured 4.3854e-14, bound 1e-9 --- \emph{rE/sO*sO rounding through steep sigmoids (slope \textasciitilde{}1e-4 per m)}
 \item SOLAARS-CF vs conical half-shadow radius shift: measured 2.2500e+04, bound 5e4 m --- \emph{refraction and oblateness; measured see last\_run}
-\item SOLAARS-CF limb height above b (normal) vs above a (ecliptic): measured ---, bound 500 m --- \emph{same atmosphere both ways; 100 m grid plus the height scaled by b/a (\textasciitilde{}0.1 km); the inverted mapping gave 42.5 km}
+\item SOLAARS-CF limb height above b (normal) vs above a (ecliptic): measured 1.5314e+01, bound 500 m --- \emph{same atmosphere both ways; 100 m grid plus the height scaled by b/a (\textasciitilde{}0.1 km); the inverted mapping gave 42.5 km}
 \end{itemize}
 \item[earthRadianceClimatologyMetamorphic] {\small\emph{metamorphic \textperiodcentered\ \texttt{env.\allowbreak{}earthRadiance}}} --- CONSTANT IN TIME is the property that separates this backend from ceres, and it is asserted as an identity rather than described in a comment: two epochs inside one month must give bitwise equal tiles, and the step must land exactly at the node.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
@@ -502,59 +502,59 @@
 \end{itemize}
 \item[windSpeed] {\small\emph{speed \textperiodcentered\ \texttt{env.\allowbreak{}wind}}} --- Its whole cost is the frame rotation it delegates, plus two page products.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item wind vs the rotationItrsToGcrs it calls: measured 1.8321e+00, bound 4.5 --- \emph{budget 3x the expected 1.4: one rotation call plus two page products; 5 repeats, median}
+\item wind vs the rotationItrsToGcrs it calls: measured 2.1482e+00, bound 4.5 --- \emph{budget 3x the expected 1.4: one rotation call plus two page products; 5 repeats, median}
 \end{itemize}
 \item[windHwm14Speed] {\small\emph{speed \textperiodcentered\ \texttt{env.\allowbreak{}wind}}} --- over the co-rotation for the 600-epoch arc: the geodetic conversion and 600 model calls on top of the same rotation. Measured see last\_run; budget 3x the 2026-09-15 figure.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item wind hwm14 / corotation time ratio, 600 epochs: measured 1.6927e+00, bound 6 --- \emph{measured 1.76 on 2026-09-15; budget 3x}
+\item wind hwm14 / corotation time ratio, 600 epochs: measured 1.4569e+00, bound 6 --- \emph{measured 1.76 on 2026-09-15; budget 3x}
 \end{itemize}
 \item[densitySpeed] {\small\emph{speed \textperiodcentered\ \texttt{env.\allowbreak{}density}}} --- Linear scaling of the MEX loop: 86400 epochs cost at most 2x ten times 8640 epochs (per-call overhead amortised).
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item msis00 86400 / 8640 epochs time ratio: measured 9.7177e-01, bound 2 --- \emph{linear scaling; measured see last\_run}
-\item msis21 / msis00 time ratio, 8640 epochs: measured 5.1557e+00, bound 15 --- \emph{measured 4.8 on 2026-09-15; budget 3x}
+\item msis00 86400 / 8640 epochs time ratio: measured 9.6786e-01, bound 2 --- \emph{linear scaling; measured see last\_run}
+\item msis21 / msis00 time ratio, 8640 epochs: measured 4.8943e+00, bound 15 --- \emph{measured 4.8 on 2026-09-15; budget 3x}
 \end{itemize}
 \item[magneticFieldSpeed] {\small\emph{speed \textperiodcentered\ \texttt{env.\allowbreak{}magneticField}}} --- Degree 13 over degree 1 for 86400 positions: 104 terms against 3 plus the shared Legendre setup. Measured see last\_run; budget 3x the 2026-09-15 figure.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item magneticField degree 13 / degree 1 time ratio, 86400 positions: measured 5.3419e+01, bound 150 --- \emph{measured 50.8 on 2026-09-15; budget 3x}
+\item magneticField degree 13 / degree 1 time ratio, 86400 positions: measured 5.5072e+01, bound 150 --- \emph{measured 50.8 on 2026-09-15; budget 3x}
 \end{itemize}
 \item[eclipseFactorSpeed] {\small\emph{speed \textperiodcentered\ \texttt{env.\allowbreak{}eclipseFactor}}} --- Conical over cylindrical for 86400 epochs: two asin, an acos and the lens area; measured see last\_run. Bound 8.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item eclipse conical / cylindrical time ratio: measured 1.0402e+00, bound 8
+\item eclipse conical / cylindrical time ratio: measured 1.0747e+00, bound 8
 \end{itemize}
 \item[earthRadianceClimatologySpeed] {\small\emph{speed \textperiodcentered\ \texttt{env.\allowbreak{}earthRadiance}}} --- Against knocke on the same cap and epochs: the rotation, a latitude SEARCH per tile and 8 gathers. The search is what makes this dearer than ceres's arithmetic indexing.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item earthRadiance ceresClimatology / knocke time ratio [12 24], 600 epochs: measured 3.2569e+00, bound 30 --- \emph{see last\_run; budget set above the measured figure, ratio not absolute}
+\item earthRadiance ceresClimatology / knocke time ratio [12 24], 600 epochs: measured 3.2838e+00, bound 30 --- \emph{see last\_run; budget set above the measured figure, ratio not absolute}
 \end{itemize}
 \item[earthRadianceCeresSpeed] {\small\emph{speed \textperiodcentered\ \texttt{env.\allowbreak{}earthRadiance}}} --- The CERES tiles over Knocke's on the same grid and 600 epochs: the rotation, the geodetic latitude and 8 x 3 gathers per tile. Measured see last\_run; budget 3x the 2026-09-15 figure.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item earthRadiance ceres / knocke time ratio [12 24], 600 epochs: measured 4.7378e+00, bound 15 --- \emph{measured 5.0 on 2026-09-15; budget 3x}
+\item earthRadiance ceres / knocke time ratio [12 24], 600 epochs: measured 4.9874e+00, bound 15 --- \emph{measured 5.0 on 2026-09-15; budget 3x}
 \end{itemize}
 \item[earthRadianceSpeed] {\small\emph{speed \textperiodcentered\ \texttt{env.\allowbreak{}earthRadiance}}} --- Tile count scales the cost: [24 48] over [12 24] for 600 epochs, four times the tiles, bound 8.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item earthRadiance [24 48] / [12 24] time ratio: measured 1.9421e+00, bound 8 --- \emph{4x the tiles}
+\item earthRadiance [24 48] / [12 24] time ratio: measured 2.4495e+00, bound 8 --- \emph{4x the tiles}
 \end{itemize}
 \item[radiationSourcesSpeed] {\small\emph{speed \textperiodcentered\ \texttt{env.\allowbreak{}radiationSources}}} --- The full source list over the bare tiling for the 600-epoch sample: pressures, visibility, rotation. Bound 6.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item radiationSources / earthRadiance time ratio (600 epochs): measured 3.5045e+00, bound 6
+\item radiationSources / earthRadiance time ratio (600 epochs): measured 3.6628e+00, bound 6
 \end{itemize}
 \item[densityScaleContract] {\small\emph{contract \textperiodcentered\ \texttt{env.\allowbreak{}densityScale}}}
 \item[densityScaleReference] {\small\emph{reference \textperiodcentered\ \texttt{env.\allowbreak{}densityScale}}} --- Oracle: an INDEPENDENT density model. CNES's DTM2020 (fitted to accelerometer densities, among them Swarm A's) against NRLMSISE-00 at Swarm A's own positions must show the same ratio ESA's POD densities show, to the 10-30 \% both are uncertain by; the month gave 0.53 (DTM2020) against 0.49 (Swarm).
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item Swarm A / msis00 vs DTM2020 / msis00 on 2020-01-01, \textbar{}log\textbar{}: measured ---, bound log(1.3) --- \emph{two independent sources of the same ratio}
+\item Swarm A / msis00 vs DTM2020 / msis00 on 2020-01-01, \textbar{}log\textbar{}: measured 2.0377e-02, bound log(1.3) --- \emph{two independent sources of the same ratio}
 \end{itemize}
 \item[densityScalePrecision] {\small\emph{precision \textperiodcentered\ \texttt{env.\allowbreak{}densityScale}}} --- At the bracket's own heights the interpolation returns the bracket's factors: an identity up to exp(log(x)) rounding, a few ulp.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item densityScale.at at the bracket heights / bracket factors - 1: measured ---, bound 8 * eps --- \emph{exp(log(x)) round trip}
+\item densityScale.at at the bracket heights / bracket factors - 1: measured 2.2204e-16, bound 8 * eps --- \emph{exp(log(x)) round trip}
 \end{itemize}
 \item[densityScaleVectorization] {\small\emph{vectorization \textperiodcentered\ \texttt{env.\allowbreak{}densityScale}}} --- S.at is element-wise: 300 epochs over three days at once equal 300 single calls, bitwise.
 \item[densityScaleRobustness] {\small\emph{robustness \textperiodcentered\ \texttt{env.\allowbreak{}densityScale}}} --- A day with too few records is refused, not filled; one lower satellite suffices, and is then the bracket.
 \item[densityScaleMetamorphic] {\small\emph{metamorphic \textperiodcentered\ \texttt{env.\allowbreak{}densityScale}}} --- log f is linear in height: the midpoint of the bracket gets the geometric mean of its ends; the order of the files changes nothing; a denser stride moves the daily factor by less than the product's own noise.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item densityScale Stride 2 vs 10, max \textbar{}log ratio\textbar{}: measured ---, bound 0.05 --- \emph{5-min sampling of a \textasciitilde{}20-min product}
+\item densityScale Stride 2 vs 10, max \textbar{}log ratio\textbar{}: measured 2.4391e-03, bound 0.05 --- \emph{5-min sampling of a \textasciitilde{}20-min product}
 \end{itemize}
 \item[densityScaleSpeed] {\small\emph{speed \textperiodcentered\ \texttt{env.\allowbreak{}densityScale}}} --- Three satellites x three days: three reads and 2592 msis00 points. Against the same number of msis00 points alone; the reads and the bookkeeping are what the ratio measures. Bound 20, first run.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item densityScale / msis00 on as many points, time ratio: measured ---, bound 20 --- \emph{first run}
+\item densityScale / msis00 on as many points, time ratio: measured 7.3899e+00, bound 20 --- \emph{first run}
 \end{itemize}
 \item[densityScaleFallbackContract] {\small\emph{contract \textperiodcentered\ \texttt{env.\allowbreak{}densityScale}}}
 \item[densityScaleFallbackReference] {\small\emph{reference \textperiodcentered\ \texttt{env.\allowbreak{}densityScale}}} --- Oracle: the two scales it combines. On Swarm's days it IS the plain Swarm scale, on every other day it IS the driver scale, bitwise -- epochs of both kinds interleaved in one call.
@@ -563,19 +563,19 @@
 \item[densityDriverScaleContract] {\small\emph{contract \textperiodcentered\ \texttt{env.\allowbreak{}densityDriverScale}}}
 \item[densityDriverScaleReference] {\small\emph{reference \textperiodcentered\ \texttt{env.\allowbreak{}densityDriverScale}}} --- Oracle: tools/densityDriverFit.m's own drivers and prediction for 2020-01-01 on the runner's full pool (run 40676249479, F30 coefficient record). Independent code -- the tool builds Fbar with a trailing movmean over the file's rows, the unit with a calendar window -- over the same bytes.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item densityDriverScale drivers vs densityDriverFit's on 2020-01-01, max rel: measured ---, bound 1e-12 --- \emph{an 81-term mean summed in another order}
-\item densityDriverScale log f vs densityDriverFit's on 2020-01-01: measured ---, bound 1e-12 --- \emph{transcribed to 17 digits}
+\item densityDriverScale drivers vs densityDriverFit's on 2020-01-01, max rel: measured 0.0000e+00, bound 1e-12 --- \emph{an 81-term mean summed in another order}
+\item densityDriverScale log f vs densityDriverFit's on 2020-01-01: measured 0.0000e+00, bound 1e-12 --- \emph{transcribed to 17 digits}
 \end{itemize}
 \item[densityDriverScalePrecision] {\small\emph{precision \textperiodcentered\ \texttt{env.\allowbreak{}densityDriverScale}}} --- 'Offset' adds to log f and nothing else: an identity up to exp/log rounding of a number near 0.3.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item densityDriverScale Offset -0.041: log ratio + 0.041: measured ---, bound 1e-14 --- \emph{exp then log of numbers below 2}
+\item densityDriverScale Offset -0.041: log ratio + 0.041: measured 7.6328e-17, bound 1e-14 --- \emph{exp then log of numbers below 2}
 \end{itemize}
 \item[densityDriverScaleVectorization] {\small\emph{vectorization \textperiodcentered\ \texttt{env.\allowbreak{}densityDriverScale}}} --- S.at over 300 epochs on three days at once equals 300 single calls, bitwise.
 \item[densityDriverScaleRobustness] {\small\emph{robustness \textperiodcentered\ \texttt{env.\allowbreak{}densityDriverScale}}} --- A missing F30 day inside the 81-day window or a missing Ap is refused, not averaged over; an epoch in GPS time is put on its UTC day.
 \item[densityDriverScaleMetamorphic] {\small\emph{metamorphic \textperiodcentered\ \texttt{env.\allowbreak{}densityDriverScale}}} --- The factor is the same at every height of a day, and raising the day's Ap by 10 multiplies it by exp(10 c\_ap) exactly; the day before's Ap does not enter.
 \item[densityDriverScaleSpeed] {\small\emph{speed \textperiodcentered\ \texttt{env.\allowbreak{}densityDriverScale}}} --- A day of 10 s epochs: one driver evaluation per UTC day, then one exp per epoch. Against msis00 on as many points, which the factor multiplies anyway. Bound 1, first run.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item densityDriverScale.at / msis00 on 8640 points, time ratio: measured ---, bound 1 --- \emph{first run}
+\item densityDriverScale.at / msis00 on 8640 points, time ratio: measured 4.0498e-02, bound 1 --- \emph{first run}
 \end{itemize}
 \end{description}
 
@@ -591,11 +591,11 @@
 \item[plotAttributionRobustness] {\small\emph{robustness \textperiodcentered\ \texttt{app.\allowbreak{}plotAttribution}}} --- A gated revolution is drawn as a gap (NaN), never as a point; an unresolved parameter (no regression) still gets its time panel and banner.
 \item[plotCalibrationSpeed] {\small\emph{speed \textperiodcentered\ \texttt{app.\allowbreak{}plotCalibration}}} --- Curves of twice the epochs: about twice the drawing, the fixed figure cost pulling it lower.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item plotCalibration, 2x epochs / 1x: measured 1.4879e+00, bound 4 --- \emph{linear would be 2}
+\item plotCalibration, 2x epochs / 1x: measured 1.3690e+00, bound 4 --- \emph{linear would be 2}
 \end{itemize}
 \item[plotAttributionSpeed] {\small\emph{speed \textperiodcentered\ \texttt{app.\allowbreak{}plotAttribution}}} --- One driver panel against three: the panels dominate, so about three times, never quadratic.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item plotAttribution, 3 driver panels / 1: measured 1.0430e+00, bound 6 --- \emph{panels are drawn once each: about 3 at most}
+\item plotAttribution, 3 driver panels / 1: measured 1.1982e+00, bound 6 --- \emph{panels are drawn once each: about 3 at most}
 \end{itemize}
 \end{description}
 
@@ -631,11 +631,11 @@
 \end{itemize}
 \item[fitCalibrationDayBootstrapSpeed] {\small\emph{speed \textperiodcentered\ \texttt{app.\allowbreak{}fitCalibration}}} --- With the per-day contributions the data pass is paid once and a replicate is a small solve, so 50 replicates must add little to a 10-day joint fit. The replicate-by-refit it replaced cost about one full fit per replicate (measured 2026-10-17: 870 s of bootstrap beside 350 s of fit on 10 real days at 100 replicates). Budget: 50 replicates within twice the fit without them.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item fitCalibration, 10 days: 50 day-bootstrap replicates / no bootstrap: measured 1.0212e+00, bound 2 --- \emph{a replicate is lsqvce.solveContributions, O(N p\textasciicircum{}2); a refit per replicate would read \textasciitilde{}50}
+\item fitCalibration, 10 days: 50 day-bootstrap replicates / no bootstrap: measured 1.0337e+00, bound 2 --- \emph{a replicate is lsqvce.solveContributions, O(N p\textasciicircum{}2); a refit per replicate would read \textasciitilde{}50}
 \end{itemize}
 \item[fitCalibrationSpeed] {\small\emph{speed \textperiodcentered\ \texttt{app.\allowbreak{}fitCalibration}}} --- Filter, gate and three solves all grow with the arc: twice the arc, about twice the cost.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item fitCalibration, 2x arc / 1x arc: measured 2.0345e+00, bound 4 --- \emph{linear would be 2 and a fixed overhead pulls it lower; quadratic 4}
+\item fitCalibration, 2x arc / 1x arc: measured 1.8468e+00, bound 4 --- \emph{linear would be 2 and a fixed overhead pulls it lower; quadratic 4}
 \end{itemize}
 \item[fitCalibrationMultiArcContract] {\small\emph{contract \textperiodcentered\ \texttt{app.\allowbreak{}fitCalibration}}}
 \item[fitCalibrationMultiArcReference] {\small\emph{reference \textperiodcentered\ \texttt{app.\allowbreak{}fitCalibration}}} --- Noise-free, three days, ONE planted scale and three different biases: the joint fit returns them all. The scale bound is the single-arc one over all rows (the common cofactor info.Qxx times the row rounding); a bias is a constant per day, recovered to the same rounding relative to the signal it sits beside.
@@ -649,17 +649,17 @@
 \end{itemize}
 \item[fitCalibrationMultiArcPrecision] {\small\emph{precision \textperiodcentered\ \texttt{app.\allowbreak{}fitCalibration}}} --- The algebra of pre-elimination: lsqvce's joint solve with each day's bias as a local block equals the DENSE joint least squares -- a block-diagonal bias design beside the common scale column, solved here by QR -- at the rounding of that solve, cond * eps.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item fitCalibration multi-arc scale vs dense joint LS (relative): measured 3.7074e-08, bound 1 --- \emph{two solvers of one problem; bound 100 eps cond(X)}
-\item fitCalibration multi-arc biases vs dense joint LS (relative to max bias): measured 7.3098e-08, bound 1 --- \emph{same solve, the local block}
+\item fitCalibration multi-arc scale vs dense joint LS (relative): measured 3.8149e-08, bound 1 --- \emph{two solvers of one problem; bound 100 eps cond(X)}
+\item fitCalibration multi-arc biases vs dense joint LS (relative to max bias): measured 7.2281e-08, bound 1 --- \emph{same solve, the local block}
 \end{itemize}
 \item[fitCalibrationVectorization] {\small\emph{vectorization \textperiodcentered\ \texttt{app.\allowbreak{}fitCalibration}}} --- 'ScaleMode' "perArc" is N single-arc fits, bitwise, arc k with seed Seed + k - 1.
 \item[fitCalibrationMultiArcRobustness] {\small\emph{robustness \textperiodcentered\ \texttt{app.\allowbreak{}fitCalibration}}} --- Spikes and a gap inside every day (several sub-arcs per day), the held S\_yy axis that has no common column (it decouples into per-day fits), and the bootstrap over days: all finite.
 \item[fitCalibrationMultiArcMetamorphic] {\small\emph{metamorphic \textperiodcentered\ \texttt{app.\allowbreak{}fitCalibration}}} --- Doubling every day's observation doubles the common scale and every bias of the free axes, bitwise (the equilibration takes a power of two out exactly); and the day's own reference is what matters -- passing one reference arc per day equals passing them as an array.
 \item[fitCalibrationScaleTemperatureReference] {\small\emph{reference \textperiodcentered\ \texttt{app.\allowbreak{}fitCalibration}}} --- N-11b. Noise-free with a planted dS/dT on x and z: the coefficients return to the solve's rounding, at the planted reference (the mean over the raw grid on both sides). Over three days whose temperatures differ only by a daily OFFSET (5 mK of in-day swing), the common S1 returns too -- which a per-day reference could not give -- and the scale is S at the common T0. And apply undoes the coupling to the bound of exchanging the filter with S(T(t)) over its window.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item fitCalibration dS/dT, one noise-free arc, relative: measured 2.8439e-13, bound 1e-9 --- \emph{rounding of the solve; measured 2.8e-13 on 2026-10-20}
+\item fitCalibration dS/dT, one noise-free arc, relative: measured 3.5421e-13, bound 1e-9 --- \emph{rounding of the solve; measured 2.8e-13 on 2026-10-20}
 \item Calibration apply of a fitted temperature-dependent scale vs H(model), relative: measured 2.2117e-04, bound bound --- \emph{the filter and S(T(t)) exchanged over one window: 2 \textbar{}S1\textbar{} max dT(window); measured 2.2e-4 at 0.5 C per orbit}
-\item fitCalibration dS/dT, three days, common, relative: measured 2.1254e-11, bound 1e-8 --- \emph{noise-free; the daily offsets alone carry S1; measured 2.4e-11 on 2026-10-20}
+\item fitCalibration dS/dT, three days, common, relative: measured 2.3492e-11, bound 1e-8 --- \emph{noise-free; the daily offsets alone carry S1; measured 2.4e-11 on 2026-10-20}
 \end{itemize}
 \item[fitCalibrationRegressorReference] {\small\emph{reference \textperiodcentered\ \texttt{app.\allowbreak{}fitCalibration}}} --- Noise-free with a planted coupling to two measured series: every parameter, the coefficients included, returns to the computed rounding bound; over two days in common mode the coefficients are one set and return too.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
@@ -856,27 +856,27 @@
 \end{itemize}
 \item[flowShadowTableSpeed] {\small\emph{speed \textperiodcentered\ \texttt{geom.\allowbreak{}flowShadow}}} --- The table read against the computation it replaces, 200 epochs, after the session's table is built. Measured 2026-10-17: 2-4 us against 450 us per epoch. Budget 5x the measured 0.01.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item flowShadow table / Method lut time ratio (200 epochs): measured 1.8350e-02, bound 0.05 --- \emph{measured \textasciitilde{}0.01 on 2026-10-17; budget 5x}
+\item flowShadow table / Method lut time ratio (200 epochs): measured 1.6350e-02, bound 0.05 --- \emph{measured \textasciitilde{}0.01 on 2026-10-17; budget 5x}
 \end{itemize}
 \item[flowShadowSpeed] {\small\emph{speed \textperiodcentered\ \texttt{geom.\allowbreak{}flowShadow}}} --- flowShadow for 32 epochs against the radiation look-up the same Model epoch needs (577 source directions x 32): the gas quadrature must stay within an order of magnitude of the radiation occlusion it sits beside. Measured 2026-09-15: see last\_run; budget 3x the measured ratio.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item flowShadow (32 epochs) / radiation occlusion look-up (577 x 32): measured 4.5298e+00, bound 16 --- \emph{measured 5.3 on 2026-09-15; budget 3x}
+\item flowShadow (32 epochs) / radiation occlusion look-up (577 x 32): measured 4.8731e+00, bound 16 --- \emph{measured 5.3 on 2026-09-15; budget 3x}
 \end{itemize}
 \item[checkAttitudeSenseSpeed] {\small\emph{speed \textperiodcentered\ \texttt{geom.\allowbreak{}checkAttitudeSense}}} --- Its whole cost is two rotations of the same quaternion series plus two atan2 angles, so it must stay within a small multiple of one rotationFromQuaternion over the same K.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item checkAttitudeSense vs one rotationFromQuaternion over 600 epochs: measured 7.5305e+00, bound 12 --- \emph{budget 3x the expected 4: two rotations, one quaternion conjugation and two atan2 angles; 5 repeats, median}
+\item checkAttitudeSense vs one rotationFromQuaternion over 600 epochs: measured 7.7262e+00, bound 12 --- \emph{budget 3x the expected 4: two rotations, one quaternion conjugation and two atan2 angles; 5 repeats, median}
 \end{itemize}
 \item[selfShadowSpeed] {\small\emph{speed \textperiodcentered\ \texttt{geom.\allowbreak{}selfShadow}}} --- A table query against the ray cast of the same directions. The cube map is O(1) per direction (two arctangents and four reads); measured 2026-09-15: 3.6 us per direction against 1.5 ms per direction for the 40-sample cast, ratio 2.4e-3. Budget 3x: 1e-2. (The icosphere it replaced scanned every face per direction.)
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item selfShadow cube-map query / ray cast time ratio (600 directions): measured 1.2203e-03, bound 1e-2 --- \emph{O(1) look-up; measured 2.4e-3}
+\item selfShadow cube-map query / ray cast time ratio (600 directions): measured 9.8321e-04, bound 1e-2 --- \emph{O(1) look-up; measured 2.4e-3}
 \end{itemize}
 \item[thermalStateSpeed] {\small\emph{speed \textperiodcentered\ \texttt{geom.\allowbreak{}thermalState}}} --- Transient over the steady state for the 600-epoch sample: the RK4 loop with dt \textless{}= tau/10 substeps. Measured 2026-09-07: 0.02 s for 400 epochs; bound 20x the steady state.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item thermalState transient / steady time ratio (600 epochs): measured 1.6571e+00, bound 20 --- \emph{RK4 substeps}
+\item thermalState transient / steady time ratio (600 epochs): measured 1.5024e+00, bound 20 --- \emph{RK4 substeps}
 \end{itemize}
 \item[attitudeProviderSpeed] {\small\emph{speed \textperiodcentered\ \texttt{geom.\allowbreak{}AttitudeProvider}}} --- at() over referenceSystem.interpolateQuaternions called directly for 5000 queries: the wrapper adds a scale check and a struct field. Measured 2026-09-07: 5.6 in a cold probe (the three-output call of the dependency computes its diagnostics); bound 8, recorded per run.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item AttitudeProvider.at / interpolateQuaternions time ratio: measured 1.0361e+00, bound 8 --- \emph{three-output form of the dependency}
+\item AttitudeProvider.at / interpolateQuaternions time ratio: measured 1.0283e+00, bound 8 --- \emph{three-output form of the dependency}
 \end{itemize}
 \end{description}
 
@@ -887,24 +887,24 @@
 \item[DynamicsSourceContract] {\small\emph{contract \textperiodcentered\ \texttt{app.\allowbreak{}DynamicsSource}}}
 \item[DynamicsSourceReference] {\small\emph{reference \textperiodcentered\ \texttt{app.\allowbreak{}DynamicsSource}}} --- Model.accel is the reference and the native evaluator is the port: at a table node the two are two implementations of the same expressions, and nothing else differs. Seven configurations, chosen to reach every branch the native path serves: exponential density with constantCd and no shadowing (fast); msis00, sentman, Knocke tiles, the cube-map shadow and the transient walls (standard); msis21, CERES, SOLAARS-CF, a 32-cell table and transient walls (precise); HWM14 winds, maxwell, the point source and the lunar shadow (hwm14). The last two exist only to reach the accommodation enum: MATLAB and C number it independently, so a value no configuration selects would let both paths run and ...
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item native evaluator vs Model.accel at the table nodes (7 configurations): measured 1.3692e-15, bound 1e-13 --- \emph{accumulated rounding of two implementations of one expression set, written in the same association order where it decides the digits; measured 2.504e-14 on 2026-09-16}
+\item native evaluator vs Model.accel at the table nodes (7 configurations): measured 1.1398e-15, bound 1e-13 --- \emph{accumulated rounding of two implementations of one expression set, written in the same association order where it decides the digits; measured 2.504e-14 on 2026-09-16}
 \item native evaluator vs Model.accel between the table nodes (60 s tables): measured 8.1162e-11, bound 1e-9 --- \emph{the cubic tables' interpolation error, not the model's: measured 8.124e-11 at 60 s spacing, and it falls as the fourth power of the step}
-\item native evaluator vs Model.accel between the table nodes, transient walls (60 s tables): measured ---, bound 1e-4 --- \emph{the wall-temperature table's cubic between nodes; measured 1.564e-05 (CI 41152904075); shrink TableStep\_s where it matters}
+\item native evaluator vs Model.accel between the table nodes, transient walls (60 s tables): measured 2.7676e-05, bound 1e-4 --- \emph{the wall-temperature table's cubic between nodes; measured 1.564e-05 (CI 41152904075); shrink TableStep\_s where it matters}
 \end{itemize}
 \item[DynamicsSourceThermalTableReference] {\small\emph{reference \textperiodcentered\ \texttt{app.\allowbreak{}DynamicsSource}}} --- thermal.model transient on the native path (2026-10-30, the owner's ruling that standard goes transient and stays integrable): prepare integrates the walls ONCE along 'ThermalOrbit' with Model.accel, and the C reads the temperatures by time. On that orbit and at a table node (an orbit epoch) the native path and Model.accel of the SAME orbit evaluate the same temperatures, so they are again two implementations of one expression set; the thermal recoil is compared on its own through the diagnostics, so a parity carried by the drag cannot pass for one of the walls.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item native transient table vs Model.accel at the table nodes, on the reference orbit: measured ---, bound 1e-13 --- \emph{the same parity as the seven configurations: the temperatures are the same numbers, the recoil the same expression}
-\item native transient thermal recoil vs Model's at the table nodes: measured ---, bound 1e-13 rel --- \emph{kernel.thermalRecoil and its C port on identical temperatures}
-\item native transient table vs Model.accel between the nodes (60 s tables): measured ---, bound 1e-2 --- \emph{the cubic reads the wall temperatures as smooth between nodes; recorded, not claimed (shrink TableStep\_s where it matters)}
+\item native transient table vs Model.accel at the table nodes, on the reference orbit: measured 8.9358e-16, bound 1e-13 --- \emph{the same parity as the seven configurations: the temperatures are the same numbers, the recoil the same expression}
+\item native transient thermal recoil vs Model's at the table nodes: measured 1.5161e-16, bound 1e-13 rel --- \emph{kernel.thermalRecoil and its C port on identical temperatures}
+\item native transient table vs Model.accel between the nodes (60 s tables): measured 1.1598e-05, bound 1e-2 --- \emph{the cubic reads the wall temperatures as smooth between nodes; recorded, not claimed (shrink TableStep\_s where it matters)}
 \end{itemize}
 \item[DynamicsSourceDensityScaleReference] {\small\emph{reference \textperiodcentered\ \texttt{app.\allowbreak{}DynamicsSource}}} --- drag.densityScale on the native path (2026-10-29, O-19): the daily table against Model.accel at the table nodes, for Swarm's bracket (interpolated in height in C), the driver scale (one factor per day) and a combined scale forced onto its fallback (MinRecords above any day's count). The factor itself is compared through the diagnostics, so a parity that holds only because the drag is small against the radiation cannot pass for one that holds on the scale.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item native evaluator vs Model.accel at the table nodes, drag.densityScale swarm / driver / combined: measured ---, bound 1e-13 --- \emph{the same parity as the seven configurations: the scale is one multiplication after the density}
-\item native density scale vs Model's: measured ---, bound 1e-14 rel --- \emph{Swarm's bracket: the same log-linear expression in the same order; driver days: the factor itself, computed by S.at}
+\item native evaluator vs Model.accel at the table nodes, drag.densityScale swarm / driver / combined: measured 1.0185e-15, bound 1e-13 --- \emph{the same parity as the seven configurations: the scale is one multiplication after the density}
+\item native density scale vs Model's: measured 0.0000e+00, bound 1e-14 rel --- \emph{Swarm's bracket: the same log-linear expression in the same order; driver days: the factor itself, computed by S.at}
 \end{itemize}
 \item[DynamicsSourcePrecision] {\small\emph{precision \textperiodcentered\ \texttt{app.\allowbreak{}DynamicsSource}}} --- The two PATHS of one source: the native entry and Model.accel, at a node, with everything else identical. And the gravity source is added, not folded in: with it the acceleration is the sum.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item the source's two paths at a table node: measured 5.3664e-16, bound 1e-12 --- \emph{the C evaluator against Model.accel through the same source}
+\item the source's two paths at a table node: measured 6.1849e-16, bound 1e-12 --- \emph{the C evaluator against Model.accel through the same source}
 \item native density vs Model's: measured 0.0000e+00, bound 1e-13 rel --- \emph{the same backend called with the same drivers}
 \item native relative velocity vs Model's: measured 0.0000e+00, bound 1e-12 --- \emph{the co-rotation from the same rotation tables}
 \item native shadow factor vs Model's: measured 0.0000e+00, bound 1e-12 --- \emph{the same eclipse model}
@@ -913,7 +913,7 @@
 \item[DynamicsSourceRobustness] {\small\emph{robustness \textperiodcentered\ \texttt{app.\allowbreak{}DynamicsSource}}}
 \item[DynamicsSourceMetamorphicFlowTable] {\small\emph{metamorphic \textperiodcentered\ \texttt{app.\allowbreak{}DynamicsSource}}} --- The reference test's parity covers the flow-shadow table only if BOTH paths read it: the standard preset's native acceleration agrees with Model.accel at a node, and the exact flow shadow moves the result by far more than the two paths differ.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item native vs Model.accel, both on the flow-shadow table, at a node: measured 5.3664e-16, bound 1e-13 --- \emph{the C trilinear is MATLAB's in the same order}
+\item native vs Model.accel, both on the flow-shadow table, at a node: measured 5.6190e-16, bound 1e-13 --- \emph{the C trilinear is MATLAB's in the same order}
 \end{itemize}
 \item[DynamicsSourceMetamorphic] {\small\emph{metamorphic \textperiodcentered\ \texttt{app.\allowbreak{}DynamicsSource}}} --- 1. cdScale multiplies the gas part and nothing else, through the native evaluator.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
@@ -922,12 +922,12 @@
 \end{itemize}
 \item[DynamicsSourceDensityScaleMetamorphic] {\small\emph{metamorphic \textperiodcentered\ \texttt{app.\allowbreak{}DynamicsSource}}} --- The gas force is linear in the densities, so the native drag with the driver scale is the unscaled native drag times the day's factor, and radiation and thermal do not notice it.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item native drag with the driver scale / (factor x unscaled native drag): measured ---, bound 1e-14 --- \emph{a linear factor through the per-species force sums; fixed accommodation does not read the density}
+\item native drag with the driver scale / (factor x unscaled native drag): measured 3.9496e-16, bound 1e-14 --- \emph{a linear factor through the per-species force sums; fixed accommodation does not read the density}
 \end{itemize}
 \item[DynamicsSourceDensityScaleRobustness] {\small\emph{robustness \textperiodcentered\ \texttt{app.\allowbreak{}DynamicsSource}}} --- A Swarm-only scale on days without a factor prepares (the table marks them missing) and is REFUSED when a step reaches one, as Model.accel refuses it; the combined scale's fallback serves the same day.
 \item[DynamicsSourceSpeed] {\small\emph{speed \textperiodcentered\ \texttt{app.\allowbreak{}DynamicsSource}}} --- The native entry exists to be cheap in an inner loop: one evaluation against the same source's MATLAB path, both timed inside one repeat on this host (rule T5, a ratio and never an absolute).
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item native accel / MATLAB accel, one state: measured 4.7126e-02, bound 0.08 --- \emph{measured 0.0234 (43x) on 2026-09-16, R2026a, standard preset; budget 3x the measured ratio}
+\item native accel / MATLAB accel, one state: measured 4.1108e-02, bound 0.08 --- \emph{measured 0.0234 (43x) on 2026-09-16, R2026a, standard preset; budget 3x the measured ratio}
 \end{itemize}
 \end{description}
 
@@ -1080,43 +1080,43 @@
 \item[spaceWeatherMetamorphic] {\small\emph{metamorphic \textperiodcentered\ \texttt{io.\allowbreak{}spaceWeather}}} --- Daily indices are step functions: 00:00:00 and 23:59:59 of one day agree on every daily field; the JB2008 lags are relations between query and table: query(d).f10 == table(d-1), etc.
 \item[importCERESSpeed] {\small\emph{speed \textperiodcentered\ \texttt{io.\allowbreak{}importCERES}}} --- Everything importCERES adds to three ncread calls (attribute checks, axis comparisons, the permutation and the fill screen) against those bare reads: measured see last\_run; budget 3x the 2026-09-15 figure.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item importCERES vs three bare ncread calls: measured 8.5556e+00, bound 25 --- \emph{checks and one permutation on 1.2e5 floats per field; measured 8.3 on 2026-09-15, budget 3x}
+\item importCERES vs three bare ncread calls: measured 7.9442e+00, bound 25 --- \emph{checks and one permutation on 1.2e5 floats per field; measured 8.3 on 2026-09-15, budget 3x}
 \end{itemize}
 \item[igrfCoefficientsSpeed] {\small\emph{speed \textperiodcentered\ \texttt{io.\allowbreak{}igrfCoefficients}}}
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item igrfCoefficients, 195 rows x 27 columns: measured 2.5727e+01, bound 2000 ms --- \emph{a smoke ceiling on a 42 kB parse, not a claim about this host}
+\item igrfCoefficients, 195 rows x 27 columns: measured 4.2379e+01, bound 2000 ms --- \emph{a smoke ceiling on a 42 kB parse, not a claim about this host}
 \end{itemize}
 \item[readMAG1BSpeed] {\small\emph{speed \textperiodcentered\ \texttt{io.\allowbreak{}readMAG1B}}} --- Reading is dominated by gracefoReading's parse; what this checks is that nothing quadratic sits in the marshalling above it.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item readMAG1B, 600 records: measured 4.7586e+01, bound 5000 ms --- \emph{a smoke ceiling on a 600-record parse, not a claim about this host}
+\item readMAG1B, 600 records: measured 9.3114e+01, bound 5000 ms --- \emph{a smoke ceiling on a 600-record parse, not a claim about this host}
 \end{itemize}
 \item[readACC1BSpeed] {\small\emph{speed \textperiodcentered\ \texttt{io.\allowbreak{}readACC1B}}} --- Reader over raw gracefoReading.readL1b: measured 0.98 (median of 5, warm). Bound 5 = 3x a generous 1.5 expectation for the epoch struct, checks and provenance.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item readACC1B / readL1b time ratio: measured 1.0098e+00, bound 5 --- \emph{measured 0.98}
+\item readACC1B / readL1b time ratio: measured 1.0130e+00, bound 5 --- \emph{measured 0.98}
 \end{itemize}
 \item[readSCA1BSpeed] {\small\emph{speed \textperiodcentered\ \texttt{io.\allowbreak{}readSCA1B}}} --- Measured 1.46 (norm check + conjugation). Bound 5.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item readSCA1B / readL1b time ratio: measured 1.0779e+00, bound 5 --- \emph{measured 1.46}
+\item readSCA1B / readL1b time ratio: measured 1.0524e+00, bound 5 --- \emph{measured 1.46}
 \end{itemize}
 \item[readGNV1BSpeed] {\small\emph{speed \textperiodcentered\ \texttt{io.\allowbreak{}readGNV1B}}} --- read over ITRS read (the rotation with Rdot for 600 epochs): measured 1.16 warm, 6.3 cold. Bound 5 after warm-up (3x the 1.5 expectation).
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item readGNV1B GCRS / ITRS time ratio: measured 1.1679e+00, bound 5 --- \emph{measured 1.16 warm}
+\item readGNV1B GCRS / ITRS time ratio: measured 1.2288e+00, bound 5 --- \emph{measured 1.16 warm}
 \end{itemize}
 \item[readTHR1BSpeed] {\small\emph{speed \textperiodcentered\ \texttt{io.\allowbreak{}readTHR1B}}} --- Measured 1.04 (event table build is cheap). Bound 5.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item readTHR1B / readL1b time ratio: measured 1.0713e+00, bound 5 --- \emph{measured 1.04}
+\item readTHR1B / readL1b time ratio: measured 1.0631e+00, bound 5 --- \emph{measured 1.04}
 \end{itemize}
 \item[readMAS1BSpeed] {\small\emph{speed \textperiodcentered\ \texttt{io.\allowbreak{}readMAS1B}}} --- Measured 1.47. Bound 5.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item readMAS1B / readL1b time ratio: measured 1.0320e+00, bound 5 --- \emph{measured 1.47}
+\item readMAS1B / readL1b time ratio: measured 1.2444e+00, bound 5 --- \emph{measured 1.47}
 \end{itemize}
 \item[massModelSpeed] {\small\emph{speed \textperiodcentered\ \texttt{io.\allowbreak{}massModel}}} --- at() over one day at 1 Hz against a bare interp1 of the same size: measured 2.24 (validation, clamping, the range check). Bound 7 = 3x.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item massModel.at(86400) / interp1 time ratio: measured 2.5325e+00, bound 7 --- \emph{measured 2.24}
+\item massModel.at(86400) / interp1 time ratio: measured 2.7048e+00, bound 7 --- \emph{measured 2.24}
 \end{itemize}
 \item[spaceWeatherSpeed] {\small\emph{speed \textperiodcentered\ \texttt{io.\allowbreak{}spaceWeather}}} --- query of one day at 1 Hz (86400 epochs, 0.05 s measured) against an ismember day lookup of the same size: measured 65 (four day rows, 20 history picks, five NaN scans). Bound 200 = 3x.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item spaceWeather.query(86400) / ismember time ratio: measured 4.1813e+01, bound 200 --- \emph{measured 65}
+\item spaceWeather.query(86400) / ismember time ratio: measured 5.5414e+01, bound 200 --- \emph{measured 65}
 \end{itemize}
 \item[importGroopsGridContract] {\small\emph{contract \textperiodcentered\ \texttt{io.\allowbreak{}importGroopsGrid}}}
 \item[importGroopsGridReference] {\small\emph{reference \textperiodcentered\ \texttt{io.\allowbreak{}importGroopsGrid}}} --- The oracle is the format itself, asserted by the three facts that make a misreading visible; each is checked on a file whose contents are known independently.
@@ -1135,13 +1135,13 @@
 \end{itemize}
 \item[importGroopsGridSpeed] {\small\emph{speed \textperiodcentered\ \texttt{io.\allowbreak{}importGroopsGrid}}} --- IS THE POINT. One month of a many-month series must not cost what the whole series costs, or a 1.25 GB file is unusable for a one-day arc.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item GROOPS grid: one grid of 60 / one grid of 2: measured 1.0518e+00, bound 3 --- \emph{seeking means the cost of one grid does not grow with the file: 30x the payload must not cost 30x. A reader that ignored TimeRange would land near 30}
+\item GROOPS grid: one grid of 60 / one grid of 2: measured 1.0304e+00, bound 3 --- \emph{seeking means the cost of one grid does not grow with the file: 30x the payload must not cost 30x. A reader that ignored TimeRange would land near 30}
 \end{itemize}
 \item[spaceWeatherDstF30Contract] {\small\emph{contract \textperiodcentered\ \texttt{io.\allowbreak{}spaceWeather}}}
 \item[spaceWeatherDstF30Reference] {\small\emph{reference \textperiodcentered\ \texttt{io.\allowbreak{}spaceWeather}}}
 \item[spaceWeatherF30Precision] {\small\emph{precision \textperiodcentered\ \texttt{io.\allowbreak{}spaceWeather}}} --- The 81-day mean is the only arithmetic of the f30 family: one sum of 81 values of \textasciitilde{}46 sfu and one division. Its rounding is bounded by 81 eps relative; measured against exact rationals.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item F30 81-day mean, relative error vs exact rational: measured ---, bound 81 * eps --- \emph{a sum of 81 doubles and one division; the rationals are from an independent Python Fraction sum}
+\item F30 81-day mean, relative error vs exact rational: measured 1.1102e-16, bound 81 * eps --- \emph{a sum of 81 doubles and one division; the rationals are from an independent Python Fraction sum}
 \end{itemize}
 \item[spaceWeatherDstF30Vectorization] {\small\emph{vectorization \textperiodcentered\ \texttt{io.\allowbreak{}spaceWeather}}}
 \item[spaceWeatherDstF30Robustness] {\small\emph{robustness \textperiodcentered\ \texttt{io.\allowbreak{}spaceWeather}}}
@@ -1152,19 +1152,19 @@
 \item[readSwarmDensityToleosReference] {\small\emph{reference \textperiodcentered\ \texttt{io.\allowbreak{}readSwarmDensity}}} --- Oracle: the raw lines split with str2double; the fill 9.99e+32 of CHAMP's orbit mean is NaN, the rest unchanged.
 \item[readSwarmDensityPrecision] {\small\emph{precision \textperiodcentered\ \texttt{io.\allowbreak{}readSwarmDensity}}} --- deg2rad is one multiplication: rad2deg brings every printed degree back to a few ulp.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item readSwarmDensity degrees round trip / 180: measured ---, bound 4 * eps --- \emph{deg2rad then rad2deg}
+\item readSwarmDensity degrees round trip / 180: measured 1.5790e-16, bound 4 * eps --- \emph{deg2rad then rad2deg}
 \end{itemize}
 \item[readSwarmDensityVectorization] {\small\emph{vectorization \textperiodcentered\ \texttt{io.\allowbreak{}readSwarmDensity}}} --- The three days equal the 1.5-day halves read separately, concatenated (bitwise: nothing is computed across records).
 \item[readSwarmDensityRobustness] {\small\emph{robustness \textperiodcentered\ \texttt{io.\allowbreak{}readSwarmDensity}}} --- the product's own units, status and flags are read, not assumed
 \item[readSwarmDensityToleosRobustness] {\small\emph{robustness \textperiodcentered\ \texttt{io.\allowbreak{}readSwarmDensity}}} --- CHAMP's orbit mean carries the fill on 359 of these records (validity\_flag\_orbitmean 1): NaN, density kept
 \item[readSwarmDensityMetamorphic] {\small\emph{metamorphic \textperiodcentered\ \texttt{io.\allowbreak{}readSwarmDensity}}} --- Physics the product must show: Swarm A and C fly side by side at the same height (same density), Swarm B \textasciitilde{}65 km higher (several times thinner); an epoch present twice is kept once.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item Swarm A / C median density ratio, \textbar{}log\textbar{}: measured ---, bound log(1.2) --- \emph{side-by-side pair}
+\item Swarm A / C median density ratio, \textbar{}log\textbar{}: measured 6.5472e-03, bound log(1.2) --- \emph{side-by-side pair}
 \end{itemize}
 \item[readSwarmDensityToleosMetamorphic] {\small\emph{metamorphic \textperiodcentered\ \texttt{io.\allowbreak{}readSwarmDensity}}} --- Physics the products must show on 2008-01-01: CHAMP \textasciitilde{}130 km below GRACE-A flies in several times the density
 \item[readSwarmDensitySpeed] {\small\emph{speed \textperiodcentered\ \texttt{io.\allowbreak{}readSwarmDensity}}} --- Against reading the same file's text and splitting it into lines. Bound 20, an estimate on the first run (header decode, one textscan); the measured ratio is in tests/last\_run.txt.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item readSwarmDensity / fileread+splitlines time ratio: measured ---, bound 20 --- \emph{first run}
+\item readSwarmDensity / fileread+splitlines time ratio: measured 4.0198e+00, bound 20 --- \emph{first run}
 \end{itemize}
 \end{description}
 
@@ -1339,31 +1339,31 @@
 \end{itemize}
 \item[partialsSpeed] {\small\emph{speed \textperiodcentered\ \texttt{kernel.\allowbreak{}partials}}} --- One derivative costs about one force evaluation: the coefficients are computed once more.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item d(drag)/d(alpha) vs one force evaluation: measured 3.4973e+00, bound 9 --- \emph{budget 3x the expected 3: the derivative evaluates the force and the coefficients again; 5 repeats, median}
+\item d(drag)/d(alpha) vs one force evaluation: measured 3.4209e+00, bound 9 --- \emph{budget 3x the expected 3: the derivative evaluates the force and the coefficients again; 5 repeats, median}
 \end{itemize}
 \item[gsiCoefficientsSpeed] {\small\emph{speed \textperiodcentered\ \texttt{kernel.\allowbreak{}gsiCoefficients}}} --- 1e5 elements at once vs 100 scalar calls: the array form must be at least 20x cheaper per element (measured \textasciitilde{}200x)
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item gsiCoefficients: 1e5-element array vs 100 scalar calls, time ratio: measured 1.1902e+00, bound 50 --- \emph{budget 3x the expected 1000/60; N = 1e5, 5 repeats, median}
+\item gsiCoefficients: 1e5-element array vs 100 scalar calls, time ratio: measured 8.9834e-01, bound 50 --- \emph{budget 3x the expected 1000/60; N = 1e5, 5 repeats, median}
 \end{itemize}
 \item[dragPanelForceSpeed] {\small\emph{speed \textperiodcentered\ \texttt{kernel.\allowbreak{}dragPanelForce}}}
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item dragPanelForce: K = 1000 batched vs one epoch, time ratio: measured 8.8932e+00, bound 100 --- \emph{budget 3x the expected \textasciitilde{}30; 8 species x 8 plates; 5 repeats, median}
+\item dragPanelForce: K = 1000 batched vs one epoch, time ratio: measured 7.7380e+00, bound 100 --- \emph{budget 3x the expected \textasciitilde{}30; 8 species x 8 plates; 5 repeats, median}
 \end{itemize}
 \item[radiationPanelForceSpeed] {\small\emph{speed \textperiodcentered\ \texttt{kernel.\allowbreak{}radiationPanelForce}}}
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item radiationPanelForce: K = 1000 x 51 sources vs one epoch, time ratio: measured 3.2242e+01, bound 300 --- \emph{budget 3x the expected \textasciitilde{}100 (the source loop is not batched over K); 5 repeats, median}
+\item radiationPanelForce: K = 1000 x 51 sources vs one epoch, time ratio: measured 2.7115e+01, bound 300 --- \emph{budget 3x the expected \textasciitilde{}100 (the source loop is not batched over K); 5 repeats, median}
 \end{itemize}
 \item[thermalRecoilSpeed] {\small\emph{speed \textperiodcentered\ \texttt{kernel.\allowbreak{}thermalRecoil}}}
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item thermalRecoil: K = 1e4 vs one epoch, time ratio: measured 5.6402e+00, bound 60 --- \emph{budget 3x the expected \textasciitilde{}20; 5 repeats, median}
+\item thermalRecoil: K = 1e4 vs one epoch, time ratio: measured 5.6605e+00, bound 60 --- \emph{budget 3x the expected \textasciitilde{}20; 5 repeats, median}
 \end{itemize}
 \item[assembleSpeed] {\small\emph{speed \textperiodcentered\ \texttt{kernel.\allowbreak{}assemble}}}
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item assemble: K = 1e4 vs one epoch, time ratio: measured 4.9849e+00, bound 60 --- \emph{budget 3x the expected \textasciitilde{}20; 5 repeats, median}
+\item assemble: K = 1e4 vs one epoch, time ratio: measured 4.5258e+00, bound 60 --- \emph{budget 3x the expected \textasciitilde{}20; 5 repeats, median}
 \end{itemize}
 \item[bodyTorquesSpeed] {\small\emph{speed \textperiodcentered\ \texttt{kernel.\allowbreak{}bodyTorques}}}
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item bodyTorques: K = 1e4 vs one epoch, time ratio: measured 1.9130e+00, bound 60 --- \emph{budget 3x the expected \textasciitilde{}20; 5 repeats, median}
+\item bodyTorques: K = 1e4 vs one epoch, time ratio: measured 1.8522e+00, bound 60 --- \emph{budget 3x the expected \textasciitilde{}20; 5 repeats, median}
 \end{itemize}
 \end{description}
 
@@ -1419,8 +1419,8 @@
 \end{itemize}
 \item[singleEpochSpeed] {\small\emph{speed \textperiodcentered\ \texttt{kernel.\allowbreak{}singleEpoch}}} --- THIS MEASURES AND WHY. HANDOVER D.6 justifies the compiled path with a MATLAB call overhead of 5-15 microseconds, and LP-6's own measurement contradicted it. The figures that comment quoted (88 ms standard, 2 ms fast) are superseded -- WP-C3 took the standard preset to 0.798 ms per epoch at K=100, and most of what the 88 ms recorded turned out to BE per-call overhead rather than model work (O-29, closed 2026-09-18: one Model.accel call costs \textasciitilde{}15 ms of setup in the standard preset before it does any per-epoch work, so D.6's 15 us was wrong by three orders of magnitude in the same direction its author feared). The premise needs a number either way, and this is it: the ratio of the compiled ...
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item single-epoch kernel: compiled / MATLAB chain (median of 5 x 200): measured 4.4523e-01, bound 1.0
-\item single-epoch compiled kernel, absolute cost per epoch: measured 5.5637e+02, bound 10000 us --- \emph{smoke ceiling, not a claim; 901.8 us measured on the CI runner 2026-09-08, MATLAB chain 4149.6 us}
+\item single-epoch kernel: compiled / MATLAB chain (median of 5 x 200): measured 4.5269e-01, bound 1.0
+\item single-epoch compiled kernel, absolute cost per epoch: measured 1.1168e+03, bound 10000 us --- \emph{smoke ceiling, not a claim; 901.8 us measured on the CI runner 2026-09-08, MATLAB chain 4149.6 us}
 \end{itemize}
 \end{description}
 
@@ -1484,11 +1484,11 @@
 \item[modelGroopsReference] {\small\emph{reference \textperiodcentered\ \texttt{Model}}} --- O-19: GROOPS against this toolbox on the real day. TU Graz's operational nonConservativeForces for 2020-01-01 GRACE-C (GRACEFO-1) are MODELLED by GROOPS (owner, 2026-10-26), in the satellite reference frame at 10 s, and published with the attitude (SRF -\textgreater{} CRF, scalar first) and the reduced-dynamic orbit (CRF) they were computed on. This test feeds THEIR state into Model.accel, so the two differ only by force model: density, gas-surface interaction, radiation and thermal. All three files are read with gracefoReading.readGroopsInstrument (\textgreater{}= 1.1, which reads real GROOPS output), the first use of that reader on TU Graz's bytes in this repository (CLAUDE.md section 7).  Every bound is ...
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
 \item \emph{(computed label)}: measured ---, bound actBound(i) --- \emph{the oracle against the measurement; independent value 2026-10-26: shortfalls 0.010, 0.018, 0.090}
-\item GROOPS (TU Graz) vs Model: \textbar{}log\textbar{} of the median magnitude ratio: measured ---, bound log(1.5) --- \emph{measured ratio 1.119 (CI 40411254932); a frame or unit error is a factor of 1e3 or a sign}
+\item GROOPS (TU Graz) vs Model: \textbar{}log\textbar{} of the median magnitude ratio: measured 1.1232e-01, bound log(1.5) --- \emph{measured ratio 1.119 (CI 40411254932); a frame or unit error is a factor of 1e3 or a sign}
 \item \emph{(computed label)}: measured ---, bound rhoBound(i) --- \emph{measured 0.017 / 0.0004 / 0.032 (CI 40406425492)}
 \item \emph{(computed label)}: measured ---, bound ratioBound(i) --- \emph{measured \textbar{}log\textbar{} 0.404 / 0.166 / 0.180 (CI 40406425492)}
-\item GROOPS vs Model RMS of the difference / RMS of GROOPS: measured ---, bound 0.6 --- \emph{measured 0.391 (CI 40411254932); drag dominates the along-track, radiation the cross-track}
-\item GROOPS comparison: modelled drag share of \textbar{}a\textbar{} (recorded): measured ---, bound 0.75 --- \emph{measured 0.497 (CI 40411254932): context for the along-track numbers above}
+\item GROOPS vs Model RMS of the difference / RMS of GROOPS: measured 3.9100e-01, bound 0.6 --- \emph{measured 0.391 (CI 40411254932); drag dominates the along-track, radiation the cross-track}
+\item GROOPS comparison: modelled drag share of \textbar{}a\textbar{} (recorded): measured 4.9719e-01, bound 0.75 --- \emph{measured 0.497 (CI 40411254932): context for the along-track numbers above}
 \end{itemize}
 \item[modelAct1bReference] {\small\emph{reference \textperiodcentered\ \texttt{Model}}} --- MODEL AGAINST THE MEASUREMENT, the way Huckfeldt et al. (2024, ASR 73, Sec. 3.5, eqs. 7-10) validate theirs: ACT1B with the thruster firings cut, one bias per day and per axis, scale 1, then the daily RMS of model minus calibrated ACT1B. A bias-only fit keeps model errors out of the calibration parameters; a bias-plus-scale fit is recorded beside it, because GRACE-C's ACT1B scale is not 1 (tools/baseline\_reference.json: S\_xx 0.762).  Data: the committed 30 min of each of 2020-01-01..03 (GRACE-C, data/samples/multiday), this toolbox's own state -- GNV1B, SCA1B conjugated once by io.readSCA1B -- and the standard preset. THR1B is committed for 2020-01-01 only; that day's three firings in ...
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
@@ -1501,11 +1501,11 @@
 \item[modelDragDiagnosis] {\small\emph{reference \textperiodcentered\ \texttt{Model}}} --- THE ALONG-TRACK EXCESS COMES FROM. modelGroopsReference and modelAct1bReference found the model's along-track 1.5x GROOPS's RMS (drag mean 1.67e-8 against a GROOPS total of 0.71e-8) and 5.5 nm/s\textasciicircum{}2 from ACT1B against GROOPS's 2.7. Two diagnoses on the same committed data, 10 s grid:  (a) EFFECT SCALES: each reference is written as k\_d drag + k\_r radiation + k\_t thermal of the standard preset, per axis (against ACT1B with one bias per day besides). A k\_d that is constant over the orbit says SCALE (density or Cd); one that varies with the orbit says geometry, wind or the gas-surface model. k = (1, 1, 1) is a feasible point, so the fitted residual can only be smaller: that identity is the ...
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
 \item \emph{(computed label)}: measured ---, bound 1 + 1e-12 --- \emph{k = (1, 1, 1) is feasible, so the least-squares fit cannot do worse: an identity}
-\item drag diagnosis: ACT1B drag-scale fit RMS over bias-only RMS, along-track: measured ---, bound 1 + 1e-12 --- \emph{the bias-only fit is the k\_drag = 1 point of the same design: an identity}
-\item drag diagnosis: GROOPS along-track, effect-scale fit RMS over RMS at k = 1: measured ---, bound 0.1 --- \emph{measured 0.050 (CI 40447628923): one drag scale explains 95 \% of the along-track difference}
-\item drag diagnosis: \textbar{}log k\_drag\textbar{} along-track vs GROOPS: measured ---, bound log(2.5) --- \emph{measured k 0.482 (CI 40447628923): GROOPS's drag is half of this toolbox's}
-\item drag diagnosis: \textbar{}log k\_drag\textbar{} along-track vs ACT1B: measured ---, bound log(10) --- \emph{measured 0.209 (CI 40450067703; 3 x 30 min, ACT1B's own scale and per-day biases in it): the measurement wants less drag too}
-\item drag diagnosis: k\_drag window spread (max/min) along-track vs GROOPS: measured ---, bound 1.3 --- \emph{measured 1.10 (0.441-0.486, CI 40447628923): a SCALE, not an orbit-dependent shape}
+\item drag diagnosis: ACT1B drag-scale fit RMS over bias-only RMS, along-track: measured 2.9517e-01, bound 1 + 1e-12 --- \emph{the bias-only fit is the k\_drag = 1 point of the same design: an identity}
+\item drag diagnosis: GROOPS along-track, effect-scale fit RMS over RMS at k = 1: measured 5.0211e-02, bound 0.1 --- \emph{measured 0.050 (CI 40447628923): one drag scale explains 95 \% of the along-track difference}
+\item drag diagnosis: \textbar{}log k\_drag\textbar{} along-track vs GROOPS: measured 7.2996e-01, bound log(2.5) --- \emph{measured k 0.482 (CI 40447628923): GROOPS's drag is half of this toolbox's}
+\item drag diagnosis: \textbar{}log k\_drag\textbar{} along-track vs ACT1B: measured 1.5657e+00, bound log(10) --- \emph{measured 0.209 (CI 40450067703; 3 x 30 min, ACT1B's own scale and per-day biases in it): the measurement wants less drag too}
+\item drag diagnosis: k\_drag window spread (max/min) along-track vs GROOPS: measured 1.1020e+00, bound 1.3 --- \emph{measured 1.10 (0.441-0.486, CI 40447628923): a SCALE, not an orbit-dependent shape}
 \item \emph{(computed label)}: measured ---, bound log(2) --- \emph{ratios 0.915 msis21, 0.751 constantCd 2.4, 0.905 alpha 1 (CI 40447628923); the combination recorded}
 \item \emph{(computed label)}: measured ---, bound 8e-9 m/s\textasciicircum{}2 --- \emph{measured 5.57 / 4.82 / 4.56 / 4.89 nm/s\textasciicircum{}2 (standard, msis21, constantCd 2.4, alpha 1; CI 40447628923)}
 \end{itemize}
@@ -1528,12 +1528,12 @@
 \end{itemize}
 \item[modelSpeed] {\small\emph{speed \textperiodcentered\ \texttt{Model}}} --- The fast preset exists to be fast: no self-shadowing, no Earth radiation, no thermal model. Until LP-C it was 45x the cheaper (2 against 89 ms per epoch, both superseded); with the O(1) cube map, flow shadowing and provenance on demand the standard preset cost 1.2 ms per epoch on the host (2026-09-15, 100 epochs; superseded by tools/benchmark\_reference.csv, 0.798 ms on 2026-09-18) and the fast one 0.3 ms, a ratio of 0.25. The fast preset must still be the cheaper one by a clear margin: budget 3x the measured ratio.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item fast preset vs standard preset, same arc (40 epochs): measured 5.6720e-01, bound 0.75 --- \emph{measured 0.25 on 2026-09-15 (it was 0.02 before WP-C3; that 88 ms of HANDOVER O-29 was per-call overhead, not physics)}
+\item fast preset vs standard preset, same arc (40 epochs): measured 5.5297e-01, bound 0.75 --- \emph{measured 0.25 on 2026-09-15 (it was 0.02 before WP-C3; that 88 ms of HANDOVER O-29 was per-call overhead, not physics)}
 \end{itemize}
 \item[modelDensityScaleContract] {\small\emph{contract \textperiodcentered\ \texttt{Model}}}
 \item[modelDensityScaleMetamorphic] {\small\emph{metamorphic \textperiodcentered\ \texttt{Model}}} --- The gas force is linear in the species densities, so the scaled Model's drag is the unscaled Model's drag times the factor at each epoch, and nothing else moves (radiation, thermal, the factor itself is S.at at the Model's own geodetic height). Bound from the rounding of one product per term.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item scaled drag / (factor x unscaled drag) - 1: measured ---, bound 1e-12 --- \emph{linear in the densities; a few products' rounding}
+\item scaled drag / (factor x unscaled drag) - 1: measured 2.2078e-16, bound 1e-12 --- \emph{linear in the densities; a few products' rounding}
 \end{itemize}
 \end{description}
 
@@ -1570,11 +1570,11 @@
 \end{itemize}
 \item[perRevolutionSpeed] {\small\emph{speed \textperiodcentered\ \texttt{app.\allowbreak{}perRevolution}}} --- One fit per window: twice the revolutions, about twice the cost.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item perRevolution, 2x arc / 1x arc: measured 2.2495e+00, bound 4 --- \emph{linear in windows would be 2}
+\item perRevolution, 2x arc / 1x arc: measured 2.0975e+00, bound 4 --- \emph{linear in windows would be 2}
 \end{itemize}
 \item[attributeRevolutionsSpeed] {\small\emph{speed \textperiodcentered\ \texttt{app.\allowbreak{}attributeRevolutions}}} --- The bootstrap dominates and is linear in the revolutions: twice the rows, about twice the cost.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item attributeRevolutions, 2x revolutions / 1x: measured 6.6859e-01, bound 4 --- \emph{linear would be 2}
+\item attributeRevolutions, 2x revolutions / 1x: measured 6.8648e-01, bound 4 --- \emph{linear would be 2}
 \end{itemize}
 \end{description}
 
@@ -1615,8 +1615,8 @@
 \end{itemize}
 \item[ElectrostaticSpeed] {\small\emph{speed \textperiodcentered\ \texttt{sensor.\allowbreak{}Electrostatic}}} --- The reading is vectorised over epochs and the partials are a loop over them, which is the honest shape for a 15-column Jacobian. What must hold is that neither is quadratic: ten times the epochs must not cost a hundred times as much.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item Electrostatic observe, 60 epochs / 6 epochs: measured 1.9179e+00, bound 10 --- \emph{linear in K would be 10 and a fixed overhead pulls it below; above 10 would mean the work is not vectorised}
-\item Electrostatic partials, 60 epochs / 6 epochs: measured 3.5322e+00, bound 20 --- \emph{a per-epoch loop of fixed work is linear; the allowance is generous because the loop body is tiny and the timer is not}
+\item Electrostatic observe, 60 epochs / 6 epochs: measured 1.8213e+00, bound 10 --- \emph{linear in K would be 10 and a fixed overhead pulls it below; above 10 would mean the work is not vectorised}
+\item Electrostatic partials, 60 epochs / 6 epochs: measured 3.1345e+00, bound 20 --- \emph{a per-epoch loop of fixed work is linear; the allowance is generous because the loop body is tiny and the timer is not}
 \end{itemize}
 \item[ElectrostaticCrnContract] {\small\emph{contract \textperiodcentered\ \texttt{sensor.\allowbreak{}Electrostatic}}}
 \item[ElectrostaticCrnReference] {\small\emph{reference \textperiodcentered\ \texttt{sensor.\allowbreak{}Electrostatic}}} --- 1. The taps ARE timeSeriesPreparation's, unchanged: one authority (R1).
@@ -1667,7 +1667,7 @@
 \end{itemize}
 \item[AtomInterferometerSpeed] {\small\emph{speed \textperiodcentered\ \texttt{sensor.\allowbreak{}AtomInterferometer}}} --- One convolution and a handful of vector operations: linear in K.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item AtomInterferometer observe, 2000 epochs / 200 epochs: measured 2.5016e+00, bound 10 --- \emph{linear in K would be 10 and a fixed overhead pulls it below; the convolution is the only term that grows}
+\item AtomInterferometer observe, 2000 epochs / 200 epochs: measured 2.3126e+00, bound 10 --- \emph{linear in K would be 10 and a fixed overhead pulls it below; the convolution is the only term that grows}
 \end{itemize}
 \item[DragFreeContract] {\small\emph{contract \textperiodcentered\ \texttt{sensor.\allowbreak{}DragFree}}}
 \item[DragFreeReference] {\small\emph{reference \textperiodcentered\ \texttt{sensor.\allowbreak{}DragFree}}} --- ORACLE IS THE FREQUENCY RESPONSE, derived on the unit circle from the same difference-equation coefficients but evaluated analytically -- a different route through the same definition, which is what a reference for a filter can be. A steady-state sinusoid in must come out scaled by exactly \textbar{}S(f)\textbar{}.
@@ -1699,7 +1699,7 @@
 \end{itemize}
 \item[DragFreeSpeed] {\small\emph{speed \textperiodcentered\ \texttt{sensor.\allowbreak{}DragFree}}} --- The filter is a per-sample recursion, so it is linear in K by construction. What is measured is that nothing quadratic crept into the surrounding bookkeeping.
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
-\item DragFree observe, 5000 epochs / 500 epochs: measured 5.7118e+00, bound 20 --- \emph{linear in K would be 10; the allowance covers an interpreted loop whose per-sample cost is small next to the timer}
+\item DragFree observe, 5000 epochs / 500 epochs: measured 7.2289e+00, bound 20 --- \emph{linear in K would be 10; the allowance covers an interpreted loop whose per-sample cost is small next to the timer}
 \end{itemize}
 \end{description}
 
