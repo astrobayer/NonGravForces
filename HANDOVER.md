@@ -1727,6 +1727,22 @@ D's radial scale; C and D still differ by 0.014 (1.0924 / 1.0786, ~2.4 joint sig
 -2..-21 s, y/z 1-15 s, largest on D's first days after the safe mode). The run REPLACED meta (no `verified` until the next
 compare at a release).
 
+### Release 0.19.0 (2026-11-04, PR #135)
+
+What it carries: `app.fitCalibration` and `app.calibrate` on lsqvce 7 -- a `lsqvce.TaskDefinition` declared instead of the
+v6 data struct, `'Noise'` takes an `lsqvce.Noise` (a v6 struct refused, `fitCalibration:inputNoise`), lsqvce >= 7.0 (PR
+#133, O-53 closed); the regression baseline with the thruster firings cut, re-frozen (PR #134); `tools/dayDiagnosis.m`
+(PR #131); `ci.yml` prints `tests/last_run.txt` into the job log and the theory document and guide carry the SOLAARS-CF
+and thruster findings (PR #132). MINOR at 0.y.z (VERSIONING.md), although the `'Noise'` struct form is refused.
+
+Release measurements on the CI runner (`release-checks.yml`):
+- **Baseline** (run 41765827182, ~75 min): PASSED; every compared number 0 sigma from the 2026-11-04 freeze (usedDays,
+  S_xx, S_zz, worst of 186 C and 168 D biases). `meta.toolbox` 0.19.0, verified 2026-11-04 03:34 UTC (the run's start).
+- **Benchmark** (run 41765830311): `Model.accel` standard 20.8 / 3.27 / 0.799 ms per epoch at K = 1 / 10 / 100, fast 14.8
+  / 1.45 / 0.242, `Model.budget` fast 14.5 / 1.68 / 0.206, `app.forceBudget` 16.8 / 1.90 / 0.284, compiled kernel 1.29 ms,
+  native 1.30 ms. No model code changed since 0.18.0 (26.5 / 3.99 / 0.762): the K = 1 difference is the runner's spread
+  for a single call, which no release should read as a gain or a loss.
+
 ### Release 0.18.0 (2026-10-31, PR #130)
 
 What it carries: the transient thermal walls in `standard` (PR #126) and `precise` (PR #129, owner), served on the native
