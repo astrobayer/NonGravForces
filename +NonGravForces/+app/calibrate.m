@@ -78,7 +78,8 @@ function res = calibrate(acc, reference, options)
 %   Config     1x1   object  -      timeSeriesPreparation.Config; default Config(acc) (of the first
 %                                   arc in a campaign); run.filterReference is set true either way
 %   QualFlags  1x1   struct  -      Passed to run's mask stage; default none
-%   Thrusters  1x1   struct  -      THR1B Arc, passed to run's mask stage; default none
+%   Thrusters  1x1   Arc     -      THR1B Arc, passed to run's mask stage; for an Arc array one Arc per
+%                                   arc, or a cell with one entry per arc ([] for none); default none
 %   Jumps      1x1   logical -      Turn run's "jump" events into bias steps; default false
 %                                   (they are reported in diagnostics.jumps either way)
 %   VifMax     1x1   double  -      Attribution's VIF gate; default 10
