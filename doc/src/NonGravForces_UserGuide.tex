@@ -548,8 +548,9 @@ ordinary day that costs little, but not after a safe mode: on GRACE-D's 2020-01-
 resumes, the first hour carries 112 firings with 90.6\,s of on-time and a cross-track residual of
 \SI{294}{\nano\metre\per\second\squared}, and the day's \SI{83}{\nano\metre\per\second\squared} falls
 to \SI{0.75}{} once every firing is cut --- as good as GRACE-C's \SI{0.70}{} that day
-(\texttt{tools/dayDiagnosis.m}). That one day is GRACE-D's whole excess in the January 2020 regression
-baseline, which, as of 0.18.0, is calibrated without THR1B.
+(\texttt{tools/dayDiagnosis.m}). That one day was GRACE-D's whole excess in the January 2020 regression
+baseline until v0.19.0, which passes THR1B: its cross-track residual is now \SI{0.71}{} (GRACE-C) and
+\SI{0.81}{\nano\metre\per\second\squared} (GRACE-D), against \SI{2.51}{} and \SI{12.08}{} before.
 
 \section{What this chain actually prints}
 \noindent Printed by \texttt{tools/userGuideTranscript.m} (release-checks \texttt{what: transcript}, run
@@ -838,11 +839,13 @@ the \SI{4.22}{} that Hładczuk et al.\ leave when they omit the term and the \SI
 \section{Cost}
 \textbf{The cost per epoch depends on how many epochs you ask for in one call, far more than on which
 preset you choose}, and that is the most useful thing to know about this toolbox's performance.
-Measured by \texttt{tools/benchmark.m} on 2026-11-01 (v0.18.0, R2026a, median of three after five
-warm-up calls) on the CI runner (release-checks run 41248946430). \texttt{standard} evaluates the
+Measured by \texttt{tools/benchmark.m} on 2026-11-04 (v0.19.0, R2026a, median of three after five
+warm-up calls) on the CI runner (release-checks run 41765830311). \texttt{standard} evaluates the
 daily density scale and, since v0.18.0, integrates the transient wall temperatures over the epochs of
 each call: against v0.17.0 on the same runner its cost at $K=100$ rose from 0.650 to
-\SI{0.762}{\milli\second} per epoch, and at $K=1$ from 20.0 to \SI{26.5}{\milli\second}. On the native
+\SI{0.799}{\milli\second} per epoch. v0.19.0 changed no model code; its $K=1$ figure of
+\SI{20.8}{\milli\second} against v0.18.0's 26.5 is the runner's spread for a single call, not a
+gain. On the native
 path the walls cost nothing per call: they are integrated once along the reference orbit at
 \texttt{prepare} and read from a table. The table it writes is committed at
 \texttt{tools/benchmark\_reference.csv}, and the audit checks every figure below against it.
@@ -851,13 +854,13 @@ path the walls cost nothing per call: they are integrated once along the referen
 \begin{tabular}{@{}lrrr@{}}\toprule
  & \multicolumn{3}{c}{ms per epoch, for a call of $K$ epochs}\\\cmidrule(l){2-4}
 path & $K=1$ & $K=10$ & $K=100$\\\midrule
-\texttt{Model.accel}, \texttt{standard} & 26.5 & 3.99 & 0.762\\
-\texttt{Model.accel}, \texttt{fast} & 14.7 & 1.51 & 0.247\\
-\texttt{Model.budget}, \texttt{fast} & 10.6 & 1.69 & 0.199\\
-\texttt{app.forceBudget}, \texttt{fast} & 16.9 & 1.85 & 0.260\\\midrule
+\texttt{Model.accel}, \texttt{standard} & 20.8 & 3.27 & 0.799\\
+\texttt{Model.accel}, \texttt{fast} & 14.8 & 1.45 & 0.242\\
+\texttt{Model.budget}, \texttt{fast} & 14.5 & 1.68 & 0.206\\
+\texttt{app.forceBudget}, \texttt{fast} & 16.8 & 1.90 & 0.284\\\midrule
 \multicolumn{4}{@{}l}{\emph{pointwise by construction --- these take one state and do not batch:}}\\
-\texttt{kernel.singleEpoch} (compiled) & \multicolumn{3}{r}{1.30}\\
-\texttt{app.DynamicsSource.accel} (native) & \multicolumn{3}{r}{1.31}\\
+\texttt{kernel.singleEpoch} (compiled) & \multicolumn{3}{r}{1.29}\\
+\texttt{app.DynamicsSource.accel} (native) & \multicolumn{3}{r}{1.30}\\
 \bottomrule
 \end{tabular}
 \end{table}
