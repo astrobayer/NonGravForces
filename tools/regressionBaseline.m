@@ -40,6 +40,17 @@ function R = regressionBaseline(options)
 %   a missing or refused day changes what the common scale averages over; the
 %   reference lists the days used, and a comparison with other days fails.
 %
+%   THR1B IS PASSED (2026-11-04, owner: "Yes. Go ahead with it"). Until 0.18.0 the baseline gave
+%   app.calibrate no 'Thrusters', so its residuals carried every firing; tools/dayDiagnosis.m
+%   (PR #131) found that GRACE-D's 2020-01-22, the day after the safe mode, re-acquires attitude on
+%   thrusters (112 firings, 90.6 s on-time in hour 12) and that cutting the firings takes the day's
+%   cross-track residual from ~85 to 0.75 nm/s^2. Each day's THR1B is read by gracefoReading and
+%   handed to timeSeriesPreparation.run's mask stage, one Arc per day (its "thr" layer, margin from
+%   the preset). A day whose THR1B file is missing is refused, never run unmasked; a THR1B file with
+%   num_records 0 is a day without firings. THR1B records not on GPS time (GRACE-D 01-22, time_ref
+%   R, hours 6-11) are placed at their own tag: they fall before ACT1B resumes and touch no sample.
+%   The reference records the choice (meta.thrusters), and a comparison across it is refused.
+%
 % NAME-VALUE ARGUMENTS
 %   Name        Size  Type    Units  Description
 %   ----        ----  ----    -----  -----------
@@ -61,6 +72,8 @@ function R = regressionBaseline(options)
 %                                    result on 2020-01-05/06 (measured 2026-10-20)
 %   Reference   1x1   string  -      The reference file; default tools/baseline_reference.json. Another
 %                                    file serves a short trial of the comparison itself
+%   Thrusters   1x1   logical -      Pass each day's THR1B to calibrate's mask stage; default true
+%                                    (false reproduces the baselines frozen up to 0.18.0)
 %
 % OUTPUT ARGUMENTS
 %   Name  Size  Type    Units  Description
@@ -70,8 +83,11 @@ function R = regressionBaseline(options)
 %                              "compare") .pass (logical) .seconds
 %
 % ERRORS
-%   NonGravForces:regressionBaseline:dataMissing  no pool, no month folder, or no reference to compare
+%   NonGravForces:regressionBaseline:dataMissing  no pool, no month folder, no reference to compare, or a
+%                                                 used day without THR1B while 'Thrusters' is true
 %   NonGravForces:regressionBaseline:inputRange   an unknown Mode
+%   NonGravForces:regressionBaseline:inputThrusters  a comparison with a reference frozen under the other
+%                                                 'Thrusters' choice
 %
 % EXAMPLE
 %   R = regressionBaseline('Pool', "E:\DATAPOOL", 'Days', 15:16, 'Satellites', "C", 'NBoot', 0, 'Mode', "trial");
@@ -88,6 +104,7 @@ arguments
     options.Mode (1,1) string = "compare"
     options.Reference (1,1) string = ""
     options.Product (1,1) string = "ACT1B"
+    options.Thrusters (1,1) logical = true
 end
 unit = "regressionBaseline";
 if ~ismember(options.Product, ["ACT1B" "ACH1B"]) || (options.Product == "ACH1B" && (any(options.Satellites ~= "D") || options.Mode ~= "trial"))
@@ -135,14 +152,28 @@ t0 = tic;
 result = struct();
 meta = struct('toolbox', string(NonGravForces.toolboxVersion("string")), 'generated', string(datetime('now', 'TimeZone', 'UTC', 'Format', 'yyyy-MM-dd HH:mm')) + " UTC", ...
     'matlab', string(version), 'month', options.Month, 'preset', options.Preset, 'nBoot', options.NBoot, 'k', options.K, ...
+    'thrusters', options.Thrusters, ...
     'note', "ORC-10: every number may move by at most k of its sigma (scale: bootstrap over days; bias: formal)");
+if options.Mode == "compare"
+    refMeta = jsondecode(fileread(refFile)).meta;
+    refThr = isfield(refMeta, 'thrusters') && logical(refMeta.thrusters);   % absent: frozen before THR1B was passed
+    if refThr ~= options.Thrusters
+        NonGravForces.fail(unit, "inputThrusters", "%s was frozen with 'Thrusters' %d and this run has %d -> compare under the same choice, or re-freeze", ...
+            refFile, refThr, options.Thrusters);
+    end
+end
 for sat = options.Satellites
     ts = tic;
-    [acc, orb, att, used, noData] = localReadMonth(monthDir, days, sat, eop, options.Product);
-    fprintf('regressionBaseline %s: read %d days (%d without records) in %.0f s\n', sat, numel(used), numel(noData), toc(ts));
+    [acc, orb, att, used, noData, thr] = localReadMonth(monthDir, days, sat, eop, options.Product, options.Thrusters, unit);
+    fprintf('regressionBaseline %s: read %d days (%d without records), THR1B %s in %.0f s\n', sat, numel(used), numel(noData), ...
+        string(repmat('passed', 1, options.Thrusters)) + string(repmat('not passed', 1, ~options.Thrusters)), toc(ts));
+    thrArgs = {};
+    if options.Thrusters
+        if isscalar(thr), thrArgs = {'Thrusters', thr{1}}; else, thrArgs = {'Thrusters', thr}; end
+    end
     M = NonGravForces.Model(NonGravForces.geom.graceFO(sat), o, 'Attitude', att, 'Eop', eop, 'SpaceWeather', sw, scaleArgs{:});
     tc = tic;
-    res = NonGravForces.app.calibrate(acc, M, 'Orbit', orb, 'Attitude', att, 'Fit', {'NBoot', options.NBoot, 'BiasBasis', "linear"});
+    res = NonGravForces.app.calibrate(acc, M, 'Orbit', orb, 'Attitude', att, thrArgs{:}, 'Fit', {'NBoot', options.NBoot, 'BiasBasis', "linear"});
     fprintf('regressionBaseline %s: calibrate (run, model, joint fit, %d replicates) in %.0f s\n', sat, options.NBoot, toc(tc));
     if isfield(res, 'used')
         ok = res.used; cals = [res.calibration{ok}];
@@ -189,11 +220,13 @@ fclose(fid);
 end
 
 % =========================================================================================
-function [acc, orb, att, used, noData] = localReadMonth(monthDir, days, sat, eop, product)
-%LOCALREADMONTH The ACT1B arcs, GNV1B orbits and one SCA1B attitude provider of the days present.
+function [acc, orb, att, used, noData, thr] = localReadMonth(monthDir, days, sat, eop, product, withThr, unit)
+%LOCALREADMONTH The ACT1B arcs, GNV1B orbits, one SCA1B attitude provider and (withThr) each day's THR1B Arc
+%of the days present; thr is a cell, one entry per used day, [] for a THR1B file without records.
 names = {'lin_accl_x', 'lin_accl_y', 'lin_accl_z'};
 units = struct('lin_accl_x', 'm/s2', 'lin_accl_y', 'm/s2', 'lin_accl_z', 'm/s2');
 acc = timeSeriesPreparation.Arc.empty; orb = struct('epoch', {}, 'r', {}, 'v', {}); used = strings(1, 0); noData = strings(1, 0);
+thr = cell(1, 0);
 dayS = []; secS = []; qS = [];
 for d = days
     f = @(p) fullfile(monthDir, d, p + "_" + d + "_" + sat + "_04.txt");
@@ -208,6 +241,19 @@ for d = days
         continue
     end
     if isempty(a), noData(end + 1) = d; continue, end %#ok<AGROW>
+    th = [];
+    if withThr
+        if ~isfile(f("THR1B"))
+            NonGravForces.fail(unit, "dataMissing", "%s %s has ACT1B but no THR1B in the pool -> fetch the day, or run with 'Thrusters' false", sat, d);
+        end
+        try
+            [tt, ot, at] = gracefoReading.readL1b(f("THR1B"), "TimeFormat", "gpsns");
+            th = timeSeriesPreparation.Arc(tt, ot, at);
+        catch err
+            if err.identifier ~= "gracefoReading:readL1b:noData", rethrow(err); end   % no firings that day
+        end
+    end
+    thr{end + 1} = th; %#ok<AGROW>
     acc(end + 1) = timeSeriesPreparation.Arc(referenceSystem.epochTo(epC, "gpsNanoseconds"), a.', struct("obsNames", {names}, ...
         "variableNames", {names}, "variableFieldNames", {names}, "variableUnits", units, "fileName", product + "_" + d + "_" + sat + "_04.txt", "product", product)); %#ok<AGROW>
     orb(end + 1) = struct('epoch', ep, 'r', r, 'v', v); %#ok<AGROW>
