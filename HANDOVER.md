@@ -1704,6 +1704,29 @@ the frozen baseline fits through every firing on both satellites; D simply fires
 the baseline's calibration (readTHR1B must then accept a file whose non-GPS records lie outside the data, or drop them),
 re-freeze; or exclude the first hours after an ACT1B gap.
 
+### The baseline cuts the thruster firings (PR #134, 2026-11-04, owner: "Yes. Go ahead with it")
+
+`tools/regressionBaseline.m` passes each day's THR1B to `app.calibrate` ('Thrusters', default true): one
+`timeSeriesPreparation.Arc` per day, read by `gracefoReading.readL1b` (not `io.readTHR1B`, which refuses D 01-22's non-GPS
+records; they are placed at their tag and fall before ACT1B resumes), cut by `timeSeriesPreparation.run`'s mask stage (layer
+"thr", the preset's margin). A used day without a THR1B file is refused; a THR1B file with no records is a day without
+firings. `meta.thrusters` is recorded and a comparison across the choice is refused (`regressionBaseline:inputThrusters`);
+'Thrusters' false reproduces the baselines frozen up to 0.18.0.
+
+**Re-frozen** (release-checks `baseline-freeze`, run 41752108433, 76 min, toolbox 0.18.0; C 31 days, D 28, none refused).
+Residual rms x / y / z [nm/s^2] and scale, old (firings in) -> new (firings cut), moves in the old bootstrap sigma:
+
+| | rms x | rms y | rms z | S_xx | S_zz |
+|---|---|---|---|---|---|
+| C | 2.26 -> 2.24 | 2.51 -> **0.71** | 2.82 -> **2.03** | 0.9957 -> 0.9991 (+1.4 sigma) | 1.0940 -> 1.0924 (-0.9) |
+| D | 2.27 -> 2.20 | 12.08 -> **0.81** | 3.09 -> **2.27** | 1.0018 -> 1.0071 (+2.0) | 1.0685 -> 1.0786 (+3.6) |
+
+The firings were most of the cross-track residual on BOTH satellites, not only D's 01-22: C's y falls 3.5x, and C and D now
+agree (0.71 / 0.81). z falls ~28 %. D's S_zz moved by 3.6 old sigma (its sigma doubles to 0.0052): the firings had pulled
+D's radial scale; C and D still differ by 0.014 (1.0924 / 1.0786, ~2.4 joint sigma). checkAlignment warns as before (x
+-2..-21 s, y/z 1-15 s, largest on D's first days after the safe mode). The run REPLACED meta (no `verified` until the next
+compare at a release).
+
 ### Release 0.18.0 (2026-10-31, PR #130)
 
 What it carries: the transient thermal walls in `standard` (PR #126) and `precise` (PR #129, owner), served on the native

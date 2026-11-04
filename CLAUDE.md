@@ -175,8 +175,14 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-11-03, PR #132)
+## 5. Current status (2026-11-04, PR #134)
 
+- **2026-11-04, PR #134 (THR1B in the baseline, owner):** `tools/regressionBaseline.m` passes each day's THR1B to
+  `app.calibrate` ('Thrusters', default true; a used day without THR1B refused; `meta.thrusters` recorded, a comparison
+  across the choice refused). **Baseline RE-FROZEN** (run 41752108433): cross-track rms C 2.51 -> **0.71**, D 12.08 ->
+  **0.81** nm/s^2, radial 2.82 -> 2.03 / 3.09 -> 2.27; S_xx C 0.996 -> 0.999, D 1.002 -> 1.007; S_zz C 1.094 -> 1.092, D
+  1.069 -> **1.079** (+3.6 old sigma). The firings were most of the cross-track residual on both satellites. Tool only:
+  gate stays 511.
 - **2026-11-03, PR #132 (documentation status, owner):** `ci.yml`'s matlab job PRINTS `tests/last_run.txt` between
   BEGIN/END markers into the job log (the artifact's blob storage is unreachable from a cloud session, which is why the
   committed file stayed at 0.16.0's 444 tests through 0.18.0); the theory document gains the corrected SOLAARS-CF mapping
@@ -189,7 +195,8 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   **Owner: change to the new API (O-53 closed).** `app.fitCalibration` and `app.calibrate` declare a
   `lsqvce.TaskDefinition` (lsqvce 7 compiles it to the v6 declaration they built by hand and fits it bitwise
   alike); `'Noise'` takes an `lsqvce.Noise` (the v6 struct is refused, `fitCalibration:inputNoise`, one assertion in
-  `fitCalibrationContract`); lsqvce minimum 7.0; CI back on lsqvce `main`. Written without MATLAB: ◐, predicted 511.
+  `fitCalibrationContract`); lsqvce minimum 7.0; CI back on lsqvce `main`. Written without MATLAB, predicted 511;
+  ☑ CI on 2958989 (PR #133): 511/511, GATE TRUE, against lsqvce 7.0.1; merged.
 - **2026-11-01, PR #131 (GRACE-D day by day, owner):** D's cross-track residual over 2020-01 (12.08 nm/s^2 against C's
   2.51) is ONE day, 2020-01-22 (read from the baseline's per-day bias sigmas: ~85 nm/s^2 over half a day, ~3.2 without
   it). `tools/dayDiagnosis.m` (release-checks `what: daydiag`, run 41325337776) hour by hour: ACT1B resumes at ~12:03
