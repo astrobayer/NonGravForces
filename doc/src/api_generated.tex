@@ -5,7 +5,7 @@
 %
 % \input-able from a report-class document; it opens no document and no chapter.
 
-\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 64 units, toolbox version 0.18.0.
+\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 64 units, toolbox version 0.19.0.
 
 \section{L0 \texttt{core} --- constants, options, provenance, uniform errors and the MEX build}
 
@@ -198,7 +198,7 @@ c.\allowbreak{}grace & 1x1 & struct & - & Launch mass (Bettadpur 2012, GRACE 327
 
 \begin{lstlisting}
 v = NonGravForces.toolboxVersion            % struct
-s = NonGravForces.toolboxVersion('string')  % '0.18.0'
+s = NonGravForces.toolboxVersion('string')  % '0.19.0'
 \end{lstlisting}
 
 \subsubsection*{INPUT ARGUMENTS}
@@ -232,7 +232,7 @@ format & 1x1 & string & - & "struct" (default) or "string". \\
 \endfoot
 \bottomrule
 \endlastfoot
-v & 1x1 & struct & - & .major .minor .patch (uint16), .semantic (string, composed), .date (string, ISO), .concept (uint8, 3 = this redesign), .model (string: authoring model of this revision). With "string": char '0.18.0'. \\
+v & 1x1 & struct & - & .major .minor .patch (uint16), .semantic (string, composed), .date (string, ISO), .concept (uint8, 3 = this redesign), .model (string: authoring model of this revision). With "string": char '0.19.0'. \\
 \end{longtable}
 
 \subsubsection*{ERRORS}

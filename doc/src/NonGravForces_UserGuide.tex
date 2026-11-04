@@ -548,8 +548,9 @@ ordinary day that costs little, but not after a safe mode: on GRACE-D's 2020-01-
 resumes, the first hour carries 112 firings with 90.6\,s of on-time and a cross-track residual of
 \SI{294}{\nano\metre\per\second\squared}, and the day's \SI{83}{\nano\metre\per\second\squared} falls
 to \SI{0.75}{} once every firing is cut --- as good as GRACE-C's \SI{0.70}{} that day
-(\texttt{tools/dayDiagnosis.m}). That one day is GRACE-D's whole excess in the January 2020 regression
-baseline, which, as of 0.18.0, is calibrated without THR1B.
+(\texttt{tools/dayDiagnosis.m}). That one day was GRACE-D's whole excess in the January 2020 regression
+baseline until v0.19.0, which passes THR1B: its cross-track residual is now \SI{0.71}{} (GRACE-C) and
+\SI{0.81}{\nano\metre\per\second\squared} (GRACE-D), against \SI{2.51}{} and \SI{12.08}{} before.
 
 \section{What this chain actually prints}
 \noindent Printed by \texttt{tools/userGuideTranscript.m} (release-checks \texttt{what: transcript}, run

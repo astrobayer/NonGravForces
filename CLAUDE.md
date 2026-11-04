@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-10-18 (release 0.16.0), 2026-10-26 (PR #107, observation data) 2026-10-29 (release 0.17.0) and 2026-10-31 (release 0.18.0) by Claude Opus 5.5. Toolbox version 0.18.0.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-10-18 (release 0.16.0), 2026-10-26 (PR #107, observation data) 2026-10-29 (release 0.17.0), 2026-10-31 (release 0.18.0) and 2026-11-04 (release 0.19.0) by Claude Opus 5.5. Toolbox version 0.19.0.
 
 ---
 
@@ -175,8 +175,10 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-11-04, PR #134)
+## 5. Current status (2026-11-04, release 0.19.0)
 
+- **2026-11-04, release 0.19.0 (PR #135):** version bumped; the release measurements on the runner (baseline-compare,
+  benchmark) follow in this PR. ◐ until both are read. Gate stays 511.
 - **2026-11-04, PR #134 (THR1B in the baseline, owner):** `tools/regressionBaseline.m` passes each day's THR1B to
   `app.calibrate` ('Thrusters', default true; a used day without THR1B refused; `meta.thrusters` recorded, a comparison
   across the choice refused). **Baseline RE-FROZEN** (run 41752108433): cross-track rms C 2.51 -> **0.71**, D 12.08 ->
