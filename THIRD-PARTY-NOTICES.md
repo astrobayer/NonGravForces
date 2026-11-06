@@ -207,3 +207,24 @@ European Space Agency, freely and openly, and their use is subject to ESA's term
 header of every file names them (`https://vires.services/data_terms`). **Data provided by
 the European Space Agency (ESA), Swarm mission.** They are not covered by the MIT licence of
 this toolbox.
+
+### ESA TOLEOS accelerometer densities (2026-10-28)
+
+`data/samples/toleos/` holds six hours each of TU Delft's accelerometer-derived thermosphere
+densities of CHAMP (`CH_OPER_DNS_ACC_2_`), GRACE-A (`GR_OPER_DNS1ACC_2_`) and GRACE-FO 1
+(`GF_OPER_DNS1ACC_2_`), ESA TOLEOS version 02, as the VirES for Swarm HAPI server returns them
+(header unchanged), cut by `tools/cutFixtures.py` from the month files
+`setupNonGravForces('DensityMonths')` puts into DATAPOOL. The datasets are published under
+**CC BY 4.0** and are subject to ESA's terms as every file's header names them
+(`https://vires.services/data_terms`): reuse is allowed, commercial use included, with
+attribution to ESA (TOLEOS) and TU Delft. They are not covered by the MIT licence of this
+toolbox.
+
+### Licence classes for an installer (2026-11-06)
+
+`NonGravForces.fetchCatalog` gives every source `setupNonGravForces` can fetch a licence class
+and names the heading of this file that records it: `open` (reuse allowed with attribution),
+`academic` (research, academic and non-profit use only), `unstated` (no licence and no grant in
+the package; nothing may be inferred from that) or `unreviewed` (the provider's terms apply and
+this repository has not reviewed them; no heading here). The class says what this file records,
+and nothing more; it is not legal advice.

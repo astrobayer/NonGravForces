@@ -53,5 +53,7 @@ ex.buildMex.speed               = "a compile is not timed";
 ex.boxWing.vectorization        = "factory returns one object";
 ex.boxWing.speed                = "no numerical work";
 ex.accommodation.speed          = "two closed forms per epoch; there is no algorithm whose cost a ratio could guard";
+ex.fetchCatalog.vectorization   = "one catalogue per call; a selection is already a list and is expanded in one call";
+ex.fetchCatalog.speed           = "a table of twenty rows and a date expansion; there is no algorithm whose cost a ratio could guard";
 ex.assemble.reference           = "two sums and a cross product have no authority outside arithmetic; closed forms are asserted under precision";
 end

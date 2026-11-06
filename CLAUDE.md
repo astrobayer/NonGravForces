@@ -48,7 +48,7 @@ L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
 L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options, buildMex
 ```
 
-64 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
+65 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
 both directions against the files on disk, and this sentence's number against it
 — which it genuinely did not until 2026-09-16, when the sentence said 53 and the
 catalogue held 55; `auditPackage.py` check 5 now compares both this number and
@@ -177,6 +177,12 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-11-04, release 0.19.0)
 
+- **2026-11-06, PR #136 (fetch catalogue, owner: the toolbox installer):** `NonGravForces.fetchCatalog` (65 units) owns the
+  fetchable ids, the products' spans (measured: ITSG GRACE 2002-04-04..2017-06-29, GRACE-FO from 2018-06-01; Swarm from
+  2014-01), per-item sizes, the licence class THIRD-PARTY-NOTICES.md records, and the expansion of "a..b" / "all";
+  `setupNonGravForces` expands through it, takes `'Items'` (a selected id whose setting is "never" is refused) and tags
+  every record with its id. 5 tests in `tests/tNgfFetchCatalog.m`; the metamorphic one compares the catalogue with
+  setup's records per id (fault-injected). ◐ predicted gate 516; 5/5 on the owner's host.
 - **2026-11-04, release 0.19.0 (PR #135):** lsqvce 7 (#133), the baseline with the firings cut (#134), dayDiagnosis
   (#131). Release measurements on the CI runner: **baseline PASSED at 0.19.0** (run 41765827182: every compared number
   0 sigma from the 2026-11-04 freeze -- S_xx, S_zz, 186 / 168 biases, C and D); benchmark (run 41765830311) standard
