@@ -182,7 +182,8 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   2014-01), per-item sizes, the licence class THIRD-PARTY-NOTICES.md records, and the expansion of "a..b" / "all";
   `setupNonGravForces` expands through it, takes `'Items'` (a selected id whose setting is "never" is refused) and tags
   every record with its id. 5 tests in `tests/tNgfFetchCatalog.m`; the metamorphic one compares the catalogue with
-  setup's records per id (fault-injected). ◐ predicted gate 516; 5/5 on the owner's host.
+  setup's records per id (fault-injected). An empty `PoolDays` now fetches no reference-day observation
+  (F30 included), for the installer's month-only requests. ☑ CI 42243962286: 516/516, GATE TRUE, predicted 516.
 - **2026-11-04, release 0.19.0 (PR #135):** lsqvce 7 (#133), the baseline with the firings cut (#134), dayDiagnosis
   (#131). Release measurements on the CI runner: **baseline PASSED at 0.19.0** (run 41765827182: every compared number
   0 sigma from the 2026-11-04 freeze -- S_xx, S_zz, 186 / 168 biases, C and D); benchmark (run 41765830311) standard
