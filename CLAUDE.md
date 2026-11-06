@@ -48,7 +48,7 @@ L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
 L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options, buildMex
 ```
 
-64 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
+65 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
 both directions against the files on disk, and this sentence's number against it
 — which it genuinely did not until 2026-09-16, when the sentence said 53 and the
 catalogue held 55; `auditPackage.py` check 5 now compares both this number and

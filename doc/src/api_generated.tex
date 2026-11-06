@@ -5,7 +5,7 @@
 %
 % \input-able from a report-class document; it opens no document and no chapter.
 
-\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 64 units, toolbox version 0.19.0.
+\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 65 units, toolbox version 0.19.0.
 
 \section{L0 \texttt{core} --- constants, options, provenance, uniform errors and the MEX build}
 
@@ -468,6 +468,68 @@ report & 1xT & struct & - & One element per target (T = 1 for a named Target, 6 
 \item[\texttt{NonGravForces:\allowbreak{}buildMex:\allowbreak{}dataMissing}] a source file of mex/ is missing
 \item[\texttt{NonGravForces:\allowbreak{}buildMex:\allowbreak{}numericBuild}] gfortran refused a file (its output is in the message)
 \item[\texttt{MATLAB:\allowbreak{}mex:\allowbreak{}*}] compiler errors propagate unwrapped
+\end{description}
+
+\subsection{\texttt{NonGravForces.fetchCatalog}}
+\label{api:NonGravForces.fetchCatalog}
+\noindent Everything setupNonGravForces can fetch: spans, sizes, licence classes, and what a selection implies.
+
+\begin{lstlisting}
+T = NonGravForces.fetchCatalog
+[T, plan] = NonGravForces.fetchCatalog('PoolDays', "2020-01-01..2020-01-31", 'Items', ["itsg" "dst"])
+[T, plan] = NonGravForces.fetchCatalog('PoolMonths', "all")
+\end{lstlisting}
+
+\subsubsection*{INPUT ARGUMENTS}
+
+\noindent (none)
+
+\subsubsection*{NAME-VALUE ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+PoolDays & 1xN & string & - & Reference days for FetchPool (Dst, F30, ITSG, Swarm, TOLEOS); default none. \\
+PoolMonths & 1xM & string & - & Whole months (GRACE-FO Level-1B, Swarm, complete SW-All and finals2000A), from 2018-06; default none. \\
+SwarmMonths & 1xS & string & - & Months of Swarm A/B/C densities alone, from 2014-01; default none. \\
+DensityMonths & 1xD & string & - & Months of TOLEOS densities (CHAMP, GRACE-A, GRACE-FO 1); a month no mission flew in is refused; default none. \\
+Items & 1xI & string & - & Ids to select (column id); default empty = every id. \\
+Today & 1x1 & datetime & - & The date "ongoing" and "in the future" are judged against; default today (UTC). Tests pass a fixed date. \\
+\end{longtable}
+
+\subsubsection*{OUTPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+T & Rx20 & table & - & One row per id: id, group, description, setting (the setup option that governs it), parameter (the selection that sizes it, "" if fixed), destination ("toolbox" \textbar{} "pool"), unit (what one item is), first, last (datetime, NaT for undated), ongoing (logical), download\_MB, disk\_MB (per item), sizeBasis, licence, licenceText, notice, source (host), selected (logical), count (items this selection implies; undated sources count their fixed files), totalDisk\_MB (count x disk\_MB, 0 when not selected). \\
+plan & 1x1 & struct & - & .PoolDays, .PoolMonths, .SwarmMonths, .DensityMonths (expanded, 1xK string "yyyy-mm-dd" / "yyyy-mm"), .Items (1xI string, the ids selected), .toleos (1x3 struct: dataset, start, stop as "yyyy-mm-ddTHH:MM:SS"), .itsgSpans (2x2 datetime, rows GRACE and GRACE-FO), .swarmFirst, .l1bFirst, .lastComplete, .today (datetime). \\
+\end{longtable}
+
+\subsubsection*{ERRORS}
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
+\item[\texttt{NonGravForces:\allowbreak{}fetchCatalog:\allowbreak{}inputSyntax}] An element is not a day, a month, a range or "all".
+\item[\texttt{NonGravForces:\allowbreak{}fetchCatalog:\allowbreak{}inputRange}] A range ends before it starts.
+\item[\texttt{NonGravForces:\allowbreak{}fetchCatalog:\allowbreak{}inputSpan}] A date before the product's first or after 'Today', or a DensityMonths month no TOLEOS mission flew in.
+\item[\texttt{NonGravForces:\allowbreak{}fetchCatalog:\allowbreak{}inputItems}] An id in Items that the catalogue does not hold.
 \end{description}
 
 \section{L1 \texttt{io} --- Level-1B products, the mass model, space weather and external grids}

@@ -15,6 +15,8 @@
 %   buildMex           - Build the MEX gateways in mex/ (msis, kernel; never
 %                        committed) or report their state
 %   provenance         - Metadata record that travels with every result
+%   fetchCatalog       - Everything setupNonGravForces can fetch: ids, spans, sizes,
+%                        licence classes, and the expansion of a day/month selection
 %
 % Layers (see doc)
 %   io      - readers over gracefoReading, space weather, mass, CERES, IGRF

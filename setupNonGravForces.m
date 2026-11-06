@@ -113,15 +113,20 @@ function info = setupNonGravForces(options)
 %                                    days (Dst, F30, TU Graz products, Swarm densities), into DataPool (default
 %                                    "ifMissing"; nothing happens without a DataPool). ciGate passes
 %                                    "never": the gate reads committed excerpts, not the network.
-%   PoolDays   1xN   string   -      Reference days for FetchPool, "yyyy-mm-dd" (default the fixture
-%                                    days "2008-01-01" "2020-01-01" "2020-01-02" "2020-01-03").
+%   PoolDays   1xN   string   -      Reference days for FetchPool, "yyyy-mm-dd", ranges "yyyy-mm-dd..yyyy-mm-dd"
+%                                    or "all" (TU Graz's operational spans; NonGravForces.fetchCatalog
+%                                    expands every selection), default the fixture days "2008-01-01"
+%                                    "2020-01-01" "2020-01-02" "2020-01-03".
 %   SwarmMonths 1xS  string   -      Months of Swarm A/B/C densities alone for FetchPool, "yyyy-mm" from
-%                                    2013-12 (default none): the base of tools/densityDriverFit.m.
+%                                    2014-01 (the first month of the HAPI header; "2013-12" was written
+%                                    here until 2026-11-06 and fetched nothing), ranges "yyyy-mm..yyyy-mm"
+%                                    or "all" (default none): the base of tools/densityDriverFit.m.
 %                                    About 40 MB per month for the three satellites.
 %   DensityMonths 1xD string -       Months of TU Delft's CHAMP, GRACE and GRACE-FO accelerometer
-%                                    densities (ESA TOLEOS) for FetchPool, "yyyy-mm" (default none);
-%                                    each month fetches the missions flying in it.
-%   PoolMonths 1xM   string   -      Whole months for FetchPool, "yyyy-mm" from 2018-06 (default none):
+%                                    densities (ESA TOLEOS) for FetchPool, "yyyy-mm", ranges or "all"
+%                                    (default none); each month fetches the missions flying in it, and
+%                                    a month no mission flew in is refused.
+%   PoolMonths 1xM   string   -      Whole months for FetchPool, "yyyy-mm" from 2018-06, ranges or "all" (default none):
 %                                    GRACE-C/D Level-1B, Swarm densities and the complete space-weather
 %                                    and EOP files a month run (tools/dragScaleMonth.m) needs. A day
 %                                    archive is about 150 MB, a month about 4.5 GB.
@@ -131,6 +136,14 @@ function info = setupNonGravForces(options)
 %                                    are committed as excerpts. A planetary ephemeris is model data,
 %                                    like the MSIS and HWM14 sources, and the gate needs it or the
 %                                    precise preset's own sun.source stays untested (HANDOVER O-7).
+%   Items      1xI   string   -      Catalogue ids to consider (NonGravForces.fetchCatalog, column id),
+%                                    default empty = all. A listed id follows its Fetch setting; an
+%                                    id left out is treated as "never" and reported "missing (not
+%                                    selected by Items)" when absent. A listed id whose setting is
+%                                    "never" is REFUSED (setupNonGravForces:itemsNever): selecting a
+%                                    GROOPS grid needs FetchGroops "ifMissing" too. Every record in
+%                                    .sources and .data.items carries its id, which is how an
+%                                    installer maps a file back to the source it chose.
 %
 % OUTPUT ARGUMENTS
 %   Name      Size  Type     Units  Description
@@ -140,20 +153,27 @@ function info = setupNonGravForces(options)
 %                                   .mex (1xT NonGravForces.buildMex('Check') report, one element per target),
 %                                   .msis (.dir, .action "present"|"fetched"|"skipped"|"failed", .url, .commit, .message),
 %                                   .sources (struct array: name, action, dir, source, message),
-%                                   .data (.items struct array: name, action, file, source; .mode;
-%                                   the Level-1B item's file lists the members, one per line)
+%                                   .data (.items struct array: name, action, file, source, id; .mode
+%                                   (FetchData); the Level-1B item's file lists the members, one per line),
+%                                   .catalog (NonGravForces.fetchCatalog's table for this selection),
+%                                   .plan (its expanded selection: PoolDays, PoolMonths, ...)
 %
 % ERRORS
 %   None raised for absent dependencies or failed fetches: absence is REPORTED (rule R4/R5).
+%   NonGravForces:fetchCatalog:*   A selection the catalogue refuses (syntax, range, span, unknown
+%                                  Items id), raised before any network action.
+%   setupNonGravForces:itemsNever  'Items' selects an id whose Fetch setting is "never".
 %
 % EXAMPLE
 %   info = setupNonGravForces('FetchData', "never");
 %   [info.sources.name; info.sources.action]
+%   % one source over a span, nothing else touched:
+%   info = setupNonGravForces('Items', "itsg", 'PoolDays', "2020-01-01..2020-01-31", 'DataPool', "E:\DATAPOOL");
 %
 % See also NonGravForces.dependencyReport, NonGravForces.buildMex, runNgfTests.
 %
 % KEYWORDS setup path dependencies fetch
-% Created 2026-08-27 by Claude Fable 5 (Anthropic) for Matthias Weigelt; content-checked fetches and NRLMSIS 2.1 2026-09-15 by Claude Opus 5 (Anthropic); FetchPool 2026-10-26 by Claude Opus 5.5 (Anthropic).
+% Created 2026-08-27 by Claude Fable 5 (Anthropic) for Matthias Weigelt; content-checked fetches and NRLMSIS 2.1 2026-09-15 by Claude Opus 5 (Anthropic); FetchPool 2026-10-26 by Claude Opus 5.5 (Anthropic); Items, ranges and "all" through NonGravForces.fetchCatalog 2026-11-06 by Claude Opus 5.5 (Anthropic).
 arguments
     options.Verbose (1,1) logical = true
     options.FetchMsis (1,1) string {mustBeMember(options.FetchMsis, ["ifMissing","never","force"])} = "ifMissing"
@@ -163,9 +183,10 @@ arguments
     options.DataPool (1,1) string = string(getenv('DATAPOOL'))
     options.FetchPool (1,1) string {mustBeMember(options.FetchPool, ["ifMissing","never","force"])} = "ifMissing"
     options.PoolDays (1,:) string {mustBeNonempty} = ["2008-01-01" "2020-01-01" "2020-01-02" "2020-01-03"]
-    options.PoolMonths (1,:) string {localMustBeMonths} = strings(1, 0)
+    options.PoolMonths (1,:) string = strings(1, 0)
     options.SwarmMonths (1,:) string = strings(1, 0)
     options.DensityMonths (1,:) string = strings(1, 0)
+    options.Items (1,:) string = strings(1, 0)
 end
 % THE PINS AND URLS LIVE HERE AND NOWHERE ELSE (rule R1). Moving a pin is an act with a run behind it.
 % NRLMSISE-00: bc9a2fe is "gtd7: fix output at 32.5 km" (Argon densities and a memory corruption fixed
@@ -232,7 +253,8 @@ GROOPS_BASE = "https://ftp.tugraz.at/pub/ITSG/groops/data";
 GROOPS_FILES = struct( ...
     'name', {"CERES_SYN1deg_albedo_climatology.dat", "CERES_SYN1deg_longwaveFlux_climatology.dat", ...
              "earth_ceres_reflectivity_grid2.5.dat", "earth_ceres_emissivity_grid2.5.dat"}, ...
-    'folder', {"earthRadiationPressure", "earthRadiationPressure", "albedo", "albedo"});
+    'folder', {"earthRadiationPressure", "earthRadiationPressure", "albedo", "albedo"}, ...
+    'id', {"groops-syn1deg", "groops-syn1deg", "groops-grid", "groops-grid"});
 % Observations for the reference days (FetchPool). The three sources were found by the fetch-data
 % workflow's probes of 2026-10-26 (PR #107, runs 40358650063 to 40375328241). NO SHA-256 PINS: the
 % days are a parameter, and CLS rewrites its files daily; each reply is checked by its first line.
@@ -256,13 +278,20 @@ SWARM_SATS = ["A" "B" "C"];
 % A request reaching outside a dataset's startDate..stopDate is refused with 400 (run 40637542696: the six
 % partial months at the ends), so the first and last month are clipped to the span; GRACE-FO's stopDate
 % grows as TU Delft publishes, and a month past it is reported as failed until this pin is moved.
-TOLEOS = struct('dataset', {"CH_OPER_DNS_ACC_2_", "GR_OPER_DNS1ACC_2_", "GF_OPER_DNS1ACC_2_"}, ...
-    'start', {"2000-07-29T00:00:00", "2002-04-04T00:00:00", "2018-05-29T00:00:00"}, ...
-    'stop', {"2010-09-04T23:59:50", "2017-10-31T23:59:50", "2026-04-30T23:59:50"});
+% THE DATASETS AND THEIR SPANS LIVE IN NonGravForces.fetchCatalog (plan.toleos), with every other span
+% this function fetches by; it is read from there below (2026-11-06).
 DE440_FILE = "de440s.bsp";
 DE440_SHA256 = "c1c7feeab882263fc493a9d5a5b2ddd71b54826cdf65d8d17a76126b260a49f2";
 root = fileparts(mfilename('fullpath'));
 addpath(root, fullfile(root,'tests'), fullfile(root,'tools'), fullfile(root,'demos'));
+% THE SELECTION IS EXPANDED AND CHECKED BEFORE ANY NETWORK ACTION, by the unit that owns the ids, the
+% spans and the syntax ("a..b", "all"): NonGravForces.fetchCatalog. A bad selection raises its
+% NonGravForces:fetchCatalog:* error here, with nothing fetched.
+[catalog, plan] = NonGravForces.fetchCatalog('PoolDays', options.PoolDays, 'PoolMonths', options.PoolMonths, ...
+    'SwarmMonths', options.SwarmMonths, 'DensityMonths', options.DensityMonths, 'Items', options.Items);
+modes = localModes(catalog, options);
+modeOf = @(id) modes(id);
+TOLEOS = plan.toleos;
 % Help-browser registration: info.xml at the root is picked up by doc.
 try
     builddocsearchdb(fullfile(root,'doc','html'));
@@ -272,35 +301,48 @@ end
 info.root    = root;
 info.version = NonGravForces.toolboxVersion('string');
 info.dependencies = NonGravForces.dependencyReport('Verbose', options.Verbose);
-info.msis = localFetchMsis(root, MSIS_URL, MSIS_COMMIT, options.FetchMsis);
+info.msis = localFetchMsis(root, MSIS_URL, MSIS_COMMIT, modeOf("nrlmsise00"));
 msis21 = localFetchArchive("nrlmsis21", fullfile(root, 'mex', 'nrlmsis21'), "msis_calc.F90", MSIS21_URL, MSIS21_SHA256, ...
-    options.FetchMsis, "This software incorporates the MSIS(R) empirical atmospheric model software designed and provided by NRL. " + ...
+    modeOf("nrlmsis21"), "This software incorporates the MSIS(R) empirical atmospheric model software designed and provided by NRL. " + ...
     "Use is governed by the Open Source Academic Research License Agreement contained in the file nrlmsis2.1_license.txt (research, academic and non-profit use only).");
-hwm14 = localFetchFiles("hwm14", fullfile(root, 'mex', 'hwm14'), HWM14_FILES, options.FetchMsis);
-dtm2020 = localFetchFiles("dtm2020", fullfile(root, 'mex', 'dtm2020'), DTM2020_FILES, options.FetchMsis);
+hwm14 = localFetchFiles("hwm14", fullfile(root, 'mex', 'hwm14'), HWM14_FILES, modeOf("hwm14"));
+dtm2020 = localFetchFiles("dtm2020", fullfile(root, 'mex', 'dtm2020'), DTM2020_FILES, modeOf("dtm2020"));
 if dtm2020.action == "fetched"
     dtm2020.message = "The DTM software is property of CNES, licensed for academic, non-commercial purposes only; it may not be modified " + ...
         "or redistributed (mex/dtm2020/LICENSE_MCM_DTM.txt). Mention CNES's DTM in any publication of results based on it.";
     fprintf('setupNonGravForces: %s\n', dtm2020.message);
 end
-info.sources = [struct('name', "nrlmsise00", 'action', info.msis.action, 'dir', info.msis.dir, 'source', MSIS_URL, 'message', info.msis.message), msis21, hwm14, dtm2020];
-info.data = localFetchData(root, EOP_URL, SW_URL, IGRF_URL, L1B_BASE, L1B_DAY, L1B_MEMBERS, options.FetchData);
-info.data.items = [info.data.items, localFetchCeres(root, CERES_BASE, CERES_FILES, CERES_SHA256, options.FetchData)];
-info.data.items = [info.data.items, localFetchKernel(root, DE440_FILE, DE440_SHA256, options.FetchKernels)];
+msis00 = struct('name', "nrlmsise00", 'action', info.msis.action, 'dir', info.msis.dir, 'source', MSIS_URL, 'message', info.msis.message, 'id', "nrlmsise00");
+msis21.id = "nrlmsis21"; hwm14.id = "hwm14"; dtm2020.id = "dtm2020";
+info.sources = [msis00, msis21, hwm14, dtm2020];
+info.data = localFetchData(root, EOP_URL, SW_URL, IGRF_URL, L1B_BASE, L1B_DAY, L1B_MEMBERS, modeOf);
+info.data.mode = options.FetchData;
+info.data.items = [info.data.items, localFetchCeres(root, CERES_BASE, CERES_FILES, CERES_SHA256, modeOf("ceres"))];
+info.data.items = [info.data.items, localFetchKernel(root, DE440_FILE, DE440_SHA256, modeOf("de440"))];
 info.dataPool = options.DataPool;
-info.data.items = [info.data.items, localFetchGroops(options.DataPool, GROOPS_BASE, GROOPS_FILES, options.FetchGroops)];
-info.data.items = [info.data.items, localFetchPool(options.DataPool, options.PoolDays, DST_BASE, F30_BASE, F30_FILES, ...
-    ITSG_BASE, ITSG_PRODUCTS, SWARM_HAPI, SWARM_SATS, TOLEOS, options.FetchPool)];
-info.data.items = [info.data.items, localFetchPoolMonths(options.DataPool, options.PoolMonths, L1B_BASE, L1B_MONTH_PRODUCTS, ...
-    SWARM_HAPI, SWARM_SATS, EOP_URL, SW_URL, options.FetchPool)];
-if ~isempty(options.SwarmMonths) && strlength(options.DataPool) > 0
-    info.data.items = [info.data.items, localFetchTargets(struct('name', {}, 'action', {}, 'file', {}, 'source', {}), ...
-        localSwarmTargets(options.DataPool, datetime(options.SwarmMonths, 'InputFormat', 'yyyy-MM'), SWARM_HAPI, SWARM_SATS), options.FetchPool)];
+info.data.items = [info.data.items, localFetchGroops(options.DataPool, GROOPS_BASE, GROOPS_FILES, modeOf)];
+info.data.items = [info.data.items, localFetchPool(options.DataPool, plan.PoolDays, DST_BASE, F30_BASE, F30_FILES, ...
+    ITSG_BASE, ITSG_PRODUCTS, SWARM_HAPI, SWARM_SATS, TOLEOS, plan.swarmFirst, modeOf)];
+info.data.items = [info.data.items, localFetchPoolMonths(options.DataPool, plan.PoolMonths, L1B_BASE, L1B_MONTH_PRODUCTS, ...
+    SWARM_HAPI, SWARM_SATS, EOP_URL, SW_URL, plan.swarmFirst, modeOf)];
+if ~isempty(plan.SwarmMonths) && strlength(options.DataPool) > 0
+    info.data.items = [info.data.items, localFetchTargets(localNoItems(), ...
+        localSwarmTargets(options.DataPool, datetime(plan.SwarmMonths, 'InputFormat', 'yyyy-MM'), SWARM_HAPI, SWARM_SATS), modeOf)];
 end
-if ~isempty(options.DensityMonths) && strlength(options.DataPool) > 0
-    info.data.items = [info.data.items, localFetchTargets(struct('name', {}, 'action', {}, 'file', {}, 'source', {}), ...
-        localToleosTargets(options.DataPool, datetime(options.DensityMonths, 'InputFormat', 'yyyy-MM'), SWARM_HAPI, TOLEOS), options.FetchPool)];
+if ~isempty(plan.DensityMonths) && strlength(options.DataPool) > 0
+    info.data.items = [info.data.items, localFetchTargets(localNoItems(), ...
+        localToleosTargets(options.DataPool, datetime(plan.DensityMonths, 'InputFormat', 'yyyy-MM'), SWARM_HAPI, TOLEOS), modeOf)];
 end
+% An item left out by 'Items' says so, instead of naming a Fetch setting the caller did not choose.
+if ~isempty(options.Items)
+    for k = 1:numel(info.data.items)
+        if ~any(info.data.items(k).id == options.Items) && startsWith(info.data.items(k).action, "missing (")
+            info.data.items(k).action = "missing (not selected by Items)";
+        end
+    end
+end
+info.catalog = catalog;
+info.plan = plan;
 info.mex = NonGravForces.buildMex('Check', true);      % 1xT: one element per target
 if options.Verbose
     for m = 1:numel(info.mex)
@@ -320,9 +362,9 @@ if options.Verbose
 end
 end
 
-function d = localFetchData(root, eopUrl, swUrl, igrfUrl, l1bBase, l1bDay, l1bMembers, mode)
+function d = localFetchData(root, eopUrl, swUrl, igrfUrl, l1bBase, l1bDay, l1bMembers, modeOf)
 %LOCALFETCHDATA The data files that can be had without an account, each checked by its content.
-items = struct('name', {}, 'action', {}, 'file', {}, 'source', {});
+items = localNoItems();
 % name, folder, exact file, url, content check (a pattern the file's head must match)
 targets = {"eop", fullfile(root, 'data', 'eop'), "finals2000A.all", eopUrl, '^\s*\d{1,2}\s*\d{1,2}\s*\d{1,2}\s+\d{5}\.\d{2}\s+[IP]'; ...
            "spaceweather", fullfile(root, 'data', 'spaceweather'), "SW-All.csv", swUrl, '^DATE,BSRN,ND,KP1'; ...
@@ -331,7 +373,8 @@ for t = 1:size(targets, 1)
     folder = targets{t, 2};
     dst = fullfile(folder, char(targets{t, 3}));
     present = isfile(dst);
-    rec = struct('name', targets{t, 1}, 'action', "present", 'file', string(dst), 'source', targets{t, 4});
+    rec = struct('name', targets{t, 1}, 'action', "present", 'file', string(dst), 'source', targets{t, 4}, 'id', targets{t, 1});
+    mode = modeOf(targets{t, 1});
     if mode == "never" || (present && mode ~= "force")
         if ~present, rec.action = "missing (FetchData never)"; rec.file = ""; end
         items(end+1) = rec; %#ok<AGROW>
@@ -366,7 +409,8 @@ end
 l1b = fullfile(root, 'data', 'l1b');
 url = l1bBase + "/" + extractBefore(l1bDay, 5) + "/gracefo_1B_" + l1bDay + "_RL04.ascii.noLRI.tgz";
 missing = l1bMembers(~isfile(fullfile(l1b, l1bMembers)));
-rec = struct('name', "l1b", 'action', "present", 'file', strjoin(fullfile(l1b, l1bMembers), newline), 'source', url);
+rec = struct('name', "l1b", 'action', "present", 'file', strjoin(fullfile(l1b, l1bMembers), newline), 'source', url, 'id', "l1b-reference");
+mode = modeOf("l1b-reference");
 if mode == "never" || (isempty(missing) && mode ~= "force")
     if ~isempty(missing), rec.action = "missing (FetchData never)"; rec.file = ""; end
 else
@@ -397,10 +441,10 @@ else
     if isfolder(unpack), rmdir(unpack, 's'); end
 end
 items(end+1) = rec;
-d = struct('items', items, 'mode', mode);
+d = struct('items', items, 'mode', "");
 end
 
-function items = localFetchGroops(pool, base, files, mode)
+function items = localFetchGroops(pool, base, files, modeOf)
 %LOCALFETCHGROOPS The GROOPS Earth-radiation grids, into a dedicated DATAPOOL subfolder.
 %   THE POOL IS NAMED, NEVER GUESSED. Without DATAPOOL this reports and does nothing: choosing a
 %   directory for 2.5 GB on the user's behalf is not a service (R5), and the owner keeps the pool on
@@ -410,11 +454,11 @@ function items = localFetchGroops(pool, base, files, mode)
 %   publisher states plainly that it does not commit to keeping them updated, and a digest measured
 %   once here would turn their next revision into a failure rather than a fact. What IS checked is
 %   the GROOPS magic and type string, by reading the first bytes -- content, not a status code (F15).
-items = struct('name', {}, 'action', {}, 'file', {}, 'source', {});
+items = localNoItems();
 if strlength(pool) == 0
     items(end+1) = struct('name', "groops", 'action', ...
         "skipped: DATAPOOL is not set -> set the DATAPOOL environment variable or pass 'DataPool'", ...
-        'file', "", 'source', base);
+        'file', "", 'source', base, 'id', "");
     return
 end
 for k = 1:numel(files)
@@ -422,7 +466,8 @@ for k = 1:numel(files)
     dst = fullfile(folder, files(k).name);
     url = base + "/" + files(k).folder + "/" + files(k).name;
     rec = struct('name', "groops " + extractBefore(files(k).name + ".", "."), 'action', "present", ...
-        'file', string(dst), 'source', url);
+        'file', string(dst), 'source', url, 'id', files(k).id);
+    mode = modeOf(files(k).id);
     present = isfile(dst);
     if present && mode ~= "force"
         if ~localGroopsMagic(dst)
@@ -462,21 +507,21 @@ for k = 1:numel(files)
 end
 end
 
-function items = localFetchPool(pool, days, dstBase, f30Base, f30Files, itsgBase, itsgProducts, swarmHapi, swarmSats, toleos, mode)
+function items = localFetchPool(pool, days, dstBase, f30Base, f30Files, itsgBase, itsgProducts, swarmHapi, swarmSats, toleos, swarmFirst, modeOf)
 %LOCALFETCHPOOL Observations of the reference days into DATAPOOL: Dst, F30, TU Graz's products, Swarm and TOLEOS densities.
 %   The pool is named, never guessed (localFetchGroops says why). Every reply is checked by its first
 %   lines before it replaces anything -- for a .gz, those of what it decompresses to -- and a failure
 %   is REPORTED per file, never raised. Kyoto keeps FINAL Dst only for months a few years old; a
 %   recent day reports "failed" for its month rather than silently taking provisional values.
-items = struct('name', {}, 'action', {}, 'file', {}, 'source', {});
+items = localNoItems();
 if strlength(pool) == 0
     items(end+1) = struct('name', "pool", 'action', ...
         "skipped: DATAPOOL is not set -> set the DATAPOOL environment variable or pass 'DataPool'", ...
-        'file', "", 'source', "");
+        'file', "", 'source', "", 'id', "");
     return
 end
 d = datetime(days, 'InputFormat', 'yyyy-MM-dd');
-targets = struct('name', {}, 'url', {}, 'dst', {}, 'check', {});
+targets = struct('name', {}, 'url', {}, 'dst', {}, 'check', {}, 'id', {});
 % Dst: each day's month and the month before it, so a three-day history never stops at a month boundary
 first = dateshift(d, 'start', 'month');
 months = unique([first, first - calmonths(1)]);
@@ -484,11 +529,11 @@ for m = months
     ym = string(m, 'yyyyMM');
     yymm = extractAfter(ym, 2);
     targets(end+1) = struct('name', "dst " + ym, 'url', dstBase + "/" + ym + "/dst" + yymm + ".for.request", ...
-        'dst', string(fullfile(pool, "SpaceWeather", "Dst", "dst" + yymm + ".for.request")), 'check', "^DST" + yymm); %#ok<AGROW>
+        'dst', string(fullfile(pool, "SpaceWeather", "Dst", "dst" + yymm + ".for.request")), 'check', "^DST" + yymm, 'id', "dst"); %#ok<AGROW>
 end
 for f = f30Files
     targets(end+1) = struct('name', "f30 " + extractBefore(f, "_observation"), 'url', f30Base + "/" + f, ...
-        'dst', string(fullfile(pool, "SpaceWeather", "F30", f)), 'check', "^# File created by CLS"); %#ok<AGROW>
+        'dst', string(fullfile(pool, "SpaceWeather", "F30", f)), 'check', "^# File created by CLS", 'id', "f30"); %#ok<AGROW>
 end
 % TU Graz names GRACE-A/B "GRACE-1/-2" and GRACE-C/D "GRACEFO-1/-2"
 for k = 1:numel(d)
@@ -500,20 +545,20 @@ for k = 1:numel(d)
             file = s + "_" + p + "_" + ymd + ".txt.gz";
             targets(end+1) = struct('name', "itsg " + s + " " + p + " " + ymd, ...
                 'url', itsgBase + "/" + s + "/" + p + "/" + yyyy + "/" + file, ...
-                'dst', string(fullfile(pool, "ITSG", "operational", s, p, yyyy, file)), 'check', "^groops instrument"); %#ok<AGROW>
+                'dst', string(fullfile(pool, "ITSG", "operational", s, p, yyyy, file)), 'check', "^groops instrument", 'id', "itsg"); %#ok<AGROW>
         end
     end
 end
-% Swarm DNSxPOD: the month of each day, from 2014 (Swarm was launched in November 2013)
-targets = [targets, localSwarmTargets(pool, unique(first(year(first) >= 2014)), swarmHapi, swarmSats)];
+% Swarm DNSxPOD: the month of each day from the product's first (fetchCatalog: 2014-01, its HAPI header)
+targets = [targets, localSwarmTargets(pool, unique(first(first >= swarmFirst)), swarmHapi, swarmSats)];
 % TOLEOS: the month of each day, for every mission flying in it
 targets = [targets, localToleosTargets(pool, unique(first), swarmHapi, toleos)];
-items = localFetchTargets(items, targets, mode);
+items = localFetchTargets(items, targets, modeOf);
 end
 
 function t = localToleosTargets(pool, months, hapi, toleos)
 %LOCALTOLEOSTARGETS One HAPI CSV per TOLEOS dataset and month, for the datasets whose mission covers the month.
-t = struct('name', {}, 'url', {}, 'dst', {}, 'check', {});
+t = struct('name', {}, 'url', {}, 'dst', {}, 'check', {}, 'id', {});
 for m = months
     ym = string(m, 'yyyy-MM');
     for k = 1:numel(toleos)
@@ -524,14 +569,14 @@ for m = months
         ds = toleos(k).dataset;
         t(end+1) = struct('name', "toleos " + ds + " " + ym, ...
             'url', hapi + "?dataset=" + ds + span + "&format=csv&include=header", ...
-            'dst', string(fullfile(pool, "TOLEOS", ds, string(year(m)), ds + ym + ".csv")), 'check', "^#\s*\{"); %#ok<AGROW>
+            'dst', string(fullfile(pool, "TOLEOS", ds, string(year(m)), ds + ym + ".csv")), 'check', "^#\s*\{", 'id', "toleos"); %#ok<AGROW>
     end
 end
 end
 
 function t = localSwarmTargets(pool, months, swarmHapi, swarmSats)
 %LOCALSWARMTARGETS One HAPI CSV per Swarm satellite and month (datetime first days of the months).
-t = struct('name', {}, 'url', {}, 'dst', {}, 'check', {});
+t = struct('name', {}, 'url', {}, 'dst', {}, 'check', {}, 'id', {});
 for m = months
     ym = string(m, 'yyyy-MM');
     span = "&start=" + string(m, 'yyyy-MM-dd') + "T00:00:00Z&stop=" + string(m + calmonths(1), 'yyyy-MM-dd') + "T00:00:00Z";
@@ -539,15 +584,17 @@ for m = months
         ds = "SW_OPER_DNS" + s + "POD_2_";
         t(end+1) = struct('name', "swarm " + s + " " + ym, ...
             'url', swarmHapi + "?dataset=" + ds + span + "&format=csv&include=header", ...
-            'dst', string(fullfile(pool, "Swarm", "DNSxPOD", string(year(m)), ds + ym + ".csv")), 'check', "^#\s*\{"); %#ok<AGROW>
+            'dst', string(fullfile(pool, "Swarm", "DNSxPOD", string(year(m)), ds + ym + ".csv")), 'check', "^#\s*\{", 'id', "swarm"); %#ok<AGROW>
     end
 end
 end
 
-function items = localFetchTargets(items, targets, mode)
+function items = localFetchTargets(items, targets, modeOf)
 %LOCALFETCHTARGETS Fetch each target unless present, keep a reply only when its head matches.
+%   modeOf maps a target's id to its mode; a plain mode string is accepted for a whole list.
 for t = targets
-    rec = struct('name', t.name, 'action', "present", 'file', t.dst, 'source', t.url);
+    if isa(modeOf, 'function_handle'), mode = modeOf(t.id); else, mode = modeOf; end
+    rec = struct('name', t.name, 'action', "present", 'file', t.dst, 'source', t.url, 'id', t.id);
     if isfile(t.dst) && mode ~= "force"
         items(end+1) = rec; %#ok<AGROW>
         continue
@@ -589,18 +636,18 @@ for t = targets
 end
 end
 
-function items = localFetchPoolMonths(pool, months, l1bBase, products, swarmHapi, swarmSats, eopUrl, swUrl, mode)
+function items = localFetchPoolMonths(pool, months, l1bBase, products, swarmHapi, swarmSats, eopUrl, swUrl, swarmFirst, modeOf)
 %LOCALFETCHPOOLMONTHS Whole months into DATAPOOL: GRACE-C/D Level-1B members, Swarm, SW-All and finals2000A.
 %   Everything a month run of tools/dragScaleMonth.m reads. The two complete files are judged by
 %   COVERAGE, not existence: one that ends before the last month's last day is refetched, since an
 %   old copy is a file that exists and is wrong. A Level-1B day is present when all its members are;
 %   otherwise its archive (about 150 MB) is fetched, the members are cut out with localTarMembers and
 %   kept only if each starts with an L1B 'header:', and the archive is deleted.
-items = struct('name', {}, 'action', {}, 'file', {}, 'source', {});
+items = localNoItems();
 if isempty(months), return, end
 if strlength(pool) == 0
     items(end+1) = struct('name', "pool months", 'action', ...
-        "skipped: DATAPOOL is not set -> set the DATAPOOL environment variable or pass 'DataPool'", 'file', "", 'source', "");
+        "skipped: DATAPOOL is not set -> set the DATAPOOL environment variable or pass 'DataPool'", 'file', "", 'source', "", 'id', "");
     return
 end
 m = unique(datetime(months, 'InputFormat', 'yyyy-MM'));
@@ -608,16 +655,19 @@ lastDay = dateshift(max(m), 'end', 'month');
 % complete space weather and EOP, refetched when stale
 whole = struct('name', {"pool spaceweather", "pool eop"}, 'url', {swUrl, eopUrl}, ...
     'dst', {string(fullfile(pool, "SpaceWeather", "SW-All.csv")), string(fullfile(pool, "EOP", "finals2000A.all"))}, ...
-    'check', {'^DATE,BSRN,ND,KP1', '^\s*\d{1,2}\s*\d{1,2}\s*\d{1,2}\s+\d{5}\.\d{2}\s+[IP]'});
+    'check', {'^DATE,BSRN,ND,KP1', '^\s*\d{1,2}\s*\d{1,2}\s*\d{1,2}\s+\d{5}\.\d{2}\s+[IP]'}, ...
+    'id', {"pool-spaceweather", "pool-eop"});
 kinds = ["sw" "eop"];
 for k = 1:numel(whole)
+    mode = modeOf(whole(k).id);
     use = mode;
     if mode == "ifMissing" && isfile(whole(k).dst) && ~(localLastDate(whole(k).dst, kinds(k)) >= lastDay)
         use = "force";
     end
     items = localFetchTargets(items, whole(k), use);
 end
-items = localFetchTargets(items, localSwarmTargets(pool, m(year(m) >= 2014), swarmHapi, swarmSats), mode);
+items = localFetchTargets(items, localSwarmTargets(pool, m(m >= swarmFirst), swarmHapi, swarmSats), modeOf);
+mode = modeOf("pool-l1b");
 % GRACE-FO Level-1B, both satellites, every day of every month
 for mm = m
     for day = mm:caldays(1):dateshift(mm, 'end', 'month')
@@ -625,7 +675,7 @@ for mm = m
         dst = fullfile(pool, "GRACEFO", "L1B", "RL04", string(year(day)), ymd);
         members = reshape(products' + "_" + ymd + "_" + ["C" "D"] + "_04.txt", 1, []);
         url = l1bBase + "/" + string(year(day)) + "/gracefo_1B_" + ymd + "_RL04.ascii.noLRI.tgz";
-        rec = struct('name', "pool l1b " + ymd, 'action', "present", 'file', string(dst), 'source', url);
+        rec = struct('name', "pool l1b " + ymd, 'action', "present", 'file', string(dst), 'source', url, 'id', "pool-l1b");
         missing = members(~isfile(fullfile(dst, members)));
         if isempty(missing) && mode ~= "force"
             items(end+1) = rec; %#ok<AGROW>
@@ -692,14 +742,26 @@ else
 end
 end
 
-function localMustBeMonths(m)
-%LOCALMUSTBEMONTHS PoolMonths are "yyyy-mm" from 2018-06, when GRACE-FO's Level-1B begins.
-if isempty(m), return, end
-if ~all(matches(m, digitsPattern(4) + "-" + digitsPattern(2)))
-    error('setupNonGravForces:poolMonths', 'PoolMonths must be "yyyy-mm" strings -> e.g. "2024-01"');
+function items = localNoItems()
+%LOCALNOITEMS The empty record list: every record carries the catalogue id it belongs to.
+items = struct('name', {}, 'action', {}, 'file', {}, 'source', {}, 'id', {});
 end
-if any(datetime(m, 'InputFormat', 'yyyy-MM') < datetime(2018, 6, 1))
-    error('setupNonGravForces:poolMonths', 'PoolMonths start at 2018-06 (GRACE-FO Level-1B) -> pass a later month');
+
+function modes = localModes(catalog, options)
+%LOCALMODES The mode of every catalogue id: its Fetch setting, or "never" when 'Items' leaves it out.
+%   A SELECTED ID WHOSE SETTING IS "never" IS REFUSED, not skipped (R4): naming a source in 'Items'
+%   and forbidding its fetch in the same call cannot both be meant. FetchGroops defaults to "never",
+%   so selecting a GROOPS grid needs FetchGroops "ifMissing" (or "force") as well.
+modes = dictionary(string.empty, string.empty);
+for k = 1:height(catalog)
+    setting = options.(catalog.setting(k));
+    if ~isempty(options.Items) && ~catalog.selected(k)
+        setting = "never";
+    elseif ~isempty(options.Items) && setting == "never"
+        error('setupNonGravForces:itemsNever', '%s', "'Items' selects " + catalog.id(k) + " but " + ...
+            catalog.setting(k) + " is ""never"" -> pass '" + catalog.setting(k) + "', ""ifMissing"" (or ""force"")");
+    end
+    modes(catalog.id(k)) = setting;
 end
 end
 
@@ -763,11 +825,11 @@ function items = localFetchKernel(root, file, sha256, mode)
 %
 %   It is fetched and never committed: 32.7 MB of binary that NAIF publishes and keeps current is
 %   the same case as the MSIS and HWM14 sources (O-34), and the same answer.
-items = struct('name', {}, 'action', {}, 'file', {}, 'source', {});
+items = localNoItems();
 folder = fullfile(root, 'data', 'kernels');
 dst = fullfile(folder, file);
 rec = struct('name', "de440", 'action', "present", 'file', string(dst), ...
-    'source', "referenceSystem.downloadKernels(Set=minimal, Span=short)");
+    'source', "referenceSystem.downloadKernels(Set=minimal, Span=short)", 'id', "de440");
 present = isfile(dst);
 if present && mode ~= "force"
     % CONTENT, NOT EXISTENCE. A pin checked only at download time protects the first run on a
@@ -847,13 +909,13 @@ end
 
 function items = localFetchCeres(root, base, files, sha256, mode)
 %LOCALFETCHCERES The CERES EBAF files, each kept only if its SHA-256 is ESGF's.
-items = struct('name', {}, 'action', {}, 'file', {}, 'source', {});
+items = localNoItems();
 folder = fullfile(root, 'data', 'ceres');
 for k = 1:numel(files)
     variable = extractBefore(files(k), "_");
     url = base + "/" + variable + "/gn/v20260220/" + files(k);
     dst = fullfile(folder, files(k));
-    rec = struct('name', "ceres " + variable, 'action', "present", 'file', string(dst), 'source', url);
+    rec = struct('name', "ceres " + variable, 'action', "present", 'file', string(dst), 'source', url, 'id', "ceres");
     present = isfile(dst);
     if mode == "never" || (present && mode ~= "force")
         if ~present, rec.action = "missing (FetchData never)"; rec.file = ""; end
