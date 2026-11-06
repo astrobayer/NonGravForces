@@ -116,7 +116,10 @@ function info = setupNonGravForces(options)
 %   PoolDays   1xN   string   -      Reference days for FetchPool, "yyyy-mm-dd", ranges "yyyy-mm-dd..yyyy-mm-dd"
 %                                    or "all" (TU Graz's operational spans; NonGravForces.fetchCatalog
 %                                    expands every selection), default the fixture days "2008-01-01"
-%                                    "2020-01-01" "2020-01-02" "2020-01-03".
+%                                    "2020-01-01" "2020-01-02" "2020-01-03". An EMPTY list
+%                                    (strings(1, 0)) fetches no reference-day observation at all, F30
+%                                    included: an installer that asks only for months must not get
+%                                    the fixture days on top (2026-11-06).
 %   SwarmMonths 1xS  string   -      Months of Swarm A/B/C densities alone for FetchPool, "yyyy-mm" from
 %                                    2014-01 (the first month of the HAPI header; "2013-12" was written
 %                                    here until 2026-11-06 and fetched nothing), ranges "yyyy-mm..yyyy-mm"
@@ -182,7 +185,7 @@ arguments
     options.FetchGroops (1,1) string {mustBeMember(options.FetchGroops, ["ifMissing","never","force"])} = "never"
     options.DataPool (1,1) string = string(getenv('DATAPOOL'))
     options.FetchPool (1,1) string {mustBeMember(options.FetchPool, ["ifMissing","never","force"])} = "ifMissing"
-    options.PoolDays (1,:) string {mustBeNonempty} = ["2008-01-01" "2020-01-01" "2020-01-02" "2020-01-03"]
+    options.PoolDays (1,:) string = ["2008-01-01" "2020-01-01" "2020-01-02" "2020-01-03"]
     options.PoolMonths (1,:) string = strings(1, 0)
     options.SwarmMonths (1,:) string = strings(1, 0)
     options.DensityMonths (1,:) string = strings(1, 0)
@@ -520,6 +523,7 @@ if strlength(pool) == 0
         'file', "", 'source', "", 'id', "");
     return
 end
+if isempty(days), return, end            % no reference days: nothing at all, F30 included
 d = datetime(days, 'InputFormat', 'yyyy-MM-dd');
 targets = struct('name', {}, 'url', {}, 'dst', {}, 'check', {}, 'id', {});
 % Dst: each day's month and the month before it, so a three-day history never stops at a month boundary

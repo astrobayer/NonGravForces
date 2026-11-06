@@ -179,6 +179,14 @@ classdef tNgfFetchCatalog < NgfTestCase
             actions = [info.data.items.action];
             tc.verifyTrue(all(startsWith(actions, ["present" "missing (not selected by Items)" "failed"])), strjoin(unique(actions), " | "));
             tc.verifyTrue(any(actions == "missing (not selected by Items)"), 'the empty pool holds nothing, so something is reported missing');
+            % (4) an empty PoolDays fetches no reference-day observation, F30 included, as the
+            % catalogue counts it (0); the months alone still list their own files
+            info = setupNonGravForces('Verbose', false, 'FetchMsis', "never", 'FetchData', "never", ...
+                'FetchKernels', "never", 'FetchPool', "never", 'DataPool', pool, 'PoolDays', strings(1, 0), ...
+                'SwarmMonths', "2020-01");
+            ids = [info.data.items.id];
+            tc.verifyFalse(any(ismember(ids, ["dst" "f30" "itsg"])), 'no reference day, no Dst/F30/ITSG record');
+            tc.verifyEqual(nnz(ids == "swarm"), 3);
         end
     end
 end
