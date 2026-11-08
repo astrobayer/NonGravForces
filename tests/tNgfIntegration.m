@@ -33,9 +33,10 @@ classdef tNgfIntegration < NgfTestCase
             tc.macro = NonGravForces.geom.graceFO("C");
             tc.cer = NonGravForces.io.importCERES(string(f('data', 'ceres', ["rsut" "rlut" "rsdt"] + "_mon_CERES-EBAF-4-2-1_NASA-GISS_gn_201912-202001.nc")));
             % The precise preset's own sun.source is rs.de440, so the kernel is a requirement of this
-            % class, not an extra. It is fetched by setupNonGravForces (FetchKernels) and never committed.
-            kernel = f('data', 'kernels', 'de440s.bsp');
-            tc.assertTrue(isfile(kernel), 'data/kernels/de440s.bsp is missing: run setupNonGravForces so the precise preset can be evaluated as shipped');
+            % class, not an extra. It is fetched by setupNonGravForces (FetchKernels) into <pool>/SPICE
+            % and never committed; without a pool NonGravForces.dataPool refuses (dataPoolUnset).
+            kernel = fullfile(NonGravForces.dataPool(), 'SPICE', 'de440s.bsp');
+            tc.assertTrue(isfile(kernel), char(kernel + " is missing: run setupNonGravForces with a DATAPOOL so the precise preset can be evaluated as shipped"));
             tc.eph = referenceSystem.readEphemeris(string(kernel));
             e1 = referenceSystem.daySecondToEpoch([tc.ep.day(1) tc.ep.sec(1)], tc.ep.scale);
             tc.tai = referenceSystem.epochTo(referenceSystem.convertTimeScale(e1, "TAI"), "datetime");

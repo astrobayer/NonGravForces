@@ -145,6 +145,11 @@ jobs:
       # timeSeriesPreparation's GUIDE): the GRACE-FO Level-1B days live below it under
       # GRACEFO\L1B\RL04\<yyyy>\<yyyy-mm-dd>\. Read by the N-10 regression month; empty when the
       # organisation has not granted the variable to this repository -- the next step says which.
+      # NonGravForces.dataPool reads DATAPOOL first and this older name second (DATA_POOL.md,
+      # 2026-11-08). SINCE THEN THE GATE NEEDS IT: every downloaded data file lives in the pool, the
+      # DE440 kernel the precise preset's tests read included (<pool>\SPICE\de440s.bsp, fetched by
+      # ciGate's setup when absent); without a pool those tests refuse, nothing falls back to the
+      # toolbox.
       READING_DATA_POOL: ${{ vars.READING_DATA_POOL }}
     steps:
       # Says whether the pool reached this job and what of 2020-01 it holds. Reporting only: a
@@ -157,6 +162,8 @@ jobs:
           $m = Join-Path $env:READING_DATA_POOL "GRACEFO\L1B\RL04\2020"
           Write-Output "READING_DATA_POOL = $($env:READING_DATA_POOL)"
           if (Test-Path $m) { Write-Output ("2020 days present: " + (@(Get-ChildItem $m -Directory -Filter "2020-01-*").Count)) } else { Write-Output "no $m" }
+          $k = Join-Path $env:READING_DATA_POOL "SPICE\de440s.bsp"
+          if (Test-Path $k) { Write-Output "DE440 kernel present: $k" } else { Write-Output "no $k (ciGate's setup fetches it)" }
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with: { path: NonGravForces }
       # ciGate checks for ALL FIVE siblings - referenceSystem/setupReferenceSystem.m,

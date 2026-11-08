@@ -21,6 +21,10 @@ classdef tNgfFetchCatalog < NgfTestCase
             tc.verifyClass(T.first, 'datetime');
             tc.verifyTrue(all(ismember(T.licence, ["open" "academic" "unstated" "unreviewed"])));
             tc.verifyTrue(all(ismember(T.destination, ["toolbox" "pool"])));
+            % EVERY DATA SOURCE GOES TO THE POOL; only the model sources stay in the toolbox
+            % (owner, 2026-11-08, toolboxInstaller docs/DATA_POOL.md)
+            tc.verifyEqual(T.id(T.destination == "toolbox"), ["nrlmsise00"; "nrlmsis21"; "hwm14"; "dtm2020"]);
+            tc.verifyTrue(all(T.group(T.destination == "toolbox") == "Model sources"));
             tc.verifyTrue(all(T.disk_MB > 0 & T.download_MB > 0));
             tc.verifyTrue(all(T.selected), 'no Items selects every id');
             % THE LICENCE CLASS IS WHAT THIRD-PARTY-NOTICES.md RECORDS: every named heading exists,

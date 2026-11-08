@@ -48,7 +48,7 @@ L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
 L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options, buildMex
 ```
 
-65 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
+66 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
 both directions against the files on disk, and this sentence's number against it
 — which it genuinely did not until 2026-09-16, when the sentence said 53 and the
 catalogue held 55; `auditPackage.py` check 5 now compares both this number and
@@ -147,6 +147,8 @@ run('...\lsqvce\lsqvce_setup.m')                     % the estimator of app.fitC
 cd('...\NonGravForces'); setupNonGravForces          % adds root, tests/, tools/; registers doc
 % with DATAPOOL set (or 'DataPool'), setup also fetches the reference days' observations
 % ('FetchPool', default ifMissing; 'PoolDays'): Kyoto Dst, CLS F30, TU Graz attitude/forces/orbits
+% EVERY downloaded data file goes to the pool (2026-11-08): the suite reads <pool>/SPICE/de440s.bsp,
+% so the gate needs DATAPOOL (or READING_DATA_POOL); without one setup skips every data fetch
 runNgfTests                                          % 'ExcludeSlow',false adds the speed tag
 doc NonGravForces
 ```
@@ -177,6 +179,16 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-11-08, release 0.20.0)
 
+- **2026-11-08, PR (data pool, owner: "All data go always to the data pool. Only model code or libraries go to the
+  toolbox"; contract toolboxInstaller `docs/DATA_POOL.md`):** `NonGravForces.dataPool` (66 units) resolves the pool
+  root -- the explicit option, else `DATAPOOL`, else `READING_DATA_POOL`, else `NonGravForces:dataPool:dataPoolUnset`.
+  `setupNonGravForces` writes eop -> `<pool>/EOP/finals2000A.all`, spaceweather -> `<pool>/SpaceWeather/SW-All.csv`,
+  igrf -> `<pool>/IGRF`, l1b-reference -> `<pool>/GRACEFO/L1B/RL04/2020/2020-01-01` (the month layout), ceres ->
+  `<pool>/CERES/EBAF`, de440 -> `<pool>/SPICE` (all were under `data/` before); without a pool each is reported
+  "skipped: DATAPOOL is not set" and nothing is written. `fetchCatalog` destination: every data row "pool", only the
+  four model sources "toolbox". `tNgfEnv` and `tNgfIntegration` read the kernel from `<pool>/SPICE`; the six
+  `tools/*` take 'Pool' through the resolver. Committed files (`data/igrf/igrf14coeffs.txt`, the excerpts) stay.
+  No version bump (the release is its own PR). ☑ local ciGate 2026-11-08 (owner's host, R2026a, worktree, DATAPOOL a scratch pool holding only SPICE/de440s.bsp): 519/519, GATE TRUE, predicted 519 (516 + tNgfDataPool's 3); package Code Analyzer clean; CI pending
 - **2026-11-08, release 0.20.0:** the fetch catalogue (#136, #137). The toolbox installer's Data tab calls
   `NonGravForces.fetchCatalog` and `'Items'`, which 0.19.0 does not have, so its release channel needed this release.
   Release measurements on the CI runner: **baseline PASSED at 0.20.0** (run 42484797709: every compared number

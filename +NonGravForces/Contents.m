@@ -17,6 +17,8 @@
 %   provenance         - Metadata record that travels with every result
 %   fetchCatalog       - Everything setupNonGravForces can fetch: ids, spans, sizes,
 %                        licence classes, and the expansion of a day/month selection
+%   dataPool           - The root of the shared data pool every downloaded data file
+%                        goes to: 'DataPool', else DATAPOOL, else READING_DATA_POOL
 %
 % Layers (see doc)
 %   io      - readers over gracefoReading, space weather, mass, CERES, IGRF

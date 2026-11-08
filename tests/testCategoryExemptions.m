@@ -55,5 +55,9 @@ ex.boxWing.speed                = "no numerical work";
 ex.accommodation.speed          = "two closed forms per epoch; there is no algorithm whose cost a ratio could guard";
 ex.fetchCatalog.vectorization   = "one catalogue per call; a selection is already a list and is expanded in one call";
 ex.fetchCatalog.speed           = "a table of twenty rows and a date expansion; there is no algorithm whose cost a ratio could guard";
+ex.dataPool.reference           = "the resolution order is the contract's own (toolboxInstaller docs/DATA_POOL.md section 2), not a quantity with an outside authority; asserted under contract";
+ex.dataPool.precision           = "no numerical claim";
+ex.dataPool.vectorization       = "one root per call by definition";
+ex.dataPool.speed               = "three getenv calls; there is no algorithm whose cost a ratio could guard";
 ex.assemble.reference           = "two sums and a cross product have no authority outside arithmetic; closed forms are asserted under precision";
 end

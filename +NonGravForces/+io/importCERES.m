@@ -26,7 +26,7 @@ function [cer, aux] = importCERES(files, options)
 %   give a period for anything but a climatological study.
 %
 %   Obtain the files anonymously from ESGF (obs4MIPs, source_id CERES-EBAF-4-2-1),
-%   or run setupNonGravForces, which fetches them into data/ceres and checks each
+%   or run setupNonGravForces, which fetches them into <DATAPOOL>/CERES/EBAF and checks each
 %   against the SHA-256 ESGF publishes. SYN1deg-3Hour is not read yet (HANDOVER O-3).
 %
 % INPUT ARGUMENTS

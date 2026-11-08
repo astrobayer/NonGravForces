@@ -335,9 +335,12 @@ classdef tNgfEnv < NgfTestCase
             % did not compute. The claim is NOT that the two agree to rounding; they are different
             % ephemerides. It is that referenceSystem's analytic Sun is accurate enough for radiation
             % pressure, which is what justifies rs.analytic being a preset value at all.
-            kernel = fullfile(tc.root, 'data', 'kernels', 'de440s.bsp');
+            % The kernel is DATA and lives in the pool, <pool>/SPICE (2026-11-08; data/kernels before):
+            % without a pool NonGravForces.dataPool refuses (dataPoolUnset), which is this test's
+            % refusal too -- it does not look anywhere else.
+            kernel = fullfile(NonGravForces.dataPool(), 'SPICE', 'de440s.bsp');
             tc.assertTrue(isfile(kernel), ...
-                'data/kernels/de440s.bsp is missing: run setupNonGravForces (FetchKernels ifMissing). This test does NOT skip -- a preset default that nothing evaluates is exactly how rs.de440 stayed unrun for two levels.');
+                char(kernel + " is missing: run setupNonGravForces (FetchKernels ifMissing) with a DATAPOOL. This test does NOT skip -- a preset default that nothing evaluates is exactly how rs.de440 stayed unrun for two levels."));
             eph = referenceSystem.readEphemeris(string(kernel));
             [ep, r, q] = tc.sampleState();
             ep5 = referenceSystem.daySecondToEpoch([ep.day(1:5) ep.sec(1:5)], "GPS"); r5 = r(:, 1:5); q5 = q(:, 1:5);

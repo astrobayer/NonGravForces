@@ -73,8 +73,7 @@ jobs:
         with:
           command: |
             cd NonGravForcesFetch
-            pool = string(getenv("READING_DATA_POOL"));
-            assert(strlength(pool) > 0, "fetchData:noPool", "READING_DATA_POOL is not set for this repository -> grant the organisation variable to it");
+            pool = NonGravForces.dataPool("", 'Option', "DataPool");   % DATAPOOL, then READING_DATA_POOL; refuses when neither is set
             months = split(strtrim(string(getenv("POOL_MONTHS"))))'; months = months(strlength(months) > 0);
             swarm = strings(1, 0); dens = strings(1, 0);
             span = strtrim(string(getenv("SWARM_SPAN")));

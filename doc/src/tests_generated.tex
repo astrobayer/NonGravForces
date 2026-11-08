@@ -3,7 +3,7 @@
 % DO NOT EDIT: auditPackage.py compares this file by content and refuses a stale one.
 % Regenerate with: python tools/buildDocs.py
 
-\noindent This catalogue is generated from the test classes by \texttt{tools/buildDocs.py}: 514 test methods in 23 classes, 526 recorded bounds, toolbox version 0.20.0. For each method it gives the category its \texttt{TestTags} block assigns, the unit \texttt{auditTestCategories} credits it to (the longest catalogued name the method name begins with), the comment under its function line, and every bound it records through \texttt{verifyBoundAndRecord}: label, bound, units and the reason stated for the bound's size. The measured value beside a bound is the one \texttt{tests/last\_run.txt} holds, from the run: \emph{NonGravForces 0.19.0  run 2026-11-06 16:00 UTC  MATLAB 26.1.0.3346908 (R2026a) Update 5 tests 516  passed 516  failed 0  incomplete 0  duration 1059.0 s  GATE TRUE}; a dash means that run did not record the label (a newer test, or a label built at run time). A method whose label is computed at run time is shown as \emph{(computed label)}. The seven categories and the rules behind them are those of the section on testing.
+\noindent This catalogue is generated from the test classes by \texttt{tools/buildDocs.py}: 517 test methods in 24 classes, 526 recorded bounds, toolbox version 0.20.0. For each method it gives the category its \texttt{TestTags} block assigns, the unit \texttt{auditTestCategories} credits it to (the longest catalogued name the method name begins with), the comment under its function line, and every bound it records through \texttt{verifyBoundAndRecord}: label, bound, units and the reason stated for the bound's size. The measured value beside a bound is the one \texttt{tests/last\_run.txt} holds, from the run: \emph{NonGravForces 0.19.0  run 2026-11-06 16:00 UTC  MATLAB 26.1.0.3346908 (R2026a) Update 5 tests 516  passed 516  failed 0  incomplete 0  duration 1059.0 s  GATE TRUE}; a dash means that run did not record the label (a newer test, or a label built at run time). A method whose label is computed at run time is shown as \emph{(computed label)}. The seven categories and the rules behind them are those of the section on testing.
 
 \subsection{\texttt{tNgfApp}}
 \noindent Tests of the application layer (LP-7): app.forceBudget, app.densityInversion.
@@ -285,6 +285,15 @@
 \item[failMetamorphic] {\small\emph{metamorphic \textperiodcentered\ \texttt{fail}}} --- The identifier is a pure function of (unit, mnemonic).
 \end{description}
 
+\subsection{\texttt{tNgfDataPool}}
+\noindent Tests of NonGravForces.dataPool and of setupNonGravForces writing every data file into the pool.
+
+\begin{description}[leftmargin=1em,style=nextline,itemsep=2pt,font=\normalfont\ttfamily\small]
+\item[dataPoolContract] {\small\emph{contract \textperiodcentered\ \texttt{dataPool}}}
+\item[dataPoolRobustness] {\small\emph{robustness \textperiodcentered\ \texttt{dataPool}}} --- blanks are no name; surrounding blanks are not part of a name; inner ones are
+\item[dataPoolMetamorphic] {\small\emph{metamorphic \textperiodcentered\ \texttt{dataPool}}} --- (1) HOW THE ROOT IS NAMED CHANGES NOTHING: 'DataPool', DATAPOOL and READING\_DATA\_POOL naming the same folder give setup the same root and the same records. (2) Every data file setup keeps lies below that root, in the product folder of the contract, and none below the toolbox. (3) Without any name, every data step is skipped -- with every Fetch setting "ifMissing", so a fallback to the toolbox would have had every chance -- and the toolbox's data folder is left exactly as it was.
+\end{description}
+
 \subsection{\texttt{tNgfDemos}}
 \noindent Every demo in demos/ runs to completion under the gate.
 
@@ -302,7 +311,7 @@
 \item[magneticFieldContract] {\small\emph{contract \textperiodcentered\ \texttt{env.\allowbreak{}magneticField}}}
 \item[eclipseFactorContract] {\small\emph{contract \textperiodcentered\ \texttt{env.\allowbreak{}eclipseFactor}}} --- at 490 km the penumbra spans 67.97..68.51 deg from the anti-Sun point (b -/+ a); 68.25 is inside it
 \item[earthRadianceContract] {\small\emph{contract \textperiodcentered\ \texttt{env.\allowbreak{}earthRadiance}}}
-\item[radiationSourcesDe440Reference] {\small\emph{contract \textperiodcentered\ \texttt{env.\allowbreak{}radiationSources}}} --- PRECISE PRESET'S OWN DEFAULT, evaluated at last. Until 2026-09-16 the only test naming rs.de440 asserted that it REFUSES without kernels, so a shipped preset's default sun.source had never produced a number (HANDOVER O-7, O-15).  Oracle: JPL's DE440 through referenceSystem's MICE provider -- an ephemeris this project did not compute. The claim is NOT that the two agree to rounding; they are different ephemerides. It is that referenceSystem's analytic Sun is accurate enough for radiation pressure, which is what justifies rs.analytic being a preset value at all.
+\item[radiationSourcesDe440Reference] {\small\emph{contract \textperiodcentered\ \texttt{env.\allowbreak{}radiationSources}}} --- PRECISE PRESET'S OWN DEFAULT, evaluated at last. Until 2026-09-16 the only test naming rs.de440 asserted that it REFUSES without kernels, so a shipped preset's default sun.source had never produced a number (HANDOVER O-7, O-15).  Oracle: JPL's DE440 through referenceSystem's MICE provider -- an ephemeris this project did not compute. The claim is NOT that the two agree to rounding; they are different ephemerides. It is that referenceSystem's analytic Sun is accurate enough for radiation pressure, which is what justifies rs.analytic being a preset value at all. The kernel is DATA and lives in the pool, \textless{}pool\textgreater{}/SPICE (2026-11-08; data/kernels before): without a pool NonGravForces.dataPool ...
 \begin{itemize}[leftmargin=1.2em,itemsep=0pt,topsep=1pt]\small
 \item DE440 vs the analytic Sun: direction: measured 3.1446e-03, bound 0.05 arcsec --- \emph{measured 0.0031 arcsec 2026-09-16; 1 arcsec of Sun direction moves a panel's cosine by 5e-6}
 \item DE440 vs the analytic Sun: distance: measured 2.0083e-09, bound 1e-7 --- \emph{measured 2.0e-9 (0.3 km) 2026-09-16}

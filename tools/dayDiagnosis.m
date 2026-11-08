@@ -36,7 +36,7 @@ function R = dayDiagnosis(options)
 % NAME-VALUE ARGUMENTS
 %   Name     Size  Type    Units  Description
 %   ----     ----  ----    -----  -----------
-%   Pool     1x1   string  -      DATAPOOL root; default getenv("READING_DATA_POOL")
+%   Pool     1x1   string  -      DATAPOOL root; default "": NonGravForces.dataPool, DATAPOOL then READING_DATA_POOL
 %   Cases    1xC   string  -      "<sat> <yyyy-mm-dd>"; default ["D 2020-01-22" "D 2020-01-23" "C 2020-01-22"]
 %   Step_s   1x1   double  s      Model grid on the ACT1B epochs; default 10
 %   Preset   1x1   string  -      default "standard"
@@ -45,20 +45,22 @@ function R = dayDiagnosis(options)
 %   R   1xC struct  .case .hours (table, one row per hour) .day (1x1 struct, the day line) .timeRefs
 %
 % ERRORS
+%   NonGravForces:dataPool:dataPoolUnset  no 'Pool' and neither DATAPOOL nor READING_DATA_POOL set
 %   NonGravForces:dayDiagnosis:dataMissing   no pool, or a case's ACT1B/GNV1B/SCA1B missing
 %   gracefoReading:*, referenceSystem:*      propagated
 %
 % Created 2026-11-01 by Claude (Anthropic) for Matthias Weigelt.
 arguments
-    options.Pool (1,1) string = string(getenv("READING_DATA_POOL"))
+    options.Pool (1,1) string = ""
     options.Cases (1,:) string = ["D 2020-01-22" "D 2020-01-23" "C 2020-01-22"]
     options.Step_s (1,1) double {mustBePositive, mustBeInteger} = 10
     options.Preset (1,1) string = "standard"
 end
 unit = "dayDiagnosis";
+options.Pool = NonGravForces.dataPool(options.Pool, 'Option', "Pool");   % refuses when none is named
 root = fileparts(fileparts(mfilename('fullpath')));
 if strlength(options.Pool) == 0 || ~isfolder(options.Pool)
-    NonGravForces.fail(unit, "dataMissing", "no DATAPOOL at '%s' -> set READING_DATA_POOL or pass 'Pool'", options.Pool);
+    NonGravForces.fail(unit, "dataMissing", "no DATAPOOL at '%s' -> set DATAPOOL or pass 'Pool'", options.Pool);
 end
 eopFile = fullfile(options.Pool, "EOP", "finals2000A.all");
 swFile = fullfile(options.Pool, "SpaceWeather", "SW-All.csv");

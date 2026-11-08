@@ -5,7 +5,7 @@
 %
 % \input-able from a report-class document; it opens no document and no chapter.
 
-\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 65 units, toolbox version 0.20.0.
+\noindent This reference is generated from the catalogue \texttt{doc/functionlist.csv} and from the help block of each unit, by \texttt{tools/buildDocs.py}. It is therefore what \texttt{help NonGravForces.\textless{}unit\textgreater{}} prints, and cannot drift from it: \texttt{auditPackage.py} re-renders this file and refuses a stale one. 66 units, toolbox version 0.20.0.
 
 \section{L0 \texttt{core} --- constants, options, provenance, uniform errors and the MEX build}
 
@@ -520,7 +520,7 @@ Today & 1x1 & datetime & - & The date "ongoing" and "in the future" are judged a
 \endfoot
 \bottomrule
 \endlastfoot
-T & Rx20 & table & - & One row per id: id, group, description, setting (the setup option that governs it), parameter (the selection that sizes it, "" if fixed), destination ("toolbox" \textbar{} "pool"), unit (what one item is), first, last (datetime, NaT for undated), ongoing (logical), download\_MB, disk\_MB (per item), sizeBasis, licence, licenceText, notice, source (host), selected (logical), count (items this selection implies; undated sources count their fixed files), totalDisk\_MB (count x disk\_MB, 0 when not selected). \\
+T & Rx20 & table & - & One row per id: id, group, description, setting (the setup option that governs it), parameter (the selection that sizes it, "" if fixed), destination ("toolbox" for the model sources, "pool" for every data source), unit (what one item is), first, last (datetime, NaT for undated), ongoing (logical), download\_MB, disk\_MB (per item), sizeBasis, licence, licenceText, notice, source (host), selected (logical), count (items this selection implies; undated sources count their fixed files), totalDisk\_MB (count x disk\_MB, 0 when not selected). \\
 plan & 1x1 & struct & - & .PoolDays, .PoolMonths, .SwarmMonths, .DensityMonths (expanded, 1xK string "yyyy-mm-dd" / "yyyy-mm"), .Items (1xI string, the ids selected), .toleos (1x3 struct: dataset, start, stop as "yyyy-mm-ddTHH:MM:SS"), .itsgSpans (2x2 datetime, rows GRACE and GRACE-FO), .swarmFirst, .l1bFirst, .lastComplete, .today (datetime). \\
 \end{longtable}
 
@@ -530,6 +530,73 @@ plan & 1x1 & struct & - & .PoolDays, .PoolMonths, .SwarmMonths, .DensityMonths (
 \item[\texttt{NonGravForces:\allowbreak{}fetchCatalog:\allowbreak{}inputRange}] A range ends before it starts.
 \item[\texttt{NonGravForces:\allowbreak{}fetchCatalog:\allowbreak{}inputSpan}] A date before the product's first or after 'Today', or a DensityMonths month no TOLEOS mission flew in.
 \item[\texttt{NonGravForces:\allowbreak{}fetchCatalog:\allowbreak{}inputItems}] An id in Items that the catalogue does not hold.
+\end{description}
+
+\subsection{\texttt{NonGravForces.dataPool}}
+\label{api:NonGravForces.dataPool}
+\noindent The root of the shared data pool: the explicit argument, else DATAPOOL, else READING\_DATA\_POOL.
+
+\begin{lstlisting}
+pool = NonGravForces.dataPool
+pool = NonGravForces.dataPool(options.Pool, 'Option', "Pool")
+pool = NonGravForces.dataPool(options.DataPool, 'Required', false)
+\end{lstlisting}
+
+\subsubsection*{INPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+explicit & 1x1 & string & - & The caller's own pool option; "" (default) defers to the environment. \\
+\end{longtable}
+
+\subsubsection*{NAME-VALUE ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+Required & 1x1 & logical & - & true (default) refuses when no root is named; false returns "" instead (setupNonGravForces, which REPORTS a skipped fetch and never raises for absence). \\
+Option & 1x1 & string & - & The caller's option name, quoted in the refusal (default "DataPool"). \\
+\end{longtable}
+
+\subsubsection*{OUTPUT ARGUMENTS}
+\begin{longtable}{@{}>{\footnotesize\raggedright\arraybackslash\ttfamily}p{3.00cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{2.20cm}>{\footnotesize\raggedright\arraybackslash}p{1.50cm}>{\footnotesize\raggedright\arraybackslash}p{6.40cm}@{}}
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endfirsthead
+\toprule
+{\footnotesize\textbf{Name}} & {\footnotesize\textbf{Size}} & {\footnotesize\textbf{Type}} & {\footnotesize\textbf{Units}} & {\footnotesize\textbf{Description}} \\
+\midrule
+\endhead
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+pool & 1x1 & string & - & The root, surrounding blanks removed; "" only when Required is false and nothing is named. \\
+\end{longtable}
+
+\subsubsection*{ERRORS}
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
+\item[\texttt{NonGravForces:\allowbreak{}dataPool:\allowbreak{}dataPoolUnset}] no explicit root, DATAPOOL and READING\_DATA\_POOL empty, and Required true.
 \end{description}
 
 \section{L1 \texttt{io} --- Level-1B products, the mass model, space weather and external grids}

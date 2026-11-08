@@ -54,7 +54,7 @@ function R = regressionBaseline(options)
 % NAME-VALUE ARGUMENTS
 %   Name        Size  Type    Units  Description
 %   ----        ----  ----    -----  -----------
-%   Pool        1x1   string  -      DATAPOOL root; default getenv("READING_DATA_POOL")
+%   Pool        1x1   string  -      DATAPOOL root; default "": NonGravForces.dataPool, DATAPOOL then READING_DATA_POOL
 %   Month       1x1   string  -      "yyyy-mm"; default "2020-01"
 %   Satellites  1xS   string  -      Default ["C" "D"]
 %   Days        1xD   double  -      Days of the month to use; default [] = every day folder present
@@ -83,6 +83,7 @@ function R = regressionBaseline(options)
 %                              "compare") .pass (logical) .seconds
 %
 % ERRORS
+%   NonGravForces:dataPool:dataPoolUnset  no 'Pool' and neither DATAPOOL nor READING_DATA_POOL set
 %   NonGravForces:regressionBaseline:dataMissing  no pool, no month folder, no reference to compare, or a
 %                                                 used day without THR1B while 'Thrusters' is true
 %   NonGravForces:regressionBaseline:inputRange   an unknown Mode
@@ -94,7 +95,7 @@ function R = regressionBaseline(options)
 %
 % Created 2026-10-16 by Claude (Anthropic) for Matthias Weigelt.
 arguments
-    options.Pool (1,1) string = string(getenv("READING_DATA_POOL"))
+    options.Pool (1,1) string = ""
     options.Month (1,1) string = "2020-01"
     options.Satellites (1,:) string = ["C" "D"]
     options.Days double = []
@@ -107,6 +108,7 @@ arguments
     options.Thrusters (1,1) logical = true
 end
 unit = "regressionBaseline";
+options.Pool = NonGravForces.dataPool(options.Pool, 'Option', "Pool");   % refuses when none is named
 if ~ismember(options.Product, ["ACT1B" "ACH1B"]) || (options.Product == "ACH1B" && (any(options.Satellites ~= "D") || options.Mode ~= "trial"))
     NonGravForces.fail(unit, "inputRange", "'Product' is ""ACT1B"", or ""ACH1B"" for GRACE-D in ""trial"" mode (the hybrid transplant exists for D only, and only ACT1B is frozen) -> got %s for %s in %s", ...
         options.Product, strjoin(options.Satellites, ","), options.Mode);
@@ -119,7 +121,7 @@ refFile = fullfile(root, 'tools', 'baseline_reference.json');
 if strlength(options.Reference) > 0, refFile = options.Reference; end
 monthDir = fullfile(options.Pool, "GRACEFO", "L1B", "RL04", extractBefore(options.Month, 5));
 if strlength(options.Pool) == 0 || ~isfolder(monthDir)
-    NonGravForces.fail(unit, "dataMissing", "no DATAPOOL month folder %s -> set READING_DATA_POOL or pass 'Pool', and fetch the month with orbitIntegration.fetchData(""gracefoL1b"", ...)", monthDir);
+    NonGravForces.fail(unit, "dataMissing", "no DATAPOOL month folder %s -> set DATAPOOL or pass 'Pool', and fetch the month with orbitIntegration.fetchData(""gracefoL1b"", ...)", monthDir);
 end
 if options.Mode == "compare" && ~isfile(refFile)
     NonGravForces.fail(unit, "dataMissing", "%s does not exist -> run regressionBaseline('Mode', ""freeze"") once to create it", refFile);

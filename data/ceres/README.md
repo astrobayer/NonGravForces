@@ -22,8 +22,9 @@ The global attributes `excerpt_of` and `excerpt_of_sha256` name the source. Clas
 format was chosen so that `tools/pyxcheck/ceres_check.py` can read the same bytes with
 a standard-library parser. Reading back gave the source values bitwise.
 
-The full files are not committed. `setupNonGravForces` fetches them into this folder
-(ignored by git) when `'FetchData'` allows it.
+The full files are not committed. `setupNonGravForces` fetches them into the data pool,
+`<DATAPOOL>/CERES/EBAF/`, when `'FetchData'` allows it (into this folder until 2026-11-08;
+downloaded data no longer lands in the toolbox).
 
 **Licence and acknowledgement.** Data in these files were produced by NASA Langley
 Research Center and are licensed under the Creative Commons Attribution 4.0

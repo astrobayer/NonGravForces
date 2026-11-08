@@ -181,15 +181,25 @@ Option & Default & What it controls\\\midrule
 \texttt{'FetchMsis'} & \texttt{"ifMissing"} & NRLMSISE-00 and NRLMSIS 2.1 source, cloned at a
  pinned commit from its maintainer. Not redistributed here: it carries no redistribution grant.\\
 \texttt{'FetchData'} & \texttt{"ifMissing"} & IERS Earth-orientation and CelesTrak space-weather
- files, and GRACE-FO Level-1B from the GFZ ISDC archive.\\
-\texttt{'FetchKernels'} & \texttt{"ifMissing"} & The DE440 planetary ephemeris, pinned by SHA-256.\\
+ files, IGRF-14, CERES EBAF, and GRACE-FO Level-1B from the GFZ ISDC archive, into the data pool.\\
+\texttt{'FetchKernels'} & \texttt{"ifMissing"} & The DE440 planetary ephemeris, pinned by SHA-256, into
+ \texttt{<pool>/SPICE}.\\
 \texttt{'FetchGroops'} & \texttt{"never"} & The GROOPS CERES grids. Default \emph{never}, because
  two of the files are \SI{1.25}{\giga\byte} \emph{each}.\\
-\texttt{'DataPool'} & --- & Where the large external data live, if you keep them outside the
- repository.\\
+\texttt{'DataPool'} & \texttt{""} & The data pool, where \emph{every} downloaded data file goes; the
+ default is the \texttt{DATAPOOL} environment variable, then the older \texttt{READING\_DATA\_POOL}
+ (\texttt{NonGravForces.dataPool}). Without one, every data fetch is skipped and reported.\\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\noindent \textbf{Data go to the pool, never into the toolbox} (owner, 8 November 2026). The pool is
+laid out by product and shared by every astrobayer toolbox: \texttt{SPICE/}, \texttt{EOP/},
+\texttt{SpaceWeather/}, \texttt{IGRF/}, \texttt{CERES/EBAF/}, \texttt{EarthRadiationPressure/},
+\texttt{GRACEFO/L1B/RL04/<yyyy>/<yyyy-mm-dd>/}, \texttt{ITSG/}, \texttt{Swarm/}, \texttt{TOLEOS/}. Only
+the model sources with their coefficient files, the compiled MEX and the committed excerpts under
+\texttt{data/} live in the toolbox. The tests read the DE440 kernel from \texttt{<pool>/SPICE}, so the
+suite needs a pool.
 
 \noindent Every fetch is verified by content, not by HTTP status: a status code is not a file, and
 one of these URLs answers \texttt{200} with an HTML error page. Every downloaded file is hashed on

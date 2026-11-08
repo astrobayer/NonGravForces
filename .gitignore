@@ -46,8 +46,10 @@ doc/references/
 # per-epoch figure in the repository against, so it has to exist in a fresh clone and on CI.
 tools/benchmark_last.txt
 
-# Full products fetched by setupNonGravForces('FetchData', ...): never committed. The committed
-# excerpts under data/ carry dated names (eop, space weather) or live in data/samples (Level-1B).
+# Full products setupNonGravForces('FetchData', ...) wrote here until 2026-11-08; since then it
+# writes them into the data pool (DATAPOOL), never into the toolbox. Still ignored so a copy left
+# on a host before it is moved by hand is never committed. The committed excerpts under data/
+# carry dated names (eop, space weather) or live in data/samples (Level-1B).
 data/eop/finals2000A.all
 data/spaceweather/SW-All.csv
 data/l1b/
@@ -63,7 +65,8 @@ doc/src/*.out
 doc/src/*.toc
 
 # The DE440 ephemeris is FETCHED by setupNonGravForces, never committed: 33 MB that NAIF
-# publishes and keeps current (the same case as the MSIS and HWM14 sources, O-34).
+# publishes and keeps current. Since 2026-11-08 it goes to <DATAPOOL>/SPICE; data/kernels/ stays
+# ignored for copies left from before.
 data/kernels/
 
 # GROOPS data (albedo grids, CERES SYN1deg climatologies) is FETCHED into DATAPOOL by

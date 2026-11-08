@@ -1,7 +1,7 @@
 function R = dragScaleMonth(options)
 %DRAGSCALEMONTH The model's along-track drag scale against ACT1B over whole days of a month (Huckfeldt et al. 2024).
 %
-%   R = dragScaleMonth                                   % 2020-01, GRACE-C, from READING_DATA_POOL
+%   R = dragScaleMonth                                   % 2020-01, GRACE-C, from the DATAPOOL
 %   R = dragScaleMonth('Days', 1:3, 'Step_s', 30)        % a quick trial
 %
 %   STEP 2 OF THE DRAG INVESTIGATION (HANDOVER O-19). tNgfModel/modelDragDiagnosis found
@@ -64,7 +64,7 @@ function R = dragScaleMonth(options)
 % NAME-VALUE ARGUMENTS
 %   Name        Size  Type    Units  Description
 %   ----        ----  ----    -----  -----------
-%   Pool        1x1   string  -      DATAPOOL root; default getenv("READING_DATA_POOL")
+%   Pool        1x1   string  -      DATAPOOL root; default "": NonGravForces.dataPool, DATAPOOL then READING_DATA_POOL
 %   Month       1x1   string  -      "yyyy-mm"; default "2020-01"
 %   Satellite   1x1   string  -      "C" (default) or "D"
 %   Days        1xD   double  -      Days of the month; default [] = every day folder present
@@ -85,6 +85,7 @@ function R = dragScaleMonth(options)
 %                              .noDataDays .seconds
 %
 % ERRORS
+%   NonGravForces:dataPool:dataPoolUnset  no 'Pool' and neither DATAPOOL nor READING_DATA_POOL set
 %   NonGravForces:dragScaleMonth:dataMissing  no pool or no month folder, or space weather / EOP files
 %                                             that do not cover the month (81 days before it included)
 %   gracefoReading:*, referenceSystem:*       propagated, except gracefoReading:readL1b:noData,
@@ -95,19 +96,23 @@ function R = dragScaleMonth(options)
 %
 % Created 2026-10-27 by Claude (Anthropic) for Matthias Weigelt.
 arguments
-    options.Pool (1,1) string = string(getenv("READING_DATA_POOL"))
+    options.Pool (1,1) string = ""
     options.Month (1,1) string = "2020-01"
     options.Satellite (1,1) string {mustBeMember(options.Satellite, ["C" "D"])} = "C"
     options.Days double = []
     options.Step_s (1,1) double {mustBePositive, mustBeInteger} = 10
     options.Preset (1,1) string = "standard"
-    options.FluxRecord (1,1) string = fullfile(string(getenv("READING_DATA_POOL")), "Swarm", "densityDriverFit_record_msis00_2000-08_2026-08_champ+grace+gracefo+swarm.mat")
+    options.FluxRecord (1,1) string = ""
 end
 unit = "dragScaleMonth";
+options.Pool = NonGravForces.dataPool(options.Pool, 'Option', "Pool");   % refuses when none is named
+if strlength(options.FluxRecord) == 0
+    options.FluxRecord = fullfile(options.Pool, "Swarm", "densityDriverFit_record_msis00_2000-08_2026-08_champ+grace+gracefo+swarm.mat");
+end
 root = fileparts(fileparts(mfilename('fullpath')));
 monthDir = fullfile(options.Pool, "GRACEFO", "L1B", "RL04", extractBefore(options.Month, 5));
 if strlength(options.Pool) == 0 || ~isfolder(monthDir)
-    NonGravForces.fail(unit, "dataMissing", "no DATAPOOL month folder %s -> set READING_DATA_POOL or pass 'Pool'", monthDir);
+    NonGravForces.fail(unit, "dataMissing", "no DATAPOOL month folder %s -> set DATAPOOL or pass 'Pool'", monthDir);
 end
 eopFile = fullfile(options.Pool, "EOP", "finals2000A.all");
 swFile = fullfile(options.Pool, "SpaceWeather", "SW-All.csv");

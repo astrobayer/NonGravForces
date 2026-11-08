@@ -35,7 +35,7 @@ function T = heatCapacityFit(options)
 % NAME-VALUE ARGUMENTS
 %   Name        Size  Type    Units  Description
 %   ----        ----  ----    -----  -----------
-%   Pool        1x1   string  -      DATAPOOL root; default getenv("READING_DATA_POOL")
+%   Pool        1x1   string  -      DATAPOOL root; default "": NonGravForces.dataPool, DATAPOOL then READING_DATA_POOL
 %   Month       1x1   string  -      "yyyy-mm"; default "2020-01"
 %   Satellites  1xS   string  -      Default ["C" "D"]
 %   Days        1xD   double  -      Days of the month; default 1:3:31 (every third day)
@@ -50,6 +50,7 @@ function T = heatCapacityFit(options)
 %                             rms_x/y/z [m/s^2], scale_x/y/z (median per-day scale), lag_x/y/z (median |lag| s)
 %
 % ERRORS
+%   NonGravForces:dataPool:dataPoolUnset  no 'Pool' and neither DATAPOOL nor READING_DATA_POOL set
 %   NonGravForces:heatCapacityFit:dataMissing  no pool or month folder, or the density-scale inputs
 %
 % EXAMPLE
@@ -57,7 +58,7 @@ function T = heatCapacityFit(options)
 %
 % Created 2026-10-30 by Claude (Anthropic) for Matthias Weigelt.
 arguments
-    options.Pool (1,1) string = string(getenv("READING_DATA_POOL"))
+    options.Pool (1,1) string = ""
     options.Month (1,1) string = "2020-01"
     options.Satellites (1,:) string = ["C" "D"]
     options.Days double = 1:3:31
@@ -66,12 +67,13 @@ arguments
     options.Output (1,1) string = ""
 end
 unit = "heatCapacityFit";
+options.Pool = NonGravForces.dataPool(options.Pool, 'Option', "Pool");   % refuses when none is named
 root = fileparts(fileparts(mfilename('fullpath')));
 out = fullfile(root, 'tools', 'heat_capacity_fit.csv');
 if strlength(options.Output) > 0, out = options.Output; end
 monthDir = fullfile(options.Pool, "GRACEFO", "L1B", "RL04", extractBefore(options.Month, 5));
 if strlength(options.Pool) == 0 || ~isfolder(monthDir)
-    NonGravForces.fail(unit, "dataMissing", "no DATAPOOL month folder %s -> set READING_DATA_POOL or pass 'Pool'", monthDir);
+    NonGravForces.fail(unit, "dataMissing", "no DATAPOOL month folder %s -> set DATAPOOL or pass 'Pool'", monthDir);
 end
 eop = referenceSystem.readEop(fullfile(root, 'data', 'eop', 'finals2000A_2019-09_2020-03.all'));
 sw = NonGravForces.io.spaceWeather(fullfile(root, 'data', 'spaceweather', 'SW-All_2019-09_2020-03.csv'));
