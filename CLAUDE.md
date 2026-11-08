@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-10-18 (release 0.16.0), 2026-10-26 (PR #107, observation data) 2026-10-29 (release 0.17.0), 2026-10-31 (release 0.18.0) and 2026-11-04 (release 0.19.0) by Claude Opus 5.5. Toolbox version 0.19.0.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-10-18 (release 0.16.0), 2026-10-26 (PR #107, observation data) 2026-10-29 (release 0.17.0), 2026-10-31 (release 0.18.0), 2026-11-04 (release 0.19.0) and 2026-11-08 (release 0.20.0) by Claude Opus 5.5. Toolbox version 0.20.0.
 
 ---
 
@@ -175,7 +175,12 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-11-04, release 0.19.0)
+## 5. Current status (2026-11-08, release 0.20.0)
+
+- **2026-11-08, release 0.20.0:** the fetch catalogue (#136, #137). The toolbox installer's Data tab calls
+  `NonGravForces.fetchCatalog` and `'Items'`, which 0.19.0 does not have, so its release channel needed this release.
+  Version bumped; the release measurements on the runner (baseline-compare, benchmark) follow in this PR. ◐ until both
+  are read. Gate stays 516.
 
 - **2026-11-06, PR #136 (fetch catalogue, owner: the toolbox installer):** `NonGravForces.fetchCatalog` (65 units) owns the
   fetchable ids, the products' spans (measured: ITSG GRACE 2002-04-04..2017-06-29, GRACE-FO from 2018-06-01; Swarm from
