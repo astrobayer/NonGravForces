@@ -179,8 +179,10 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 - **2026-11-08, release 0.20.0:** the fetch catalogue (#136, #137). The toolbox installer's Data tab calls
   `NonGravForces.fetchCatalog` and `'Items'`, which 0.19.0 does not have, so its release channel needed this release.
-  Version bumped; the release measurements on the runner (baseline-compare, benchmark) follow in this PR. ◐ until both
-  are read. Gate stays 516.
+  Release measurements on the CI runner: **baseline PASSED at 0.20.0** (run 42484797709: every compared number
+  0 sigma from the 2026-11-04 freeze -- S_xx, S_zz, 186 / 168 biases, C and D); benchmark (run 42484799866) standard
+  22.8 / 3.17 / 0.743 ms at K = 1 / 10 / 100 (0.19.0: 20.8 / 3.27 / 0.799; no model code changed, the runner's
+  spread). Gate stays 516.
 
 - **2026-11-06, PR #136 (fetch catalogue, owner: the toolbox installer):** `NonGravForces.fetchCatalog` (65 units) owns the
   fetchable ids, the products' spans (measured: ITSG GRACE 2002-04-04..2017-06-29, GRACE-FO from 2018-06-01; Swarm from
