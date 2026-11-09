@@ -176,7 +176,8 @@ this toolbox's to relicense.
 
 The toolbox is published **via git only** — `.mltbx` packaging was deprecated on
 2026-09-09 — so the question of what a package may carry does not arise.
-`setupNonGravForces` downloads these, only when they are missing, and otherwise
+`setupNonGravForces` downloads the full products, only when they are missing, into
+the data pool (`DATAPOOL`; never into the toolbox, owner 2026-11-08), and otherwise
 supplying them is the user's responsibility.
 
 | source | fetched by setup | where from |

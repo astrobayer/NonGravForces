@@ -1,7 +1,7 @@
 function R = densityDriverFit(options)
 %DENSITYDRIVERFIT A driver model of the observed density scale: Swarm 2014-now, cross-validated over years.
 %
-%   R = densityDriverFit                                  % Swarm 2014-01..2026-08 from READING_DATA_POOL
+%   R = densityDriverFit                                  % Swarm 2014-01..2026-08 from the DATAPOOL
 %   R = densityDriverFit('First', "2019-01", 'Last', "2020-12")
 %   R = densityDriverFit('First', "2000-08", 'Missions', ["swarm" "champ" "grace" "gracefo"])
 %
@@ -69,7 +69,7 @@ function R = densityDriverFit(options)
 % NAME-VALUE ARGUMENTS
 %   Name        Size  Type    Units  Description
 %   ----        ----  ----    -----  -----------
-%   Pool        1x1   string  -      DATAPOOL root; default getenv("READING_DATA_POOL")
+%   Pool        1x1   string  -      DATAPOOL root; default "": NonGravForces.dataPool, DATAPOOL then READING_DATA_POOL
 %   First, Last 1x1   string  -      "yyyy-mm" span of months; default 2014-01..2026-08
 %   Missions    1xM   string  -      "swarm" (A, B, C; satellites 1-3), "champ", "grace" (GRACE-A),
 %                                    "gracefo" (GRACE-FO 1), numbered on in this order; default "swarm".
@@ -102,6 +102,7 @@ function R = densityDriverFit(options)
 %   between models.
 %
 % ERRORS
+%   NonGravForces:dataPool:dataPoolUnset  no 'Pool' and neither DATAPOOL nor READING_DATA_POOL set
 %   NonGravForces:densityDriverFit:dataMissing  SW-All or the CLS F30 file is not in the pool,
 %                                               or no Swarm pass survived
 %   NonGravForces:readSwarmDensity:*, NonGravForces:density:*, timeSeriesPreparation:*  propagated,
@@ -113,7 +114,7 @@ function R = densityDriverFit(options)
 %
 % Created 2026-10-27 by Claude (Anthropic) for Matthias Weigelt.
 arguments
-    options.Pool (1,1) string = string(getenv("READING_DATA_POOL"))
+    options.Pool (1,1) string = ""
     options.First (1,1) string = "2014-01"
     options.Last (1,1) string = "2026-08"
     options.Model (1,1) string = "msis00"
@@ -128,6 +129,7 @@ arguments
     options.FluxGrid (1,:) double {mustBeFinite} = -60:15:30
 end
 unit = "densityDriverFit";
+options.Pool = NonGravForces.dataPool(options.Pool, 'Option', "Pool");   % refuses when none is named
 swFile = fullfile(options.Pool, "SpaceWeather", "SW-All.csv");
 f30File = fullfile(options.Pool, "SpaceWeather", "F30", "radio_flux_adjusted_observation.txt");
 if ~isfile(swFile) || ~isfile(f30File)

@@ -9,7 +9,9 @@ SHA-256 8f8d88403028fc4ee92c4f38d97b46e0a87e2cfc496045b43c9e26c1d6b0903c.
 
 Read by `NonGravForces.io.igrfCoefficients` since 2026-09-09 (WP-23); the file
 fetched that day is **byte-identical** to the digest above, so upstream has not
-moved. `setupNonGravForces` fetches it when it is missing.
+moved. `setupNonGravForces` fetches the upstream file into the data pool, `<DATAPOOL>/IGRF/`,
+when it is missing there; the copy in this folder is committed and is the one the tests and
+examples read.
 
 **A correction to this file's earlier claim:** the reference Fortran `igrf14.f`
 is NOT at the same site. `https://www.ngdc.noaa.gov/IAGA/vmod/igrf14.f` answers

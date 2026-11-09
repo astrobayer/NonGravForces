@@ -125,6 +125,8 @@ if ~gjToolbox.nativeStepper("available")
 end
 % The model sources are fetched when missing (buildMex cannot build without them); the data are NOT:
 % every test reads the committed excerpts, and a 147 MB archive per CI run would test the network.
+% The DE440 kernel IS fetched when missing (FetchKernels), into <pool>/SPICE like every other data
+% file (2026-11-08): the gate needs a pool (DATAPOOL, or READING_DATA_POOL on the runner).
 info = setupNonGravForces('Verbose', true, 'FetchData', "never", 'FetchPool', "never");
 mexReport = NonGravForces.buildMex();          % O-14: a runner without a compiler turns the gate red here, by design
 for m = 1:numel(mexReport)                     % one element per target (msis, msis21, hwm14, dtm2020, rhs, kernel)

@@ -8,6 +8,7 @@ NonGravForces,fail,function,L0,WP-00,done,Uniform error raising with identifier 
 NonGravForces,provenance,function,L0,WP-00,done,Metadata record that travels with every result
 NonGravForces,buildMex,function,L0,WP-05b,done,Build the MEX gateways in mex/ (msis kernel; never committed) or report their state
 NonGravForces,fetchCatalog,function,L0,WP-I1,done,Everything setup can fetch: ids; spans; sizes; licence classes; the expansion of a selection
+NonGravForces,dataPool,function,L0,WP-I2,done,The data-pool root: the explicit argument; else DATAPOOL; else READING_DATA_POOL; else a refusal
 io,readACC1B,function,L1,WP-18,done,ACC1B/ACT1B/ACH1B reader over gracefoReading (3xK SRF accelerations + aux)
 io,readSCA1B,function,L1,WP-18,done,SCA1B reader: ICRF->SRF quaternions conjugated once to BODY->GCRS
 io,readGNV1B,function,L1,WP-18,done,GNV1B reader: ITRS state rotated to GCRS via referenceSystem

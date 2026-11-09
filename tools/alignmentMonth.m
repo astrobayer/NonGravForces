@@ -45,7 +45,7 @@ function T = alignmentMonth(options)
 % NAME-VALUE ARGUMENTS
 %   Name        Size  Type    Units  Description
 %   ----        ----  ----    -----  -----------
-%   Pool        1x1   string  -      DATAPOOL root; default getenv("READING_DATA_POOL")
+%   Pool        1x1   string  -      DATAPOOL root; default "": NonGravForces.dataPool, DATAPOOL then READING_DATA_POOL
 %   Month       1x1   string  -      "yyyy-mm"; default "2020-01"
 %   Satellites  1xS   string  -      Default ["C" "D"]
 %   Days        1xD   double  -      Days of the month to use; default [] = every day folder present
@@ -62,6 +62,7 @@ function T = alignmentMonth(options)
 %                             obs after its mean; 1 for raw), edges (shadow entries + exits of the day)
 %
 % ERRORS
+%   NonGravForces:dataPool:dataPoolUnset  no 'Pool' and neither DATAPOOL nor READING_DATA_POOL set
 %   NonGravForces:alignmentMonth:dataMissing  no pool or month folder, the density-scale inputs, or precise's CERES/DE440
 %
 % EXAMPLE
@@ -69,7 +70,7 @@ function T = alignmentMonth(options)
 %
 % Created 2026-10-30 by Claude (Anthropic) for Matthias Weigelt.
 arguments
-    options.Pool (1,1) string = string(getenv("READING_DATA_POOL"))
+    options.Pool (1,1) string = ""
     options.Month (1,1) string = "2020-01"
     options.Satellites (1,:) string = ["C" "D"]
     options.Days double = []
@@ -79,12 +80,13 @@ arguments
     options.Output (1,1) string = ""
 end
 unit = "alignmentMonth";
+options.Pool = NonGravForces.dataPool(options.Pool, 'Option', "Pool");   % refuses when none is named
 root = fileparts(fileparts(mfilename('fullpath')));
 out = fullfile(root, 'tools', 'alignment_month.csv');
 if strlength(options.Output) > 0, out = options.Output; end
 monthDir = fullfile(options.Pool, "GRACEFO", "L1B", "RL04", extractBefore(options.Month, 5));
 if strlength(options.Pool) == 0 || ~isfolder(monthDir)
-    NonGravForces.fail(unit, "dataMissing", "no DATAPOOL month folder %s -> set READING_DATA_POOL or pass 'Pool'", monthDir);
+    NonGravForces.fail(unit, "dataMissing", "no DATAPOOL month folder %s -> set DATAPOOL or pass 'Pool'", monthDir);
 end
 eop = referenceSystem.readEop(fullfile(root, 'data', 'eop', 'finals2000A_2019-09_2020-03.all'));
 sw = NonGravForces.io.spaceWeather(fullfile(root, 'data', 'spaceweather', 'SW-All_2019-09_2020-03.csv'));
@@ -132,9 +134,9 @@ if o.erp.backend == "ceres"
     extraArgs = [extraArgs, {'Ceres', NonGravForces.io.importCERES(cerFiles)}];
 end
 if o.sun.source == "rs.de440"
-    kernel = fullfile(root, 'data', 'kernels', 'de440s.bsp');
+    kernel = fullfile(options.Pool, 'SPICE', 'de440s.bsp');
     if ~isfile(kernel)
-        NonGravForces.fail(unit, "dataMissing", "preset %s takes sun.source rs.de440 and %s is missing -> run setupNonGravForces", options.Preset, kernel);
+        NonGravForces.fail(unit, "dataMissing", "preset %s takes sun.source rs.de440 and %s is missing -> run setupNonGravForces('FetchKernels', ""ifMissing"") with this pool", options.Preset, kernel);
     end
     extraArgs = [extraArgs, {'Ephemeris', referenceSystem.readEphemeris(string(kernel))}];
 end
