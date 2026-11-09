@@ -136,8 +136,11 @@ function info = setupNonGravForces(options)
 %                                    About 40 MB per month for the three satellites.
 %   DensityMonths 1xD string -       Months of TU Delft's CHAMP, GRACE and GRACE-FO accelerometer
 %                                    densities (ESA TOLEOS) for FetchPool, "yyyy-mm", ranges or "all"
-%                                    (default none); each month fetches the missions flying in it, and
-%                                    a month no mission flew in is refused.
+%                                    (default none); each month fetches the missions flying in it. No
+%                                    mission flew 2017-11..2018-04: "all" and a range across that gap
+%                                    skip its months (info.plan lists those kept), a single gap month or
+%                                    a range inside the gap is refused (NonGravForces.fetchCatalog;
+%                                    "all" refused itself at 2017-11 until 2026-11-09).
 %   PoolMonths 1xM   string   -      Whole months for FetchPool, "yyyy-mm" from 2018-06, ranges or "all" (default none):
 %                                    GRACE-C/D Level-1B, Swarm densities and the complete space-weather
 %                                    and EOP files a month run (tools/dragScaleMonth.m) needs. A day

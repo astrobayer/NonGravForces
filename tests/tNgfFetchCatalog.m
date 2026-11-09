@@ -146,6 +146,47 @@ classdef tNgfFetchCatalog < NgfTestCase
             tc.verifyErrorId(@() NonGravForces.fetchCatalog('Today', tc.Today, 'PoolDays', ""), ...
                 "NonGravForces:fetchCatalog:inputSyntax");
         end
+
+        function fetchCatalogDensityGap(tc)
+            % THE TOLEOS GAP (2026-11-09): no mission flew 2017-11..2018-04 (GRACE-A's last day is
+            % 2017-10-31, GRACE-FO 1's first 2018-05-29). Until this date "all" was expanded as ONE
+            % range 2000-07..2026-04 and the per-month check refused its own expansion at 2017-11,
+            % which the toolbox installer showed as "all (refused by the catalogue)".
+            f = @(varargin) NonGravForces.fetchCatalog('Today', tc.Today, varargin{:});
+            gap = ["2017-11" "2017-12" "2018-0" + (1:4)];
+            [T, plan] = f('DensityMonths', "all");
+            tc.verifyFalse(any(ismember(plan.DensityMonths, gap)), 'the gap months are not in "all"');
+            tc.verifyEqual(plan.DensityMonths([1 end]), ["2000-07" "2026-04"]);
+            tc.verifyTrue(all(ismember(["2017-10" "2018-05"], plan.DensityMonths)), 'the gap''s edge months are flown');
+            % by hand: 2000-07..2017-10 is 6 + 16*12 + 10 = 208 months, 2018-05..2026-04 is 8 + 7*12 + 4 = 96
+            tc.verifyNumElements(plan.DensityMonths, 208 + 96);
+            % files: CHAMP 2000-07..2010-09 = 6 + 9*12 + 9 = 123, GRACE-A 2002-04..2017-10 = 9 + 14*12 + 10 = 187,
+            % GRACE-FO 1 2018-05..2026-04 = 96
+            tc.verifyEqual(T.count(T.id == "toleos"), 123 + 187 + 96);
+            % AN EXPLICIT RANGE ACROSS THE GAP keeps its flown months and skips the gap's (the plan
+            % lists exactly what is fetched); the whole envelope as a range is "all"
+            [~, p] = f('DensityMonths', "2017-10..2018-05");
+            tc.verifyEqual(p.DensityMonths, ["2017-10" "2018-05"]);
+            [Tr, r] = f('DensityMonths', "2000-07..2026-04");
+            tc.verifyEqual(r, plan); tc.verifyEqual(Tr, T);
+            % AN ELEMENT THAT SELECTS NO FLOWN MONTH is refused: a single gap month, a range inside
+            % the gap; so is a range reaching past the last mission month (outside the span, not a gap)
+            tc.verifyErrorId(@() f('DensityMonths', "2017-11"), "NonGravForces:fetchCatalog:inputSpan");
+            tc.verifyErrorId(@() f('DensityMonths', "2017-12..2018-03"), "NonGravForces:fetchCatalog:inputSpan");
+            tc.verifyErrorId(@() f('DensityMonths', "2026-01..2026-08"), "NonGravForces:fetchCatalog:inputSpan");
+            tc.verifyErrorId(@() f('DensityMonths', "2000-06..2000-08"), "NonGravForces:fetchCatalog:inputSpan");
+            % SETUP takes "all" through the catalogue and lists one source per catalogued file.
+            % Every Fetch setting is "never" and the pool is empty, so nothing reaches the network.
+            pool = string(tempname);
+            mkdir(pool);
+            tc.addTeardown(@() rmdir(pool, 's'));
+            info = setupNonGravForces('Verbose', false, 'FetchMsis', "never", 'FetchData', "never", ...
+                'FetchKernels', "never", 'FetchGroops', "never", 'FetchPool', "never", 'DataPool', pool, ...
+                'PoolDays', strings(1, 0), 'DensityMonths', "all");
+            tc.verifyEqual(info.plan.DensityMonths, plan.DensityMonths);
+            recs = info.data.items([info.data.items.id] == "toleos");
+            tc.verifyEqual(numel(unique([recs.source])), 123 + 187 + 96);
+        end
     end
 
     methods (Test, TestTags = {'metamorphic'})

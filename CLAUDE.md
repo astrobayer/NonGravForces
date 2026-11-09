@@ -179,6 +179,12 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-11-08, release 0.20.0)
 
+- **2026-11-09, PR #PRNUM (the TOLEOS gap, owner: `fetchCatalog('DensityMonths', "all")` refused itself with "no TOLEOS mission flew in
+  2017-11"):** "all" was the envelope 2000-07..2026-04, which crosses the gap 2017-11..2018-04; it is now the union of the three missions'
+  spans (304 months, 406 files). An explicit range across the gap skips the gap months (the plan lists those kept); a single gap month, a
+  range inside the gap, and a range past 2026-04 are refused (`inputSpan`). Setup follows through the catalogue; its help says so. New test
+  `tNgfFetchCatalog/fetchCatalogDensityGap` (red before the fix with exactly the reported error; the past-the-end refusal fault-injected).
+  O-54 opened: fetch-data.yml expands its spans itself. No version bump (the release is its own PR). GATEVERDICT
 - **2026-11-08, PR (data pool, owner: "All data go always to the data pool. Only model code or libraries go to the
   toolbox"; contract toolboxInstaller `docs/DATA_POOL.md`):** `NonGravForces.dataPool` (66 units) resolves the pool
   root -- the explicit option, else `DATAPOOL`, else `READING_DATA_POOL`, else `NonGravForces:dataPool:dataPoolUnset`.
