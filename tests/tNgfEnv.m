@@ -470,10 +470,11 @@ classdef tNgfEnv < NgfTestCase
             % where the unit refuses because HWM14 does not return).
             r21 = NonGravForces.buildMex('Check', true, 'Target', "hwm14");
             txt = splitlines(string(fileread(fullfile(r21.sourceDir, 'gfortran.txt'))));
-            % EOP is DATA in the pool, <pool>/EOP (referenceSystem 3.0's .EOP; O-55: before 3.0 it lay flat in
-            % dataFolder(), and this line read it there). Without a pool dataFolder refuses, as for the kernel.
-            [~, loc] = referenceSystem.dataFolder();
-            eop = referenceSystem.readEop(fullfile(loc.EOP, 'finals2000A.all'));
+            % EOP from referenceSystem's PINNED copy, committed to its data/ folder (O-55): a test must not depend
+            % on the host's data folder (data/eop/README.md). This line read referenceSystem.dataFolder() until
+            % 2026-11-09, which since referenceSystem 3.0 is the pool root (EOP in <pool>/EOP) or, on a host with
+            % a stored 2.x preference, an old per-toolbox folder -- red on the one, green on the other by accident.
+            eop = referenceSystem.readEop(fullfile(fileparts(which('setupReferenceSystem')), 'data', 'finals2000A.all'));
             prof = struct('title', {"height profile", "latitude profile", "local time profile", "longitude profile", "day of year profile", "magnetic activity profile"});
             worst = 0; rows = 0;
             for p = 1:numel(prof)

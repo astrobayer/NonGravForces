@@ -179,14 +179,20 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-11-08, release 0.20.0)
 
-- **2026-11-09, PR (O-55, EOP from the pool):** `tNgfEnv/windHwm14Reference` and the EXAMPLE of `io.readGNV1B` read
-  `finals2000A.all` from `referenceSystem.dataFolder()` itself, where referenceSystem 2.x kept it flat; since 3.0.0 that is
-  the pool ROOT and EOP lives in `<pool>/EOP`, so the test errored on any pool without a flat copy. Both now read
-  `[~, loc] = referenceSystem.dataFolder(); loc.EOP`. The referenceSystem minimum in `dependencyReport` rises 2.3 -> 3.0
-  (`.EOP` exists only since 3.0); `Contents.m` stated 2.1 and gracefoReading >= 2.1 (stale) and now states 3.0 and 1.1.
-  No version bump (the release is its own PR). Red before on E:\DATAPOOL (no flat finals2000A.all), green after:
-  tNgfEnv 87/87, tNgfCore 17/17 (owner's host, R2026a, worktree, DATAPOOL=E:\DATAPOOL); ☑ local ciGate 520/520, GATE TRUE, predicted 520; auditPackage clean;
-  CI pending
+- **2026-11-09, PR #141 (O-55, EOP of the HWM14 oracle):** `tNgfEnv/windHwm14Reference` and the EXAMPLE of `io.readGNV1B`
+  read `finals2000A.all` from `referenceSystem.dataFolder()` itself, where referenceSystem 2.x kept it flat; since 3.0.0 that
+  is the pool ROOT and EOP lives in `<pool>/EOP`. Red on the owner's host (E:\DATAPOOL holds only EOP/finals2000A.all), green
+  on the runner BY ACCIDENT: the runner keeps a 2.x stored preference `...\DATAPOOL\referencesSystem` (step 2 of the resolution,
+  before DATAPOOL), an old per-toolbox folder holding the file flat. The first fix (`loc.EOP`) was green locally and red on CI
+  (run 42612519514: `...\referencesSystem\EOP\finals2000A.all` does not exist). The TEST now reads referenceSystem's pinned
+  copy, committed to its `data/` (`fileparts(which('setupReferenceSystem'))/data/finals2000A.all`): a test does not depend on
+  the host's data folder (data/eop/README.md). The EXAMPLE, production use, reads `[~, loc] = referenceSystem.dataFolder();
+  loc.EOP`. The referenceSystem minimum in `dependencyReport` rises 2.3 -> 3.0 (the pool layout setup writes; `.EOP`);
+  `Contents.m` stated 2.1 and gracefoReading >= 2.1 (stale) and now states 3.0 and 1.1. No version bump (the release is its
+  own PR). Owner's host (R2026a, worktree, DATAPOOL=E:\DATAPOOL): the test green on the pinned copy; with `loc.EOP` tNgfEnv 87/87,
+  tNgfCore 17/17 and ☑ local ciGate 520/520, GATE TRUE, predicted 520; auditPackage clean. CI pending. The runner's stale
+  preference is the owner's to clear (`referenceSystem.dataFolder("reset")` on the runner): until then referenceSystem's
+  downloads there land below `...\referencesSystem`.
 - **2026-11-09, PR #140 (the TOLEOS gap, owner: `fetchCatalog('DensityMonths', "all")` refused itself with "no TOLEOS mission flew in
   2017-11"):** "all" was the envelope 2000-07..2026-04, which crosses the gap 2017-11..2018-04; it is now the union of the three missions'
   spans (304 months, 406 files). An explicit range across the gap skips the gap months (the plan lists those kept); a single gap month, a
