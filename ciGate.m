@@ -167,7 +167,7 @@ if r.failed > 0,     reasons(end+1) = sprintf("%d failed", r.failed); end
 if r.incomplete > 0, reasons(end+1) = sprintf("%d incomplete", r.incomplete); end
 short = r.audit(~r.audit.complete, :);          % an exemption for one category never excuses another
 if ~isempty(short), reasons(end+1) = "category audit shortfall: " + strjoin(short.unit, ", "); end
-if ~isfile(r.logFile), reasons(end+1) = "tests/last_run.txt was not written"; end
+if ~isfile(r.logFile), reasons(end+1) = string(r.logFile) + " was not written"; end
 if r.passed == 0,    reasons(end+1) = "no test passed (suite not discovered?)"; end
 fprintf("ciGate: %d passed, %d failed, %d incomplete, %d exempt units, GATE %s\n", ...
     r.passed, r.failed, r.incomplete, nnz(r.audit.exempt), string(isempty(reasons)));

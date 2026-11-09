@@ -78,3 +78,5 @@ tools/baseline_last.txt
 mex/dtm2020/
 tools/alignment_month.csv
 tools/heat_capacity_fit.csv
+# the run log of a LOCAL run (runNgfTests); tests/last_run.txt is CI's and tracked
+tests/last_run_local.txt
