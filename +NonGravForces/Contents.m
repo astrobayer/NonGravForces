@@ -30,6 +30,6 @@
 %   app     - calibration (own linear solver), force budget, density inversion
 %
 % Dependencies (called by qualified name, never copied or wrapped)
-%   referenceSystem >= 2.1   time, frames, ephemerides, attitude kinematics
-%   gracefoReading  >= 2.1   GRACE-FO Level-1B reading
+%   referenceSystem >= 3.0   time, frames, ephemerides, attitude kinematics, the data pool
+%   gracefoReading  >= 1.1   GRACE-FO Level-1B reading
 %   gjToolbox (odeSuite)     orbit integration (optional, for rhs)
