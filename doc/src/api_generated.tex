@@ -501,7 +501,7 @@ T = NonGravForces.fetchCatalog
 PoolDays & 1xN & string & - & Reference days for FetchPool (Dst, F30, ITSG, Swarm, TOLEOS); default none. \\
 PoolMonths & 1xM & string & - & Whole months (GRACE-FO Level-1B, Swarm, complete SW-All and finals2000A), from 2018-06; default none. \\
 SwarmMonths & 1xS & string & - & Months of Swarm A/B/C densities alone, from 2014-01; default none. \\
-DensityMonths & 1xD & string & - & Months of TOLEOS densities (CHAMP, GRACE-A, GRACE-FO 1); a month no mission flew in is refused; default none. \\
+DensityMonths & 1xD & string & - & Months of TOLEOS densities (CHAMP, GRACE-A, GRACE-FO 1); a range or "all" skips the gap 2017-11..2018-04, a single month no mission flew in is refused; default none. \\
 Items & 1xI & string & - & Ids to select (column id); default empty = every id. \\
 Today & 1x1 & datetime & - & The date "ongoing" and "in the future" are judged against; default today (UTC). Tests pass a fixed date. \\
 \end{longtable}
@@ -528,7 +528,7 @@ plan & 1x1 & struct & - & .PoolDays, .PoolMonths, .SwarmMonths, .DensityMonths (
 \begin{description}[leftmargin=1.2em,style=nextline,itemsep=0pt]
 \item[\texttt{NonGravForces:\allowbreak{}fetchCatalog:\allowbreak{}inputSyntax}] An element is not a day, a month, a range or "all".
 \item[\texttt{NonGravForces:\allowbreak{}fetchCatalog:\allowbreak{}inputRange}] A range ends before it starts.
-\item[\texttt{NonGravForces:\allowbreak{}fetchCatalog:\allowbreak{}inputSpan}] A date before the product's first or after 'Today', or a DensityMonths month no TOLEOS mission flew in.
+\item[\texttt{NonGravForces:\allowbreak{}fetchCatalog:\allowbreak{}inputSpan}] A date before the product's first or after 'Today', a DensityMonths element that selects no month a TOLEOS mission flew in, or one reaching past the last such month.
 \item[\texttt{NonGravForces:\allowbreak{}fetchCatalog:\allowbreak{}inputItems}] An id in Items that the catalogue does not hold.
 \end{description}
 

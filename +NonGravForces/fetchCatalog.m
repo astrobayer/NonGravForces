@@ -26,6 +26,16 @@ function [T, plan] = fetchCatalog(options)
 %   Elements are united, sorted and de-duplicated. "all" for PoolDays is the union of TU Graz's
 %   operational spans (GRACE, then GRACE-FO), about 8800 days and 25 GB.
 %
+%   THE TOLEOS GAP (DensityMonths). No TOLEOS mission flew 2017-11..2018-04 (GRACE-A's last day
+%   2017-10-31, GRACE-FO 1's first 2018-05-29). "all" is the union of the three missions' own
+%   spans: 2000-07..2017-10 and 2018-05..2026-04, 304 months, the gap months absent. An explicit
+%   range that crosses the gap keeps its flown months and SKIPS the gap's, which hold no file; the
+%   plan lists exactly the months kept, so nothing is dropped unseen ("2017-10..2018-05" is two
+%   months). An element that selects no flown month is refused: a single gap month ("2017-11")
+%   or a range inside the gap. A range reaching past the last TOLEOS month is refused too: that
+%   is outside the published span, not a gap. Until 2026-11-09 "all" was expanded as the one
+%   envelope 2000-07..2026-04 and refused itself at 2017-11.
+%
 %   LICENCE CLASSES. The class is what THIRD-PARTY-NOTICES.md records, and nothing more:
 %     "open"        reuse allowed, commercial included, with attribution (CC BY 4.0, ESA's open data)
 %     "academic"    research, academic and non-profit use only; commercial use prohibited
@@ -67,6 +77,7 @@ function [T, plan] = fetchCatalog(options)
 %                                         finals2000A), from 2018-06; default none.
 %   SwarmMonths    1xS   string    -      Months of Swarm A/B/C densities alone, from 2014-01; default none.
 %   DensityMonths  1xD   string    -      Months of TOLEOS densities (CHAMP, GRACE-A, GRACE-FO 1); a
+%                                         range or "all" skips the gap 2017-11..2018-04, a single
 %                                         month no mission flew in is refused; default none.
 %   Items          1xI   string    -      Ids to select (column id); default empty = every id.
 %   Today          1x1   datetime  -      The date "ongoing" and "in the future" are judged against;
@@ -93,8 +104,9 @@ function [T, plan] = fetchCatalog(options)
 % ERRORS
 %   NonGravForces:fetchCatalog:inputSyntax   An element is not a day, a month, a range or "all".
 %   NonGravForces:fetchCatalog:inputRange    A range ends before it starts.
-%   NonGravForces:fetchCatalog:inputSpan     A date before the product's first or after 'Today', or a
-%                                            DensityMonths month no TOLEOS mission flew in.
+%   NonGravForces:fetchCatalog:inputSpan     A date before the product's first or after 'Today', a
+%                                            DensityMonths element that selects no month a TOLEOS
+%                                            mission flew in, or one reaching past the last such month.
 %   NonGravForces:fetchCatalog:inputItems    An id in Items that the catalogue does not hold.
 %
 % ACCURACY
@@ -113,7 +125,7 @@ function [T, plan] = fetchCatalog(options)
 % See also setupNonGravForces, NonGravForces.dependencyReport.
 %
 % KEYWORDS fetch catalogue licence data pool installer
-% Created 2026-11-06 by Claude Opus 5.5 (Anthropic); every data source to the pool 2026-11-08 by Claude Opus 5.5 (Anthropic).
+% Created 2026-11-06 by Claude Opus 5.5 (Anthropic); every data source to the pool 2026-11-08 by Claude Opus 5.5 (Anthropic); DensityMonths "all" across the TOLEOS gap 2026-11-09 by Claude Opus 5.5 (Anthropic).
 arguments
     options.PoolDays (1,:) string = strings(1, 0)
     options.PoolMonths (1,:) string = strings(1, 0)
@@ -160,14 +172,28 @@ end
 days = localExpand(options.PoolDays, "day", "PoolDays", itsgSpans, NaT, today);
 poolMonths = localExpand(options.PoolMonths, "month", "PoolMonths", [l1bFirst, lastComplete], l1bFirst, today);
 swarmMonths = localExpand(options.SwarmMonths, "month", "SwarmMonths", [swarmFirst, lastComplete], swarmFirst, today);
-densityMonths = localExpand(options.DensityMonths, "month", "DensityMonths", [min(tStart), max(tStop)], min(tStart), today);
-for m = densityMonths
-    if ~any(localFlying(m, tStart, tStop))
+% TOLEOS has a GAP: no mission flew 2017-11..2018-04. "all" is the union of the missions' own spans
+% (one row each), never the envelope from the first start to the last stop: that envelope crosses
+% the gap, and until 2026-11-09 the check below refused "all" at 2017-11. Each element is expanded
+% and judged on its own: it must select at least one flown month and end by the last one; the gap
+% months a range crosses are skipped (they hold no file), and the plan lists what remains.
+spans = strjoin(string(tStart, 'yyyy-MM') + ".." + string(tStop, 'yyyy-MM'), ", ");
+densityMonths = NaT(1, 0);
+for e = strtrim(options.DensityMonths)
+    em = localExpand(e, "month", "DensityMonths", [tStart(:), tStop(:)], min(tStart), today);
+    flown = arrayfun(@(m) any(localFlying(m, tStart, tStop)), em);
+    if ~any(flown)
         NonGravForces.fail("fetchCatalog", "inputSpan", ...
-            "no TOLEOS mission flew in %s (spans %s) -> pick a month inside one of them", ...
-            string(m, 'yyyy-MM'), strjoin(string(tStart, 'yyyy-MM') + ".." + string(tStop, 'yyyy-MM'), ", "));
+            "no TOLEOS mission flew in %s (spans %s) -> pick a month inside one of them", e, spans);
     end
+    if any(em(~flown) > dateshift(max(tStop), 'start', 'month'))
+        NonGravForces.fail("fetchCatalog", "inputSpan", ...
+            "DensityMonths element ""%s"" reaches past the last TOLEOS month %s (spans %s)" + ...
+            " -> end it there", e, string(max(tStop), 'yyyy-MM'), spans);
+    end
+    densityMonths = [densityMonths, em(flown)]; %#ok<AGROW>
 end
+densityMonths = unique(densityMonths);
 
 % Counts: the distinct source URLs setup requests for this selection, per id
 first = unique(dateshift(days, 'start', 'month'));
