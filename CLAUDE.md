@@ -61,7 +61,7 @@ records — A.2 rule, B.4 — follow with N-02c.)
 
 | Toolbox | Owns |
 |---|---|
-| `referenceSystem` ≥ 2.3 (2.3.0; raised from 2.1 by N-02c for `epochTo(..., "gpsNanoseconds")`) | time scales, EOP, ITRS↔GCRS with derivatives, geodesy, quaternions, attitude interpolation, Sun/Moon states |
+| `referenceSystem` ≥ 3.0 (3.0.0; raised from 2.1 by N-02c for `epochTo(..., "gpsNanoseconds")`, from 2.3 on 2026-11-09 for the pool layout `dataFolder` reports, O-55) | time scales, EOP, ITRS↔GCRS with derivatives, geodesy, quaternions, attitude interpolation, Sun/Moon states |
 | `gracefoReading` ≥ 1.1 (1.3.0; raised from 1.0.1 on 2026-10-26 for `readGroopsInstrument` on real GROOPS output, O-19) | L1B ASCII reading, quality flags, GROOPS instrument export/import. The 1.0.1 PATCH minimum of O-12/O-25 was the one exception to VERSIONING.md's MAJOR.MINOR rule; 1.1 contains that fix and ends the exception |
 | `timeSeriesPreparation` ≥ 1.5 (1.5.0; raised from 1.4 on 2026-10-20 for the ACH1B preset, its X-19) | The L1B CRN kernel (`crnKernel`), and after N-01 the `qc` stage. **Optional for the toolbox, required by `ciGate`**: `sensor.Electrostatic` filters with `crnKernel("ACC")` by DEFAULT (N-04, owner ruling 2026-10-14) and raises `Electrostatic:depMissing` without it. Its version is the `% Version` line of its `Contents.m` |
 | `lsqvce` ≥ **7.0** (since 2026-11-03: `app.fitCalibration` declares a `lsqvce.TaskDefinition`, O-53 closed; 6.35 before, for `R.contributions` / `solveContributions`) | The one least-squares estimator (CONCEPT Q2). **Optional for the toolbox, required by `ciGate`**: `app.fitCalibration` declares kind A (one system, one day, one arc per contiguous run) per axis its day bootstrap solves the fit's per-day contributions and its single-arc bootstrap refits kind B. Version from `lsqvce.util.toolboxVersion` |
@@ -179,6 +179,20 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ## 5. Current status (2026-11-08, release 0.20.0)
 
+- **2026-11-09, PR #141 (O-55, EOP of the HWM14 oracle):** `tNgfEnv/windHwm14Reference` and the EXAMPLE of `io.readGNV1B`
+  read `finals2000A.all` from `referenceSystem.dataFolder()` itself, where referenceSystem 2.x kept it flat; since 3.0.0 that
+  is the pool ROOT and EOP lives in `<pool>/EOP`. Red on the owner's host (E:\DATAPOOL holds only EOP/finals2000A.all), green
+  on the runner BY ACCIDENT: the runner keeps a 2.x stored preference `...\DATAPOOL\referencesSystem` (step 2 of the resolution,
+  before DATAPOOL), an old per-toolbox folder holding the file flat. The first fix (`loc.EOP`) was green locally and red on CI
+  (run 42612519514: `...\referencesSystem\EOP\finals2000A.all` does not exist). The TEST now reads referenceSystem's pinned
+  copy, committed to its `data/` (`fileparts(which('setupReferenceSystem'))/data/finals2000A.all`): a test does not depend on
+  the host's data folder (data/eop/README.md). The EXAMPLE, production use, reads `[~, loc] = referenceSystem.dataFolder();
+  loc.EOP`. The referenceSystem minimum in `dependencyReport` rises 2.3 -> 3.0 (the pool layout setup writes; `.EOP`);
+  `Contents.m` stated 2.1 and gracefoReading >= 2.1 (stale) and now states 3.0 and 1.1. No version bump (the release is its
+  own PR). Owner's host (R2026a, worktree, DATAPOOL=E:\DATAPOOL): the test green on the pinned copy; with `loc.EOP` tNgfEnv 87/87,
+  tNgfCore 17/17 and ☑ local ciGate 520/520, GATE TRUE, predicted 520; auditPackage clean. CI pending. The runner's stale
+  preference is the owner's to clear (`referenceSystem.dataFolder("reset")` on the runner): until then referenceSystem's
+  downloads there land below `...\referencesSystem`.
 - **2026-11-09, PR #140 (the TOLEOS gap, owner: `fetchCatalog('DensityMonths', "all")` refused itself with "no TOLEOS mission flew in
   2017-11"):** "all" was the envelope 2000-07..2026-04, which crosses the gap 2017-11..2018-04; it is now the union of the three missions'
   spans (304 months, 406 files). An explicit range across the gap skips the gap months (the plan lists those kept); a single gap month, a

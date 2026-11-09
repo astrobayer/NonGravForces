@@ -69,7 +69,11 @@ spec = { ...
 % referenceSystem's minimum rose from 2.1 to 2.3 on 2026-10-15 (N-02c): app.calibrate converts the
 % int64 GPS nanoseconds of timeSeriesPreparation.Arc with epochTo(..., "gpsNanoseconds"), which
 % 2.3.0 introduced (its #26). The rest of the toolbox would still run on 2.1.
-  "referenceSystem", true,  "2.3", "setupReferenceSystem", "time, frames, ephemerides, attitude kinematics", @() string(referenceSystem.toolboxVersion().version); ...
+% It rose from 2.3 to 3.0 on 2026-11-09 (O-55): 3.0.0 (its #39) is the referenceSystem of the shared
+% data pool, whose layout setupNonGravForces writes (<pool>/EOP, <pool>/SPICE), and the EXAMPLE of
+% io.readGNV1B reads finals2000A.all from the .EOP field of dataFolder's second output, which 3.0
+% introduced. Before 3.0 dataFolder() named a per-toolbox folder holding the EOP file flat.
+  "referenceSystem", true,  "3.0", "setupReferenceSystem", "time, frames, ephemerides, attitude kinematics", @() string(referenceSystem.toolboxVersion().version); ...
 % gracefoReading's minimum rose from 1.0.1 to 1.1 on 2026-10-26 (O-19): tNgfModel/modelGroopsReference
 % reads TU Graz's GROOPS output with readGroopsInstrument, which reads the real GROOPS dialect (comment
 % header, column legend, .gz) only since 1.1.0. 1.1 is MAJOR.MINOR again, so the PATCH exception of

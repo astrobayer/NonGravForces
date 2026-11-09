@@ -85,7 +85,8 @@ function [epoch, r, v, aux] = readGNV1B(files, options)
 %   JPL D-56935, GNV1B format; IERS Conventions (2010) Ch. 5 via referenceSystem.
 %
 % EXAMPLE
-%   eop = referenceSystem.readEop(fullfile(referenceSystem.dataFolder(), 'finals2000A.all'));
+%   [~, loc] = referenceSystem.dataFolder();                  % loc.EOP = <pool>/EOP
+%   eop = referenceSystem.readEop(fullfile(loc.EOP, 'finals2000A.all'));
 %   f = fullfile(fileparts(fileparts(fileparts(mfilename('fullpath')))), 'data', 'samples', 'GNV1B_2020-01-01_C_04.txt');
 %   [ep, r, v, aux] = NonGravForces.io.readGNV1B(f, 'Eop', eop);   % GCRS
 %
