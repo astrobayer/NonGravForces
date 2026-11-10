@@ -181,9 +181,11 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 - **2026-11-09, release 0.20.1 (a PATCH):** #140 (DensityMonths "all" no longer refuses itself at the TOLEOS gap; the toolbox
   installer's date pickers showed "all (refused by the catalogue)" on the release channel) and #141 (O-55: the HWM14 oracle reads
-  referenceSystem's pinned EOP copy; referenceSystem >= 3.0). Version bumped; the release measurements on the runner
-  (baseline-compare, benchmark) follow in this PR. ◐ until both are read. Gate stays 520. #142 (O-54, the local run log)
-  is not in it.
+  referenceSystem's pinned EOP copy; referenceSystem >= 3.0). Release measurements on the CI runner: **baseline PASSED
+  at 0.20.1** (run 42714124318: every compared number 0 sigma from the 2026-11-04 freeze -- S_xx, S_zz, 186 / 168
+  biases, C and D); benchmark (run 42714129801) standard 20.7 / 4.57 / 0.767 ms at K = 1 / 10 / 100 (0.20.0: 22.8 /
+  3.17 / 0.743; no Model code changed: K = 10 is the runner's spread on a 46 ms call). Gate stays 520. #142
+  (O-54, the local run log) is not in it.
 - **2026-11-09, PR #141 (O-55, EOP of the HWM14 oracle):** `tNgfEnv/windHwm14Reference` and the EXAMPLE of `io.readGNV1B`
   read `finals2000A.all` from `referenceSystem.dataFolder()` itself, where referenceSystem 2.x kept it flat; since 3.0.0 that
   is the pool ROOT and EOP lives in `<pool>/EOP`. Red on the owner's host (E:\DATAPOOL holds only EOP/finals2000A.all), green
