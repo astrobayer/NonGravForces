@@ -4,7 +4,7 @@ Orientation file for an AI assistant working in this repository.
 `HANDOVER.md` is the single source of truth; this file is the short form.
 Read `HANDOVER.md` Part A, then the level prompt in Part G for the level being worked.
 
-Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-10-18 (release 0.16.0), 2026-10-26 (PR #107, observation data) 2026-10-29 (release 0.17.0), 2026-10-31 (release 0.18.0), 2026-11-04 (release 0.19.0) and 2026-11-08 (release 0.20.0) by Claude Opus 5.5. Toolbox version 0.20.0.
+Created 2026-09-06 by Claude Opus 5 (Anthropic); updated 2026-10-18 (release 0.16.0), 2026-10-26 (PR #107, observation data) 2026-10-29 (release 0.17.0), 2026-10-31 (release 0.18.0), 2026-11-04 (release 0.19.0), 2026-11-08 (release 0.20.0) and 2026-11-09 (release 0.20.1) by Claude Opus 5.5. Toolbox version 0.20.1.
 
 ---
 
@@ -178,8 +178,16 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
 
 ---
 
-## 5. Current status (2026-11-08, release 0.20.0)
+## 5. Current status (2026-11-09, release 0.20.1)
 
+- **2026-11-09, release 0.20.1 (a PATCH):** #140 (DensityMonths "all" no longer refuses itself at the TOLEOS gap; the toolbox
+  installer's date pickers showed "all (refused by the catalogue)" on the release channel) and #141 (O-55: the HWM14 oracle reads
+  referenceSystem's pinned EOP copy; referenceSystem >= 3.0). Release measurements on the CI runner: **baseline PASSED
+  at 0.20.1** (run 42714124318: every compared number 0 sigma from the 2026-11-04 freeze -- S_xx, S_zz, 186 / 168
+  biases, C and D); benchmark (run 42714129801) standard 20.7 / 4.57 / 0.767 ms at K = 1 / 10 / 100 (0.20.0: 22.8 /
+  3.17 / 0.743; no Model code changed: K = 10 is the runner's spread on a 46 ms call). Gate stays 520. #142
+  (O-54, the local run log; merged first) came in by merging main: CI workflow and test log only, no toolbox code the
+  measurements ran.
 - **2026-11-09, PR (O-54 and the local run log):** `fetch-data.yml` passes its `swarm` and `densities` inputs to
   `setupNonGravForces` AS GIVEN (space-separated months, `a..b` spans or `all`); it had split each span into single months
   itself, a second expansion beside `NonGravForces.fetchCatalog` (R1), so a densities span across the TOLEOS gap was refused
