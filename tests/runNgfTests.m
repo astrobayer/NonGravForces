@@ -1,18 +1,25 @@
 function result = runNgfTests(options)
-%RUNNGFTESTS The one runner: discover, run, report, and write tests/last_run.txt.
+%RUNNGFTESTS The one runner: discover, run, report, and write the run log.
 %
 %   result = runNgfTests
 %   result = runNgfTests('ExcludeSlow', false, 'Name', "tNgfIo*")
 %
 %   GREEN means: every discovered class loaded, nothing failed, nothing
 %   incomplete, the category audit found no public unit short of a category
-%   (or exempted with a reason), and last_run.txt was written. The pass
+%   (or exempted with a reason), and the run log was written. The pass
 %   count alone is not the gate.
+%
+%   THE RUN LOG is tests/last_run.txt on CI (NONGRAVFORCES_CI set, as ci.yml does) and
+%   tests/last_run_local.txt, git-ignored, everywhere else. last_run.txt is tracked: README's
+%   test count and the theory catalogue are checked against it, and it is committed from a CI
+%   job's log. A local run rewrote it until 2026-11-09 and left every checkout dirty.
 %
 % NAME-VALUE ARGUMENTS
 %   ExcludeSlow  1x1 logical  skip tag "speed" (default true)
 %   Name         1x1 string   class-name pattern (default "tNgf*")
 %   Strict       1x1 logical  error when not GREEN (default false)
+%   LogFile      1x1 string   where the run log goes (default "": last_run.txt on CI,
+%                             last_run_local.txt elsewhere; see above)
 %
 % OUTPUT ARGUMENTS
 %   result       1x1 struct   .passed .failed .incomplete .duration_s .green
@@ -24,6 +31,7 @@ arguments
     options.ExcludeSlow (1,1) logical = true
     options.Name (1,1) string = "tNgf*"
     options.Strict (1,1) logical = false
+    options.LogFile (1,1) string = ""
 end
 import matlab.unittest.TestSuite
 import matlab.unittest.selectors.HasTag
@@ -51,7 +59,13 @@ result.audit = auditTestCategories('Verbose', false);
 shortfall = result.audit(~result.audit.complete, :);
 result.green = result.failed == 0 && result.incomplete == 0 && isempty(shortfall);
 % report
-result.logFile = fullfile(here, 'last_run.txt');
+if strlength(options.LogFile) > 0
+    result.logFile = char(options.LogFile);
+elseif strlength(strtrim(string(getenv('NONGRAVFORCES_CI')))) > 0
+    result.logFile = fullfile(here, 'last_run.txt');
+else
+    result.logFile = fullfile(here, 'last_run_local.txt');
+end
 fid = fopen(result.logFile, 'w');
 fprintf(fid, 'NonGravForces %s  run %s  MATLAB %s\n', NonGravForces.toolboxVersion('string'), char(datetime('now','TimeZone','UTC','Format','yyyy-MM-dd HH:mm z')), version);
 fprintf(fid, 'tests %d  passed %d  failed %d  incomplete %d  duration %.1f s  GATE %s\n', numel(res), result.passed, result.failed, result.incomplete, result.duration_s, string(result.green).upper());

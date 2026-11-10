@@ -36,10 +36,10 @@ on:
         description: "Whole months for the drag month, space-separated yyyy-mm (GRACE-C/D L1B, Swarm, SW-All, finals2000A; ~4.5 GB each)"
         default: ""
       swarm:
-        description: "Swarm densities alone, a span yyyy-mm..yyyy-mm (tools/densityDriverFit.m; ~40 MB per month)"
+        description: "Swarm densities alone: yyyy-mm, a span yyyy-mm..yyyy-mm or all, space-separated (tools/densityDriverFit.m; ~40 MB per month)"
         default: ""
       densities:
-        description: "TU Delft CHAMP/GRACE/GRACE-FO densities (ESA TOLEOS), a span yyyy-mm..yyyy-mm"
+        description: "TU Delft CHAMP/GRACE/GRACE-FO densities (ESA TOLEOS): yyyy-mm, a span yyyy-mm..yyyy-mm or all, space-separated (a span across 2017-11..2018-04 skips the gap)"
         default: ""
 
 concurrency:
@@ -75,17 +75,11 @@ jobs:
             cd NonGravForcesFetch
             pool = NonGravForces.dataPool("", 'Option', "DataPool");   % DATAPOOL, then READING_DATA_POOL; refuses when neither is set
             months = split(strtrim(string(getenv("POOL_MONTHS"))))'; months = months(strlength(months) > 0);
-            swarm = strings(1, 0); dens = strings(1, 0);
-            span = strtrim(string(getenv("SWARM_SPAN")));
-            if strlength(span) > 0
-                ends = datetime(split(span, ".."), 'InputFormat', 'yyyy-MM');
-                swarm = string(ends(1):calmonths(1):ends(2), 'yyyy-MM');
-            end
-            span = strtrim(string(getenv("DENSITY_SPAN")));
-            if strlength(span) > 0
-                ends = datetime(split(span, ".."), 'InputFormat', 'yyyy-MM');
-                dens = string(ends(1):calmonths(1):ends(2), 'yyyy-MM');
-            end
+            % The spans go to setup AS GIVEN (O-54): NonGravForces.fetchCatalog is the one expansion of
+            % "a..b" and "all" (R1), the TOLEOS gap 2017-11..2018-04 included. This step split them into
+            % single months itself until 2026-11-09, so a span across the gap was refused here only.
+            swarm = split(strtrim(string(getenv("SWARM_SPAN"))))'; swarm = swarm(strlength(swarm) > 0);
+            dens = split(strtrim(string(getenv("DENSITY_SPAN"))))'; dens = dens(strlength(dens) > 0);
             info = setupNonGravForces('Verbose', false, 'FetchMsis', "never", 'FetchData', "never", 'FetchKernels', "never", 'FetchGroops', "never", 'FetchPool', "ifMissing", 'DataPool', pool, 'PoolMonths', months, 'SwarmMonths', swarm, 'DensityMonths', dens);
             items = info.data.items(startsWith([info.data.items.name], ["dst" "f30" "itsg" "swarm" "toleos" "pool"]));
             fprintf("%-50s %s\n", [[items.name]; [items.action]]);

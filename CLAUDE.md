@@ -124,7 +124,8 @@ records — A.2 rule, B.4 — follow with N-02c.)
   `auditTestCategories`: `contract`, `reference`, `precision`, `vectorization`,
   `robustness`, `metamorphic`, `speed`. Exemptions live in
   `testCategoryExemptions.m` with one reason each; `contract` is never exempt.
-  A passing bound leaves its measured number in `tests/last_run.txt`.
+  A passing bound leaves its measured number in the run log: `tests/last_run.txt` on CI (tracked),
+  `tests/last_run_local.txt` (git-ignored) on any other host since 2026-11-09.
   Assert ratios, not host-dependent absolutes. Tests assert identifiers, not
   messages. **An oracle is independent code** (`tools/pyxcheck/*.py`, published
   tables, real data), never a copy of the unit under test.
@@ -185,7 +186,15 @@ Work goes on a branch → PR → green → merge → `git pull` on the host.
   at 0.20.1** (run 42714124318: every compared number 0 sigma from the 2026-11-04 freeze -- S_xx, S_zz, 186 / 168
   biases, C and D); benchmark (run 42714129801) standard 20.7 / 4.57 / 0.767 ms at K = 1 / 10 / 100 (0.20.0: 22.8 /
   3.17 / 0.743; no Model code changed: K = 10 is the runner's spread on a 46 ms call). Gate stays 520. #142
-  (O-54, the local run log) is not in it.
+  (O-54, the local run log; merged first) came in by merging main: CI workflow and test log only, no toolbox code the
+  measurements ran.
+- **2026-11-09, PR (O-54 and the local run log):** `fetch-data.yml` passes its `swarm` and `densities` inputs to
+  `setupNonGravForces` AS GIVEN (space-separated months, `a..b` spans or `all`); it had split each span into single months
+  itself, a second expansion beside `NonGravForces.fetchCatalog` (R1), so a densities span across the TOLEOS gap was refused
+  there although the catalogue accepts it. O-54 closed. `runNgfTests` writes `tests/last_run.txt` only on CI
+  (`NONGRAVFORCES_CI`, set by ci.yml) and `tests/last_run_local.txt` (git-ignored) elsewhere, new option `LogFile`; a local
+  gate had rewritten the tracked file and left every checkout dirty (seen on #141). ciGate names the file it misses. No
+  version bump. ☑ local ciGate 520/520, GATE TRUE, predicted 520, the checkout clean afterwards (log in last_run_local.txt); auditPackage clean. fetch-data.yml not dispatched (it fetches into the pool and commits to the branch).
 - **2026-11-09, PR #141 (O-55, EOP of the HWM14 oracle):** `tNgfEnv/windHwm14Reference` and the EXAMPLE of `io.readGNV1B`
   read `finals2000A.all` from `referenceSystem.dataFolder()` itself, where referenceSystem 2.x kept it flat; since 3.0.0 that
   is the pool ROOT and EOP lives in `<pool>/EOP`. Red on the owner's host (E:\DATAPOOL holds only EOP/finals2000A.all), green
@@ -1171,7 +1180,8 @@ Every one of these was an actual defect found in a predecessor or a dependency.
   it. This happened twice on 2026-09-18, once after #54 merged and once after #55. Recovery is
   cheap (branch from HEAD, push, open a new PR, delete the recreated one) but only if it is noticed,
   and the failure mode is indistinguishable from success in every check except the run list.
-- **RE-RUN `auditPackage.py` AFTER THE GATE, NOT BEFORE IT.** The gate writes `tests/last_run.txt`
+- **RE-RUN `auditPackage.py` AFTER THE GATE, NOT BEFORE IT.** The gate writes `tests/last_run.txt` (on CI;
+  a local gate writes `tests/last_run_local.txt` since 2026-11-09, and the committed file comes from CI's log)
   and check 11 compares `README.md`'s quoted test count against it, so an audit run before the gate
   is an audit of the previous run's numbers. On 2026-09-18 that reddened CI on a branch whose local
   audit had been clean twice: two tests were added, the gate recorded 381, `README.md` still said
