@@ -165,10 +165,28 @@ jobs:
                         rep = NonGravForces.buildMex('Target', target); assert(rep.upToDate, "releaseChecks:mex", "MEX target %s did not build", target);
                     end
                     names = strip(string(getenv("TUTORIAL_NAMES")));
-                    if strlength(names) == 0, names = string.empty(1, 0); else, names = split(names, " ")'; end
-                    report = runTutorials(names);
-                    disp(struct2table(report, 'AsArray', true));
-                    publishTutorials(names);
+                    if strlength(names) == 0
+                        d = dir(fullfile(pwd, "tutorials", "ngfTutorial*.m")); names = sort(string(erase({d.name}, ".m")));
+                    else
+                        names = split(names, " ")';
+                    end
+                    % One tutorial at a time: a tutorial that errors is reported with its cell and message and the
+                    % others are still recorded (and committed), so one run finds every broken tutorial.
+                    failed = strings(1, 0);
+                    for n = names
+                        try
+                            report = runTutorials(n);
+                            publishTutorials(n);
+                            fprintf("RECORDED %s: %d cells in %.1f s\n", n, report.cells, report.seconds);
+                        catch err
+                            failed(end + 1) = n; %#ok<AGROW>
+                            fprintf("FAILED %s: %s\n%s\n", n, err.identifier, err.message);
+                            for st = err.stack(1:min(4, end))'
+                                fprintf("   at %s line %d\n", st.name, st.line);
+                            end
+                        end
+                    end
+                    if ~isempty(failed), fprintf("TUTORIALS FAILED: %s\n", strjoin(failed, " ")); end
                     out = "";
                 case "heatcapacity"
                     rep = NonGravForces.buildMex('Target', "msis"); assert(rep.upToDate, "releaseChecks:mex", "MEX target msis did not build");
