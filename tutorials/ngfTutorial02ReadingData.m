@@ -83,8 +83,8 @@ xlabel('seconds since 2020-01-01 00:00:00 GPS'), ylabel('deg')
 legend("body +Z vs nadir", "SCA1B vs nominal frame"), title('Attitude sense and pointing of GRACE-C')
 
 %% Step 3 - The accelerometer and the thrusters: ACT1B and THR1B
-% ACT1B is the calibrated accelerometer product of GRACE-FO (for GRACE-D since mid-2018 a
-% transplant from GRACE-C's data), linear accelerations in the SRF in m/s^2 at 1 Hz. Nothing is
+% ACT1B is the calibrated accelerometer product of GRACE-FO (for GRACE-D a transplant built
+% with GRACE-C's data), linear accelerations in the SRF in m/s^2 at 1 Hz. Nothing is
 % calibrated by the reader: bias and scale are the product's (Tutorials 7 and 8 estimate them).
 % |io.readACC1B| reads ACC1B, ACT1B and GRACE-D's hybrid ACH1B alike and takes the product name
 % from the file header, never from the file name. THR1B lists every thruster activation: per
