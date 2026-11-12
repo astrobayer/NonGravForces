@@ -47,7 +47,7 @@ Usage:  python tools/buildDocs.py            # writes every page
         python tools/buildDocs.py --check    # exit 1 if any page is stale
         python tools/buildDocs.py --dump-api # print the parsed API, for eyeballing
 """
-import csv, html, os, re, sys
+import csv, glob, html, os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CSV = os.path.join(ROOT, "doc", "functionlist.csv")
@@ -82,7 +82,7 @@ def read_version():
 def read_taxonomy():
     """The mnemonic classes and their meanings, from the help block of fail.m -- its authority."""
     src = open(FAIL_FILE, encoding="utf-8").read()
-    rows = re.findall(r"^%\s{5}(\w+\*?)\s{2,}(.+?)\s*$", src, re.M)
+    rows = re.findall(r"^%\s{5}(\w+\*?)\s+(.+?)\s*$", src, re.M)
     if len(rows) < 5:
         sys.exit("buildDocs: cannot read the mnemonic taxonomy from fail.m")
     return rows
@@ -930,6 +930,44 @@ def render_tests_tex():
     return "\n".join(out).rstrip() + "\n"
 
 
+def tutorials():
+    """The first-time tutorials, tutorials/ngfTutorial*.m: (name, title, requirement, what-you-learn items),
+    read from the script itself -- the first cell's title, its "% Requirements:" line and the bullets
+    under its "*What you will learn*" line -- so the page cannot list a tutorial that is not there."""
+    out = []
+    for path in sorted(glob.glob(os.path.join(ROOT, "tutorials", "ngfTutorial*.m"))):
+        name = os.path.splitext(os.path.basename(path))[0]
+        lines = open(path, encoding="utf-8").read().replace("\r", "").split("\n")
+        title = next((ln[2:].strip() for ln in lines if ln.startswith("%%")), name)
+        req = next((m.group(1).strip() for m in (re.match(r"^%\s*Requirements:\s*(.+)$", ln) for ln in lines) if m), "")
+        learn, inside = [], False
+        for ln in lines:
+            if ln.startswith("%%") and learn:
+                break
+            body = re.sub(r"^% ?", "", ln) if ln.startswith("%") else None
+            if body is None:
+                break
+            if body.strip().startswith("*What you will learn*"):
+                inside = True
+                continue
+            if inside:
+                if body.startswith("* "):
+                    learn.append(body[2:].strip())
+                elif body.startswith("  ") and learn:
+                    learn[-1] += " " + body.strip()
+                elif body.strip() == "" and learn:
+                    inside = False
+        out.append((name, re.sub(r"^Tutorial \d+ - ", "", title), req, learn))
+    return out
+
+
+def publish_markup(s):
+    """|code| and *bold* of MATLAB's publish markup, as HTML."""
+    s = html.escape(s, quote=False)
+    s = re.sub(r"\|([^|]+)\|", r"<code>\1</code>", s)
+    return re.sub(r"\*([^*\s][^*]*)\*", r"<b>\1</b>", s)
+
+
 def page(title, body, version, date, model):
     """The shared chrome. One place for the head, the style and the footer."""
     return ("<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + html.escape(title, quote=False) +
@@ -1088,12 +1126,32 @@ def render_all():
          "python auditPackage.py          %% catalogue, help template, taxonomy, C2 scan</pre>"]
     out["Testing.html"] = page("Testing", "".join(p), version, date, model)
 
+    # --- tutorials
+    tuts = tutorials()
+    p = ["<p>Step-by-step guides for a first-time user: one MATLAB script per task in <code>tutorials/</code>, "
+         "written to be run cell by cell. Every step says what it does and why, which inputs it takes with "
+         "their units and frames, and prints or plots what it produced. The pages below are the PUBLISHED "
+         "scripts (<code>tools/publishTutorials.m</code>) with the output of a real run; the same tutorials, "
+         "with code, recorded output and figures, form the first chapter of the user guide PDF. "
+         "<code>tests/tNgfTutorials.m</code> runs every tutorial that needs no data pool in every gate.</p>"
+         "<pre>setupNonGravForces             %% puts tutorials/ on the path\n"
+         "edit ngfTutorial01FirstSteps   %% then run it cell by cell (Ctrl+Enter)</pre><ol>"]
+    for name, title, req, learn in tuts:
+        p.append("<li><a href='tutorials/%s.html'>%s</a> <small>(<code>%s.m</code>; requirements: %s)</small>"
+                 % (name, publish_markup(title), name, html.escape(req or "none", quote=False)))
+        if learn:
+            p.append("<ul>" + "".join("<li>%s</li>" % publish_markup(x) for x in learn) + "</ul>")
+        p.append("</li>")
+    p.append("</ol>")
+    out["Tutorials.html"] = page("Tutorials", "".join(p), version, date, model)
+
     # --- index
     p = ["<p>A MATLAB toolbox computing non-gravitational forces and torques on GRACE-FO and GRACE satellites: gas-surface "
          "interaction, solar and Earth radiation pressure, thermal recoil, and the sensors that measure them. "
          "%d of %d catalogued units are delivered; %d are documented stubs.</p><ul>"
          % (len(done), len(rows), len(stubs))]
-    for f, t in (("GettingStarted.html", "Getting Started"), ("Architecture.html", "Architecture"),
+    for f, t in (("GettingStarted.html", "Getting Started"), ("Tutorials.html", "Tutorials"),
+                 ("Architecture.html", "Architecture"),
                  ("FunctionList.html", "Function Reference"), ("Sensors.html", "Sensor Layer"),
                  ("ErrorHandling.html", "Error Handling"), ("Testing.html", "Testing")):
         p.append("<li><a href='%s'>%s</a></li>" % (f, t))
@@ -1103,10 +1161,17 @@ def render_all():
     # --- helptoc: generated too, so a page cannot exist without being reachable
     toc = ["<?xml version='1.0' encoding='utf-8'?>\n<toc version='2.0'>\n",
            "<tocitem target='index.html'>NonGravForces\n"]
-    for f, t in (("GettingStarted.html", "Getting Started"), ("Architecture.html", "Architecture"),
+    for f, t in (("GettingStarted.html", "Getting Started"), ("Tutorials.html", "Tutorials"),
+                 ("Architecture.html", "Architecture"),
                  ("FunctionList.html", "Function Reference"), ("Sensors.html", "Sensor Layer"),
                  ("ErrorHandling.html", "Error Handling"), ("Testing.html", "Testing")):
-        toc.append("<tocitem target='%s'>%s</tocitem>\n" % (f, t))
+        if f != "Tutorials.html":
+            toc.append("<tocitem target='%s'>%s</tocitem>\n" % (f, t))
+            continue
+        toc.append("<tocitem target='Tutorials.html'>Tutorials\n")
+        for name, title, _, _ in tuts:
+            toc.append("<tocitem target='tutorials/%s.html'>%s</tocitem>\n" % (name, html.escape(title, quote=False)))
+        toc.append("</tocitem>\n")
     toc.append("</tocitem>\n</toc>\n")
     out["helptoc.xml"] = "".join(toc)
     return out

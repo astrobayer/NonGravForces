@@ -86,7 +86,7 @@ function [cal, info] = fitCalibration(obs, ref, options)
 %   uncertainty is a bootstrap over DAYS: timeSeriesPreparation.bootstrap on
 %   the day index with block length 1 -- days are independent where the
 %   samples of one day are not. A replicate is the weighted sum of the drawn
-%   days' reduced normal equations (lsqvce >= 6.35: R.contributions and
+%   days' reduced normal equations (lsqvce >= 6.35, now >= 7.0: R.contributions and
 %   lsqvce.solveContributions, a day drawn twice counted twice), so the data
 %   pass is paid once and a replicate costs O(N p^2). Under "white" noise and
 %   no 'Robust' that IS the joint refit of the drawn days; an estimated noise

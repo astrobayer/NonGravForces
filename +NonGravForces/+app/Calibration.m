@@ -177,6 +177,15 @@ classdef Calibration
 %   `drift` is gammainc(W/2, dof/2, 'upper'), exact for the chi-square law;
 %   the law itself is the large-sample one of the estimate, and holds for the
 %   bootstrap covariance only as well as that covariance is estimated.
+%   covScale and the bias covariances are PRECISIONS GIVEN THE FORCE MODEL: they do
+%   not contain the model's own error, which is correlated with the signal and is
+%   absorbed by the scale. Measured on January 2020: the steady-state to transient
+%   thermal model moved S_zz from 0.820 to 1.094 (about 100 bootstrap sigmas), the
+%   observed density scale moved S_xx from 0.762 to 0.966, cutting the thruster
+%   firings moved GRACE-D's S_zz by 3.6 sigmas (HANDOVER, PR #126, #122, #134). The
+%   per-day bias covariance is the formal (white-noise) one of a CRN-filtered, red
+%   residual and is optimistic by the same kind of factor as the scale's
+%   uncertainty.inflation.
 %
 % ERRORS
 %   NonGravForces:Calibration:inputFit       the fit struct lacks a field, or one has the wrong size

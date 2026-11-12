@@ -4,7 +4,7 @@ function info = setupNonGravForces(options)
 %   setupNonGravForces
 %   info = setupNonGravForces('Verbose', false, 'FetchData', "never")
 %
-%   Adds the toolbox root, tests/, tools/ and demos/ to the MATLAB path (no savepath),
+%   Adds the toolbox root, tests/, tools/, demos/ and tutorials/ to the MATLAB path (no savepath),
 %   registers the documentation for the Help browser, and reports which of the
 %   ecosystem dependencies are reachable. It never adds a dependency to the path
 %   itself: each dependency ships its own setup function and owns its own path.
@@ -299,7 +299,7 @@ SWARM_SATS = ["A" "B" "C"];
 DE440_FILE = "de440s.bsp";
 DE440_SHA256 = "c1c7feeab882263fc493a9d5a5b2ddd71b54826cdf65d8d17a76126b260a49f2";
 root = fileparts(mfilename('fullpath'));
-addpath(root, fullfile(root,'tests'), fullfile(root,'tools'), fullfile(root,'demos'));
+addpath(root, fullfile(root,'tests'), fullfile(root,'tools'), fullfile(root,'demos'), fullfile(root,'tutorials'));
 % THE SELECTION IS EXPANDED AND CHECKED BEFORE ANY NETWORK ACTION, by the unit that owns the ids, the
 % spans and the syntax ("a..b", "all"): NonGravForces.fetchCatalog. A bad selection raises its
 % NonGravForces:fetchCatalog:* error here, with nothing fetched.
