@@ -173,6 +173,8 @@ C = NonGravForces.env.densityScale(swarm, sw, 'Fallback', D);
 e5 = referenceSystem.mjdToEpoch((58849:58853)' + 0.5, "UTC");
 fprintf('kind %s; 2020-01-01..05 at 490 km: %s from %s\n', C.kind, mat2str(C.at(e5, 490e3 * ones(1, 5)), 3), strjoin(C.source(e5), ", "));
 fArc = C.at(ep, lla(3, :));
+srcArc = C.source(ep);                % the day of an epoch is its UTC day: GPS 00:00:00 is 2019-12-31 23:59:42 UTC
+fprintf('along the arc the factor comes from: %s (%d epochs from the driver)\n', strjoin(unique(srcArc), ", "), nnz(srcArc == "driver"));
 fprintf('along the arc: factor %.3f .. %.3f, scaled density %.3e kg/m^3 on average (unscaled %.3e)\n', ...
     min(fArc), max(fArc), mean(rho .* fArc), mean(rho));
 opt = NonGravForces.Options("standard");
