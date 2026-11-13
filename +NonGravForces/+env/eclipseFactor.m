@@ -77,9 +77,15 @@ function [nu, info] = eclipseFactor(r, r_sun, options)
 %   difference of terms 1e4 times larger than itself, which lost 3e-11 in nu;
 %   the atan2 forms restore full precision (tested as rotation invariance to
 %   1e-12, the HANDOVER accuracy figure). What the geometric models do not
-%   model: Earth oblateness (up to 21 km of limb height, ~2 % of the penumbra
-%   width) and atmospheric refraction and extinction (the penumbra is in
-%   reality wider and darker: Robertson 2015). The Sun is a uniform disc.
+%   model: Earth oblateness and atmospheric refraction and extinction (the
+%   penumbra is in reality wider and darker: Robertson 2015). The oblateness
+%   is NOT small in time: the geometric models take a sphere of the EQUATORIAL
+%   radius a, while on a polar orbit the limb at shadow entry and exit lies at
+%   high latitude, where the radius is close to b (21 km less). At 490 km and
+%   beta 0 every nu level is crossed about 7.5 s early at entry and late at exit,
+%   about the duration of the penumbra itself (7.8 s); measured with an independent
+%   re-implementation of "conical" in the review of 2026-11-12 (HANDOVER O-57).
+%   solaarsCF models the oblateness. The Sun is a uniform disc.
 %   SOLAARS-CF: the thesis quotes a curve-fit residual below 3 % of nu against
 %   the full SOLAARS model (Fig. 3.30); the coefficients here were transcribed
 %   from Table 3.2 by three agreeing text extractions and reproduce the

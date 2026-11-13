@@ -1,10 +1,10 @@
-%DEMO02_DENSITYINVERSION Recover the thermosphere density that produced an acceleration.
+%DEMODENSITYINVERSION Recover the thermosphere density that produced an acceleration.
 %
 %   The gas force is exactly linear in the species densities, so the inversion
 %   is a division and not a search. This demo proves that on the only data where
 %   the truth is known: the model's own output, fed back in.
 %
-%   Run:  demo02_densityInversion
+%   Run:  demoDensityInversion
 %
 % See also NonGravForces.app.densityInversion.
 %

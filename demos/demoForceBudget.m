@@ -1,11 +1,11 @@
-%DEMO01_FORCEBUDGET Which effect carries the arc, and what does a modelling choice cost?
+%DEMOFORCEBUDGET Which effect carries the arc, and what does a modelling choice cost?
 %
 %   A budget is not an acceleration: it answers "which effect dominates, on
 %   which axis, and what changes if I turn something off". This runs the same
 %   arc through two presets and puts them side by side, which is the comparison
 %   the unit exists for.
 %
-%   Run:  demo01_forceBudget
+%   Run:  demoForceBudget
 %
 % See also NonGravForces.app.forceBudget, NonGravForces.Model.
 %

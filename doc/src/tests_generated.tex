@@ -3,7 +3,7 @@
 % DO NOT EDIT: auditPackage.py compares this file by content and refuses a stale one.
 % Regenerate with: python tools/buildDocs.py
 
-\noindent This catalogue is generated from the test classes by \texttt{tools/buildDocs.py}: 518 test methods in 24 classes, 526 recorded bounds, toolbox version 0.20.1. For each method it gives the category its \texttt{TestTags} block assigns, the unit \texttt{auditTestCategories} credits it to (the longest catalogued name the method name begins with), the comment under its function line, and every bound it records through \texttt{verifyBoundAndRecord}: label, bound, units and the reason stated for the bound's size. The measured value beside a bound is the one \texttt{tests/last\_run.txt} holds, from the run: \emph{NonGravForces 0.19.0  run 2026-11-06 16:00 UTC  MATLAB 26.1.0.3346908 (R2026a) Update 5 tests 516  passed 516  failed 0  incomplete 0  duration 1059.0 s  GATE TRUE}; a dash means that run did not record the label (a newer test, or a label built at run time). A method whose label is computed at run time is shown as \emph{(computed label)}. The seven categories and the rules behind them are those of the section on testing.
+\noindent This catalogue is generated from the test classes by \texttt{tools/buildDocs.py}: 520 test methods in 25 classes, 526 recorded bounds, toolbox version 0.20.1. For each method it gives the category its \texttt{TestTags} block assigns, the unit \texttt{auditTestCategories} credits it to (the longest catalogued name the method name begins with), the comment under its function line, and every bound it records through \texttt{verifyBoundAndRecord}: label, bound, units and the reason stated for the bound's size. The measured value beside a bound is the one \texttt{tests/last\_run.txt} holds, from the run: \emph{NonGravForces 0.19.0  run 2026-11-06 16:00 UTC  MATLAB 26.1.0.3346908 (R2026a) Update 5 tests 516  passed 516  failed 0  incomplete 0  duration 1059.0 s  GATE TRUE}; a dash means that run did not record the label (a newer test, or a label built at run time). A method whose label is computed at run time is shown as \emph{(computed label)}. The seven categories and the rules behind them are those of the section on testing.
 
 \subsection{\texttt{tNgfApp}}
 \noindent Tests of the application layer (LP-7): app.forceBudget, app.densityInversion.
@@ -1737,4 +1737,12 @@
 \begin{description}[leftmargin=1em,style=nextline,itemsep=2pt,font=\normalfont\ttfamily\small]
 \item[benchmarkRunsAndKeepsItsShape] {\small\emph{contract \textperiodcentered\ no unit}} --- The smallest run that still exercises every path: one batch size, one timed repetition. The cost is dominated by reading the arc and building the two Models, not by the timing loop, so asking for more would buy no coverage.
 \item[benchmarkRefusesAnArcItDoesNotHave] {\small\emph{contract \textperiodcentered\ no unit}} --- The committed GNV1B excerpt is an excerpt, so a large enough batch has no states to time. The count is deliberately not written here -- benchmark.m reads it from the file and puts it in the message; 100000 is past any excerpt this fixture will hold. Until 2026-09-18 this reached ep.day(1:n) and raised MATLAB's "Index exceeds the number of array elements" -- a message naming neither the fixture nor the limit, from no unit the caller can look up. Paired with the call that must SUCCEED, because a refusal test whose sibling does not run proves only that everything refuses.
+\end{description}
+
+\subsection{\texttt{tNgfTutorials}}
+\noindent Every first-time tutorial in tutorials/ runs to completion on the committed data.
+
+\begin{description}[leftmargin=1em,style=nextline,itemsep=2pt,font=\normalfont\ttfamily\small]
+\item[tutorialRuns] {\small\emph{contract \textperiodcentered\ no unit}} --- Every offline tutorial runs on the current code. What the PDF shows of it (doc/src/tutorials/*/run.json) is checked against the script by tools/makeTutorialsTex.py --check (auditPackage.py check 15).
+\item[tutorialRequirementsDeclared] {\small\emph{contract \textperiodcentered\ no unit}} --- Every tutorial declares what it needs, one of three words; the gate runs the "none" ones and there is at least one of them.
 \end{description}

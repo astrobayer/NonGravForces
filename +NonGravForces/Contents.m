@@ -3,17 +3,17 @@
 %
 % Single point of access
 %   Model              - Configure once, evaluate many: accel | torque | series |
-%                        partials | rhs | budget
+%                        partials | budget
 %   Options            - Validated option set with presets fast/standard/precise
 %
 % Core (L0)
 %   const              - Constants owned by this toolbox (S0, sigma_SB, species)
 %   toolboxVersion     - Semantic version, one authority
-%   dependencyReport   - Presence and version of the four ecosystem toolboxes
+%   dependencyReport   - Presence and version of the five ecosystem toolboxes and MICE
 %   fail               - The one place errors are raised from (identifier
 %                        taxonomy, correction hints)
-%   buildMex           - Build the MEX gateways in mex/ (msis, kernel; never
-%                        committed) or report their state
+%   buildMex           - Build the MEX gateways in mex/ (msis, msis21, hwm14, dtm2020,
+%                        kernel, rhs; never committed) or report their state
 %   provenance         - Metadata record that travels with every result
 %   fetchCatalog       - Everything setupNonGravForces can fetch: ids, spans, sizes,
 %                        licence classes, and the expansion of a day/month selection
@@ -27,9 +27,12 @@
 %   kernel  - per-panel gas-surface and radiation forces, body torques,
 %             partials, and the compiled single-epoch path
 %   sensor  - measurement models: electrostatic, atom interferometer, drag-free
-%   app     - calibration (own linear solver), force budget, density inversion
+%   app     - calibration (through lsqvce.fit), force budget, density inversion,
+%             the integrator entry DynamicsSource
 %
 % Dependencies (called by qualified name, never copied or wrapped)
 %   referenceSystem >= 3.0   time, frames, ephemerides, attitude kinematics, the data pool
 %   gracefoReading  >= 1.1   GRACE-FO Level-1B reading
-%   gjToolbox (odeSuite)     orbit integration (optional, for rhs)
+%   gjToolbox (odeSuite)     orbit integration (optional, for app.DynamicsSource)
+%   timeSeriesPreparation >= 1.5  the L1B CRN filter, mask/QC stages (optional; app.calibrate)
+%   lsqvce >= 7.0            the least-squares estimator (optional; app.fitCalibration)

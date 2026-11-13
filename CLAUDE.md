@@ -45,7 +45,8 @@ L3 geom     MacroModel, graceFO, grace, boxWing, selfShadow, flowShadow, thermal
 L2 env      density, densityScale, densityDriverScale, wind, eclipseFactor, earthRadiance, magneticField, radiationSources
 L1 io       readACC1B/SCA1B/GNV1B/THR1B/MAS1B/MAG1B, massModel, spaceWeather,
             importCERES, importGroopsGrid, igrfCoefficients, readSwarmDensity, readIMU1B
-L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options, buildMex
+L0 core     const, toolboxVersion, dependencyReport, fail, provenance, Options, buildMex,
+            fetchCatalog, dataPool
 ```
 
 66 public units, catalogued in `doc/functionlist.csv` (the authority; CI checks
@@ -90,7 +91,7 @@ records — A.2 rule, B.4 — follow with N-02c.)
   third, at L8 and not in `Model`**: `app.DynamicsSource`'s native entry
   (`mex/ngfRhs.c`) evaluates the WHOLE chain in C over tables built once per run,
   for an integrator's inner loop. Same rule — MATLAB is normative, parity is
-  asserted in six configurations in `tNgfIntegration`, and `Model` is untouched.
+  asserted in seven configurations in `tNgfIntegration`, and `Model` is untouched.
 - **MATLAB is normative.** The C/MEX port (LP-6b, hand-written, no MATLAB Coder,
   `mex/ngfKernel.c` + `kernel.singleEpoch`) and the standard-library kernel mirror
   (WP-33) are verified *against* MATLAB, never the reverse. The C is written in the
@@ -906,7 +907,7 @@ repository had written down about them.
   under `tests/fixtures/groops/` and committed; neither CI nor the host needs a
   GROOPS installation.
 
-**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-55 with an owner
+**Obligations**: `HANDOVER.md` Part H holds them, currently O-1 to O-63 with an owner
 and a re-entry condition each. This file deliberately does NOT list them: the copy that
 used to live here had drifted to O-15 of 21 and showed two closed items as open, and no
 check compared the two (R1). Read Part H.

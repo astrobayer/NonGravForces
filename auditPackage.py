@@ -517,6 +517,31 @@ else:
              "-> run tools/regressionBaseline on the DATAPOOL (Mode \"compare\") before the release"
              % (bmeta.get("toolbox"), version))
 
+# 15. THE TUTORIALS' RECORDED OUTPUT BELONGS TO THEIR CURRENT CODE (2026-11-12, after lgdToolbox R-055).
+#     The user guide's tutorials chapter shows each tutorial's code with the output and figures of a
+#     RECORDED run (tools/runTutorials.m on the CI runner, release-checks "tutorials"), and the Help
+#     browser shows the published page (tools/publishTutorials.m). tools/makeTutorialsTex.py --check
+#     refuses a record whose CODE differs from the script (comments and blank lines excepted, so the
+#     explanations can be edited without a new run), a missing record or figure, and a tutorials.tex
+#     that is not what it writes; this check also refuses a tutorial without its published page.
+#     WHAT IT DOES NOT CHECK: that a tutorial still RUNS (tests/tNgfTutorials.m does, in every gate),
+#     nor that a published page is as recent as the record (both come from the same run).
+import subprocess
+TUTS = sorted(os.path.splitext(os.path.basename(p))[0]
+              for p in glob.glob(os.path.join(ROOT, "tutorials", "ngfTutorial*.m")))
+if TUTS:
+    chk = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "makeTutorialsTex.py"), "--check"],
+                         capture_output=True, text=True)
+    if chk.returncode != 0:
+        for ln in chk.stdout.splitlines():
+            if ln.startswith("STALE:"):
+                note("tutorials: " + ln[len("STALE:"):].strip() +
+                     " -> record them on the runner (release-checks, what: tutorials), then push once more")
+    for t in TUTS:
+        if not os.path.isfile(os.path.join(ROOT, "doc", "html", "tutorials", t + ".html")):
+            note("tutorials: %s has no published page doc/html/tutorials/%s.html -> record it "
+                 "(release-checks, what: tutorials)" % (t, t))
+
 if findings:
     print(f"auditPackage: {len(findings)} finding(s)")
     for f in findings:

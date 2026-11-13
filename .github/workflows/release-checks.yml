@@ -8,6 +8,13 @@
 # through the transient thermal model; ~2 h). "transcript" runs tools/userGuideTranscript.m (the user
 # guide's Steps 1-8 on the committed excerpt, minutes) for the guide's transcript. "daydiag" runs
 # tools/dayDiagnosis.m (GRACE-D 2020-01-22 hour by hour against D 01-23 and C 01-22, minutes).
+# "tutorials" RECORDS the first-time tutorials (tutorials/ngfTutorial*.m; input names, empty = all):
+# tools/runTutorials.m writes doc/src/tutorials/<name>/run.json and each cell's figures (the user guide's
+# tutorials chapter is built from them by tools/makeTutorialsTex.py, which refuses a record whose code
+# differs from the script), tools/publishTutorials.m the Help-browser pages doc/html/tutorials/. That
+# record IS committed, by the job "commit" on GitHub's machine (as fetch-data.yml commits its excerpts):
+# the sessions that write this toolbox have no MATLAB and cannot reach the artefact storage. A push made
+# with GITHUB_TOKEN starts no CI on its commit (CLAUDE.md section 7): push once more by hand afterwards.
 #
 # Neither is a gate. They exist as a workflow because a release needs both at the version being
 # released (audit check 14 refuses a version the baseline was not verified at; check 13 compares every
@@ -25,11 +32,14 @@ on:
   workflow_dispatch:
     inputs:
       what:
-        description: "baseline-freeze | baseline-compare | benchmark | alignment | heatcapacity | daydiag | transcript"
+        description: "baseline-freeze | baseline-compare | benchmark | alignment | heatcapacity | daydiag | transcript | tutorials"
         default: "baseline-compare"
       preset:
         description: "alignment only: the Model preset (standard | precise)"
         default: "standard"
+      names:
+        description: "tutorials only: the tutorials to record, space-separated (e.g. ngfTutorial01FirstSteps); empty = all"
+        default: ""
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.inputs.what }}-${{ github.event.inputs.preset }}
@@ -46,6 +56,7 @@ jobs:
       READING_DATA_POOL: ${{ vars.READING_DATA_POOL }}
       RELEASE_WHAT: ${{ github.event.inputs.what }}
       RELEASE_PRESET: ${{ github.event.inputs.preset }}
+      TUTORIAL_NAMES: ${{ github.event.inputs.names }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with: { path: NonGravForces, persist-credentials: false }
@@ -146,17 +157,85 @@ jobs:
                     rep = NonGravForces.buildMex('Target', "msis"); assert(rep.upToDate, "releaseChecks:mex", "MEX target msis did not build");
                     dayDiagnosis();   % GRACE-D 2020-01-22 hour by hour, against D 01-23 and C 01-22
                     out = "";
+                case "tutorials"
+                    if ~gjToolbox.nativeStepper("available")
+                        back = pwd; cd(fullfile(ws, "odeSuite")); buildtool("mex"); cd(back);
+                    end
+                    for target = ["msis" "rhs" "kernel"]
+                        rep = NonGravForces.buildMex('Target', target); assert(rep.upToDate, "releaseChecks:mex", "MEX target %s did not build", target);
+                    end
+                    names = strip(string(getenv("TUTORIAL_NAMES")));
+                    if strlength(names) == 0
+                        d = dir(fullfile(pwd, "tutorials", "ngfTutorial*.m")); names = sort(string(erase({d.name}, ".m")));
+                    else
+                        names = split(names, " ")';
+                    end
+                    % One tutorial at a time: a tutorial that errors is reported with its cell and message and the
+                    % others are still recorded (and committed), so one run finds every broken tutorial.
+                    failed = strings(1, 0);
+                    for n = names
+                        try
+                            report = runTutorials(n);
+                            publishTutorials(n);
+                            fprintf("RECORDED %s: %d cells in %.1f s\n", n, report.cells, report.seconds);
+                        catch err
+                            failed(end + 1) = n; %#ok<AGROW>
+                            fprintf("FAILED %s: %s\n%s\n", n, err.identifier, err.message);
+                            for st = err.stack(1:min(4, end))'
+                                fprintf("   at %s line %d\n", st.name, st.line);
+                            end
+                        end
+                    end
+                    if ~isempty(failed), fprintf("TUTORIALS FAILED: %s\n", strjoin(failed, " ")); end
+                    out = "";
                 case "heatcapacity"
                     rep = NonGravForces.buildMex('Target', "msis"); assert(rep.upToDate, "releaseChecks:mex", "MEX target msis did not build");
                     heatCapacityFit();
                     out = fullfile(pwd, "tools", "heat_capacity_fit.csv");
                 otherwise
-                    error("releaseChecks:what", "unknown input what = %s -> baseline-freeze, baseline-compare, benchmark, alignment, heatcapacity, daydiag or transcript", what);
+                    error("releaseChecks:what", "unknown input what = %s -> baseline-freeze, baseline-compare, benchmark, alignment, heatcapacity, daydiag, transcript or tutorials", what);
             end
             if strlength(out) > 0
                 fprintf("----- BEGIN %s -----\n%s\n----- END %s -----\n", out, fileread(out), out);
             end
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: ${{ github.event.inputs.what == 'tutorials' }}
+        with:
+          name: tutorial-record
+          path: |
+            NonGravForces/doc/src/tutorials
+            NonGravForces/doc/html/tutorials
+          retention-days: 7
       - name: Remove the working copies from this machine
         if: always()
         shell: powershell
         run: Remove-Item -Recurse -Force NonGravForces, referenceSystem, gracefoReading, odeSuite, timeSeriesPreparation, lsqvce -ErrorAction SilentlyContinue
+
+  commit-tutorials:
+    needs: [measure]
+    if: ${{ github.event.inputs.what == 'tutorials' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.ref_name }}
+      # The artefact's root is doc/ (the common ancestor of its two paths).
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: tutorial-record
+          path: doc
+      - name: Rebuild the tutorials chapter and commit the record to this branch
+        run: |
+          python3 tools/makeTutorialsTex.py --allow-missing
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A doc/src/tutorials doc/html/tutorials
+          git status --short
+          if git diff --cached --quiet; then
+            echo "the recorded tutorials equal the committed ones"
+            exit 0
+          fi
+          git commit -m "Tutorial record from the CI runner (release-checks run ${{ github.run_id }})"
+          git push origin "HEAD:${{ github.ref_name }}"
