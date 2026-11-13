@@ -35,12 +35,39 @@ on:
     branches: [main]
   pull_request:          # one run per dev push on the merge-preview commit
   workflow_dispatch:
+    inputs:
+      runner:
+        description: "auto | a8 | hosted - narrows the routing, never widens it"
+        required: false
+        default: auto
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # Where may MATLAB run for this event: A8, a GitHub-hosted runner, or
+  # nowhere? One decision for the whole organisation, in
+  # astrobayer/ci-actions (ci-route; docs/CI_GUIDE.md section 2): members
+  # only, no forks, A8 from a public repository only for the allow-listed
+  # user. This job never fails - a refusal arrives in the MATLAB job as
+  # runner=none and matlab-setup turns that required context red.
+  route:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      runner: ${{ steps.route.outputs.runner }}
+      runs-on: ${{ steps.route.outputs.runs-on }}
+      reason: ${{ steps.route.outputs.reason }}
+    steps:
+      - id: route
+        uses: astrobayer/ci-actions/ci-route@v1.4.0
+        with:
+          policy: ${{ vars.CI_MATLAB_RUNNER }}
+          request: ${{ github.event.inputs.runner }}
+
   audit:
     runs-on: ubuntu-latest
     steps:
@@ -136,8 +163,8 @@ jobs:
           path: doc/src/NonGravForces_UserGuide.pdf
 
   matlab:
-    needs: [audit]
-    runs-on: [self-hosted, Windows]
+    needs: [audit, route]
+    runs-on: ${{ fromJSON(needs.route.outputs.runs-on) }}
     timeout-minutes: 45
     env:
       NONGRAVFORCES_CI: 1
@@ -150,7 +177,7 @@ jobs:
       # DE440 kernel the precise preset's tests read included (<pool>\SPICE\de440s.bsp, fetched by
       # ciGate's setup when absent); without a pool those tests refuse, nothing falls back to the
       # toolbox.
-      READING_DATA_POOL: ${{ vars.READING_DATA_POOL }}
+      READING_DATA_POOL: ${{ needs.route.outputs.runner == 'a8' && vars.READING_DATA_POOL || '' }}
     steps:
       # Says whether the pool reached this job and what of 2020-01 it holds. Reporting only: a
       # missing variable and a pool without the month produce the same skipped data downstream,
@@ -257,8 +284,15 @@ jobs:
       #
       # timeout-minutes sits here and not in the action: GitHub's
       # composite-action schema rejects the key on a step.
-      - uses: astrobayer/ci-actions/matlab-probe@v1.2.0
-        timeout-minutes: 2
+      # MATLAB on the routed runner: probed on A8, installed by setup-matlab on a
+      # GitHub-hosted runner (public repositories only), or a red step quoting
+      # the routing refusal. Replaces matlab-probe; same immutable-tag rule.
+      - uses: astrobayer/ci-actions/matlab-setup@v1.4.0
+        timeout-minutes: 15
+        with:
+          runner: ${{ needs.route.outputs.runner }}
+          reason: ${{ needs.route.outputs.reason }}
+          products: ${{ vars.CI_MATLAB_PRODUCTS }}
       # NRLMSISE-00 is not fetched here. It was, for one run, in a bash step --
       # and this runner has no bash ("bash: command not found", 2026-09-09).
       # The right answer was not a different shell: setupNonGravForces already

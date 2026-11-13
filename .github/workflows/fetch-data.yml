@@ -32,6 +32,10 @@ on:
       - .github/workflows/fetch-data.yml
   workflow_dispatch:
     inputs:
+      runner:
+        description: "auto | a8 | hosted - narrows the routing, never widens it"
+        required: false
+        default: auto
       months:
         description: "Whole months for the drag month, space-separated yyyy-mm (GRACE-C/D L1B, Swarm, SW-All, finals2000A; ~4.5 GB each)"
         default: ""
@@ -50,10 +54,33 @@ permissions:
   contents: read
 
 jobs:
+  # Where may MATLAB run for this event: A8, a GitHub-hosted runner, or
+  # nowhere? One decision for the whole organisation, in
+  # astrobayer/ci-actions (ci-route; docs/CI_GUIDE.md section 2): members
+  # only, no forks, A8 from a public repository only for the allow-listed
+  # user. This job never fails - a refusal arrives in the MATLAB job as
+  # runner=none and matlab-setup turns that required context red.
+  route:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      runner: ${{ steps.route.outputs.runner }}
+      runs-on: ${{ steps.route.outputs.runs-on }}
+      reason: ${{ steps.route.outputs.reason }}
+    steps:
+      - id: route
+        uses: astrobayer/ci-actions/ci-route@v1.4.0
+        with:
+          policy: ${{ vars.CI_MATLAB_RUNNER }}
+          request: ${{ github.event.inputs.runner }}
+
   pool:
+    needs: [route]
     # A fork's pull request must not reach the self-hosted runner.
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, Windows]
+    if: (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository) && needs.route.outputs.runner == 'a8'
+    runs-on: ${{ fromJSON(needs.route.outputs.runs-on) }}
     timeout-minutes: 720                   # a whole month of Level-1B is ~31 archives of ~150 MB; Swarm 2014-now ~460 requests
     env:
       READING_DATA_POOL: ${{ vars.READING_DATA_POOL }}
@@ -146,6 +173,11 @@ jobs:
           name: fixtures
           path: data
       - name: Commit the excerpts to this branch
+        # The branch name arrives through env, never spliced into the script:
+        # a name is free text, and ${{ }} in `run:` is pasted before the shell
+        # parses it (actionlint [expression], 2026-11-13).
+        env:
+          TARGET_BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -156,4 +188,4 @@ jobs:
             exit 0
           fi
           git commit -m "Excerpts cut from the CI runner's DATAPOOL (run ${{ github.run_id }})"
-          git push origin "HEAD:${{ github.head_ref || github.ref_name }}"
+          git push origin "HEAD:$TARGET_BRANCH"
